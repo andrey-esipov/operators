@@ -46,22 +46,40 @@ export function MainMenu() {
     return () => clearInterval(id)
   }, [])
 
-  // Attract mode: idle 12s → fullscreen SF II-style sizzle reel until any
-  // user interaction (pointer/key). Resets the timer every interaction.
+  // Attract mode: idle 10s → fullscreen SF II-style sizzle reel. Resets
+  // on clicks/keydowns/significant mouse moves (>40px since last reset)
+  // — micro-moves from a jittery mouse don't keep the timer alive forever.
   const [attract, setAttract] = useState(false)
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | null = null
+    let lastX = 0, lastY = 0
     function reset() {
       if (attract) setAttract(false)
       if (timer) clearTimeout(timer)
-      timer = setTimeout(() => setAttract(true), 12_000)
+      timer = setTimeout(() => setAttract(true), 10_000)
+    }
+    function onMove(e: PointerEvent) {
+      const dx = Math.abs(e.clientX - lastX)
+      const dy = Math.abs(e.clientY - lastY)
+      if (dx + dy > 40) {
+        lastX = e.clientX
+        lastY = e.clientY
+        reset()
+      }
     }
     reset()
-    const events: Array<keyof WindowEventMap> = ['pointermove', 'pointerdown', 'keydown', 'wheel', 'touchstart']
-    events.forEach((e) => window.addEventListener(e, reset))
+    window.addEventListener('pointerdown', reset)
+    window.addEventListener('keydown', reset)
+    window.addEventListener('wheel', reset)
+    window.addEventListener('touchstart', reset)
+    window.addEventListener('pointermove', onMove)
     return () => {
       if (timer) clearTimeout(timer)
-      events.forEach((e) => window.removeEventListener(e, reset))
+      window.removeEventListener('pointerdown', reset)
+      window.removeEventListener('keydown', reset)
+      window.removeEventListener('wheel', reset)
+      window.removeEventListener('touchstart', reset)
+      window.removeEventListener('pointermove', onMove)
     }
   }, [attract])
 
@@ -237,6 +255,7 @@ export function MainMenu() {
           />
           <SmallButton label={`♪ ${music ? 'ON' : 'OFF'}`} onClick={toggleMusic} />
           <SmallButton label={`🗣 ${voice ? 'ON' : 'OFF'}`} onClick={toggleVoice} />
+          <SmallButton label="◇ ATTRACT" onClick={() => { Sfx.menuSelect(); setAttract(true) }} />
           <SmallButton
             label="TEST VOICE"
             onClick={() => {

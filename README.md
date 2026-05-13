@@ -1,8 +1,13 @@
 # OPERATORS
 
-A turn-based tactical fighting game where 16 of the most iconic guests from **Lenny's Podcast** face off in 2D combat. Every fighter has 5 signature moves named after their real frameworks. Every move's flavor text is a verbatim quote with episode + timestamp. Every fight takes place in a business **scenario** — and each fighter does bonus damage in the scenarios where their philosophy actually applies.
+A turn-based tactical fighting game where 8 of the most iconic guests from **Lenny's Podcast** face off in 2D combat. Every fighter has 5 signature moves named after their real frameworks. Every move's flavor text is a verbatim quote with episode + timestamp. Every fight takes place in a business **scenario** — and each fighter does bonus damage in the scenarios where their philosophy actually applies.
 
 Submission for the **[Lenny × Replit Buildathon](https://lennysbuildathon.replit.app/)** (May 6 – May 27, 2026).
+
+![menu](docs/screenshots/01-menu.png)
+![character select](docs/screenshots/02-character-select.png)
+![fight](docs/screenshots/03-fight.png)
+![quote callout](docs/screenshots/04-quote-callout.png)
 
 ## Stack
 

@@ -354,6 +354,7 @@ function ActiveMoves({
                 key={m.id}
                 move={m}
                 canAfford={activeRt.momentum >= m.momentum}
+                lastMoveId={activeRt.lastMoveId}
                 onClick={() => onCast(m)}
               />
             ))}
@@ -362,6 +363,11 @@ function ActiveMoves({
               canAfford={activeRt.momentum >= def.ult.momentum}
               isUltimate
               superReady={superReady}
+              hasRequiredStatus={
+                !def.ult.requiresSelfStatus ||
+                activeRt.status.some((s) => s.key === def.ult.requiresSelfStatus)
+              }
+              lastMoveId={activeRt.lastMoveId}
               onClick={() => onCast(def.ult)}
             />
           </div>

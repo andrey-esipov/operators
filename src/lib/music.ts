@@ -35,7 +35,8 @@ function getCtx(): AudioContext {
 
 /** MIDI-style note name → frequency in Hz (4th octave is the reference). */
 const NOTE: Record<string, number> = {
-  C3:  130.81, D3:  146.83, E3:  164.81, F3:  174.61, G3:  196.00, A3:  220.00, B3:  246.94,
+  C3:  130.81, 'C#3': 138.59, D3:  146.83, 'D#3': 155.56, E3:  164.81, F3:  174.61, 'F#3': 185.00,
+  G3:  196.00, 'G#3': 207.65, A3:  220.00, 'A#3': 233.08, B3:  246.94,
   C4:  261.63, 'C#4': 277.18, D4:  293.66, 'D#4': 311.13, E4:  329.63, F4:  349.23, 'F#4': 369.99,
   G4:  392.00, 'G#4': 415.30, A4:  440.00, 'A#4': 466.16, B4:  493.88,
   C5:  523.25, 'C#5': 554.37, D5:  587.33, 'D#5': 622.25, E5:  659.25, F5:  698.46, 'F#5': 739.99,
@@ -197,6 +198,12 @@ function scheduleNote(
   type: OscillatorType,
   vol: number,
 ) {
+  // Defensive: a typo in a track table can pass undefined frequency or duration
+  // here. WebAudio throws "non-finite value" which becomes a React error and
+  // crashes the entire app. Skip the note instead.
+  if (!Number.isFinite(freq) || !Number.isFinite(duration) || !Number.isFinite(startAt) || duration <= 0) {
+    return
+  }
   const c = getCtx()
   const o = c.createOscillator()
   const g = c.createGain()

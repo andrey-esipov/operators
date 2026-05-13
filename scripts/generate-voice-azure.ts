@@ -1,19 +1,27 @@
 /**
- * Generate self-contained voice line audio via Azure Speech (Neural TTS).
+ * Generate self-contained voice line audio via Azure OpenAI gpt-4o-mini-tts.
  *
- * Reads config from ~/.gstack/azure-speech.json OR env vars:
- *   AZURE_SPEECH_KEY=...
- *   AZURE_SPEECH_REGION=eastus
+ * gpt-4o-mini-tts supports per-call "instructions" that describe voice
+ * delivery in prose — way more expressive than picking a named voice +
+ * SSML pitch. We map each fighter to a (base voice + instructions) pair
+ * to give them distinct character without specifying accents.
+ *
+ * Reads config from ~/.gstack/openai.json (reuses the existing astack
+ * backend config) OR env vars:
+ *   AZURE_OPENAI_ENDPOINT=https://<resource>.openai.azure.com
+ *   AZURE_OPENAI_API_KEY=...
+ *   AZURE_OPENAI_TTS_DEPLOYMENT=gpt-4o-mini-tts
+ *   AZURE_OPENAI_API_VERSION=2025-04-01-preview
  *
  * Output: public/audio/voices/<fighterId>/<lineKey>.mp3
- *         public/audio/voices/announcer/<key>.mp3   (FIGHT, KO, etc.)
+ *         public/audio/voices/announcer/<key>.mp3
  *         public/audio/voices/stages/<scenarioId>.mp3
  *
  * Usage:
- *   npx tsx scripts/generate-voice-azure.ts                 # everything missing
- *   npx tsx scripts/generate-voice-azure.ts --force         # re-render all
- *   npx tsx scripts/generate-voice-azure.ts chesky lenny    # specific fighters
- *   npx tsx scripts/generate-voice-azure.ts --announcer     # just announcer + stages
+ *   npx tsx scripts/generate-voice-azure.ts              # everything missing
+ *   npx tsx scripts/generate-voice-azure.ts --force      # re-render all
+ *   npx tsx scripts/generate-voice-azure.ts chesky lenny # specific fighters
+ *   npx tsx scripts/generate-voice-azure.ts --announcer  # announcer + stages only
  */
 
 import fs from 'node:fs'
@@ -24,82 +32,186 @@ import { SCENARIOS } from '../src/data/scenarios'
 
 // ─── Config ──────────────────────────────────────────────────────────────
 function loadAzureConfig() {
-  const gstackPath = path.join(os.homedir(), '.gstack', 'azure-speech.json')
-  let file: { key?: string; region?: string } = {}
+  const gstackPath = path.join(os.homedir(), '.gstack', 'openai.json')
+  let file: { azure?: { endpoint?: string; api_key?: string; api_version?: string; tts_deployment?: string } } = {}
   try {
     if (fs.existsSync(gstackPath)) file = JSON.parse(fs.readFileSync(gstackPath, 'utf-8'))
   } catch {
     // ignore
   }
-  const key = process.env.AZURE_SPEECH_KEY || file.key || ''
-  const region = process.env.AZURE_SPEECH_REGION || file.region || 'eastus'
-  return { key, region }
+  const azureFile = file?.azure || {}
+  const endpoint = (process.env.AZURE_OPENAI_ENDPOINT || azureFile.endpoint || '').replace(/\/$/, '')
+  const apiKey = process.env.AZURE_OPENAI_API_KEY || azureFile.api_key || ''
+  const deployment =
+    process.env.AZURE_OPENAI_TTS_DEPLOYMENT ||
+    azureFile.tts_deployment ||
+    'gpt-4o-mini-tts'
+  const apiVersion = process.env.AZURE_OPENAI_API_VERSION || azureFile.api_version || '2025-04-01-preview'
+  return { endpoint, apiKey, deployment, apiVersion }
 }
 
 const OUT_DIR = path.resolve(process.cwd(), 'public/audio/voices')
 
-// ─── Voice profiles (gravitas/tone over accents) ──────────────────────────
+// ─── Voice profiles (gravitas / tone via prose instructions) ─────────────
+//
+// gpt-4o-mini-tts has 8 base voices: alloy, ash, ballad, coral, echo,
+// fable, onyx, nova, sage, shimmer. We pick the base that suits the
+// fighter's energy, then steer further with the `instructions` field.
+//
 interface ToneProfile {
-  voice: string         // Azure Neural voice short name
-  pitchPct: number      // -50..+50 — applied via SSML prosody
-  ratePct: number       // -50..+50 — applied via SSML prosody
-  style?: string        // optional Azure expressive style
+  voice: string
+  instructions: string
 }
 
 const PROFILES: Record<string, ToneProfile> = {
-  // Boss
-  lenny:      { voice: 'en-US-DavisNeural',     pitchPct: -8, ratePct: -15 },
+  // ─── Boss ────────────────────────────────────────────────────────
+  lenny: {
+    voice: 'onyx',
+    instructions: 'Slow, deep, theatrical podcast host with measured gravitas. Pauses between thoughts. A knowing smile in the voice. This is the boss, and he wants you to know it.',
+  },
 
-  // Mature gravitas
-  andreessen: { voice: 'en-US-RogerNeural',     pitchPct: -5, ratePct: -10 },
-  seth:       { voice: 'en-US-RogerNeural',     pitchPct: -3, ratePct: -8 },
+  // ─── Mature gravitas ─────────────────────────────────────────────
+  andreessen: {
+    voice: 'onyx',
+    instructions: 'Confident, contrarian, slightly amused. Speaks like he is the smartest person in the room and knows it. Slower pace than average, with deliberate emphasis.',
+  },
+  seth: {
+    voice: 'sage',
+    instructions: 'Warm marketing icon with bookish confidence. Speaks slowly, deliberately, like he is sharing wisdom you should write down.',
+  },
 
-  // Warm conversational
-  cagan:      { voice: 'en-US-DavisNeural',     pitchPct: -2, ratePct: -5 },
-  jason:      { voice: 'en-US-DavisNeural',     pitchPct: 0,  ratePct: -6 },
+  // ─── Warm conversational ─────────────────────────────────────────
+  cagan: {
+    voice: 'sage',
+    instructions: 'Veteran product mentor. Calm, generous, methodical. Speaks like someone who has seen it all and chosen patience over fire.',
+  },
+  jason: {
+    voice: 'ash',
+    instructions: 'Calm contrarian, dry humor. Slower than average. Sounds like he is leaning back in a chair, refusing to be rushed.',
+  },
 
-  // Confident young male
-  chesky:     { voice: 'en-US-AndrewNeural',    pitchPct: 0,  ratePct: 0 },
-  altman:     { voice: 'en-US-AndrewNeural',    pitchPct: -2, ratePct: -2 },
-  krieger:    { voice: 'en-US-AndrewNeural',    pitchPct: 2,  ratePct: 0 },
-  tobi:       { voice: 'en-US-AndrewNeural',    pitchPct: -2, ratePct: 2 },
-  stewart:    { voice: 'en-US-AndrewNeural',    pitchPct: 1,  ratePct: -2 },
-  taylor:     { voice: 'en-US-AndrewNeural',    pitchPct: 0,  ratePct: 1 },
+  // ─── Confident young male / charismatic founder ──────────────────
+  chesky: {
+    voice: 'echo',
+    instructions: 'Confident young tech founder. Energetic but composed. Sounds like he believes every word he says, deeply.',
+  },
+  altman: {
+    voice: 'echo',
+    instructions: 'Calm, measured, slightly soft-spoken. Carries weight without raising volume.',
+  },
+  krieger: {
+    voice: 'echo',
+    instructions: 'Warm, friendly, slightly soft. Speaks like a thoughtful builder who never rushes to conclusions.',
+  },
+  tobi: {
+    voice: 'echo',
+    instructions: 'Programmer-CEO energy: confident, direct, slight grin in the delivery. Slightly faster than average.',
+  },
+  stewart: {
+    voice: 'ash',
+    instructions: 'Witty product polymath. Slightly bemused, generous, never aggressive. Like he is delighting in his own observations.',
+  },
+  taylor: {
+    voice: 'ash',
+    instructions: 'Polymath operator. Even, measured, signals intelligence through restraint rather than volume.',
+  },
 
-  // Energetic / fast
-  turley:     { voice: 'en-US-SteffanNeural',   pitchPct: 4,  ratePct: 8 },
-  lazar:      { voice: 'en-US-SteffanNeural',   pitchPct: 2,  ratePct: 12 },
-  nikita:     { voice: 'en-US-SteffanNeural',   pitchPct: 5,  ratePct: 10 },
-  boris:      { voice: 'en-US-SteffanNeural',   pitchPct: 3,  ratePct: 6 },
-  drew:       { voice: 'en-US-SteffanNeural',   pitchPct: 0,  ratePct: 4 },
-  dylan:      { voice: 'en-US-SteffanNeural',   pitchPct: 4,  ratePct: 5 },
-  amjad:      { voice: 'en-US-SteffanNeural',   pitchPct: 1,  ratePct: 3 },
+  // ─── Energetic / fast / glass cannons ────────────────────────────
+  turley: {
+    voice: 'echo',
+    instructions: 'Young, fast, slightly breathless. Sounds like he just shipped a feature and is already onto the next one.',
+  },
+  lazar: {
+    voice: 'echo',
+    instructions: 'Vibe-coder energy. Excited, slightly chaotic, fast pace. Like he is mid-sprint and loving it.',
+  },
+  nikita: {
+    voice: 'echo',
+    instructions: 'Consumer-app savant. Energetic, slightly cocky, sells every line like a viral tweet.',
+  },
+  boris: {
+    voice: 'echo',
+    instructions: 'Young AI engineer, fast and confident, delivers each line like he is showing you a demo that just shipped.',
+  },
+  drew: {
+    voice: 'echo',
+    instructions: 'Engineer-CEO. Clear, direct, slightly grounded. Believes in his product without needing to prove it.',
+  },
+  dylan: {
+    voice: 'echo',
+    instructions: 'Designer-founder. Warm, slightly enthusiastic, friendly. Sounds like he genuinely cares about the craft.',
+  },
+  amjad: {
+    voice: 'echo',
+    instructions: 'Builder-CEO. Calm but conviction-laden. Delivers each line like he is laying down a manifesto.',
+  },
 
-  // Measured professional male
-  doshi:      { voice: 'en-US-JasonNeural',     pitchPct: 0,  ratePct: -3 },
-  simon:      { voice: 'en-US-JasonNeural',     pitchPct: 2,  ratePct: -2 },
-  madhavan:   { voice: 'en-US-JasonNeural',     pitchPct: -2, ratePct: -3 },
-  gokul:      { voice: 'en-US-JasonNeural',     pitchPct: -1, ratePct: -4 },
-  spiegel:    { voice: 'en-US-JasonNeural',     pitchPct: -3, ratePct: -5 },
+  // ─── Measured professional ───────────────────────────────────────
+  doshi: {
+    voice: 'ash',
+    instructions: 'Strategy thinker. Slower than average, precise, slightly didactic. Each phrase delivered like a forcing function.',
+  },
+  simon: {
+    voice: 'ash',
+    instructions: 'Open-source AI hacker. Curious, slightly amused, thoughtful pauses. Like he is mid-blog-post.',
+  },
+  madhavan: {
+    voice: 'ash',
+    instructions: 'Pricing strategist. Measured, professional, slight emphasis on numbers and frameworks.',
+  },
+  gokul: {
+    voice: 'ash',
+    instructions: 'Operating veteran. Steady, slightly weary in a good way — the calm of someone who has built and rebuilt many orgs.',
+  },
+  spiegel: {
+    voice: 'ash',
+    instructions: 'Distribution-obsessed founder. Slow, deliberate, slightly cold. Believes in long-term moats over short-term wins.',
+  },
 
-  // Warm female
-  catwu:      { voice: 'en-US-AriaNeural',      pitchPct: 4,  ratePct: 3 },
-  julie:      { voice: 'en-US-AriaNeural',      pitchPct: 2,  ratePct: 0 },
+  // ─── Warm female ─────────────────────────────────────────────────
+  catwu: {
+    voice: 'nova',
+    instructions: 'Young AI product builder. Bright, friendly, slightly fast. Speaks like she ships every week.',
+  },
+  julie: {
+    voice: 'nova',
+    instructions: 'Thoughtful design VP. Warm, considered, occasionally pauses to choose the right word.',
+  },
 
-  // Authoritative female
-  annie:      { voice: 'en-US-NancyNeural',     pitchPct: -2, ratePct: -3 },
-  dunford:    { voice: 'en-US-NancyNeural',     pitchPct: 0,  ratePct: -2 },
+  // ─── Authoritative female ────────────────────────────────────────
+  annie: {
+    voice: 'shimmer',
+    instructions: 'World-class poker player turned cognitive scientist. Sharp, slightly clipped, dispassionate about luck and outcome. Sounds like someone who has already considered three counter-arguments to whatever you might say.',
+  },
+  dunford: {
+    voice: 'shimmer',
+    instructions: 'Positioning consultant. Direct, professional, slight smile in the delivery. Like someone who refuses to let your strategy stay muddy.',
+  },
 }
 
-const DEFAULT_PROFILE: ToneProfile = { voice: 'en-US-AndrewNeural', pitchPct: 0, ratePct: 0 }
-const ANNOUNCER: ToneProfile = { voice: 'en-US-GuyNeural', pitchPct: 0, ratePct: 5 }
+const DEFAULT_PROFILE: ToneProfile = {
+  voice: 'echo',
+  instructions: 'Confident operator. Even, professional pacing.',
+}
+
+// Announcer — the booming SF II-style game-shouter
+const ANNOUNCER: ToneProfile = {
+  voice: 'onyx',
+  instructions: 'BOOMING fight-game announcer. Theatrical, loud, dramatic, extremely punchy delivery. Hold the final syllable. Energy of a 90s arcade.',
+}
+
+// Stage names — slightly less theatrical, more presenter-like
+const STAGE_ANNOUNCER: ToneProfile = {
+  voice: 'onyx',
+  instructions: 'Game announcer presenting the stage. Cinematic, slightly slower than the fight shouts, with weight on the stage name.',
+}
 
 // ─── Announcer + stage lines ─────────────────────────────────────────────
 const ANNOUNCER_LINES: Record<string, string> = {
   fight: 'Fight!',
-  ko: 'K. O.',
+  ko: 'K. O.!',
   combo: 'Combo!',
-  crit: 'Critical!',
+  crit: 'Critical hit!',
   ultimate: 'Ultimate!',
   perfect: 'Perfect!',
   timeup: 'Time up!',
@@ -109,53 +221,34 @@ const ANNOUNCER_LINES: Record<string, string> = {
   reading: 'They read you!',
 }
 
-// ─── SSML builder ────────────────────────────────────────────────────────
-function buildSSML(profile: ToneProfile, text: string): string {
-  // Escape XML special chars in body
-  const safe = text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-  const pitch = profile.pitchPct >= 0 ? `+${profile.pitchPct}%` : `${profile.pitchPct}%`
-  const rate  = profile.ratePct  >= 0 ? `+${profile.ratePct}%`  : `${profile.ratePct}%`
-  const styleOpen  = profile.style ? `<mstts:express-as style="${profile.style}">` : ''
-  const styleClose = profile.style ? `</mstts:express-as>` : ''
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis"
-       xmlns:mstts="https://www.w3.org/2001/mstts" xml:lang="en-US">
-  <voice name="${profile.voice}">
-    ${styleOpen}
-    <prosody pitch="${pitch}" rate="${rate}">${safe}</prosody>
-    ${styleClose}
-  </voice>
-</speak>`
-}
-
-// ─── REST call ────────────────────────────────────────────────────────────
+// ─── REST call to Azure OpenAI gpt-4o-mini-tts ───────────────────────────
 async function synthesizeOnce(
-  ssml: string,
-  key: string,
-  region: string,
+  profile: ToneProfile,
+  text: string,
+  cfg: ReturnType<typeof loadAzureConfig>,
 ): Promise<Buffer> {
-  const url = `https://${region}.tts.speech.microsoft.com/cognitiveservices/v1`
+  const url = `${cfg.endpoint}/openai/deployments/${cfg.deployment}/audio/speech?api-version=${cfg.apiVersion}`
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 60_000)
   try {
     const res = await fetch(url, {
       method: 'POST',
       headers: {
-        'Ocp-Apim-Subscription-Key': key,
-        'Content-Type': 'application/ssml+xml',
-        'X-Microsoft-OutputFormat': 'audio-24khz-48kbitrate-mono-mp3',
-        'User-Agent': 'operators-voicegen',
+        'api-key': cfg.apiKey,
+        'Content-Type': 'application/json',
       },
-      body: ssml,
+      body: JSON.stringify({
+        model: cfg.deployment,
+        input: text,
+        voice: profile.voice,
+        instructions: profile.instructions,
+        response_format: 'mp3',
+      }),
       signal: controller.signal,
     })
     if (!res.ok) {
-      const text = await res.text()
-      throw new Error(`Azure ${res.status}: ${text.slice(0, 300)}`)
+      const errText = await res.text()
+      throw new Error(`Azure ${res.status}: ${errText.slice(0, 300)}`)
     }
     return Buffer.from(await res.arrayBuffer())
   } finally {
@@ -163,19 +256,23 @@ async function synthesizeOnce(
   }
 }
 
-async function synthesize(profile: ToneProfile, text: string, key: string, region: string): Promise<Buffer> {
+async function synthesize(
+  profile: ToneProfile,
+  text: string,
+  cfg: ReturnType<typeof loadAzureConfig>,
+): Promise<Buffer> {
   const maxAttempts = 6
   let lastErr: Error | null = null
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      return await synthesizeOnce(buildSSML(profile, text), key, region)
+      return await synthesizeOnce(profile, text, cfg)
     } catch (e) {
       lastErr = e as Error
       const msg = lastErr.message
       const retryable =
         msg.includes('429') || msg.includes('500') || msg.includes('502') ||
         msg.includes('503') || msg.includes('504') || msg.includes('fetch failed') ||
-        msg.includes('aborted')
+        msg.includes('aborted') || msg.includes('EngineOverloaded')
       if (!retryable || attempt === maxAttempts) throw lastErr
       const wait = Math.min(20_000, Math.pow(2, attempt) * 1000) + Math.random() * 1000
       console.log(`    ↻ retry ${attempt}/${maxAttempts - 1} after ${(wait / 1000).toFixed(1)}s — ${msg.slice(0, 60)}`)
@@ -191,12 +288,13 @@ async function main() {
   const force = process.argv.includes('--force')
   const announcerOnly = process.argv.includes('--announcer')
 
-  const { key, region } = loadAzureConfig()
-  if (!key) {
-    console.error('Missing AZURE_SPEECH_KEY (or ~/.gstack/azure-speech.json).')
+  const cfg = loadAzureConfig()
+  if (!cfg.endpoint || !cfg.apiKey) {
+    console.error('Missing Azure OpenAI config. Set AZURE_OPENAI_ENDPOINT + AZURE_OPENAI_API_KEY (or ~/.gstack/openai.json).')
     process.exit(1)
   }
-  console.log(`Azure Speech: region=${region}\n`)
+  console.log(`Azure OpenAI endpoint: ${cfg.endpoint}`)
+  console.log(`TTS deployment: ${cfg.deployment}\n`)
 
   fs.mkdirSync(OUT_DIR, { recursive: true })
 
@@ -205,12 +303,12 @@ async function main() {
   // Announcer
   const annDir = path.join(OUT_DIR, 'announcer')
   fs.mkdirSync(annDir, { recursive: true })
-  for (const [key2, text] of Object.entries(ANNOUNCER_LINES)) {
-    const out = path.join(annDir, `${key2}.mp3`)
+  for (const [key, text] of Object.entries(ANNOUNCER_LINES)) {
+    const out = path.join(annDir, `${key}.mp3`)
     if (fs.existsSync(out) && !force) { skipped++; continue }
-    console.log(`  → announcer/${key2}.mp3 …`)
+    console.log(`  → announcer/${key}.mp3 …`)
     try {
-      const buf = await synthesize(ANNOUNCER, text, key, region)
+      const buf = await synthesize(ANNOUNCER, text, cfg)
       fs.writeFileSync(out, buf)
       console.log(`    ✓ wrote (${(buf.byteLength / 1024).toFixed(1)}KB)`)
       made++
@@ -229,7 +327,7 @@ async function main() {
     if (fs.existsSync(out) && !force) { skipped++; continue }
     console.log(`  → stages/${id}.mp3 …`)
     try {
-      const buf = await synthesize(ANNOUNCER, s.name, key, region)
+      const buf = await synthesize(STAGE_ANNOUNCER, s.name, cfg)
       fs.writeFileSync(out, buf)
       console.log(`    ✓ wrote (${(buf.byteLength / 1024).toFixed(1)}KB)`)
       made++
@@ -265,9 +363,9 @@ async function main() {
     for (const [keyName, text] of lines) {
       const out = path.join(dir, `${keyName}.mp3`)
       if (fs.existsSync(out) && !force) { skipped++; continue }
-      console.log(`  → ${fighter.id}/${keyName}.mp3 (${profile.voice}) …`)
+      console.log(`  → ${fighter.id}/${keyName}.mp3 (voice=${profile.voice}) …`)
       try {
-        const buf = await synthesize(profile, text, key, region)
+        const buf = await synthesize(profile, text, cfg)
         fs.writeFileSync(out, buf)
         console.log(`    ✓ wrote (${(buf.byteLength / 1024).toFixed(1)}KB)`)
         made++
@@ -282,7 +380,8 @@ async function main() {
 
   console.log(`\nDone. made=${made} skipped=${skipped} failed=${failed}`)
   if (made > 0) {
-    console.log('\nAudio files are auto-played by src/lib/voice.ts when present.')
+    console.log('\nAudio files are auto-played by src/lib/voice.ts (fighter lines)')
+    console.log('and src/lib/announcer.ts (game shouts) when present.')
   }
 }
 

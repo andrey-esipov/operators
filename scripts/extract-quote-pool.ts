@@ -19,6 +19,13 @@ const FIGHTER_TRANSCRIPTS: Record<string, string[]> = {
   spiegel: ['evan-spiegel'],
   turley: ['nick-turley'],
   cagan: ['marty-cagan'],
+  // New roster
+  altman: ['sam-altman', 'altman'],
+  taylor: ['bret-taylor'],
+  lazar: ['lazar-jovanovic'],
+  amjad: ['amjad-masad'],
+  gokul: ['gokul-rajaram'],
+  dunford: ['april-dunford'],
   lenny: [], // host — extract from every episode
 }
 

@@ -5,6 +5,7 @@ import { Logo } from '../components/Logo'
 import { FIGHTERS } from '../data/fighters'
 import { Sprite } from '../components/Sprite'
 import { PULL_QUOTES } from '../data/pull-quotes'
+import { Voice } from '../lib/voice'
 
 export function MainMenu() {
   const setPhase = useGame((s) => s.setPhase)
@@ -195,6 +196,23 @@ export function MainMenu() {
           />
           <SmallButton label={`♪ ${music ? 'ON' : 'OFF'}`} onClick={toggleMusic} />
           <SmallButton label={`🗣 ${voice ? 'ON' : 'OFF'}`} onClick={toggleVoice} />
+          <SmallButton
+            label="TEST VOICE"
+            onClick={() => {
+              Sfx.menuSelect()
+              // Speak the focused fighter's matchStart line so you can hear
+              // the per-fighter voice profile (pitch / rate / preferred voice).
+              if (!voice) {
+                // If the user toggled voice OFF, still allow a one-shot test.
+                // Temporarily flip on, speak, flip back.
+                Voice.setEnabled(true)
+                Voice.say(`${focusFighter.shortName}: ${focusFighter.voiceLines.matchStart}`, focusFighter.id)
+                setTimeout(() => Voice.setEnabled(false), 100)
+              } else {
+                Voice.say(`${focusFighter.shortName}: ${focusFighter.voiceLines.matchStart}`, focusFighter.id)
+              }
+            }}
+          />
           <SmallButton label={`CRT · ${crt ? 'ON' : 'OFF'}`} onClick={toggleCrt} />
         </div>
       </div>

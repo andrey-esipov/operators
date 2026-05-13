@@ -45,63 +45,75 @@ export function StatusHalo({ status, superReady }: Props) {
 
   return (
     <div className="pointer-events-none absolute inset-0">
+      {/* Status aura — a soft elliptical halo near the fighter's feet,
+          sized to live inside the sprite container without bleeding out. */}
       {best && (
         <div
           className="absolute"
           style={{
             left: '50%',
-            bottom: '8%',
-            marginLeft: -160,
-            width: 320,
-            height: 320,
+            bottom: '2%',
+            marginLeft: -90,
+            width: 180,
+            height: 60,
             borderRadius: '50%',
-            background: `radial-gradient(ellipse at center 80%, ${best.color}55 0%, ${best.color}22 35%, transparent 60%)`,
+            background: `radial-gradient(ellipse at center, ${best.color}77 0%, ${best.color}33 40%, transparent 70%)`,
             animation:
               best.style === 'pulse'  ? 'haloPulse 1.6s ease-in-out infinite' :
               best.style === 'swirl'  ? 'haloSwirl 4s linear infinite' :
                                         'haloSpark 0.7s steps(6) infinite',
-            mixBlendMode: 'screen',
+            filter: 'blur(2px)',
           }}
         />
       )}
 
-      {/* Super-ready ring — always on top, gold, slow pulse */}
+      {/* Super-ready indicator — small floating "⚡ ULT" tag above the fighter's
+          head, instead of the giant overlapping circle. Subtle but readable. */}
       {superReady && (
         <div
           className="absolute"
           style={{
             left: '50%',
-            bottom: '6%',
-            marginLeft: -180,
-            width: 360,
-            height: 360,
-            borderRadius: '50%',
-            border: '3px solid #FFD60A',
-            background: 'radial-gradient(ellipse at center 80%, rgba(255,214,10,0.18) 0%, transparent 55%)',
+            top: '0%',
+            transform: 'translateX(-50%)',
             animation: 'superReady 1.4s ease-in-out infinite',
-            boxShadow: '0 0 24px rgba(255,214,10,0.6) inset, 0 0 24px rgba(247,127,0,0.4)',
-            mixBlendMode: 'screen',
+            pointerEvents: 'none',
           }}
-        />
+        >
+          <div
+            className="font-display px-2 py-0.5"
+            style={{
+              color: '#FFD60A',
+              fontSize: 9,
+              letterSpacing: '0.2em',
+              background: 'rgba(15,10,26,0.85)',
+              border: '1px solid #FFD60A',
+              boxShadow: '0 0 10px #FFD60A, inset -1px -1px 0 rgba(0,0,0,0.4)',
+              textShadow: '0 0 4px #F77F00',
+            }}
+          >
+            ⚡ ULT
+          </div>
+        </div>
       )}
 
       <style>{`
         @keyframes haloPulse {
-          0%, 100% { opacity: 0.45; transform: scale(1) }
-          50%      { opacity: 0.9;  transform: scale(1.08) }
+          0%, 100% { opacity: 0.55; transform: scaleY(1) }
+          50%      { opacity: 0.95; transform: scaleY(1.4) }
         }
         @keyframes haloSwirl {
-          0%   { opacity: 0.6; transform: rotate(0deg) scale(1) }
-          50%  { opacity: 0.9; transform: rotate(180deg) scale(1.1) }
-          100% { opacity: 0.6; transform: rotate(360deg) scale(1) }
+          0%   { opacity: 0.7; transform: rotate(0deg) }
+          50%  { opacity: 1;   transform: rotate(180deg) }
+          100% { opacity: 0.7; transform: rotate(360deg) }
         }
         @keyframes haloSpark {
-          0%,40%,60%,100% { opacity: 0.55 }
+          0%,40%,60%,100% { opacity: 0.6 }
           50%,55%         { opacity: 1 }
         }
         @keyframes superReady {
-          0%, 100% { opacity: 0.8; transform: scale(1) }
-          50%      { opacity: 1;   transform: scale(1.04) }
+          0%, 100% { opacity: 0.85; transform: translateX(-50%) translateY(0) }
+          50%      { opacity: 1;    transform: translateX(-50%) translateY(-3px) }
         }
       `}</style>
     </div>

@@ -105,8 +105,8 @@ export function MatchEnd() {
         </div>
       </div>
 
-      <div className="relative z-10 mt-8 flex gap-4">
-        {arcadePlayerWon ? (
+      <div className="relative z-10 mt-8 flex gap-3 flex-wrap justify-center">
+        {arcadePlayerWon && (
           <button
             onClick={handleContinue}
             className="px-6 py-3 font-display text-base tracking-widest"
@@ -115,11 +115,13 @@ export function MatchEnd() {
               color: 'white',
               border: '2px solid #FFD60A',
               boxShadow: 'inset -2px -2px 0 rgba(0,0,0,0.6), inset 2px 2px 0 rgba(255,255,255,0.2)',
+              cursor: 'pointer',
             }}
           >
             {isFinalBoss ? 'CLAIM YOUR PRIZE →' : 'NEXT STAGE →'}
           </button>
-        ) : (
+        )}
+        {!arcadePlayerWon && (
           <button
             onClick={() => {
               Sfx.menuSelect()
@@ -131,12 +133,39 @@ export function MatchEnd() {
               color: 'white',
               border: '2px solid #E63946',
               boxShadow: 'inset -2px -2px 0 rgba(0,0,0,0.6), inset 2px 2px 0 rgba(255,255,255,0.2)',
+              cursor: 'pointer',
             }}
           >
             MAIN MENU
           </button>
         )}
+        <ShareButton winner={winner.shortName} loser={loser.shortName} quoteBank={quoteBank.length} />
       </div>
     </div>
+  )
+}
+
+function ShareButton({ winner, loser, quoteBank }: { winner: string; loser: string; quoteBank: number }) {
+  function tweet() {
+    Sfx.menuSelect()
+    const text = `Just played OPERATORS — ${winner} beat ${loser}. Unlocked ${quoteBank} real Lenny's Podcast quotes. Built for #lennysbuildathon`
+    const url = 'https://operators.replit.app'
+    const tweetUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`
+    window.open(tweetUrl, '_blank', 'noopener,noreferrer')
+  }
+  return (
+    <button
+      onClick={tweet}
+      className="px-6 py-3 font-display text-base tracking-widest"
+      style={{
+        background: 'linear-gradient(180deg, #00B4D844, #0077B644)',
+        color: 'white',
+        border: '2px solid #00B4D8',
+        boxShadow: 'inset -2px -2px 0 rgba(0,0,0,0.6), inset 2px 2px 0 rgba(255,255,255,0.2)',
+        cursor: 'pointer',
+      }}
+    >
+      ↗ TWEET RESULT
+    </button>
   )
 }

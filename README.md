@@ -1,73 +1,71 @@
-# React + TypeScript + Vite
+# OPERATORS
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A turn-based tactical fighting game where 16 of the most iconic guests from **Lenny's Podcast** face off in 2D combat. Every fighter has 5 signature moves named after their real frameworks. Every move's flavor text is a verbatim quote with episode + timestamp. Every fight takes place in a business **scenario** — and each fighter does bonus damage in the scenarios where their philosophy actually applies.
 
-Currently, two official plugins are available:
+Submission for the **[Lenny × Replit Buildathon](https://lennysbuildathon.replit.app/)** (May 6 – May 27, 2026).
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Stack
 
-## React Compiler
+- **Vite + React 19 + TypeScript** — UI
+- **Tailwind CSS v4** — styling, custom 24-color palette
+- **Framer Motion** — combat juice (screen shake, banner slide-ins, transitions)
+- **Zustand** — game state machine
+- **WebAudio (procedural)** — chiptune SFX synthesized at runtime
+- **Replit Deployments** — hosting (required by buildathon)
+- **Azure OpenAI gpt-image-2** — sprite generation pipeline
+- **Anthropic Claude** — fighter content extraction from podcast transcripts
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Local dev
 
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+npm run dev
+# open http://localhost:5173
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Build
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm run build
 ```
+
+## Asset generation
+
+```bash
+# Extract per-fighter content from the podcast/newsletter dataset
+npx tsx scripts/extract-fighter-content.ts
+
+# Generate fighter sprites via Azure gpt-image-2
+npx tsx scripts/generate-fighter-sprites.ts
+```
+
+Required env vars (see `.env.example`):
+
+```
+ANTHROPIC_API_KEY=...
+AZURE_OPENAI_API_KEY=...
+AZURE_OPENAI_ENDPOINT=https://<resource>.openai.azure.com
+AZURE_OPENAI_DEPLOYMENT=gpt-image-2
+AZURE_OPENAI_API_VERSION=2025-04-01-preview
+```
+
+## Game design (one-pager)
+
+- **Turn-based**, alternating moves, ~5-minute matches. Best of 3 rounds, 90s per round.
+- **Resources**: HP (1000) · Momentum (1–8, +1/turn) · Super Meter (0–100)
+- **Each fighter has 5 moves**: light · heavy · setup · combo · ultimate
+- **Status effects** named after operator wisdom: CONFUSED ICP, FOUNDER MODE, OUTCOME DEBT, …
+- **Combos** chain setup → finisher with a banner flash of the operator's iconic story
+- **Reads** counter specific move types — adds prediction depth
+- **Scenario-aware damage**: Chesky +50% in Pre-PMF; Madhavan +50% in Monetization; …
+- **Ultimates**: 8 momentum + 100 super meter, character-defining signature moves
+
+## Credits
+
+- Podcast + newsletter data: [Lenny's Newsletter](https://www.lennysnewsletter.com/)
+- Built with [Replit Agent](https://replit.com/agent)
+- Inspired by Street Fighter II, King of Fighters, Slay the Spire, and [LennyRPG](https://www.lennysnewsletter.com/p/how-i-built-lennyrpg) by Ben Shih
+
+## Status
+
+`init` — May 12, 2026. Daily build-in-public progress on X with #lennysbuildathon.

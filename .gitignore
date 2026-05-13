@@ -13,10 +13,6 @@ dist-ssr/
 # dataset (too large to commit)
 dataset/
 
-# generated art
-public/sprites/
-public/stages/
-
 # logs
 *.log
 .DS_Store

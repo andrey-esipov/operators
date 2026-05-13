@@ -132,33 +132,49 @@ export function MainMenu() {
   }
 
   return (
-    <div className="relative w-full h-full flex flex-col items-center justify-center overflow-hidden">
+    <div className="relative w-full h-full flex flex-col items-center overflow-y-auto overflow-x-hidden">
       {/* BG — 5-layer parallax */}
       <HeroBackground />
-
-      {/* Layer 2: drifting starfield */}
       <Starfield />
-
-      {/* Layer 3: animated geometric overlay */}
       <DiamondGrid />
-
-      {/* Layer 4: animated stage lights */}
       <SpotLight />
-
-      {/* Layer 5: floating fighter silhouettes */}
       <SilhouetteCarousel />
 
-      {/* TOP: logo with subtle 3D depth — two stacked shadows for parallax feel */}
-      <div className="relative z-20 pt-6 logo-pulse" style={{
-        filter: 'drop-shadow(0 4px 0 black) drop-shadow(0 0 24px rgba(255,214,10,0.4)) drop-shadow(0 0 56px rgba(247,127,0,0.3))',
-        animation: 'logoFloat 4s ease-in-out infinite',
-      }}>
+      {/* Operator-of-the-Day pill — top-left, compact */}
+      <div
+        className="absolute top-3 left-3 z-20 flex items-center gap-2 px-2.5 py-1"
+        style={{
+          background: `linear-gradient(90deg, ${operatorOfDay.accent}44 0%, rgba(0,0,0,0.6) 100%)`,
+          border: `1px solid ${operatorOfDay.accent}AA`,
+          boxShadow: `0 0 10px ${operatorOfDay.accent}66`,
+        }}
+      >
+        <span className="font-display text-[7px] tracking-widest" style={{ color: operatorOfDay.accent }}>
+          ☼ OP OF THE DAY
+        </span>
+        <span className="font-display text-[8px] tracking-widest text-white">
+          {operatorOfDay.shortName}
+        </span>
+      </div>
+
+      {/* LOGO — top, generous breathing room */}
+      <div
+        className="relative z-20 pt-4 logo-pulse"
+        style={{
+          filter: 'drop-shadow(0 4px 0 black) drop-shadow(0 0 24px rgba(255,214,10,0.4)) drop-shadow(0 0 56px rgba(247,127,0,0.3))',
+          animation: 'logoFloat 4s ease-in-out infinite',
+        }}
+      >
         <Logo size={1} />
       </div>
 
-      <p className="relative z-20 font-display text-[10px] tracking-widest mt-2 text-white/80"
-         style={{ textShadow: '2px 2px 0 black' }}>
-        ★ A TACTICAL FIGHTER ON LENNY&apos;S PODCAST ★
+      {/* The tagline lived twice — it's baked into title-hero.png already.
+          Replaced with a sleeker subtitle that doesn't repeat the marquee. */}
+      <p
+        className="relative z-20 font-display text-[9px] tracking-widest mt-1 text-white/65"
+        style={{ textShadow: '2px 2px 0 black' }}
+      >
+        27 OPERATORS · 135 FRAMEWORKS · 8 STAGES
       </p>
 
       {/* MID: rotating fighter spotlight */}
@@ -168,67 +184,58 @@ export function MainMenu() {
         <FighterShowcase fighter={FIGHTERS[(focusIdx + 4) % FIGHTERS.length]} side="b" />
       </div>
 
-      {/* Operator of the Day banner */}
-      <div
-        className="relative z-20 mt-3 flex items-center gap-3 px-3 py-1.5"
-        style={{
-          background: `linear-gradient(90deg, ${operatorOfDay.accent}33 0%, rgba(0,0,0,0.5) 50%, ${operatorOfDay.accent}33 100%)`,
-          border: `1px solid ${operatorOfDay.accent}88`,
-          boxShadow: `0 0 12px ${operatorOfDay.accent}55, inset -2px -2px 0 rgba(0,0,0,0.5)`,
-        }}
-      >
-        <span className="font-display text-[8px] tracking-widest" style={{ color: operatorOfDay.accent }}>
-          ☼ OPERATOR OF THE DAY
-        </span>
-        <span className="font-display text-[10px] tracking-widest text-white">
-          {operatorOfDay.name.toUpperCase()}
-        </span>
-        <span className="font-display text-[7px] tracking-widest text-white/60">
-          {operatorOfDay.archetype}
-        </span>
-      </div>
-
-      {/* Rotating quote marquee */}
-      <div className="relative z-20 mt-2 max-w-3xl px-4">
+      {/* Rotating quote marquee — compact */}
+      <div className="relative z-20 mt-3 max-w-2xl px-4">
         <div
           key={quoteIdx}
-          className="text-center font-body italic text-white text-xl px-4 py-2"
+          className="text-center font-body italic text-white text-base px-3 py-1.5"
           style={{
             background: 'rgba(0,0,0,0.55)',
-            border: '1px solid rgba(255,255,255,0.2)',
+            border: '1px solid rgba(255,255,255,0.18)',
             boxShadow: '0 0 12px rgba(255,214,10,0.15)',
             animation: 'banner-in 6s ease-out',
-            minHeight: 50,
+            minHeight: 40,
+            lineHeight: 1.35,
           }}
         >
           {currentQuote ? (
             <>
               &ldquo;{currentQuote.quote}&rdquo;{' '}
-              <span className="font-display text-[8px] tracking-widest" style={{ color: '#FFD60A' }}>
+              <span className="font-display text-[7px] tracking-widest" style={{ color: '#FFD60A' }}>
                 — {currentQuote.who} · {currentQuote.episode}
               </span>
             </>
           ) : (
-            <span className="text-white/40">…loading verbatim quotes from the archive…</span>
+            <span className="text-white/40">…loading verbatim quotes…</span>
           )}
         </div>
       </div>
 
-      {/* PRESS START / menu buttons — staggered crash-in entrance */}
-      <div className="relative z-20 flex flex-col gap-3 mt-4 items-center menu-cta-stack">
-        <MenuButton
-          label="▶ ARCADE MODE"
-          subtitle="8-stage gauntlet · final boss Lenny"
-          onClick={() => go('arcade')}
-          accent="#E63946"
-        />
-        <MenuButton
-          label="VS MODE"
-          subtitle="local 2-player hot seat"
-          onClick={() => go('vs')}
-          accent="#00B4D8"
-        />
-        <div className="flex gap-2">
+      {/* MENU — clean hierarchy:
+          Row 1 (primary):     ARCADE · VS
+          Row 2 (modes):       DAILY · PRACTICE · RANDOM · GENERATE YOU
+          Row 3 (library):     HOW TO PLAY · ENCYCLOPEDIA · QUOTE BANK · STATS
+          Row 4 (preferences): DIFFICULTY · ♪ · 🗣 · CRT · ATTRACT · TEST VOICE
+      */}
+      <div className="relative z-20 flex flex-col gap-3 mt-4 items-center menu-cta-stack px-4">
+        {/* Row 1: primary CTAs side-by-side */}
+        <div className="flex gap-3 flex-wrap justify-center">
+          <MenuButton
+            label="▶ ARCADE MODE"
+            subtitle="8-stage gauntlet · boss Lenny"
+            onClick={() => go('arcade')}
+            accent="#E63946"
+          />
+          <MenuButton
+            label="VS MODE"
+            subtitle="local 2-player hot seat"
+            onClick={() => go('vs')}
+            accent="#00B4D8"
+          />
+        </div>
+
+        {/* Row 2: alt modes in one row */}
+        <div className="flex gap-2 flex-wrap justify-center">
           <MidButton
             label="◇ DAILY"
             subtitle="today's matchup"
@@ -237,30 +244,34 @@ export function MainMenu() {
           />
           <MidButton
             label="◇ PRACTICE"
-            subtitle="train against any fighter"
+            subtitle="train freely"
             onClick={() => go('practice')}
             accent="#FCBF49"
           />
           <MidButton
             label="◇ RANDOM"
-            subtitle="dice rolls the matchup"
+            subtitle="dice rolls"
             onClick={() => { Sfx.menuSelect(); startRandom() }}
             accent="#F72585"
           />
-        </div>
-        <div className="flex gap-2">
           <MidButton
             label="★ GENERATE YOU"
-            subtitle="build your own fighter card"
+            subtitle="your fighter card"
             onClick={() => { Sfx.menuSelect(); setPhase('generate-fighter') }}
             accent="#7209B7"
           />
         </div>
-        <div className="flex gap-2 flex-wrap justify-center">
-          <SmallButton label="HOW TO PLAY" onClick={() => { Sfx.menuSelect(); setPhase('how-to-play') }} />
+
+        {/* Row 3: library — knowledge tools, grouped */}
+        <ButtonGroup label="LIBRARY">
+          <SmallButton label="HOW TO PLAY"  onClick={() => { Sfx.menuSelect(); setPhase('how-to-play') }} />
           <SmallButton label="ENCYCLOPEDIA" onClick={() => { Sfx.menuSelect(); setPhase('framework-encyclopedia') }} />
-          <SmallButton label="QUOTE BANK" onClick={() => { Sfx.menuSelect(); setPhase('quote-bank') }} />
-          <SmallButton label="STATS · ★" onClick={() => { Sfx.menuSelect(); setPhase('stats') }} />
+          <SmallButton label="QUOTE BANK"   onClick={() => { Sfx.menuSelect(); setPhase('quote-bank') }} />
+          <SmallButton label="STATS · ★"    onClick={() => { Sfx.menuSelect(); setPhase('stats') }} />
+        </ButtonGroup>
+
+        {/* Row 4: settings + dev/demo, grouped */}
+        <ButtonGroup label="SETTINGS">
           <SmallButton
             label={`DIFFICULTY · ${difficulty.toUpperCase()}`}
             onClick={() => {
@@ -268,18 +279,15 @@ export function MainMenu() {
               setDifficulty(difficulty === 'easy' ? 'normal' : difficulty === 'normal' ? 'hard' : 'easy')
             }}
           />
-          <SmallButton label={`♪ ${music ? 'ON' : 'OFF'}`} onClick={toggleMusic} />
+          <SmallButton label={`♪ ${music ? 'ON' : 'OFF'}`}  onClick={toggleMusic} />
           <SmallButton label={`🗣 ${voice ? 'ON' : 'OFF'}`} onClick={toggleVoice} />
+          <SmallButton label={`CRT · ${crt ? 'ON' : 'OFF'}`} onClick={toggleCrt} />
           <SmallButton label="◇ ATTRACT" onClick={() => { Sfx.menuSelect(); setAttract(true) }} />
           <SmallButton
             label="TEST VOICE"
             onClick={() => {
               Sfx.menuSelect()
-              // Speak the focused fighter's matchStart line so you can hear
-              // the per-fighter voice profile (pitch / rate / preferred voice).
               if (!voice) {
-                // If the user toggled voice OFF, still allow a one-shot test.
-                // Temporarily flip on, speak, flip back.
                 Voice.setEnabled(true)
                 Voice.say(focusFighter.voiceLines.matchStart, focusFighter.id, 'matchStart')
                 setTimeout(() => Voice.setEnabled(false), 100)
@@ -288,11 +296,10 @@ export function MainMenu() {
               }
             }}
           />
-          <SmallButton label={`CRT · ${crt ? 'ON' : 'OFF'}`} onClick={toggleCrt} />
-        </div>
+        </ButtonGroup>
       </div>
 
-      {/* BOTTOM: blinking press-start + roster strip */}
+      {/* Blinking press-start */}
       <div className="relative z-20 mt-3" style={{ height: 16 }}>
         <div
           className="font-display text-[9px] tracking-widest"
@@ -618,6 +625,20 @@ function MidButton({
         {subtitle}
       </div>
     </button>
+  )
+}
+
+function ButtonGroup({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-2 flex-wrap justify-center">
+      <span
+        className="font-display text-[7px] tracking-widest text-white/40 select-none"
+        style={{ letterSpacing: '0.3em' }}
+      >
+        {label} ▸
+      </span>
+      {children}
+    </div>
   )
 }
 

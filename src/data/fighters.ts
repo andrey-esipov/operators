@@ -186,7 +186,7 @@ export const FIGHTERS: FighterDef[] = [
     name: 'Cat Wu',
     shortName: 'CAT WU',
     archetype: 'TEMPO · SHIP SMALL',
-    bio: 'Anthropic product. Builds AI-native products at speed-of-research.',
+    bio: 'a young Chinese-American woman with shoulder-length black hair, glasses, in a fitted blazer over a t-shirt with jeans, holding a sleek laptop',
     episode: 'ep 304',
     accent: '#00B4D8',
     maxHp: 900,

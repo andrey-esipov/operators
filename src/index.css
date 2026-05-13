@@ -1,0 +1,148 @@
+@import "tailwindcss";
+
+/* OPERATORS — 24-color master palette + pixel-art rendering globals */
+@theme {
+  /* Background / atmosphere */
+  --color-bg-deep: #1A1230;
+  --color-bg-purple: #3B2360;
+  --color-bg-charcoal: #0F0A1A;
+
+  /* Stage neutrals */
+  --color-stone-dark: #4A3B2F;
+  --color-stone: #8C6A4E;
+  --color-stone-light: #D4A574;
+
+  /* Player A (warm) */
+  --color-pa-red: #E63946;
+  --color-pa-orange: #F77F00;
+  --color-pa-yellow: #FCBF49;
+
+  /* Player B (cool) */
+  --color-pb-deep: #0077B6;
+  --color-pb-cyan: #00B4D8;
+  --color-pb-sky: #90E0EF;
+
+  /* HP states */
+  --color-hp-good: #06D6A0;
+  --color-hp-warn: #FFD60A;
+  --color-hp-crit: #EF233C;
+
+  /* Super Meter */
+  --color-sm-start: #7209B7;
+  --color-sm-end: #F72585;
+
+  /* Effects */
+  --color-combo: #FFD60A;
+  --color-crit: #FFFFFF;
+  --color-buff: #06D6A0;
+  --color-debuff: #7209B7;
+
+  /* Fonts */
+  --font-display: "Press Start 2P", "Courier New", monospace;
+  --font-body: "VT323", "Courier New", monospace;
+  --font-num: "VT323", "Courier New", monospace;
+}
+
+/* Pixel-perfect rendering — global */
+* {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  -webkit-font-smoothing: none;
+  font-smoothing: none;
+}
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  background: var(--color-bg-charcoal);
+  color: white;
+  overflow: hidden;
+  font-family: var(--font-body);
+}
+
+button {
+  font-family: var(--font-display);
+  cursor: pointer;
+  border: 0;
+  background: transparent;
+  color: inherit;
+}
+
+/* CRT scanline overlay — optional */
+.crt-overlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 50;
+  background:
+    repeating-linear-gradient(
+      0deg,
+      rgba(0, 0, 0, 0.18) 0px,
+      rgba(0, 0, 0, 0.18) 1px,
+      transparent 1px,
+      transparent 3px
+    ),
+    radial-gradient(
+      ellipse at center,
+      transparent 50%,
+      rgba(0, 0, 0, 0.4) 100%
+    );
+  mix-blend-mode: multiply;
+}
+
+/* Sprite mirror utility */
+.sprite-mirrored {
+  transform: scaleX(-1);
+}
+
+/* Idle bob for sprites */
+@keyframes idle-bob {
+  0%, 100% { transform: translateY(0) scaleX(var(--mirror, 1)); }
+  50%      { transform: translateY(-4px) scaleX(var(--mirror, 1)); }
+}
+.idle-bob { animation: idle-bob 1.4s ease-in-out infinite; }
+
+/* Damage number float */
+@keyframes dmg-float {
+  0%   { opacity: 1; transform: translate(-50%, 0); }
+  100% { opacity: 0; transform: translate(-50%, -80px); }
+}
+
+/* Banner slide */
+@keyframes banner-in {
+  0%   { transform: translateX(-100%); opacity: 0; }
+  20%  { transform: translateX(0); opacity: 1; }
+  80%  { transform: translateX(0); opacity: 1; }
+  100% { transform: translateX(100%); opacity: 0; }
+}
+
+/* Hit flash */
+@keyframes flash {
+  0%, 100% { opacity: 0; }
+  50%      { opacity: 0.7; }
+}
+
+/* Shake */
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20%      { transform: translateX(-8px); }
+  40%      { transform: translateX(8px); }
+  60%      { transform: translateX(-4px); }
+  80%      { transform: translateX(4px); }
+}
+.shake { animation: shake 220ms ease-in-out; }
+
+/* Parallax ambient sway */
+@keyframes sway {
+  0%, 100% { transform: translateX(0); }
+  50%      { transform: translateX(-6px); }
+}
+.sway { animation: sway 4s ease-in-out infinite; }
+
+/* Logo drip pulse */
+@keyframes logo-pulse {
+  0%, 100% { transform: scale(1); filter: drop-shadow(0 0 0 rgba(255, 214, 10, 0)); }
+  50%      { transform: scale(1.02); filter: drop-shadow(0 0 12px rgba(255, 214, 10, 0.5)); }
+}
+.logo-pulse { animation: logo-pulse 2.2s ease-in-out infinite; }

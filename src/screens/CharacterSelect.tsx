@@ -95,13 +95,14 @@ export function CharacterSelect() {
 
       {/* MAIN AREA: roster + profile */}
       <div className="relative z-10 flex gap-4 flex-1 min-h-0">
-        {/* LEFT: roster grid */}
+        {/* LEFT: roster grid — auto-fits cells to available width.
+            ~92px min-cell means we get 6 cols on a typical desktop pane
+            but degrade to 5 on smaller viewports without overflowing. */}
         <div
           className="grid gap-2 content-start auto-rows-max overflow-y-auto pr-2"
           style={{
-            gridTemplateColumns: 'repeat(5, minmax(0, 1fr))',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(92px, 1fr))',
             flex: '1 1 0',
-            maxWidth: '50%',
           }}
         >
           {ROSTER_ORDER.map((id) => {
@@ -118,7 +119,7 @@ export function CharacterSelect() {
                 }}
                 onClick={() => !isLocked && pickFighter(id)}
                 disabled={isLocked}
-                className="relative aspect-square flex items-center justify-center transition-transform hover:scale-105"
+                className="relative aspect-square flex flex-col items-center justify-center transition-transform hover:scale-105 overflow-hidden"
                 style={{
                   background: `linear-gradient(180deg, ${f.accent}33, ${f.accent}11)`,
                   border: `2px solid ${isSelected ? 'white' : isHovered ? f.accent : f.accent + '88'}`,
@@ -127,12 +128,19 @@ export function CharacterSelect() {
                     : 'inset -2px -2px 0 rgba(0,0,0,0.4), inset 2px 2px 0 rgba(255,255,255,0.15)',
                   cursor: isLocked ? 'not-allowed' : 'pointer',
                   opacity: isLocked ? 0.4 : 1,
+                  minHeight: 92,
                 }}
               >
-                <Sprite fighter={f} side="a" state="stance" />
+                <div className="absolute inset-0 flex items-center justify-center pb-3">
+                  <Sprite fighter={f} side="a" state="stance" />
+                </div>
                 <div
-                  className="absolute left-0 right-0 bottom-0 font-display text-[7px] tracking-widest text-center py-1 text-white"
-                  style={{ background: 'rgba(0,0,0,0.75)' }}
+                  className="absolute left-0 right-0 bottom-0 font-display text-[8px] text-center py-[3px] text-white truncate"
+                  style={{
+                    background: 'rgba(0,0,0,0.78)',
+                    letterSpacing: '0.5px',
+                  }}
+                  title={f.shortName}
                 >
                   {f.shortName}
                 </div>
@@ -152,12 +160,13 @@ export function CharacterSelect() {
         {/* RIGHT: profile card */}
         {hoveredFighter && (
           <div
-            className="flex-1 overflow-y-auto pr-1 min-w-0"
+            className="overflow-y-auto pr-1"
             style={{
               background: 'rgba(15,10,26,0.9)',
               border: `3px solid ${hoveredFighter.accent}`,
               boxShadow: `inset -2px -2px 0 rgba(0,0,0,0.5), inset 2px 2px 0 rgba(255,255,255,0.1), 0 0 24px ${hoveredFighter.accent}55`,
-              minWidth: 420,
+              flex: '0 0 420px',
+              maxWidth: 420,
             }}
           >
             <ProfileCard fighter={hoveredFighter} expanded={expanded} onToggle={() => setExpanded((x) => !x)} />

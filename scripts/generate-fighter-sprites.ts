@@ -293,7 +293,7 @@ async function main() {
     } else {
       console.log(`  → ${fighter.id}/stance.png …`)
       try {
-        stanceBuf = await generateSprite(fighter.bio, POSES[0], null)
+        stanceBuf = await generateSprite((fighter.spriteBio ?? fighter.bio), POSES[0], null)
         fs.writeFileSync(stancePath, stanceBuf)
         console.log(`    ✓ wrote ${stancePath} (${(stanceBuf.byteLength / 1024).toFixed(1)}KB)`)
       } catch (e) {
@@ -313,7 +313,7 @@ async function main() {
       }
       console.log(`  → ${fighter.id}/${pose.state}.png (edit from stance) …`)
       try {
-        const buf = await generateSprite(fighter.bio, pose, stanceBuf)
+        const buf = await generateSprite((fighter.spriteBio ?? fighter.bio), pose, stanceBuf)
         fs.writeFileSync(outPath, buf)
         console.log(`    ✓ wrote ${outPath} (${(buf.byteLength / 1024).toFixed(1)}KB)`)
       } catch (e) {

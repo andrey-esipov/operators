@@ -78,7 +78,11 @@ export interface FighterDef {
   name: string
   shortName: string
   archetype: string
+  /** 1-line bio shown in the UI — who they are, what they're known for. */
   bio: string
+  /** Optional appearance description used only by the sprite generator
+   *  (gpt-image-2 prompt). When set, the UI ignores this field. */
+  spriteBio?: string
   episode: string
   /** Hex accent color (player-side override) */
   accent: string

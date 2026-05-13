@@ -39,6 +39,7 @@ const FIGHTER_TRANSCRIPTS: Record<string, string[]> = {
   nikita: ['nikita-bier'],
   julie: ['julie-zhuo'],
   annie: ['annie-duke'],
+  boris: ['boris-cherny'],
   lenny: [], // host — extract from every episode
 }
 

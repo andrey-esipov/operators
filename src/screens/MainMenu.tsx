@@ -4,12 +4,14 @@ import { Logo } from '../components/Logo'
 
 export function MainMenu() {
   const setPhase = useGame((s) => s.setPhase)
+  const setMode = useGame((s) => s.setMode)
   const toggleCrt = useGame((s) => s.toggleCrt)
   const crt = useGame((s) => s.crtEnabled)
 
-  function go(phase: 'character-select') {
+  function go(mode: 'vs' | 'arcade') {
     Sfx.menuSelect()
-    setPhase(phase)
+    setMode(mode)
+    setPhase('character-select')
   }
 
   return (
@@ -29,8 +31,16 @@ export function MainMenu() {
 
       {/* Menu */}
       <div className="relative z-10 flex flex-col gap-4 mt-12 items-center">
-        <MenuButton label="ARCADE MODE" onClick={() => go('character-select')} />
-        <MenuButton label="VS MODE" onClick={() => go('character-select')} />
+        <MenuButton label="ARCADE MODE" onClick={() => go('arcade')} />
+        <MenuButton label="VS MODE" onClick={() => go('vs')} />
+        <MenuButton
+          label="QUOTE BANK"
+          onClick={() => {
+            Sfx.menuSelect()
+            setPhase('quote-bank')
+          }}
+          secondary
+        />
         <MenuButton label={`CRT  ·  ${crt ? 'ON' : 'OFF'}`} onClick={toggleCrt} secondary />
       </div>
 

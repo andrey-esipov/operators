@@ -9,7 +9,9 @@ import type { ScenarioId } from '../types'
 const ROSTER_ORDER = [...STARTING_ROSTER, ...UNLOCKABLES]
 
 export function CharacterSelect() {
+  const mode = useGame((s) => s.mode)
   const startMatch = useGame((s) => s.startMatch)
+  const startArcade = useGame((s) => s.startArcade)
   const setPhase = useGame((s) => s.setPhase)
   const [side, setSide] = useState<'a' | 'b'>('a')
   const [selectedA, setSelectedA] = useState<string | null>(null)
@@ -18,9 +20,16 @@ export function CharacterSelect() {
   const [scenario, setScenario] = useState<ScenarioId>('pre-pmf')
 
   const hoveredFighter = hovered ? getFighter(hovered) : null
+  const arcadeMode = mode === 'arcade'
 
   function pickFighter(id: string) {
     Sfx.menuSelect()
+    if (arcadeMode) {
+      // Arcade only picks player 1, then auto-starts
+      setSelectedA(id)
+      setTimeout(() => startArcade(id), 400)
+      return
+    }
     if (side === 'a') {
       setSelectedA(id)
       setSide('b')
@@ -34,7 +43,6 @@ export function CharacterSelect() {
 
   return (
     <div className="relative w-full h-full flex flex-col p-6 gap-4 overflow-hidden">
-      {/* Background */}
       <div
         className="absolute inset-0"
         style={{
@@ -42,7 +50,7 @@ export function CharacterSelect() {
             'radial-gradient(circle at center, #3B2360 0%, #1A0F2E 60%, #0F0A1A 100%)',
         }}
       />
-      {/* Header */}
+
       <div className="relative z-10 flex items-center justify-between">
         <button
           onClick={() => {
@@ -54,19 +62,25 @@ export function CharacterSelect() {
           ← BACK
         </button>
         <h1 className="font-display text-2xl tracking-widest" style={{ color: '#FFD60A', textShadow: '4px 4px 0 rgba(0,0,0,0.6)' }}>
-          SELECT YOUR OPERATOR
+          {arcadeMode ? 'ARCADE MODE · PICK YOUR FIGHTER' : 'SELECT YOUR OPERATOR'}
         </h1>
         <div className="font-display text-[10px] tracking-widest text-white/70">
-          P{side === 'a' ? '1' : '2'} PICKING
+          {arcadeMode ? 'PLAYER 1' : `P${side === 'a' ? '1' : '2'} PICKING`}
         </div>
       </div>
 
       {/* Selected side display */}
-      <div className="relative z-10 grid grid-cols-3 gap-4 items-end">
-        <SideCard side="a" id={selectedA} active={side === 'a'} />
-        <ScenarioPicker scenario={scenario} onChange={setScenario} />
-        <SideCard side="b" id={selectedB} active={side === 'b'} />
-      </div>
+      {arcadeMode ? (
+        <div className="relative z-10 px-4 py-2 text-center font-display text-base tracking-widest text-white/80">
+          Beat 8 stages. Final boss: Lenny himself. Win once to unlock the rest of the roster.
+        </div>
+      ) : (
+        <div className="relative z-10 grid grid-cols-3 gap-4 items-end">
+          <SideCard side="a" id={selectedA} active={side === 'a'} />
+          <ScenarioPicker scenario={scenario} onChange={setScenario} />
+          <SideCard side="b" id={selectedB} active={side === 'b'} />
+        </div>
+      )}
 
       {/* Roster grid */}
       <div className="relative z-10 grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-8 gap-3 flex-1 content-start">
@@ -112,7 +126,6 @@ export function CharacterSelect() {
         })}
       </div>
 
-      {/* Hover info */}
       {hoveredFighter && (
         <div className="relative z-10 px-6 py-3 font-body text-base" style={{
           background: 'rgba(15,10,26,0.85)',

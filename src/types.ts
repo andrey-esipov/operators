@@ -133,6 +133,7 @@ export type Phase =
   | 'round-end'
   | 'match-end'
   | 'arcade-victory'
+  | 'quote-bank'
 
 export interface BattleLogEntry {
   turn: number

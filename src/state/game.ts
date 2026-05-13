@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { GameState, Move, ScenarioId, Side } from '../types'
 import { getFighter } from '../data/fighters'
+import { ARCADE_PROGRESSION } from '../data/scenarios'
 import { applyMove, initialRuntime, startTurn } from './applyMove'
 
 let flashCounter = 0
@@ -21,6 +22,13 @@ interface Actions {
   resetMatch: () => void
   advanceArcade: () => void
   setSelectedSide: (side: Side, id: string) => void
+  /** Start arcade mode with a chosen fighter */
+  startArcade: (fighterId: string) => void
+  /** Continue to next arcade fight */
+  nextArcadeFight: () => void
+  /** Game mode (vs = hot seat 2P; arcade = vs bots) */
+  mode: 'vs' | 'arcade'
+  setMode: (m: 'vs' | 'arcade') => void
 }
 
 export const useGame = create<GameState & Actions>((set, get) => ({
@@ -39,12 +47,49 @@ export const useGame = create<GameState & Actions>((set, get) => ({
   quoteBank: [],
   crtEnabled: true,
   damagePulses: [],
+  mode: 'vs',
 
   setPhase: (p) => set({ phase: p }),
   toggleCrt: () => set((s) => ({ crtEnabled: !s.crtEnabled })),
   setScenario: (s) => set({ scenario: s }),
   setSelectedSide: (side, id) => set(() => side === 'a' ? { selectedA: id } : { selectedB: id }),
   selectFighters: (a, b) => set({ selectedA: a, selectedB: b }),
+  setMode: (m) => set({ mode: m }),
+
+  startArcade: (fighterId: string) => {
+    set({ mode: 'arcade', arcadeStep: 0, selectedA: fighterId })
+    // First arcade fight setup
+    setTimeout(() => get().nextArcadeFight(), 200)
+  },
+
+  nextArcadeFight: () => {
+    const state = get()
+    const step = state.arcadeStep
+    // Lazy import to avoid circular dep at module init
+    const progression = ARCADE_PROGRESSION
+    if (step >= progression.length) {
+      set({ phase: 'arcade-victory' })
+      return
+    }
+    const { scenario, opponentId } = progression[step]
+    const playerId = state.selectedA
+    if (!playerId) return
+    set({
+      mode: 'arcade',
+      phase: 'pre-fight',
+      fighterA: initialRuntime(playerId),
+      fighterB: initialRuntime(opponentId),
+      scenario,
+      round: 1,
+      roundsWon: { a: 0, b: 0 },
+      turn: 1,
+      activeSide: 'a',
+      log: [],
+      damagePulses: [],
+      selectedB: opponentId,
+    })
+    setTimeout(() => set({ phase: 'fight' }), 1600)
+  },
 
   startMatch: (a, b, scenario) => {
     set({

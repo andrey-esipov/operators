@@ -206,10 +206,10 @@ export function MainMenu() {
                 // If the user toggled voice OFF, still allow a one-shot test.
                 // Temporarily flip on, speak, flip back.
                 Voice.setEnabled(true)
-                Voice.say(`${focusFighter.shortName}: ${focusFighter.voiceLines.matchStart}`, focusFighter.id)
+                Voice.say(focusFighter.voiceLines.matchStart, focusFighter.id, 'matchStart')
                 setTimeout(() => Voice.setEnabled(false), 100)
               } else {
-                Voice.say(`${focusFighter.shortName}: ${focusFighter.voiceLines.matchStart}`, focusFighter.id)
+                Voice.say(focusFighter.voiceLines.matchStart, focusFighter.id, 'matchStart')
               }
             }}
           />

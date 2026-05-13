@@ -223,8 +223,8 @@ export const useGame = create<GameState & Actions>((set, get) => ({
       set({ phase: 'fight' })
       // Both fighters quote their match-start line. Stagger so they don't overlap.
       const defA = getFighter(a); const defB = getFighter(b)
-      if (defA) Voice.say(defA.voiceLines.matchStart, a)
-      if (defB) setTimeout(() => Voice.say(defB.voiceLines.matchStart, b), 1800)
+      if (defA) Voice.say(defA.voiceLines.matchStart, a, 'matchStart')
+      if (defB) setTimeout(() => Voice.say(defB.voiceLines.matchStart, b, 'matchStart'), 1800)
     }, 4200)
   },
 
@@ -321,7 +321,7 @@ export const useGame = create<GameState & Actions>((set, get) => ({
 
     // Voice line on key moments — ult lines and K.O. lines.
     if (result.flash === 'ult') {
-      Voice.say(attackerDef.voiceLines.ult, attackerDef.id)
+      Voice.say(attackerDef.voiceLines.ult, attackerDef.id, 'ult')
     }
 
     // Stats: every move counts. Combo / crit / ult specifically tracked.
@@ -336,7 +336,7 @@ export const useGame = create<GameState & Actions>((set, get) => ({
     checkAndUnlock(stats)
 
     if (result.ko) {
-      Voice.say(attackerDef.voiceLines.ko, attackerDef.id)
+      Voice.say(attackerDef.voiceLines.ko, attackerDef.id, 'ko')
       // K.O. + match-win bookkeeping
       const ks = loadStats()
       ks.totalKOs += 1

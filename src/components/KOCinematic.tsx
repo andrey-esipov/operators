@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { Side } from '../types'
 import { getFighter } from '../data/fighters'
+import { Announcer } from '../lib/announcer'
 
 interface Props {
   winner: Side
@@ -29,7 +30,10 @@ export function KOCinematic({ winner, loser, winnerId, loserId, id }: Props) {
 
   useEffect(() => {
     setBeat(0)
-    const t1 = setTimeout(() => setBeat(1), 150)
+    const t1 = setTimeout(() => {
+      setBeat(1)
+      Announcer.ko()  // "K.O.!" announcer call paired with banner crash
+    }, 150)
     const t2 = setTimeout(() => setBeat(2), 1100)
     return () => {
       clearTimeout(t1)

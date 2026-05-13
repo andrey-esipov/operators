@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Sfx } from '../lib/audio'
+import { Announcer } from '../lib/announcer'
 
 interface Props {
   round: 1 | 2 | 3
@@ -22,17 +23,21 @@ export function FightIntro({ round, triggerKey }: Props) {
   useEffect(() => {
     setShow(true)
     setBeat(0)
+    // "ROUND N" voice cue on entry
+    Announcer.round(round)
     const t1 = setTimeout(() => setBeat(1), 700)
     const t2 = setTimeout(() => {
       setBeat(2)
       Sfx.fight()
+      // "FIGHT!" voice cue paired with the visual
+      Announcer.fight()
     }, 1400)
     const t3 = setTimeout(() => setBeat(3), 2100)
     const t4 = setTimeout(() => setShow(false), 2500)
     return () => {
       clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); clearTimeout(t4)
     }
-  }, [triggerKey])
+  }, [triggerKey, round])
 
   if (!show) return null
 

@@ -1,4 +1,6 @@
+import { useEffect } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
+import { Announcer } from '../lib/announcer'
 
 interface Props {
   title: string | null
@@ -21,6 +23,14 @@ export function ComboBanner({ title, kind = 'combo' }: Props) {
   const color = kind === 'ult' ? '#F72585' : kind === 'crit' ? '#FFFFFF' : '#FFD60A'
   const accent = kind === 'ult' ? '#7209B7' : kind === 'crit' ? '#E63946' : '#F77F00'
   const label = kind === 'ult' ? '⚡ ULTIMATE' : kind === 'crit' ? '✦ CRITICAL' : '◇ COMBO'
+
+  // Pair the visual banner with an announcer voice cue
+  useEffect(() => {
+    if (!title) return
+    if (kind === 'ult') Announcer.ultimate()
+    else if (kind === 'crit') Announcer.crit()
+    else Announcer.combo()
+  }, [title, kind])
 
   return (
     <AnimatePresence>

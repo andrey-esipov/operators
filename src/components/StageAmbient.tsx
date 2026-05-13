@@ -94,22 +94,6 @@ function PrePMF() {
         />
       ))}
 
-      {/* Whiteboard arrow scribbles scrolling sideways (back wall) */}
-      <div className="absolute" style={{ top: '20%', left: 0, right: 0, height: 60, overflow: 'hidden', opacity: 0.45 }}>
-        <div
-          className="font-display"
-          style={{
-            color: '#06D6A0',
-            fontSize: 16,
-            whiteSpace: 'nowrap',
-            animation: 'scrollLeft 30s linear infinite',
-            letterSpacing: '8px',
-          }}
-        >
-          {'TAM → SAM → SOM     CAC < LTV     ICP     PMF?     RETENTION ↑     '.repeat(6)}
-        </div>
-      </div>
-
       {/* Random pixel sparks (debugging "bugs" floating around) */}
       {Array.from({ length: 12 }).map((_, i) => (
         <div

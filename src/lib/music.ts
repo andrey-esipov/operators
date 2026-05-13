@@ -20,8 +20,10 @@ export type TrackId = 'menu' | 'fight' | 'fight-b' | 'boss' | 'victory' | 'defea
 let ctx: AudioContext | null = null
 let masterGain: GainNode | null = null
 let currentTrack: TrackId | null = null
+let pendingTrack: TrackId | null = null  // remembered when context is suspended at play()-time
 let stopFlag = 0  // incremented to cancel pending scheduled callbacks
 let userVolume = 0.35  // 0..1 — kept modest; chiptune is loud
+let unlockListenerAttached = false
 
 function getCtx(): AudioContext {
   if (!ctx) {
@@ -31,6 +33,40 @@ function getCtx(): AudioContext {
     masterGain.connect(ctx.destination)
   }
   return ctx
+}
+
+/**
+ * Browsers gate WebAudio playback behind a user gesture (autoplay policy).
+ * We can call ctx.resume() — but only inside a click/keydown/touch handler
+ * will it actually transition from 'suspended' → 'running'. Attach a one-
+ * time global listener that fires on the first gesture, resumes the
+ * context, and if a track was queued earlier, kicks it off.
+ */
+function attachUnlockListener() {
+  if (unlockListenerAttached || typeof window === 'undefined') return
+  unlockListenerAttached = true
+  const unlock = () => {
+    const c = getCtx()
+    if (c.state === 'suspended') {
+      c.resume().then(() => {
+        // If music was requested before the user clicked, start it now.
+        if (pendingTrack && !currentTrack) {
+          const t = pendingTrack
+          pendingTrack = null
+          Music.play(t)
+        }
+      }).catch(() => {})
+    }
+    // Keep this lightweight; remove ourselves now that we've resumed once.
+    window.removeEventListener('click', unlock)
+    window.removeEventListener('keydown', unlock)
+    window.removeEventListener('touchstart', unlock)
+    window.removeEventListener('pointerdown', unlock)
+  }
+  window.addEventListener('click', unlock, { once: false })
+  window.addEventListener('keydown', unlock, { once: false })
+  window.addEventListener('touchstart', unlock, { once: false })
+  window.addEventListener('pointerdown', unlock, { once: false })
 }
 
 /** MIDI-style note name → frequency in Hz (4th octave is the reference). */
@@ -316,8 +352,19 @@ export const Music = {
     if (currentTrack === track) return
     Music.stop()
     const c = getCtx()
-    // Some browsers require user-gesture-driven resume on the AudioContext
-    if (c.state === 'suspended') c.resume().catch(() => {})
+    attachUnlockListener()
+
+    // If the AudioContext is still suspended (no user gesture yet), queue
+    // this track and abort scheduling — the unlock listener will replay
+    // when the first click/key/touch arrives. Scheduling notes against a
+    // suspended context wastes them: the clock advances past their start
+    // times silently.
+    if (c.state === 'suspended') {
+      pendingTrack = track
+      c.resume().catch(() => {})
+      return
+    }
+
     currentTrack = track
     stopFlag++
     const myStopFlag = stopFlag

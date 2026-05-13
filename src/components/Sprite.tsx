@@ -23,11 +23,24 @@ interface Props {
 export function Sprite({ fighter, side, state, shake }: Props) {
   const mirror = side === 'b' ? -1 : 1
   const resolvedState = state === 'ult' ? 'win' : state
+  // Pose fallback chain: state → stance → placeholder
+  const [stateFallback, setStateFallback] = useState<'stance' | 'attack' | 'win' | 'lose'>(resolvedState)
+  // If incoming state changes, reset the fallback
+  if (stateFallback !== resolvedState && stateFallback !== 'stance') {
+    setStateFallback(resolvedState)
+  }
   const candidate =
     fighter.sprites?.[state] ??
-    `/sprites/${fighter.id}/${resolvedState}.png`
+    `/sprites/${fighter.id}/${stateFallback}.png`
 
   const [errored, setErrored] = useState(false)
+  function handleError() {
+    if (stateFallback !== 'stance') {
+      setStateFallback('stance')
+    } else {
+      setErrored(true)
+    }
+  }
 
   return (
     <div
@@ -42,7 +55,7 @@ export function Sprite({ fighter, side, state, shake }: Props) {
         <KeyedSprite
           src={candidate}
           alt={fighter.name}
-          onError={() => setErrored(true)}
+          onError={handleError}
         />
       ) : (
         <PlaceholderSprite fighter={fighter} state={state} />

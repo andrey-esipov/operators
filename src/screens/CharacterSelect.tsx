@@ -23,11 +23,26 @@ export function CharacterSelect() {
   const hoveredFighter = getFighter(hovered)
   const arcadeMode = mode === 'arcade'
 
+  const startPractice = useGame((s) => s.startPractice)
+
   function pickFighter(id: string) {
     Sfx.menuSelect()
     if (arcadeMode) {
       setSelectedA(id)
       setTimeout(() => startArcade(id), 400)
+      return
+    }
+    if (mode === 'practice') {
+      // Practice mode flow: P1 picks themselves, P2 picks dummy opponent.
+      if (side === 'a') {
+        setSelectedA(id)
+        setSide('b')
+      } else {
+        setSelectedB(id)
+        if (selectedA) {
+          setTimeout(() => startPractice(selectedA, id), 250)
+        }
+      }
       return
     }
     if (side === 'a') {

@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { GameState, Move, ScenarioId, Side } from '../types'
-import { getFighter } from '../data/fighters'
+import { getFighter, STARTING_ROSTER } from '../data/fighters'
+import { AI_PROFILES } from '../data/ai-profiles'
 import { ARCADE_PROGRESSION } from '../data/scenarios'
 import { applyMove, initialRuntime, startTurn } from './applyMove'
 
@@ -28,8 +29,15 @@ interface Actions {
   /** Continue to next arcade fight */
   nextArcadeFight: () => void
   /** Game mode (vs = hot seat 2P; arcade = vs bots) */
-  mode: 'vs' | 'arcade'
-  setMode: (m: 'vs' | 'arcade') => void
+  mode: 'vs' | 'arcade' | 'practice' | 'daily'
+  setMode: (m: 'vs' | 'arcade' | 'practice' | 'daily') => void
+  /** AI difficulty applied to bots */
+  difficulty: 'easy' | 'normal' | 'hard'
+  setDifficulty: (d: 'easy' | 'normal' | 'hard') => void
+  /** Start practice mode against a chosen fighter */
+  startPractice: (player: string, opponent: string) => void
+  /** Start daily challenge (date-seeded matchup) */
+  startDaily: () => void
 }
 
 export const useGame = create<GameState & Actions>((set, get) => ({
@@ -50,6 +58,7 @@ export const useGame = create<GameState & Actions>((set, get) => ({
   musicEnabled: true,
   damagePulses: [],
   mode: 'vs',
+  difficulty: 'normal',
 
   setPhase: (p) => set({ phase: p }),
   toggleCrt: () => set((s) => ({ crtEnabled: !s.crtEnabled })),
@@ -58,6 +67,54 @@ export const useGame = create<GameState & Actions>((set, get) => ({
   setSelectedSide: (side, id) => set(() => side === 'a' ? { selectedA: id } : { selectedB: id }),
   selectFighters: (a, b) => set({ selectedA: a, selectedB: b }),
   setMode: (m) => set({ mode: m }),
+  setDifficulty: (d) => set({ difficulty: d }),
+
+  startPractice: (player, opponent) => {
+    set({
+      mode: 'practice',
+      phase: 'pre-fight',
+      fighterA: initialRuntime(player),
+      fighterB: initialRuntime(opponent),
+      round: 1,
+      roundsWon: { a: 0, b: 0 },
+      turn: 1,
+      activeSide: 'a',
+      log: [],
+      damagePulses: [],
+      selectedA: player,
+      selectedB: opponent,
+    })
+    setTimeout(() => set({ phase: 'fight' }), 2400)
+  },
+
+  startDaily: () => {
+    // Daily challenge: seed from today's date (UTC). Same matchup for everyone.
+    const today = new Date().toISOString().slice(0, 10)  // 'YYYY-MM-DD'
+    let h = 0
+    for (let i = 0; i < today.length; i++) h = (h * 31 + today.charCodeAt(i)) >>> 0
+    const all = STARTING_ROSTER
+    const player = all[h % all.length]
+    const oppPool = all.filter((x: string) => x !== player)
+    const opponent = oppPool[(h >>> 7) % oppPool.length]
+    const scenarios = ['pre-pmf', 'hypergrowth', 'plateau', 'ai-native', 'monetization', 'crisis', 'ipo-prep', 'distribution'] as const
+    const scenario = scenarios[(h >>> 13) % scenarios.length]
+    set({
+      mode: 'daily',
+      phase: 'pre-fight',
+      fighterA: initialRuntime(player),
+      fighterB: initialRuntime(opponent),
+      round: 1,
+      roundsWon: { a: 0, b: 0 },
+      turn: 1,
+      activeSide: 'a',
+      log: [],
+      damagePulses: [],
+      selectedA: player,
+      selectedB: opponent,
+      scenario,
+    })
+    setTimeout(() => set({ phase: 'fight' }), 4200)
+  },
 
   startArcade: (fighterId: string) => {
     set({ mode: 'arcade', arcadeStep: 0, selectedA: fighterId })
@@ -244,7 +301,18 @@ export const useGame = create<GameState & Actions>((set, get) => ({
     if (!target) return
     const turnStart = startTurn(target)
 
-    const updatedTarget = turnStart.runtime
+    let updatedTarget = turnStart.runtime
+    // PRACTICE MODE: player (side A) always has full resources + topped HP
+    // so they can experiment with the entire move kit freely.
+    if (state.mode === 'practice' && nextActive === 'a') {
+      updatedTarget = {
+        ...updatedTarget,
+        momentum: 10,
+        superMeter: 100,
+        hp: Math.max(updatedTarget.hp, Math.round(updatedTarget.maxHp * 0.8)),
+      }
+    }
+
     setTimeout(() => {
       set((s) => ({
         activeSide: nextActive,
@@ -294,11 +362,46 @@ export const useGame = create<GameState & Actions>((set, get) => ({
       return
     }
 
-    // Weight moves: prefer ultimates when available, then heavy, then combo, then setup, then light
-    const weights: Record<string, number> = {
-      ultimate: 10, heavy: 5, combo: 4, setup: 3, light: 2,
+    // Per-fighter AI profile (falls back to neutral) + global difficulty.
+    const profile = AI_PROFILES[def.id] ?? def.ai ?? {
+      aggression: 1.0, comboFocus: 1.0, ultRush: 1.0, defensiveBias: 0.0,
     }
-    const weighted = affordable.flatMap((m) => Array(weights[m.type] ?? 1).fill(m))
+    const difficulty = state.difficulty
+    const lowHp = rt.hp / rt.maxHp < 0.3
+
+    // Base weights (Normal). Easy = flatter, Hard = greedier.
+    const baseW: Record<string, number> = difficulty === 'easy'
+      ? { ultimate: 3, heavy: 3, combo: 3, setup: 3, light: 4 }
+      : difficulty === 'hard'
+      ? { ultimate: 18, heavy: 8, combo: 7, setup: 3, light: 2 }
+      : { ultimate: 10, heavy: 5, combo: 4, setup: 3, light: 2 }
+
+    // Apply personality multipliers
+    const weights: Record<string, number> = {
+      light: baseW.light,
+      setup: baseW.setup,
+      combo: baseW.combo * profile.comboFocus,
+      heavy: baseW.heavy * profile.aggression,
+      ultimate: baseW.ultimate * profile.aggression * profile.ultRush,
+    }
+
+    // Defensive bias when low HP — boost light + setup
+    if (lowHp && profile.defensiveBias > 0) {
+      weights.light *= 1 + profile.defensiveBias * 2
+      weights.setup *= 1 + profile.defensiveBias * 1.5
+      weights.ultimate *= 1 + profile.defensiveBias * 0.5  // still want to clutch ult
+    }
+
+    // Hard difficulty: prefer combo chains when setup was just played.
+    if (difficulty === 'hard' && rt.lastMoveId) {
+      for (const m of affordable) {
+        if (m.combosFrom?.includes(rt.lastMoveId)) {
+          weights[m.type] *= 3
+        }
+      }
+    }
+
+    const weighted = affordable.flatMap((m) => Array(Math.max(1, Math.round(weights[m.type] ?? 1))).fill(m))
     const choice = weighted[Math.floor(Math.random() * weighted.length)]
     get().castMove(choice)
   },

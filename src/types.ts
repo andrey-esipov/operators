@@ -73,6 +73,17 @@ export interface QuotePoolEntry {
   timestamp: string
 }
 
+export interface AIProfile {
+  /** Aggression — multiplier on heavy / ultimate weight (default 1.0) */
+  aggression: number
+  /** Combo focus — multiplier on combo / setup weight (default 1.0) */
+  comboFocus: number
+  /** Ult rush — bias toward using ult ASAP once available (default 1.0) */
+  ultRush: number
+  /** Defensive bias — chance to play light/setup when below 30% HP (default 0) */
+  defensiveBias: number
+}
+
 export interface FighterDef {
   id: string
   name: string
@@ -83,6 +94,8 @@ export interface FighterDef {
   /** Optional appearance description used only by the sprite generator
    *  (gpt-image-2 prompt). When set, the UI ignores this field. */
   spriteBio?: string
+  /** AI personality — when this fighter is bot-controlled. Defaults to neutral. */
+  ai?: AIProfile
   episode: string
   /** Hex accent color (player-side override) */
   accent: string
@@ -145,6 +158,7 @@ export type Phase =
   | 'arcade-victory'
   | 'quote-bank'
   | 'how-to-play'
+  | 'framework-encyclopedia'
 
 export interface BattleLogEntry {
   turn: number

@@ -49,11 +49,15 @@ export function MainMenu() {
     return () => clearInterval(id)
   }, [])
 
-  function go(mode: 'vs' | 'arcade') {
+  function go(mode: 'vs' | 'arcade' | 'practice') {
     Sfx.menuSelect()
     setMode(mode)
     setPhase('character-select')
   }
+
+  const startDaily = useGame((s) => s.startDaily)
+  const difficulty = useGame((s) => s.difficulty)
+  const setDifficulty = useGame((s) => s.setDifficulty)
 
   const currentQuote = allQuotes[quoteIdx]
   const focusFighter = FIGHTERS[focusIdx]
@@ -127,8 +131,30 @@ export function MainMenu() {
           accent="#00B4D8"
         />
         <div className="flex gap-2">
+          <MidButton
+            label="◇ DAILY"
+            subtitle="today's matchup"
+            onClick={() => { Sfx.menuSelect(); startDaily() }}
+            accent="#06D6A0"
+          />
+          <MidButton
+            label="◇ PRACTICE"
+            subtitle="train against any fighter"
+            onClick={() => go('practice')}
+            accent="#FCBF49"
+          />
+        </div>
+        <div className="flex gap-2 flex-wrap justify-center">
           <SmallButton label="HOW TO PLAY" onClick={() => { Sfx.menuSelect(); setPhase('how-to-play') }} />
+          <SmallButton label="ENCYCLOPEDIA" onClick={() => { Sfx.menuSelect(); setPhase('framework-encyclopedia') }} />
           <SmallButton label="QUOTE BANK" onClick={() => { Sfx.menuSelect(); setPhase('quote-bank') }} />
+          <SmallButton
+            label={`DIFFICULTY · ${difficulty.toUpperCase()}`}
+            onClick={() => {
+              Sfx.menuMove()
+              setDifficulty(difficulty === 'easy' ? 'normal' : difficulty === 'normal' ? 'hard' : 'easy')
+            }}
+          />
           <SmallButton label={`♪ ${music ? 'ON' : 'OFF'}`} onClick={toggleMusic} />
           <SmallButton label={`CRT · ${crt ? 'ON' : 'OFF'}`} onClick={toggleCrt} />
         </div>
@@ -337,6 +363,50 @@ function MenuButton({
       {label}
       <div
         className="font-body text-base tracking-normal mt-0.5"
+        style={{
+          color: 'white',
+          opacity: 0.7,
+          textShadow: 'none',
+          letterSpacing: 'normal',
+        }}
+      >
+        {subtitle}
+      </div>
+    </button>
+  )
+}
+
+function MidButton({
+  label,
+  subtitle,
+  onClick,
+  accent,
+}: {
+  label: string
+  subtitle: string
+  onClick: () => void
+  accent: string
+}) {
+  return (
+    <button
+      onClick={onClick}
+      onMouseEnter={Sfx.menuMove}
+      className="relative px-4 py-1.5 font-display text-base tracking-widest hover:translate-y-[-2px] transition-transform"
+      style={{
+        background: `linear-gradient(180deg, ${accent}55, ${accent}22)`,
+        color: 'white',
+        border: `2px solid ${accent}`,
+        boxShadow:
+          `inset -2px -2px 0 rgba(0,0,0,0.6), inset 2px 2px 0 rgba(255,255,255,0.2), 0 0 16px ${accent}55`,
+        cursor: 'pointer',
+        minWidth: 170,
+        letterSpacing: '2px',
+        textShadow: '2px 2px 0 black',
+      }}
+    >
+      {label}
+      <div
+        className="font-body text-sm tracking-normal mt-0.5"
         style={{
           color: 'white',
           opacity: 0.7,

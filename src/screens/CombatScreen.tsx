@@ -13,10 +13,11 @@ import { ComboBanner } from '../components/ComboBanner'
 import { DamageFloats } from '../components/DamageFloat'
 import { StatusChip } from '../components/StatusChip'
 import { KOCinematic } from '../components/KOCinematic'
+import { youtubeDeepLink } from '../lib/youtube'
 import { Sfx } from '../lib/audio'
 import { AnimatePresence, motion } from 'framer-motion'
 
-export function CombatScreen({ mode = 'vs' }: { mode?: 'vs' | 'arcade' }) {
+export function CombatScreen({ mode = 'vs' }: { mode?: 'vs' | 'arcade' | 'practice' | 'daily' }) {
   const fighterA = useGame((s) => s.fighterA)
   const fighterB = useGame((s) => s.fighterB)
   const scenario = useGame((s) => s.scenario)
@@ -37,7 +38,7 @@ export function CombatScreen({ mode = 'vs' }: { mode?: 'vs' | 'arcade' }) {
   const [shaking, setShaking] = useState(false)
   // Hit-lag: brief desaturate/scale on the side that just took damage. Re-keys on every damagePulse.
   const [hitLag, setHitLag] = useState<{ side: 'a' | 'b'; id: number } | null>(null)
-  const [lastQuote, setLastQuote] = useState<{ q: string; ep: string; t: string; name: string } | null>(null)
+  const [lastQuote, setLastQuote] = useState<{ q: string; ep: string; t: string; name: string; fighterId: string } | null>(null)
   /** Which side is currently in attack-pose (briefly after casting) */
   const [attackingSide, setAttackingSide] = useState<'a' | 'b' | null>(null)
   const resetMatch = useGame((s) => s.resetMatch)
@@ -93,6 +94,7 @@ export function CombatScreen({ mode = 'vs' }: { mode?: 'vs' | 'arcade' }) {
         ep: rotated.episode || last.episode,
         t: rotated.timestamp || last.timestamp,
         name: def?.shortName ?? '',
+        fighterId: fighterIdForQuote ?? '',
       })
       // Read time: short quotes get less, long ones get more. 4.5s - 6s.
       const readTime = Math.min(6500, Math.max(4500, rotated.quote.length * 60))
@@ -152,9 +154,9 @@ export function CombatScreen({ mode = 'vs' }: { mode?: 'vs' | 'arcade' }) {
     }))
   }, [timeLeft, fighterA, fighterB])
 
-  // Bot AI for player B in arcade mode
+  // Bot AI for player B in single-player modes (arcade / practice / daily)
   useEffect(() => {
-    if (mode !== 'arcade') return
+    if (mode === 'vs') return
     if (activeSide !== 'b') return
     const id = setTimeout(() => aiPlay('b'), 1200 + Math.random() * 600)
     return () => clearTimeout(id)
@@ -318,8 +320,24 @@ export function CombatScreen({ mode = 'vs' }: { mode?: 'vs' | 'arcade' }) {
             <div className="font-body text-2xl text-white leading-snug italic">
               "{lastQuote.q}"
             </div>
-            <div className="font-display text-[8px] tracking-widest mt-2" style={{ color: '#FFD60A' }}>
-              — {lastQuote.name} · {lastQuote.ep} · {lastQuote.t}
+            <div className="flex items-center justify-center gap-3 mt-2">
+              <span className="font-display text-[8px] tracking-widest" style={{ color: '#FFD60A' }}>
+                — {lastQuote.name} · {lastQuote.ep} · {lastQuote.t}
+              </span>
+              {(() => {
+                const link = youtubeDeepLink(lastQuote.fighterId, lastQuote.t)
+                return link ? (
+                  <a
+                    href={link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-display text-[8px] tracking-widest px-2 py-0.5"
+                    style={{ border: '1px solid #FFD60A', color: '#FFD60A', textDecoration: 'none' }}
+                  >
+                    ▶ EPISODE
+                  </a>
+                ) : null
+              })()}
             </div>
           </motion.div>
         )}
@@ -367,7 +385,7 @@ function ActiveMoves({
   fighterA: NonNullable<ReturnType<typeof useGame.getState>['fighterA']>
   fighterB: NonNullable<ReturnType<typeof useGame.getState>['fighterB']>
   onCast: (m: Move) => void
-  mode: 'vs' | 'arcade'
+  mode: 'vs' | 'arcade' | 'practice' | 'daily'
   aSuperReady: boolean
   bSuperReady: boolean
 }) {
@@ -375,7 +393,8 @@ function ActiveMoves({
   const def = useMemo(() => getFighter(activeRt.defId)!, [activeRt.defId])
   const superReady = side === 'a' ? aSuperReady : bSuperReady
 
-  const showHumanControls = !(mode === 'arcade' && side === 'b')
+  // In single-player modes (arcade / practice / daily) only player A is human.
+  const showHumanControls = !(mode !== 'vs' && side === 'b')
 
   return (
     <div className="absolute left-0 right-0 bottom-0 z-20 px-6 pb-4">

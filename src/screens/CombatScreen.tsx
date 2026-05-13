@@ -94,9 +94,11 @@ export function CombatScreen({ mode = 'vs' }: { mode?: 'vs' | 'arcade' }) {
       const readTime = Math.min(6500, Math.max(4500, rotated.quote.length * 60))
       setTimeout(() => setLastQuote(null), readTime)
     }
-    // Attack sprite pose: briefly switch the attacker to attack frame
+    // Attack sprite pose: briefly switch the attacker to attack frame.
+    // 800ms is long enough for the pose swap + lunge to register visually
+    // without dragging out the turn rhythm.
     setAttackingSide(last.attacker)
-    setTimeout(() => setAttackingSide(null), 350)
+    setTimeout(() => setAttackingSide(null), 800)
   }, [log.length])
 
   // Round timer

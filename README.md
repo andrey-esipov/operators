@@ -30,15 +30,16 @@ npm run dev
 
 ## Deploy to Replit (buildathon submission)
 
-1. Go to https://replit.com → Create Repl → Import from GitHub → paste `https://github.com/andrey-esipov/operators`
+The repo is fully self-contained — sprites and stages are committed under `public/`, so the build doesn't need any secrets to ship.
+
+1. Go to https://replit.com → **Create Repl** → **Import from GitHub** → paste `https://github.com/andrey-esipov/operators`
 2. Replit auto-detects the `.replit` config and runs `npm install && npm run build`
-3. Click `Deploy` → choose `Autoscale` or `Static` deployment
-4. Live at `<your-repl-name>.replit.app`
-5. (Optional) Generate real sprites with Azure gpt-image-2 by adding secrets in the Replit Secrets panel:
-   - `AZURE_OPENAI_ENDPOINT`
-   - `AZURE_OPENAI_API_KEY`
-   - `AZURE_OPENAI_DEPLOYMENT`
-   Then run `npx tsx scripts/generate-fighter-sprites.ts` from the Replit shell.
+3. Click **Deploy** in the top-right → **Static deployment** → choose a name (e.g. `operators`)
+4. Live at `<your-repl-name>.replit.app` (~30s build time)
+5. (Optional) Regenerate sprites with your own Azure gpt-image-2: add these Replit Secrets, then run `npx tsx scripts/generate-fighter-sprites.ts --force`
+   - `AZURE_OPENAI_ENDPOINT` — `https://<resource>.openai.azure.com`
+   - `AZURE_OPENAI_API_KEY` — your key
+   - `AZURE_OPENAI_DEPLOYMENT` — `gpt-image-2`
 
 ## Build
 

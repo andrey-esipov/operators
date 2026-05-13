@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { useGame } from './state/game'
 import { MainMenu } from './screens/MainMenu'
 import { CharacterSelect } from './screens/CharacterSelect'
+import { StageSelect } from './screens/StageSelect'
 import { PreFight } from './screens/PreFight'
 import { CombatScreen } from './screens/CombatScreen'
 import { RoundEnd } from './screens/RoundEnd'
@@ -26,6 +27,7 @@ export function App() {
     <div className="w-full h-full" style={{ background: '#0F0A1A' }}>
       {phase === 'menu' && <MainMenu />}
       {phase === 'character-select' && <CharacterSelect />}
+      {phase === 'stage-select' && <StageSelect />}
       {phase === 'pre-fight' && <PreFight />}
       {phase === 'fight' && <CombatScreen mode={mode} />}
       {phase === 'round-end' && <RoundEnd />}

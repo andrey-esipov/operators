@@ -133,6 +133,7 @@ export interface FighterRuntime {
 export type Phase =
   | 'menu'
   | 'character-select'
+  | 'stage-select'
   | 'pre-fight'
   | 'fight'
   | 'round-end'

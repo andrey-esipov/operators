@@ -129,7 +129,10 @@ async function generateSpriteOnce(bio: string, pose: PoseSpec): Promise<Buffer> 
 }
 
 async function generateSprite(bio: string, pose: PoseSpec): Promise<Buffer> {
-  const maxAttempts = 4
+  // Azure's gpt-image-2 deployment hits EngineOverloaded waves; we need to
+  // be very patient. 10 attempts with backoff capped at 90s gives ~6-8 minutes
+  // of retry budget per sprite — enough to outlast typical overload windows.
+  const maxAttempts = 10
   let lastErr: Error | null = null
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
@@ -145,10 +148,12 @@ async function generateSprite(bio: string, pose: PoseSpec): Promise<Buffer> {
         msg.includes('503') ||
         msg.includes('504') ||
         msg.includes('aborted') ||
-        msg.includes('ECONNRESET')
+        msg.includes('ECONNRESET') ||
+        msg.includes('EngineOverloaded')
       if (!isRetryable || attempt === maxAttempts) throw lastErr
-      // Exponential backoff: 3s, 9s, 27s
-      const wait = Math.pow(3, attempt) * 1000 + Math.random() * 1500
+      // Exponential backoff capped at 90s + jitter: 5s, 15s, 45s, 90s, 90s, ...
+      const base = Math.min(90_000, Math.pow(3, attempt) * 1000)
+      const wait = base + Math.random() * 3000
       console.log(`    ↻ retry ${attempt}/${maxAttempts - 1} after ${(wait / 1000).toFixed(1)}s — ${msg.slice(0, 80)}`)
       await new Promise((r) => setTimeout(r, wait))
     }
@@ -188,8 +193,9 @@ async function main() {
       } catch (e) {
         console.warn(`    ✗ failed: ${(e as Error).message}`)
       }
-      // Polite rate limit — wait longer between sprites to avoid quota throttling
-      await new Promise((r) => setTimeout(r, 8000))
+      // Polite rate limit — wait longer between sprites to give Azure breathing room.
+      // 15s minimum + jitter helps avoid sustained EngineOverloaded waves.
+      await new Promise((r) => setTimeout(r, 15_000 + Math.random() * 5000))
     }
   }
   console.log('\nDone.')

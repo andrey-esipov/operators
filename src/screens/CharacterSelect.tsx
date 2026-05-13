@@ -10,15 +10,15 @@ const ROSTER_ORDER = [...STARTING_ROSTER, ...UNLOCKABLES]
 
 export function CharacterSelect() {
   const mode = useGame((s) => s.mode)
-  const startMatch = useGame((s) => s.startMatch)
   const startArcade = useGame((s) => s.startArcade)
   const setPhase = useGame((s) => s.setPhase)
   const [side, setSide] = useState<'a' | 'b'>('a')
   const [selectedA, setSelectedA] = useState<string | null>(null)
   const [selectedB, setSelectedB] = useState<string | null>(null)
   const [hovered, setHovered] = useState<string>('chesky')
-  const [scenario, setScenario] = useState<ScenarioId>('pre-pmf')
   const [expanded, setExpanded] = useState(false)
+
+  const setSelectedSide = useGame((s) => s.setSelectedSide)
 
   const hoveredFighter = getFighter(hovered)
   const arcadeMode = mode === 'arcade'
@@ -36,7 +36,10 @@ export function CharacterSelect() {
     } else {
       setSelectedB(id)
       if (selectedA) {
-        startMatch(selectedA, id, scenario)
+        // Persist both picks into the store, then advance to stage select
+        setSelectedSide('a', selectedA)
+        setSelectedSide('b', id)
+        setTimeout(() => useGame.getState().setPhase('stage-select'), 250)
       }
     }
   }
@@ -79,7 +82,7 @@ export function CharacterSelect() {
       {!arcadeMode && (
         <div className="relative z-10 grid grid-cols-3 gap-3 items-end flex-shrink-0">
           <SideCard side="a" id={selectedA} active={side === 'a'} />
-          <ScenarioPicker scenario={scenario} onChange={setScenario} />
+          <NextStepHint hasA={!!selectedA} hasB={!!selectedB} />
           <SideCard side="b" id={selectedB} active={side === 'b'} />
         </div>
       )}
@@ -197,11 +200,14 @@ function ProfileCard({
             <Stat label="HP" value={String(fighter.maxHp)} color="#06D6A0" />
             <Stat
               label="BEST IN"
-              value={Object.entries(fighter.scenarioBonus)
-                .filter(([, v]) => v >= 1.3)
-                .map(([k]) => SCENARIOS[k as ScenarioId].name.split(' ')[0])
-                .slice(0, 2)
-                .join(' / ')}
+              value={(() => {
+                const tops = Object.entries(fighter.scenarioBonus)
+                  .filter(([, v]) => v >= 1.3)
+                  .sort((a, b) => b[1] - a[1])
+                  .slice(0, 2)
+                  .map(([k]) => SCENARIOS[k as ScenarioId].tag)
+                return tops.length > 0 ? tops.join(' / ') : 'ALL-ROUNDER'
+              })()}
               color="#FFD60A"
             />
           </div>
@@ -388,45 +394,34 @@ function SideCard({ side, id, active }: { side: 'a' | 'b'; id: string | null; ac
   )
 }
 
-function ScenarioPicker({
-  scenario,
-  onChange,
-}: {
-  scenario: ScenarioId
-  onChange: (s: ScenarioId) => void
-}) {
-  const ids = Object.keys(SCENARIOS) as ScenarioId[]
+function NextStepHint({ hasA, hasB }: { hasA: boolean; hasB: boolean }) {
+  const ready = hasA && hasB
   return (
     <div
-      className="flex flex-col items-center gap-1 p-2"
+      className="flex flex-col items-center justify-center gap-1 p-3 text-center"
       style={{
-        background: 'rgba(0,0,0,0.3)',
-        border: '2px solid #FFD60A',
+        background: 'rgba(0,0,0,0.4)',
+        border: `2px solid ${ready ? '#06D6A0' : '#FFD60A66'}`,
+        boxShadow: ready
+          ? '0 0 14px #06D6A0AA, inset -2px -2px 0 rgba(0,0,0,0.5)'
+          : 'inset -2px -2px 0 rgba(0,0,0,0.5)',
       }}
     >
-      <span className="font-display text-[10px] tracking-widest" style={{ color: '#FFD60A' }}>
-        STAGE
-      </span>
-      <select
-        value={scenario}
-        onChange={(e) => {
-          Sfx.menuMove()
-          onChange(e.target.value as ScenarioId)
-        }}
-        className="font-display text-[9px] tracking-widest bg-transparent text-white border-2 border-yellow-400 px-2 py-1 w-full"
+      <span
+        className="font-display text-[10px] tracking-widest"
+        style={{ color: ready ? '#06D6A0' : '#FFD60A' }}
       >
-        {ids.map((id) => (
-          <option key={id} value={id} style={{ background: '#1A1230' }}>
-            {SCENARIOS[id].name}
-          </option>
-        ))}
-      </select>
-      <p className="font-body text-sm text-white/80 text-center px-1 leading-tight">
-        {SCENARIOS[scenario].description}
+        {hasA && !hasB ? '↓ P2 PICKS' : hasA && hasB ? '✓ READY' : 'P1 PICKS FIRST'}
+      </span>
+      <p className="font-body text-sm text-white/70 leading-snug">
+        {ready
+          ? 'Next: select your battleground.'
+          : 'After both picks you choose the stage (or let it auto-pick).'}
       </p>
     </div>
   )
 }
 
-// Suppress unused-import warning for FIGHTERS
+// Suppress unused-import warning for FIGHTERS / ScenarioId — kept for type references inside SCENARIOS lookups
 void FIGHTERS
+void (null as ScenarioId | null)

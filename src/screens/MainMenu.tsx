@@ -4,10 +4,7 @@ import { Sfx } from '../lib/audio'
 import { Logo } from '../components/Logo'
 import { FIGHTERS } from '../data/fighters'
 import { Sprite } from '../components/Sprite'
-import quotePool from '../data/quote-pool.json'
-import type { QuotePoolEntry } from '../types'
-
-const POOL = quotePool as Record<string, QuotePoolEntry[]>
+import { PULL_QUOTES } from '../data/pull-quotes'
 
 export function MainMenu() {
   const setPhase = useGame((s) => s.setPhase)
@@ -15,25 +12,22 @@ export function MainMenu() {
   const toggleCrt = useGame((s) => s.toggleCrt)
   const crt = useGame((s) => s.crtEnabled)
 
-  // Cycle through a random quote every 6 seconds
+  // Cycle through hand-curated pull quotes every 7 seconds
   const allQuotes = useMemo(() => {
-    const flat: Array<{ q: string; who: string; ep: string }> = []
-    for (const [fid, list] of Object.entries(POOL)) {
-      const f = FIGHTERS.find((x) => x.id === fid)
-      if (!f) continue
-      for (const item of list) {
-        flat.push({ q: item.quote, who: f.shortName, ep: item.timestamp })
-      }
+    // Shuffle once so the order isn't predictable but never plays a low-quality auto-extracted line
+    const arr = [...PULL_QUOTES]
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1))
+      ;[arr[i], arr[j]] = [arr[j], arr[i]]
     }
-    return flat
+    return arr
   }, [])
   const [quoteIdx, setQuoteIdx] = useState(0)
   useEffect(() => {
     if (allQuotes.length === 0) return
-    setQuoteIdx(Math.floor(Math.random() * allQuotes.length))
     const id = setInterval(() => {
-      setQuoteIdx((i) => (i + Math.floor(1 + Math.random() * 8)) % allQuotes.length)
-    }, 6000)
+      setQuoteIdx((i) => (i + 1) % allQuotes.length)
+    }, 7000)
     return () => clearInterval(id)
   }, [allQuotes.length])
 
@@ -105,9 +99,9 @@ export function MainMenu() {
         >
           {currentQuote ? (
             <>
-              &ldquo;{currentQuote.q}&rdquo;{' '}
+              &ldquo;{currentQuote.quote}&rdquo;{' '}
               <span className="font-display text-[8px] tracking-widest" style={{ color: '#FFD60A' }}>
-                — {currentQuote.who} · {currentQuote.ep}
+                — {currentQuote.who} · {currentQuote.episode}
               </span>
             </>
           ) : (

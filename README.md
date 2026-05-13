@@ -85,4 +85,26 @@ AZURE_OPENAI_API_VERSION=2025-04-01-preview
 
 ## Status
 
-`init` — May 12, 2026. Daily build-in-public progress on X with #lennysbuildathon.
+May 13, 2026 — 8 fighters all sprite-art complete, 8 stages, full combat loop, Arcade Mode + VS Mode + Quote Bank live. Building in public on X with #lennysbuildathon.
+
+| Fighter | Episode | Archetype | Sprites |
+|---|---|---|---|
+| Brian Chesky | ep 217 | AGGRO · Founder Mode | ✓ stance/attack/win/lose |
+| Shreyas Doshi | ep 142 | STRATEGY · Lock | ✓ |
+| Cat Wu | ep 304 | TEMPO · Ship Small | ✓ |
+| Madhavan Ramanujam | ep 273 | CONTROL · Pricing | ✓ |
+| Evan Spiegel | ep 308 | TANK · Distribution | ✓ |
+| Nick Turley | ep 287 | GLASS · Hypergrowth | ✓ |
+| Marty Cagan | ep 89 | CONTROL · Discovery | ✓ |
+| Lenny Rachitsky ★ (boss) | ep 1–298 | BOSS · Pattern Match | ✓ |
+
+| Stage | Theme |
+|---|---|
+| Pre-PMF Garage | Early scrappy startup |
+| Hypergrowth Office | Scaling, chart wall |
+| The Plateau | Empty boardroom at sunset |
+| The Datacenter | AI-native, GPU racks |
+| The Cap Table | Executive negotiation |
+| The Layoff | Crisis, packed boxes |
+| Conference Stage | IPO prep, TED-talk audience |
+| Hollywood Sign | Distribution destiny |

@@ -613,6 +613,7 @@ export const FIGHTERS: FighterDef[] = [
     shortName: 'LENNY',
     archetype: 'BOSS · PATTERN MATCH',
     bio: 'Host. Synthesizes patterns across 300+ episodes. The final pattern-matcher.',
+    spriteBio: 'a friendly-faced man in his late 30s with short light brown / dirty-blond hair, clean-shaven, wearing a casual button-up shirt with rolled-up sleeves, large studio headphones around his neck, holding a podcast microphone on a desk arm — Lenny Rachitsky, host of Lenny\'s Podcast',
     episode: 'ep 1–298',
     accent: '#FFD60A',
     maxHp: 1200,

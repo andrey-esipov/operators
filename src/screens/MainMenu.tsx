@@ -46,12 +46,11 @@ export function MainMenu() {
     return () => clearInterval(id)
   }, [])
 
-  // Attract mode: idle 10s → fullscreen SF II-style sizzle reel.
-  // While menu is showing: any meaningful interaction resets the idle timer.
-  // While attract IS showing: only an explicit click/key/touch exits it
-  // (mouse-hover doesn't kill it — that was making it close instantly when
-  // the cursor was on top of the attract screen after we'd just entered it).
-  const [attract, setAttract] = useState(false)
+  // Attract mode: defaults ON at first menu load — the sizzle reel IS
+  // the first-impression experience (SF II opens to its attract mode too).
+  // Any explicit click/key/touch/wheel drops the player into the real menu;
+  // 10s of idle on the menu re-arms the reel.
+  const [attract, setAttract] = useState(true)
   useEffect(() => {
     if (attract) {
       // Only explicit interactions exit. Pointermove is intentionally ignored.

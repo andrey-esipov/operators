@@ -19,13 +19,26 @@ const FIGHTER_TRANSCRIPTS: Record<string, string[]> = {
   spiegel: ['evan-spiegel'],
   turley: ['nick-turley'],
   cagan: ['marty-cagan'],
-  // New roster
+  // First expansion
   altman: ['sam-altman', 'altman'],
   taylor: ['bret-taylor'],
   lazar: ['lazar-jovanovic'],
   amjad: ['amjad-masad'],
   gokul: ['gokul-rajaram'],
   dunford: ['april-dunford'],
+  // May 2026 expansion — CEOs / AI stars / high-profile multi-appearance guests
+  andreessen: ['marc-andreessen'],
+  tobi: ['tobi'],  // file slug 'tobi-lutke' matches via file substring; speaker name has umlaut ü, match on 'tobi' instead
+  drew: ['drew-houston'],
+  dylan: ['dylan-field'],
+  krieger: ['mike-krieger'],
+  stewart: ['stewart-butterfield'],
+  jason: ['jason-fried'],
+  simon: ['simon-willison'],
+  seth: ['seth-godin'],
+  nikita: ['nikita-bier'],
+  julie: ['julie-zhuo'],
+  annie: ['annie-duke'],
   lenny: [], // host — extract from every episode
 }
 

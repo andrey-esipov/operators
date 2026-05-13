@@ -93,7 +93,7 @@ export const useGame = create<GameState & Actions>((set, get) => ({
       damagePulses: [],
       selectedB: opponentId,
     })
-    setTimeout(() => set({ phase: 'fight' }), 1600)
+    setTimeout(() => set({ phase: 'fight' }), 4200)
   },
 
   startMatch: (a, b, scenario) => {
@@ -111,8 +111,8 @@ export const useGame = create<GameState & Actions>((set, get) => ({
       selectedA: a,
       selectedB: b,
     })
-    // After short delay, the screen transitions to 'fight'
-    setTimeout(() => set({ phase: 'fight' }), 1400)
+    // After cinematic pre-fight beat (stage reveal), the screen transitions to 'fight'
+    setTimeout(() => set({ phase: 'fight' }), 4200)
   },
 
   newRound: () => {
@@ -130,7 +130,7 @@ export const useGame = create<GameState & Actions>((set, get) => ({
       phase: 'pre-fight',
       roundsWon, // preserved
     })
-    setTimeout(() => set({ phase: 'fight' }), 1200)
+    setTimeout(() => set({ phase: 'fight' }), 2400)
   },
 
   resetMatch: () => {

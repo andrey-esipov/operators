@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { useGame } from '../state/game'
-import { STARTING_ROSTER, getFighter, UNLOCKABLES } from '../data/fighters'
+import { STARTING_ROSTER, getFighter, UNLOCKABLES, FIGHTERS } from '../data/fighters'
 import { SCENARIOS } from '../data/scenarios'
 import { Sprite } from '../components/Sprite'
 import { Sfx } from '../lib/audio'
-import type { ScenarioId } from '../types'
+import type { FighterDef, Move, ScenarioId } from '../types'
 
 const ROSTER_ORDER = [...STARTING_ROSTER, ...UNLOCKABLES]
 
@@ -16,16 +16,16 @@ export function CharacterSelect() {
   const [side, setSide] = useState<'a' | 'b'>('a')
   const [selectedA, setSelectedA] = useState<string | null>(null)
   const [selectedB, setSelectedB] = useState<string | null>(null)
-  const [hovered, setHovered] = useState<string | null>('chesky')
+  const [hovered, setHovered] = useState<string>('chesky')
   const [scenario, setScenario] = useState<ScenarioId>('pre-pmf')
+  const [expanded, setExpanded] = useState(false)
 
-  const hoveredFighter = hovered ? getFighter(hovered) : null
+  const hoveredFighter = getFighter(hovered)
   const arcadeMode = mode === 'arcade'
 
   function pickFighter(id: string) {
     Sfx.menuSelect()
     if (arcadeMode) {
-      // Arcade only picks player 1, then auto-starts
       setSelectedA(id)
       setTimeout(() => startArcade(id), 400)
       return
@@ -42,7 +42,7 @@ export function CharacterSelect() {
   }
 
   return (
-    <div className="relative w-full h-full flex flex-col p-6 gap-4 overflow-hidden">
+    <div className="relative w-full h-full flex flex-col p-4 gap-3 overflow-hidden">
       <div
         className="absolute inset-0"
         style={{
@@ -51,7 +51,7 @@ export function CharacterSelect() {
         }}
       />
 
-      <div className="relative z-10 flex items-center justify-between">
+      <div className="relative z-10 flex items-center justify-between flex-shrink-0">
         <button
           onClick={() => {
             Sfx.menuMove()
@@ -61,7 +61,13 @@ export function CharacterSelect() {
         >
           ← BACK
         </button>
-        <h1 className="font-display text-2xl tracking-widest" style={{ color: '#FFD60A', textShadow: '4px 4px 0 rgba(0,0,0,0.6)' }}>
+        <h1
+          className="font-display text-2xl tracking-widest"
+          style={{
+            color: '#FFD60A',
+            textShadow: '4px 4px 0 rgba(0,0,0,0.6)',
+          }}
+        >
           {arcadeMode ? 'ARCADE MODE · PICK YOUR FIGHTER' : 'SELECT YOUR OPERATOR'}
         </h1>
         <div className="font-display text-[10px] tracking-widest text-white/70">
@@ -69,85 +75,283 @@ export function CharacterSelect() {
         </div>
       </div>
 
-      {/* Selected side display */}
-      {arcadeMode ? (
-        <div className="relative z-10 px-4 py-2 text-center font-display text-base tracking-widest text-white/80">
-          Beat 8 stages. Final boss: Lenny himself. Win once to unlock the rest of the roster.
-        </div>
-      ) : (
-        <div className="relative z-10 grid grid-cols-3 gap-4 items-end">
+      {/* Selected sides (VS mode only) */}
+      {!arcadeMode && (
+        <div className="relative z-10 grid grid-cols-3 gap-3 items-end flex-shrink-0">
           <SideCard side="a" id={selectedA} active={side === 'a'} />
           <ScenarioPicker scenario={scenario} onChange={setScenario} />
           <SideCard side="b" id={selectedB} active={side === 'b'} />
         </div>
       )}
 
-      {/* Roster grid */}
-      <div className="relative z-10 grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-8 gap-3 flex-1 content-start">
-        {ROSTER_ORDER.map((id) => {
-          const f = getFighter(id)!
-          const isLocked = UNLOCKABLES.includes(id)
-          const isSelected = selectedA === id || selectedB === id
-          return (
-            <button
-              key={id}
-              onMouseEnter={() => {
-                setHovered(id)
-                Sfx.menuMove()
-              }}
-              onClick={() => !isLocked && pickFighter(id)}
-              disabled={isLocked}
-              className="relative aspect-square flex items-center justify-center transition-transform hover:scale-105"
-              style={{
-                background: `linear-gradient(180deg, ${f.accent}33, ${f.accent}11)`,
-                border: `2px solid ${isSelected ? 'white' : f.accent}`,
-                boxShadow:
-                  hovered === id
-                    ? `0 0 0 2px ${f.accent}, inset -2px -2px 0 rgba(0,0,0,0.4)`
-                    : 'inset -2px -2px 0 rgba(0,0,0,0.4), inset 2px 2px 0 rgba(255,255,255,0.15)',
-                cursor: isLocked ? 'not-allowed' : 'pointer',
-                opacity: isLocked ? 0.4 : 1,
-              }}
-            >
-              <Sprite fighter={f} side="a" state="stance" />
-              <div
-                className="absolute left-0 right-0 bottom-0 font-display text-[7px] tracking-widest text-center py-1 text-white"
-                style={{ background: 'rgba(0,0,0,0.7)' }}
-              >
-                {f.shortName}
-              </div>
-              {isLocked && (
-                <div className="absolute inset-0 flex items-center justify-center font-display text-xl text-white/80" style={{ background: 'rgba(0,0,0,0.6)' }}>
-                  ?
-                </div>
-              )}
-            </button>
-          )
-        })}
-      </div>
-
-      {hoveredFighter && (
-        <div className="relative z-10 px-6 py-3 font-body text-base" style={{
-          background: 'rgba(15,10,26,0.85)',
-          borderTop: `2px solid ${hoveredFighter.accent}`,
-        }}>
-          <div className="flex items-baseline gap-3">
-            <span className="font-display text-base tracking-widest" style={{ color: hoveredFighter.accent }}>
-              {hoveredFighter.name.toUpperCase()}
-            </span>
-            <span className="font-display text-[8px] tracking-widest text-white/60">
-              · {hoveredFighter.episode}
-            </span>
-            <span className="font-display text-[8px] tracking-widest text-white/40">
-              · {hoveredFighter.archetype}
-            </span>
-          </div>
-          <p className="text-white/80 text-xl mt-1">{hoveredFighter.bio}</p>
-          <p className="text-white/60 text-base mt-1 italic">
-            Signature: {hoveredFighter.ult.name} — "{hoveredFighter.ult.quote}"
-          </p>
+      {arcadeMode && (
+        <div className="relative z-10 px-4 py-2 text-center font-display text-base tracking-widest text-white/80 flex-shrink-0">
+          Beat 8 stages. Final boss: Lenny himself.
         </div>
       )}
+
+      {/* MAIN AREA: roster + profile */}
+      <div className="relative z-10 flex gap-4 flex-1 min-h-0">
+        {/* LEFT: roster grid */}
+        <div
+          className="grid gap-2 content-start auto-rows-max overflow-y-auto pr-2"
+          style={{
+            gridTemplateColumns: 'repeat(5, minmax(0, 1fr))',
+            flex: '1 1 0',
+            maxWidth: '50%',
+          }}
+        >
+          {ROSTER_ORDER.map((id) => {
+            const f = getFighter(id)!
+            const isLocked = UNLOCKABLES.includes(id)
+            const isSelected = selectedA === id || selectedB === id
+            const isHovered = hovered === id
+            return (
+              <button
+                key={id}
+                onMouseEnter={() => {
+                  setHovered(id)
+                  Sfx.menuMove()
+                }}
+                onClick={() => !isLocked && pickFighter(id)}
+                disabled={isLocked}
+                className="relative aspect-square flex items-center justify-center transition-transform hover:scale-105"
+                style={{
+                  background: `linear-gradient(180deg, ${f.accent}33, ${f.accent}11)`,
+                  border: `2px solid ${isSelected ? 'white' : isHovered ? f.accent : f.accent + '88'}`,
+                  boxShadow: isHovered
+                    ? `0 0 16px ${f.accent}, inset -2px -2px 0 rgba(0,0,0,0.4)`
+                    : 'inset -2px -2px 0 rgba(0,0,0,0.4), inset 2px 2px 0 rgba(255,255,255,0.15)',
+                  cursor: isLocked ? 'not-allowed' : 'pointer',
+                  opacity: isLocked ? 0.4 : 1,
+                }}
+              >
+                <Sprite fighter={f} side="a" state="stance" />
+                <div
+                  className="absolute left-0 right-0 bottom-0 font-display text-[7px] tracking-widest text-center py-1 text-white"
+                  style={{ background: 'rgba(0,0,0,0.75)' }}
+                >
+                  {f.shortName}
+                </div>
+                {isLocked && (
+                  <div
+                    className="absolute inset-0 flex items-center justify-center font-display text-2xl text-white/90"
+                    style={{ background: 'rgba(0,0,0,0.6)' }}
+                  >
+                    ?
+                  </div>
+                )}
+              </button>
+            )
+          })}
+        </div>
+
+        {/* RIGHT: profile card */}
+        {hoveredFighter && (
+          <div
+            className="flex-1 overflow-y-auto pr-1 min-w-0"
+            style={{
+              background: 'rgba(15,10,26,0.9)',
+              border: `3px solid ${hoveredFighter.accent}`,
+              boxShadow: `inset -2px -2px 0 rgba(0,0,0,0.5), inset 2px 2px 0 rgba(255,255,255,0.1), 0 0 24px ${hoveredFighter.accent}55`,
+              minWidth: 420,
+            }}
+          >
+            <ProfileCard fighter={hoveredFighter} expanded={expanded} onToggle={() => setExpanded((x) => !x)} />
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function ProfileCard({
+  fighter,
+  expanded,
+  onToggle,
+}: {
+  fighter: FighterDef
+  expanded: boolean
+  onToggle: () => void
+}) {
+  return (
+    <div className="p-4">
+      {/* HEADER */}
+      <div className="flex gap-4 items-start">
+        <div style={{ width: 130, height: 180, flexShrink: 0 }}>
+          <Sprite fighter={fighter} side="a" state="stance" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div
+            className="font-display text-2xl tracking-widest"
+            style={{ color: fighter.accent, textShadow: '3px 3px 0 black' }}
+          >
+            {fighter.name.toUpperCase()}
+          </div>
+          <div className="font-display text-[8px] tracking-widest text-white/60 mt-1">
+            {fighter.archetype} · {fighter.episode}
+          </div>
+          <p className="font-body text-base text-white/90 mt-2 leading-snug">{fighter.bio}</p>
+          {/* Quick stats */}
+          <div className="flex gap-3 mt-3 font-display text-[8px] tracking-widest">
+            <Stat label="HP" value={String(fighter.maxHp)} color="#06D6A0" />
+            <Stat
+              label="BEST IN"
+              value={Object.entries(fighter.scenarioBonus)
+                .filter(([, v]) => v >= 1.3)
+                .map(([k]) => SCENARIOS[k as ScenarioId].name.split(' ')[0])
+                .slice(0, 2)
+                .join(' / ')}
+              color="#FFD60A"
+            />
+          </div>
+          <button
+            onClick={onToggle}
+            className="mt-3 font-display text-[9px] tracking-widest px-3 py-1"
+            style={{
+              background: `${fighter.accent}33`,
+              color: fighter.accent,
+              border: `1px solid ${fighter.accent}`,
+            }}
+          >
+            {expanded ? '▾ HIDE MOVE LIST' : '▸ SEE FULL MOVE LIST'}
+          </button>
+        </div>
+      </div>
+
+      {/* SIGNATURE ULT — always shown */}
+      <div
+        className="mt-4 p-3"
+        style={{
+          background: `linear-gradient(180deg, #F7258544, #F7258522)`,
+          border: '2px solid #F72585',
+          boxShadow: 'inset -2px -2px 0 rgba(0,0,0,0.5)',
+        }}
+      >
+        <div className="flex items-baseline justify-between">
+          <span className="font-display text-[9px] tracking-widest" style={{ color: '#F72585' }}>
+            ⚡ SIGNATURE ULTIMATE
+          </span>
+          <span className="font-num text-base tabular-nums text-white">
+            {fighter.ult.baseDamage} DMG
+          </span>
+        </div>
+        <div className="font-display text-base tracking-wider text-white mt-1">{fighter.ult.name}</div>
+        <p className="font-body italic text-lg text-white/85 mt-1 leading-snug">
+          &ldquo;{fighter.ult.quote}&rdquo;
+        </p>
+        <p className="font-display text-[7px] tracking-widest mt-1 text-white/50">
+          {fighter.ult.episode} · {fighter.ult.timestamp}
+        </p>
+        {fighter.ult.requiresSelfStatus && (
+          <p className="font-display text-[7px] tracking-widest mt-2" style={{ color: '#FFD60A' }}>
+            REQUIRES: {fighter.ult.requiresSelfStatus.replace('_', ' ')}
+          </p>
+        )}
+      </div>
+
+      {/* MOVE LIST — expandable */}
+      {expanded && (
+        <div className="mt-4 space-y-2">
+          <div
+            className="font-display text-[10px] tracking-widest"
+            style={{ color: fighter.accent, borderBottom: `1px solid ${fighter.accent}` }}
+          >
+            ▌ FULL MOVE LIST
+          </div>
+          {fighter.moves.map((m) => (
+            <MoveDetail key={m.id} move={m} />
+          ))}
+
+          {/* Scenario bonus full breakdown */}
+          <div
+            className="font-display text-[10px] tracking-widest mt-4 pt-2"
+            style={{ color: fighter.accent, borderBottom: `1px solid ${fighter.accent}` }}
+          >
+            ▌ SCENARIO BONUSES
+          </div>
+          <div className="grid grid-cols-2 gap-2 mt-2">
+            {Object.entries(fighter.scenarioBonus).map(([sc, mult]) => (
+              <div
+                key={sc}
+                className="p-2 font-display text-[8px] tracking-widest"
+                style={{
+                  background: mult >= 1.5 ? '#FFD60A22' : mult >= 1.3 ? '#F7790022' : '#3B236022',
+                  border: `1px solid ${mult >= 1.5 ? '#FFD60A' : mult >= 1.3 ? '#F77F00' : '#3B2360'}`,
+                  color: 'white',
+                }}
+              >
+                <div className="text-white/70">{SCENARIOS[sc as ScenarioId].name}</div>
+                <div style={{ color: mult >= 1.5 ? '#FFD60A' : mult >= 1.3 ? '#F77F00' : '#90E0EF' }}>
+                  +{Math.round((mult - 1) * 100)}% damage
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Voice line sample */}
+          <div
+            className="font-display text-[10px] tracking-widest mt-4 pt-2"
+            style={{ color: fighter.accent, borderBottom: `1px solid ${fighter.accent}` }}
+          >
+            ▌ VOICE LINES
+          </div>
+          <div className="font-body text-base text-white/85 leading-snug space-y-1 italic mt-2">
+            <p>• Match start: &ldquo;{fighter.voiceLines.matchStart}&rdquo;</p>
+            <p>• On win: &ldquo;{fighter.voiceLines.win}&rdquo;</p>
+            <p>• On crit: &ldquo;{fighter.voiceLines.crit}&rdquo;</p>
+            <p>• Trash talk: &ldquo;{fighter.voiceLines.trash[0]}&rdquo;</p>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function MoveDetail({ move }: { move: Move }) {
+  const TYPE_COLOR: Record<Move['type'], string> = {
+    light: '#90E0EF',
+    heavy: '#E63946',
+    setup: '#06D6A0',
+    combo: '#FFD60A',
+    ultimate: '#F72585',
+  }
+  const color = TYPE_COLOR[move.type]
+  return (
+    <div
+      className="p-2"
+      style={{
+        background: `${color}22`,
+        border: `1px solid ${color}`,
+        boxShadow: 'inset -2px -2px 0 rgba(0,0,0,0.4)',
+      }}
+    >
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="font-display text-[8px] tracking-widest" style={{ color }}>
+          {move.type.toUpperCase()}
+        </span>
+        <span className="font-display text-[8px] tracking-widest text-white/60">
+          {move.momentum} MOM · {move.baseDamage} DMG
+        </span>
+      </div>
+      <div className="font-display text-[10px] tracking-wider text-white mt-1">{move.name}</div>
+      <p className="font-body italic text-base text-white/85 mt-1 leading-snug">
+        &ldquo;{move.quote}&rdquo;
+        <span className="font-display text-[7px] tracking-widest ml-1 text-white/40">
+          — {move.episode} · {move.timestamp}
+        </span>
+      </p>
+    </div>
+  )
+}
+
+function Stat({ label, value, color }: { label: string; value: string; color: string }) {
+  return (
+    <div>
+      <div className="text-white/50" style={{ color }}>
+        {label}
+      </div>
+      <div className="font-num text-base tabular-nums text-white">{value || '—'}</div>
     </div>
   )
 }
@@ -156,43 +360,60 @@ function SideCard({ side, id, active }: { side: 'a' | 'b'; id: string | null; ac
   const f = id ? getFighter(id) : null
   return (
     <div
-      className="flex flex-col items-center gap-2 p-3"
+      className="flex flex-col items-center gap-1 p-2"
       style={{
         background: active ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.3)',
         border: `2px solid ${active ? (side === 'a' ? '#E63946' : '#00B4D8') : '#2A1F33'}`,
         boxShadow: active ? `0 0 24px ${side === 'a' ? '#E6394644' : '#00B4D844'}` : 'none',
-        minHeight: 140,
+        minHeight: 100,
       }}
     >
-      <span className="font-display text-[10px] tracking-widest" style={{ color: side === 'a' ? '#E63946' : '#00B4D8' }}>
+      <span
+        className="font-display text-[10px] tracking-widest"
+        style={{ color: side === 'a' ? '#E63946' : '#00B4D8' }}
+      >
         PLAYER {side === 'a' ? '1' : '2'}
       </span>
       {f ? (
         <>
-          <div style={{ width: 100, height: 140 }}>
+          <div style={{ width: 70, height: 90 }}>
             <Sprite fighter={f} side={side} state="stance" />
           </div>
-          <span className="font-display text-[10px] tracking-widest text-white">{f.shortName}</span>
+          <span className="font-display text-[9px] tracking-widest text-white">{f.shortName}</span>
         </>
       ) : (
-        <div className="font-body text-2xl text-white/40">{active ? 'PICK!' : '...'}</div>
+        <div className="font-body text-xl text-white/40">{active ? 'PICK!' : '...'}</div>
       )}
     </div>
   )
 }
 
-function ScenarioPicker({ scenario, onChange }: { scenario: ScenarioId; onChange: (s: ScenarioId) => void }) {
+function ScenarioPicker({
+  scenario,
+  onChange,
+}: {
+  scenario: ScenarioId
+  onChange: (s: ScenarioId) => void
+}) {
   const ids = Object.keys(SCENARIOS) as ScenarioId[]
   return (
-    <div className="flex flex-col items-center gap-2 p-3" style={{ background: 'rgba(0,0,0,0.3)', border: '2px solid #FFD60A' }}>
-      <span className="font-display text-[10px] tracking-widest" style={{ color: '#FFD60A' }}>STAGE</span>
+    <div
+      className="flex flex-col items-center gap-1 p-2"
+      style={{
+        background: 'rgba(0,0,0,0.3)',
+        border: '2px solid #FFD60A',
+      }}
+    >
+      <span className="font-display text-[10px] tracking-widest" style={{ color: '#FFD60A' }}>
+        STAGE
+      </span>
       <select
         value={scenario}
         onChange={(e) => {
           Sfx.menuMove()
           onChange(e.target.value as ScenarioId)
         }}
-        className="font-display text-[9px] tracking-widest bg-transparent text-white border-2 border-yellow-400 px-3 py-1"
+        className="font-display text-[9px] tracking-widest bg-transparent text-white border-2 border-yellow-400 px-2 py-1 w-full"
       >
         {ids.map((id) => (
           <option key={id} value={id} style={{ background: '#1A1230' }}>
@@ -200,7 +421,12 @@ function ScenarioPicker({ scenario, onChange }: { scenario: ScenarioId; onChange
           </option>
         ))}
       </select>
-      <p className="font-body text-base text-white/80 text-center px-2">{SCENARIOS[scenario].description}</p>
+      <p className="font-body text-sm text-white/80 text-center px-1 leading-tight">
+        {SCENARIOS[scenario].description}
+      </p>
     </div>
   )
 }
+
+// Suppress unused-import warning for FIGHTERS
+void FIGHTERS

@@ -65,7 +65,7 @@ export function CombatScreen({ mode = 'vs' }: { mode?: 'vs' | 'arcade' }) {
     const last = log[log.length - 1]
     if (last.comboTitle) {
       setComboBanner({ title: last.comboTitle, kind: last.flash ?? 'combo' })
-      setTimeout(() => setComboBanner(null), 1400)
+      setTimeout(() => setComboBanner(null), 2400)
     }
     if (last.flash) {
       setHitFlash(last.flash)
@@ -90,7 +90,9 @@ export function CombatScreen({ mode = 'vs' }: { mode?: 'vs' | 'arcade' }) {
         t: rotated.timestamp || last.timestamp,
         name: def?.shortName ?? '',
       })
-      setTimeout(() => setLastQuote(null), 2600)
+      // Read time: short quotes get less, long ones get more. 4.5s - 6s.
+      const readTime = Math.min(6500, Math.max(4500, rotated.quote.length * 60))
+      setTimeout(() => setLastQuote(null), readTime)
     }
     // Attack sprite pose: briefly switch the attacker to attack frame
     setAttackingSide(last.attacker)

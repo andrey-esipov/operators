@@ -33,6 +33,8 @@ export function CombatScreen({ mode = 'vs' }: { mode?: 'vs' | 'arcade' }) {
   const [hitFlash, setHitFlash] = useState<'crit' | 'combo' | 'ult' | null>(null)
   const [shaking, setShaking] = useState(false)
   const [lastQuote, setLastQuote] = useState<{ q: string; ep: string; t: string; name: string } | null>(null)
+  /** Which side is currently in attack-pose (briefly after casting) */
+  const [attackingSide, setAttackingSide] = useState<'a' | 'b' | null>(null)
 
   // Audio cues
   useEffect(() => {
@@ -68,6 +70,9 @@ export function CombatScreen({ mode = 'vs' }: { mode?: 'vs' | 'arcade' }) {
       setLastQuote({ q: last.quote, ep: last.episode, t: last.timestamp, name: def?.shortName ?? '' })
       setTimeout(() => setLastQuote(null), 2400)
     }
+    // Attack sprite pose: briefly switch the attacker to attack frame
+    setAttackingSide(last.attacker)
+    setTimeout(() => setAttackingSide(null), 350)
   }, [log.length])
 
   // Round timer
@@ -165,14 +170,36 @@ export function CombatScreen({ mode = 'vs' }: { mode?: 'vs' | 'arcade' }) {
             filter: activeSide === 'a' ? 'drop-shadow(0 0 16px #FFD60A)' : 'drop-shadow(0 8px 16px rgba(0,0,0,0.6))',
             transition: 'filter 0.2s',
           }}>
-            <Sprite fighter={a} side="a" state={'stance'} shake={shaking && damagePulses[damagePulses.length-1]?.side === 'a'} />
+            <Sprite
+              fighter={a}
+              side="a"
+              state={
+                fighterA.hp <= 0
+                  ? 'lose'
+                  : attackingSide === 'a'
+                  ? (lastFlash?.kind === 'ult' ? 'ult' : 'attack')
+                  : 'stance'
+              }
+              shake={shaking && damagePulses[damagePulses.length-1]?.side === 'a'}
+            />
           </div>
           <div style={{
             width: 340, height: 440,
             filter: activeSide === 'b' ? 'drop-shadow(0 0 16px #FFD60A)' : 'drop-shadow(0 8px 16px rgba(0,0,0,0.6))',
             transition: 'filter 0.2s',
           }}>
-            <Sprite fighter={b} side="b" state={'stance'} shake={shaking && damagePulses[damagePulses.length-1]?.side === 'b'} />
+            <Sprite
+              fighter={b}
+              side="b"
+              state={
+                fighterB.hp <= 0
+                  ? 'lose'
+                  : attackingSide === 'b'
+                  ? (lastFlash?.kind === 'ult' ? 'ult' : 'attack')
+                  : 'stance'
+              }
+              shake={shaking && damagePulses[damagePulses.length-1]?.side === 'b'}
+            />
           </div>
         </div>
       </div>

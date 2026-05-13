@@ -31,11 +31,9 @@ export function Sprite({ fighter, side, state, shake }: Props) {
 
   return (
     <div
-      className={`relative ${shake ? 'shake' : 'idle-bob'}`}
+      className={`relative w-full h-full ${shake ? 'shake' : 'idle-bob'}`}
       style={{
         ['--mirror' as unknown as string]: mirror,
-        width: 220,
-        height: 320,
         transform: `scaleX(${mirror})`,
         transformOrigin: 'center bottom',
       }}

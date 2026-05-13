@@ -11,12 +11,32 @@
 import 'dotenv/config'
 import fs from 'node:fs'
 import path from 'node:path'
+import os from 'node:os'
 import { SCENARIOS } from '../src/data/scenarios'
 
-const ENDPOINT = process.env.AZURE_OPENAI_ENDPOINT!.replace(/\/$/, '')
-const DEPLOYMENT = process.env.AZURE_OPENAI_DEPLOYMENT || 'gpt-image-2'
-const API_KEY = process.env.AZURE_OPENAI_API_KEY!
-const API_VERSION = process.env.AZURE_OPENAI_API_VERSION || '2025-04-01-preview'
+// ── Azure config from env → ~/.gstack/openai.json
+function loadAzureConfig() {
+  const gstackPath = path.join(os.homedir(), '.gstack', 'openai.json')
+  let file: any = {}
+  try {
+    if (fs.existsSync(gstackPath)) {
+      file = JSON.parse(fs.readFileSync(gstackPath, 'utf-8'))
+    }
+  } catch { /* ignore */ }
+  const azureFile = file?.azure || {}
+  return {
+    endpoint: (process.env.AZURE_OPENAI_ENDPOINT || azureFile.endpoint || '').replace(/\/$/, ''),
+    apiKey: process.env.AZURE_OPENAI_API_KEY || azureFile.api_key || '',
+    deployment: process.env.AZURE_OPENAI_DEPLOYMENT || process.env.AZURE_OPENAI_IMAGE_DEPLOYMENT || azureFile.image_deployment || 'gpt-image-2',
+    apiVersion: process.env.AZURE_OPENAI_API_VERSION || azureFile.api_version || '2025-04-01-preview',
+  }
+}
+
+const cfg = loadAzureConfig()
+const ENDPOINT = cfg.endpoint
+const DEPLOYMENT = cfg.deployment
+const API_KEY = cfg.apiKey
+const API_VERSION = cfg.apiVersion
 
 const OUT_DIR = path.resolve(process.cwd(), 'public/stages')
 
@@ -63,36 +83,62 @@ NEGATIVE:
 
 OUTPUT: 1792×1024 pixel art PNG, ready for use as a 2D fighting game stage.`
 
-async function generate(scenarioId: string, scene: string) {
+async function generateOnce(_scenarioId: string, scene: string) {
   const prompt = MASTER_PROMPT.replace('{SCENE}', scene)
   const url = `${ENDPOINT}/openai/deployments/${DEPLOYMENT}/images/generations?api-version=${API_VERSION}`
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'api-key': API_KEY, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      prompt,
-      n: 1,
-      size: '1792x1024',
-      quality: 'high',
-      output_format: 'png',
-    }),
-  })
-  if (!res.ok) throw new Error(`Azure ${res.status}: ${await res.text()}`)
-  const data = (await res.json()) as { data: Array<{ b64_json?: string; url?: string }> }
-  const first = data.data[0]
-  if (first.b64_json) return Buffer.from(first.b64_json, 'base64')
-  if (first.url) {
-    const r = await fetch(first.url)
-    return Buffer.from(await r.arrayBuffer())
+  const ctl = new AbortController()
+  const t = setTimeout(() => ctl.abort(), 360_000)
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'api-key': API_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        prompt,
+        n: 1,
+        size: '1536x1024',
+        quality: 'high',
+        output_format: 'png',
+      }),
+      signal: ctl.signal,
+    })
+    if (!res.ok) throw new Error(`Azure ${res.status}: ${(await res.text()).slice(0, 300)}`)
+    const data = (await res.json()) as { data: Array<{ b64_json?: string; url?: string }> }
+    const first = data.data[0]
+    if (first.b64_json) return Buffer.from(first.b64_json, 'base64')
+    if (first.url) {
+      const r = await fetch(first.url)
+      return Buffer.from(await r.arrayBuffer())
+    }
+    throw new Error('no image')
+  } finally {
+    clearTimeout(t)
   }
-  throw new Error('no image')
+}
+
+async function generate(scenarioId: string, scene: string) {
+  let lastErr: Error | null = null
+  for (let attempt = 1; attempt <= 4; attempt++) {
+    try {
+      return await generateOnce(scenarioId, scene)
+    } catch (e) {
+      lastErr = e as Error
+      const msg = lastErr.message
+      const retryable = /fetch failed|429|5\d\d|aborted|ECONNRESET/i.test(msg)
+      if (!retryable || attempt === 4) throw lastErr
+      const wait = Math.pow(3, attempt) * 1000 + Math.random() * 1500
+      console.log(`    ↻ retry ${attempt}/3 after ${(wait / 1000).toFixed(1)}s — ${msg.slice(0, 80)}`)
+      await new Promise((r) => setTimeout(r, wait))
+    }
+  }
+  throw lastErr ?? new Error('unknown')
 }
 
 async function main() {
   if (!ENDPOINT || !API_KEY) {
-    console.error('Set AZURE_OPENAI_ENDPOINT and AZURE_OPENAI_API_KEY in your .env')
+    console.error('Azure config not found. Set AZURE_OPENAI_* env vars or ~/.gstack/openai.json')
     process.exit(1)
   }
+  console.log(`Using endpoint: ${ENDPOINT}\nDeployment: ${DEPLOYMENT}\n`)
   fs.mkdirSync(OUT_DIR, { recursive: true })
 
   for (const [id, scenario] of Object.entries(SCENARIOS)) {

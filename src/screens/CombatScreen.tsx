@@ -158,12 +158,20 @@ export function CombatScreen({ mode = 'vs' }: { mode?: 'vs' | 'arcade' }) {
       </div>
 
       {/* FIGHTERS */}
-      <div className="absolute left-0 right-0 z-10" style={{ bottom: 220 }}>
-        <div className="flex items-end justify-between px-24">
-          <div style={{ transform: 'translateY(0)', filter: activeSide === 'a' ? 'drop-shadow(0 0 12px #FFD60A)' : 'none' }}>
+      <div className="absolute left-0 right-0 z-10" style={{ bottom: 200 }}>
+        <div className="flex items-end justify-between px-12 md:px-20">
+          <div style={{
+            width: 340, height: 440,
+            filter: activeSide === 'a' ? 'drop-shadow(0 0 16px #FFD60A)' : 'drop-shadow(0 8px 16px rgba(0,0,0,0.6))',
+            transition: 'filter 0.2s',
+          }}>
             <Sprite fighter={a} side="a" state={'stance'} shake={shaking && damagePulses[damagePulses.length-1]?.side === 'a'} />
           </div>
-          <div style={{ transform: 'translateY(0)', filter: activeSide === 'b' ? 'drop-shadow(0 0 12px #FFD60A)' : 'none' }}>
+          <div style={{
+            width: 340, height: 440,
+            filter: activeSide === 'b' ? 'drop-shadow(0 0 16px #FFD60A)' : 'drop-shadow(0 8px 16px rgba(0,0,0,0.6))',
+            transition: 'filter 0.2s',
+          }}>
             <Sprite fighter={b} side="b" state={'stance'} shake={shaking && damagePulses[damagePulses.length-1]?.side === 'b'} />
           </div>
         </div>

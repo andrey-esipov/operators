@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { ScenarioId } from '../types'
 
 interface Props {
@@ -63,8 +64,27 @@ const STAGE_THEMES: Record<ScenarioId, {
 
 export function StageBackground({ scenario, shake }: Props) {
   const t = STAGE_THEMES[scenario]
+  const [bgFailed, setBgFailed] = useState(false)
+  const realBg = `/stages/${scenario}.png`
+
   return (
     <div className={`absolute inset-0 overflow-hidden ${shake ? 'shake' : ''}`}>
+      {/* Real generated pixel-art stage if available */}
+      {!bgFailed && (
+        <img
+          src={realBg}
+          alt={scenario}
+          onError={() => setBgFailed(true)}
+          className="absolute inset-0 w-full h-full object-cover"
+          style={{
+            imageRendering: 'pixelated',
+            filter: 'brightness(0.85)',
+          }}
+        />
+      )}
+
+      {bgFailed && (
+        <>
       {/* SKY layer */}
       <div
         className="absolute inset-0"
@@ -113,6 +133,18 @@ export function StageBackground({ scenario, shake }: Props) {
           background: `repeating-linear-gradient(90deg, transparent 0 60px, rgba(255,255,255,0.06) 60px 61px)`,
         }}
       />
+        </>
+      )}
+      {/* Atmospheric vignette over real-image stage */}
+      {!bgFailed && (
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            background:
+              'radial-gradient(ellipse at center, transparent 30%, rgba(0,0,0,0.6) 100%)',
+          }}
+        />
+      )}
     </div>
   )
 }

@@ -12,6 +12,7 @@ import { ArcadeVictory } from './screens/ArcadeVictory'
 import { QuoteBank } from './screens/QuoteBank'
 import { HowToPlay } from './screens/HowToPlay'
 import { FrameworkEncyclopedia } from './screens/FrameworkEncyclopedia'
+import { Stats } from './screens/Stats'
 import { attachQuoteBankSync, loadQuoteBank } from './lib/persist'
 
 export function App() {
@@ -60,6 +61,7 @@ export function App() {
       {phase === 'quote-bank' && <QuoteBank />}
       {phase === 'how-to-play' && <HowToPlay />}
       {phase === 'framework-encyclopedia' && <FrameworkEncyclopedia />}
+      {phase === 'stats' && <Stats />}
       {crtEnabled && <div className="crt-overlay" />}
     </div>
   )

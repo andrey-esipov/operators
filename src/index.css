@@ -204,3 +204,31 @@ button {
   50%      { box-shadow: 0 0 16px 4px rgba(239, 35, 60, 0.7) }
 }
 .hp-crit { animation: hpCritPulse 0.9s ease-in-out infinite; }
+
+/* Mobile responsive — the game targets desktop but degrades gracefully */
+@media (max-width: 900px) {
+  /* Allow scroll on mobile menu screens */
+  html, body, #root { overflow: auto; }
+  /* Reduce font-display headlines slightly */
+  .text-2xl { font-size: 1.25rem; }
+  .text-5xl { font-size: 2.25rem; }
+}
+@media (max-width: 640px) {
+  /* On phones, scale combat root by viewport width — keeps the SF II
+     layout but shrinks to fit. Combat UI assumes ~960px wide; we map it. */
+  body::before {
+    content: 'BEST VIEWED ON DESKTOP · 960px+';
+    position: fixed;
+    top: 4px; left: 50%;
+    transform: translateX(-50%);
+    z-index: 100;
+    font-family: var(--font-display);
+    font-size: 7px;
+    letter-spacing: 0.3em;
+    color: #FFD60A;
+    background: rgba(15,10,26,0.92);
+    border: 1px solid #FFD60A;
+    padding: 2px 8px;
+    pointer-events: none;
+  }
+}

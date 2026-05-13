@@ -242,11 +242,49 @@ export function CombatScreen({ mode = 'vs' }: { mode?: 'vs' | 'arcade' | 'practi
           <div className="font-display text-[10px] tracking-widest text-white/70">
             ROUND {round}/3
           </div>
-          <div className="flex gap-2 mt-1">
-            <span style={{ width: 12, height: 12, background: roundsWon.a > 0 ? '#E63946' : '#2A1F33', border: '1px solid white' }} />
-            <span style={{ width: 12, height: 12, background: roundsWon.b > 0 ? '#00B4D8' : '#2A1F33', border: '1px solid white' }} />
+          {/* Best-of-3 dot grid: 2 dots per side; filled = round won. */}
+          <div className="flex gap-3 mt-1">
+            <div className="flex gap-1.5">
+              {[0, 1].map((i) => (
+                <span
+                  key={`a-${i}`}
+                  style={{
+                    width: 14,
+                    height: 14,
+                    borderRadius: '50%',
+                    background: roundsWon.a > i ? '#E63946' : 'transparent',
+                    border: `2px solid ${roundsWon.a > i ? '#E63946' : 'rgba(230,57,70,0.4)'}`,
+                    boxShadow: roundsWon.a > i ? '0 0 8px #E63946' : 'none',
+                    transition: 'all 0.3s',
+                  }}
+                />
+              ))}
+            </div>
+            <div className="flex gap-1.5">
+              {[0, 1].map((i) => (
+                <span
+                  key={`b-${i}`}
+                  style={{
+                    width: 14,
+                    height: 14,
+                    borderRadius: '50%',
+                    background: roundsWon.b > i ? '#00B4D8' : 'transparent',
+                    border: `2px solid ${roundsWon.b > i ? '#00B4D8' : 'rgba(0,180,216,0.4)'}`,
+                    boxShadow: roundsWon.b > i ? '0 0 8px #00B4D8' : 'none',
+                    transition: 'all 0.3s',
+                  }}
+                />
+              ))}
+            </div>
           </div>
-          <div className="font-num text-5xl tabular-nums mt-2" style={{ color: timeLeft < 15 ? '#EF233C' : '#FFD60A', textShadow: '3px 3px 0 black' }}>
+          <div
+            className="font-num text-5xl tabular-nums mt-2"
+            style={{
+              color: timeLeft < 15 ? '#EF233C' : '#FFD60A',
+              textShadow: '3px 3px 0 black',
+              animation: timeLeft < 10 && timeLeft > 0 ? 'hpCritPulse 0.9s ease-in-out infinite' : undefined,
+            }}
+          >
             {timeLeft}
           </div>
         </div>

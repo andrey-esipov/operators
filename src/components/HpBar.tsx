@@ -7,10 +7,11 @@ interface Props {
   name: string
 }
 
-/** Segmented SF II-style HP bar. 20 segments. */
+/** Segmented SF II-style HP bar. 20 segments + pulse when critical. */
 export function HpBar({ hp, maxHp, side, name }: Props) {
   const pct = Math.max(0, Math.min(1, hp / maxHp))
   const filled = Math.round(pct * 20)
+  const isCritical = pct > 0 && pct <= 0.25
   const color =
     pct > 0.6 ? 'var(--color-hp-good)' : pct > 0.3 ? 'var(--color-hp-warn)' : 'var(--color-hp-crit)'
   const accent = side === 'a' ? 'var(--color-pa-red)' : 'var(--color-pb-cyan)'
@@ -21,11 +22,19 @@ export function HpBar({ hp, maxHp, side, name }: Props) {
         <div className={`flex items-center gap-2 ${side === 'b' ? 'flex-row-reverse' : ''}`} style={{ color: accent }}>
           <span className="font-display text-[10px] tracking-widest">{name}</span>
           <span className="flex-1" />
-          <span className="font-num text-2xl tabular-nums" style={{ color: 'white' }}>
+          <span
+            className="font-num text-2xl tabular-nums"
+            style={{
+              color: isCritical ? '#EF233C' : 'white',
+              animation: isCritical ? 'hpCritPulse 0.9s ease-in-out infinite' : undefined,
+            }}
+          >
             {Math.ceil(hp)}
           </span>
         </div>
-        <div className={`flex gap-[2px] h-4 ${side === 'b' ? 'flex-row-reverse' : ''}`}>
+        <div
+          className={`flex gap-[2px] h-4 ${side === 'b' ? 'flex-row-reverse' : ''} ${isCritical ? 'hp-crit' : ''}`}
+        >
           {Array.from({ length: 20 }).map((_, i) => (
             <div
               key={i}

@@ -5,6 +5,7 @@ import { AI_PROFILES } from '../data/ai-profiles'
 import { ARCADE_PROGRESSION } from '../data/scenarios'
 import { applyMove, initialRuntime, startTurn } from './applyMove'
 import { Voice } from '../lib/voice'
+import { loadStats, saveStats, checkAndUnlock } from '../data/achievements'
 
 let flashCounter = 0
 let damageCounter = 0
@@ -40,6 +41,8 @@ interface Actions {
   startPractice: (player: string, opponent: string) => void
   /** Start daily challenge (date-seeded matchup) */
   startDaily: () => void
+  /** Start a random matchup */
+  startRandom: () => void
 }
 
 export const useGame = create<GameState & Actions>((set, get) => ({
@@ -124,6 +127,33 @@ export const useGame = create<GameState & Actions>((set, get) => ({
     setTimeout(() => set({ phase: 'fight' }), 4200)
   },
 
+  startRandom: () => {
+    // Random matchup — random player, random bot opponent, random scenario.
+    // Uses 'daily' mode semantics (single fight, bot AI, no resource refill).
+    const all = STARTING_ROSTER
+    const player = all[Math.floor(Math.random() * all.length)]
+    const oppPool = all.filter((x) => x !== player)
+    const opponent = oppPool[Math.floor(Math.random() * oppPool.length)]
+    const scenarios = ['pre-pmf', 'hypergrowth', 'plateau', 'ai-native', 'monetization', 'crisis', 'ipo-prep', 'distribution'] as const
+    const scenario = scenarios[Math.floor(Math.random() * scenarios.length)]
+    set({
+      mode: 'daily',
+      phase: 'pre-fight',
+      fighterA: initialRuntime(player),
+      fighterB: initialRuntime(opponent),
+      round: 1,
+      roundsWon: { a: 0, b: 0 },
+      turn: 1,
+      activeSide: 'a',
+      log: [],
+      damagePulses: [],
+      selectedA: player,
+      selectedB: opponent,
+      scenario,
+    })
+    setTimeout(() => set({ phase: 'fight' }), 4200)
+  },
+
   startArcade: (fighterId: string) => {
     set({ mode: 'arcade', arcadeStep: 0, selectedA: fighterId })
     // First arcade fight setup
@@ -135,6 +165,11 @@ export const useGame = create<GameState & Actions>((set, get) => ({
     const step = state.arcadeStep
     const progression = ARCADE_PROGRESSION
     if (step >= progression.length) {
+      // Arcade run completion bookkeeping
+      const av = loadStats()
+      av.arcadeRunsCompleted += 1
+      saveStats(av)
+      checkAndUnlock(av)
       set({ phase: 'arcade-victory' })
       return
     }
@@ -284,8 +319,24 @@ export const useGame = create<GameState & Actions>((set, get) => ({
       Voice.say(attackerDef.voiceLines.ult, attackerDef.id)
     }
 
+    // Stats: every move counts. Combo / crit / ult specifically tracked.
+    const stats = loadStats()
+    if (result.flash === 'combo') stats.totalCombos += 1
+    if (result.flash === 'crit') stats.totalCrits += 1
+    if (result.flash === 'ult') stats.totalUlts += 1
+    if (result.log.appliedStatuses.length > 0 || result.log.finalDamage > 0) {
+      stats.totalQuotes = Math.max(stats.totalQuotes, get().quoteBank.length + 1)
+    }
+    saveStats(stats)
+    checkAndUnlock(stats)
+
     if (result.ko) {
       Voice.say(attackerDef.voiceLines.ko, attackerDef.id)
+      // K.O. + match-win bookkeeping
+      const ks = loadStats()
+      ks.totalKOs += 1
+      saveStats(ks)
+      checkAndUnlock(ks)
       // Trigger the K.O. cinematic overlay. The CombatScreen reads
       // koCinematic and runs a 2.4s sequence: slow-mo + white flash +
       // K.O. banner + particle burst. Then we transition to round/match end.
@@ -305,6 +356,31 @@ export const useGame = create<GameState & Actions>((set, get) => ({
         b: state.roundsWon.b + (attackerSide === 'b' ? 1 : 0),
       }
       const matchWinner = newRoundsWon.a >= 2 ? 'a' : newRoundsWon.b >= 2 ? 'b' : null
+
+      // Match-end stats — only count when the match (not just a round) ends.
+      if (matchWinner) {
+        const ms = loadStats()
+        ms.totalMatches += 1
+        const playerWon = matchWinner === 'a'  // side A is always the player in single-player modes
+        if (playerWon && state.mode !== 'vs') {
+          ms.totalWins += 1
+          // Track which fighters player has won as
+          if (state.selectedA && !ms.fightersUsed.includes(state.selectedA)) {
+            ms.fightersUsed.push(state.selectedA)
+          }
+          // Track which fighters player has beaten
+          if (state.selectedB && !ms.fightersBeaten.includes(state.selectedB)) {
+            ms.fightersBeaten.push(state.selectedB)
+          }
+          if (state.selectedB === 'lenny') {
+            ms.lennyDefeats += 1
+            if (state.difficulty === 'hard') ms.hardModeWins += 1
+          }
+        }
+        saveStats(ms)
+        checkAndUnlock(ms)
+      }
+
       setTimeout(() => {
         set({
           phase: matchWinner ? 'match-end' : 'round-end',

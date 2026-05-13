@@ -44,6 +44,14 @@ export function MainMenu() {
     return () => clearInterval(id)
   }, [])
 
+  // Operator of the Day — deterministic from today's date, same for everyone today.
+  const operatorOfDay = useMemo(() => {
+    const today = new Date().toISOString().slice(0, 10)
+    let h = 0
+    for (let i = 0; i < today.length; i++) h = (h * 31 + today.charCodeAt(i)) >>> 0
+    return FIGHTERS[h % FIGHTERS.length]
+  }, [])
+
   // PRESS START blink
   const [blinkOn, setBlinkOn] = useState(true)
   useEffect(() => {
@@ -58,6 +66,7 @@ export function MainMenu() {
   }
 
   const startDaily = useGame((s) => s.startDaily)
+  const startRandom = useGame((s) => s.startRandom)
   const difficulty = useGame((s) => s.difficulty)
   const setDifficulty = useGame((s) => s.setDifficulty)
 
@@ -90,6 +99,26 @@ export function MainMenu() {
         <FighterShowcase fighter={focusFighter} side="a" />
         <VsBadge />
         <FighterShowcase fighter={FIGHTERS[(focusIdx + 4) % FIGHTERS.length]} side="b" />
+      </div>
+
+      {/* Operator of the Day banner */}
+      <div
+        className="relative z-20 mt-3 flex items-center gap-3 px-3 py-1.5"
+        style={{
+          background: `linear-gradient(90deg, ${operatorOfDay.accent}33 0%, rgba(0,0,0,0.5) 50%, ${operatorOfDay.accent}33 100%)`,
+          border: `1px solid ${operatorOfDay.accent}88`,
+          boxShadow: `0 0 12px ${operatorOfDay.accent}55, inset -2px -2px 0 rgba(0,0,0,0.5)`,
+        }}
+      >
+        <span className="font-display text-[8px] tracking-widest" style={{ color: operatorOfDay.accent }}>
+          ☼ OPERATOR OF THE DAY
+        </span>
+        <span className="font-display text-[10px] tracking-widest text-white">
+          {operatorOfDay.name.toUpperCase()}
+        </span>
+        <span className="font-display text-[7px] tracking-widest text-white/60">
+          {operatorOfDay.archetype}
+        </span>
       </div>
 
       {/* Rotating quote marquee */}
@@ -145,11 +174,18 @@ export function MainMenu() {
             onClick={() => go('practice')}
             accent="#FCBF49"
           />
+          <MidButton
+            label="◇ RANDOM"
+            subtitle="dice rolls the matchup"
+            onClick={() => { Sfx.menuSelect(); startRandom() }}
+            accent="#F72585"
+          />
         </div>
         <div className="flex gap-2 flex-wrap justify-center">
           <SmallButton label="HOW TO PLAY" onClick={() => { Sfx.menuSelect(); setPhase('how-to-play') }} />
           <SmallButton label="ENCYCLOPEDIA" onClick={() => { Sfx.menuSelect(); setPhase('framework-encyclopedia') }} />
           <SmallButton label="QUOTE BANK" onClick={() => { Sfx.menuSelect(); setPhase('quote-bank') }} />
+          <SmallButton label="STATS · ★" onClick={() => { Sfx.menuSelect(); setPhase('stats') }} />
           <SmallButton
             label={`DIFFICULTY · ${difficulty.toUpperCase()}`}
             onClick={() => {

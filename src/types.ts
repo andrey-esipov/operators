@@ -159,6 +159,7 @@ export type Phase =
   | 'quote-bank'
   | 'how-to-play'
   | 'framework-encyclopedia'
+  | 'stats'
 
 export interface BattleLogEntry {
   turn: number

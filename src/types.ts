@@ -211,6 +211,8 @@ export interface GameState {
   crtEnabled: boolean
   /** Music master on/off (procedural chiptune via lib/music.ts) */
   musicEnabled: boolean
+  /** Voice line TTS on/off (browser SpeechSynthesis) */
+  voiceEnabled: boolean
   /** Last damage events for floating numbers */
   damagePulses: Array<{ id: number; side: Side; amount: number; kind: 'normal' | 'crit' | 'heal' }>
 }

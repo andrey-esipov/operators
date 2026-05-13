@@ -13,6 +13,8 @@ import { ComboBanner } from '../components/ComboBanner'
 import { DamageFloats } from '../components/DamageFloat'
 import { StatusChip } from '../components/StatusChip'
 import { KOCinematic } from '../components/KOCinematic'
+import { FightIntro } from '../components/FightIntro'
+import { StatusHalo } from '../components/StatusHalo'
 import { youtubeDeepLink } from '../lib/youtube'
 import { Sfx } from '../lib/audio'
 import { AnimatePresence, motion } from 'framer-motion'
@@ -38,6 +40,10 @@ export function CombatScreen({ mode = 'vs' }: { mode?: 'vs' | 'arcade' | 'practi
   const [shaking, setShaking] = useState(false)
   // Hit-lag: brief desaturate/scale on the side that just took damage. Re-keys on every damagePulse.
   const [hitLag, setHitLag] = useState<{ side: 'a' | 'b'; id: number } | null>(null)
+  // Crit slow-mo: brief world-freeze + sepia/contrast filter on critical hits.
+  const [critFreeze, setCritFreeze] = useState(false)
+  // Live combo counter: number of successive damaging moves by the same side. Resets on side change or KO.
+  const [comboStreak, setComboStreak] = useState<{ side: 'a' | 'b'; count: number; id: number } | null>(null)
   const [lastQuote, setLastQuote] = useState<{ q: string; ep: string; t: string; name: string; fighterId: string } | null>(null)
   /** Which side is currently in attack-pose (briefly after casting) */
   const [attackingSide, setAttackingSide] = useState<'a' | 'b' | null>(null)
@@ -75,6 +81,23 @@ export function CombatScreen({ mode = 'vs' }: { mode?: 'vs' | 'arcade' | 'practi
     if (last.flash) {
       setHitFlash(last.flash)
       setTimeout(() => setHitFlash(null), 200)
+    }
+    // Crit slow-mo — freeze the world for 240ms before resuming
+    if (last.flash === 'crit') {
+      setCritFreeze(true)
+      setTimeout(() => setCritFreeze(false), 240)
+    }
+    // Combo streak — increment if same attacker dealt damage again, else reset
+    if (last.finalDamage > 0) {
+      setComboStreak((prev) => {
+        const id = log.length
+        if (prev && prev.side === last.attacker) {
+          return { side: last.attacker, count: prev.count + 1, id }
+        }
+        return { side: last.attacker, count: 1, id }
+      })
+    } else {
+      setComboStreak(null)
     }
     if (last.finalDamage > 50) {
       setShaking(true)
@@ -170,7 +193,13 @@ export function CombatScreen({ mode = 'vs' }: { mode?: 'vs' | 'arcade' | 'practi
   const bSuperReady = fighterB.superMeter >= 100
 
   return (
-    <div className={`relative w-full h-full overflow-hidden ${shaking ? 'shake' : ''}`}>
+    <div
+      className={`relative w-full h-full overflow-hidden ${shaking ? 'shake' : ''}`}
+      style={{
+        filter: critFreeze ? 'saturate(1.6) contrast(1.4) hue-rotate(-12deg)' : 'none',
+        transition: critFreeze ? 'none' : 'filter 180ms ease-out',
+      }}
+    >
       {/* Stage background */}
       <StageBackground scenario={scenario} shake={shaking} />
 
@@ -257,8 +286,10 @@ export function CombatScreen({ mode = 'vs' }: { mode?: 'vs' | 'arcade' | 'practi
               width: 340, height: 440,
               filter: activeSide === 'a' ? 'drop-shadow(0 0 16px #FFD60A)' : 'drop-shadow(0 8px 16px rgba(0,0,0,0.6))',
               transition: 'filter 0.2s',
+              position: 'relative',
             }}
           >
+            <StatusHalo status={fighterA.status} superReady={aSuperReady} />
             <Sprite
               fighter={a}
               side="a"
@@ -279,8 +310,10 @@ export function CombatScreen({ mode = 'vs' }: { mode?: 'vs' | 'arcade' | 'practi
               width: 340, height: 440,
               filter: activeSide === 'b' ? 'drop-shadow(0 0 16px #FFD60A)' : 'drop-shadow(0 8px 16px rgba(0,0,0,0.6))',
               transition: 'filter 0.2s',
+              position: 'relative',
             }}
           >
+            <StatusHalo status={fighterB.status} superReady={bSuperReady} />
             <Sprite
               fighter={b}
               side="b"
@@ -345,6 +378,48 @@ export function CombatScreen({ mode = 'vs' }: { mode?: 'vs' | 'arcade' | 'practi
 
       {/* Combo banner */}
       <ComboBanner title={comboBanner?.title ?? null} kind={comboBanner?.kind} />
+
+      {/* FIGHT! intro — fires on every fight phase entry */}
+      <FightIntro round={round} triggerKey={`${round}-${roundsWon.a + roundsWon.b}`} />
+
+      {/* Live combo streak counter — shows on the attacker's side */}
+      {comboStreak && comboStreak.count >= 2 && (
+        <div
+          key={comboStreak.id}
+          className="absolute z-30 pointer-events-none"
+          style={{
+            top: '34%',
+            [comboStreak.side === 'a' ? 'left' : 'right']: '22%',
+            animation: 'comboBump 0.4s ease-out',
+          }}
+        >
+          <div
+            className="font-display tracking-widest"
+            style={{
+              color: '#FFD60A',
+              fontSize: 48,
+              textShadow: '4px 4px 0 black, 0 0 16px #F77F00',
+              letterSpacing: '0.1em',
+              transform: 'skewX(-6deg)',
+              lineHeight: 1,
+            }}
+          >
+            {comboStreak.count}×
+          </div>
+          <div
+            className="font-display"
+            style={{
+              color: '#FFD60A',
+              fontSize: 11,
+              letterSpacing: '0.35em',
+              textShadow: '2px 2px 0 black',
+              marginTop: 2,
+            }}
+          >
+            COMBO
+          </div>
+        </div>
+      )}
 
       {/* K.O. cinematic overlay */}
       {koCinematic && (

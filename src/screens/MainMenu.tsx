@@ -13,6 +13,8 @@ export function MainMenu() {
   const crt = useGame((s) => s.crtEnabled)
   const toggleMusic = useGame((s) => s.toggleMusic)
   const music = useGame((s) => s.musicEnabled)
+  const toggleVoice = useGame((s) => s.toggleVoice)
+  const voice = useGame((s) => s.voiceEnabled)
 
   // Cycle through hand-curated pull quotes every 7 seconds
   const allQuotes = useMemo(() => {
@@ -156,6 +158,7 @@ export function MainMenu() {
             }}
           />
           <SmallButton label={`♪ ${music ? 'ON' : 'OFF'}`} onClick={toggleMusic} />
+          <SmallButton label={`🗣 ${voice ? 'ON' : 'OFF'}`} onClick={toggleVoice} />
           <SmallButton label={`CRT · ${crt ? 'ON' : 'OFF'}`} onClick={toggleCrt} />
         </div>
       </div>

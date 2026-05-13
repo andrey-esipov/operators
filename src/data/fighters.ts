@@ -963,7 +963,7 @@ FIGHTERS.push(
     shortName: 'AMJAD',
     archetype: 'BUILDER · PLATFORM',
     bio: 'Replit founder. Believes the next billion programmers will use AI agents. Master of fast iteration.',
-    spriteBio: 'a Jordanian-American man in his mid-30s with short dark brown hair and a neatly trimmed dark beard, slim build, friendly thoughtful eyes, wearing a casual dark t-shirt with the Replit logo over jeans, holding a laptop showing the Replit IDE with AI agent panels — Amjad Masad, Replit founder',
+    spriteBio: 'a Jordanian-American man in his mid-30s with a completely bald shaved head, a subtle short reddish-auburn goatee, slim build, friendly thoughtful eyes, wearing a casual dark t-shirt with the Replit logo over jeans, holding a laptop showing the Replit IDE with AI agent panels — Amjad Masad, Replit founder',
     episode: 'ep 263',
     accent: '#06D6A0',
     maxHp: 950,

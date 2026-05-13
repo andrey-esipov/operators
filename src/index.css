@@ -190,3 +190,17 @@ button {
   100% { opacity: 0; }
 }
 .impact-flash { animation: impactFlash 220ms linear forwards; }
+
+/* Combo streak bump on each new hit */
+@keyframes comboBump {
+  0%   { transform: scale(0.5) skewX(-6deg); opacity: 0 }
+  50%  { transform: scale(1.4) skewX(-6deg); opacity: 1 }
+  100% { transform: scale(1) skewX(-6deg); opacity: 1 }
+}
+
+/* Critical-HP pulse for health bar */
+@keyframes hpCritPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239, 35, 60, 0.7) }
+  50%      { box-shadow: 0 0 16px 4px rgba(239, 35, 60, 0.7) }
+}
+.hp-crit { animation: hpCritPulse 0.9s ease-in-out infinite; }

@@ -4,6 +4,7 @@ import { getFighter, STARTING_ROSTER } from '../data/fighters'
 import { AI_PROFILES } from '../data/ai-profiles'
 import { ARCADE_PROGRESSION } from '../data/scenarios'
 import { applyMove, initialRuntime, startTurn } from './applyMove'
+import { Voice } from '../lib/voice'
 
 let flashCounter = 0
 let damageCounter = 0
@@ -16,6 +17,7 @@ interface Actions {
   setPhase: (p: GameState['phase']) => void
   toggleCrt: () => void
   toggleMusic: () => void
+  toggleVoice: () => void
   /** Active player casts a move */
   castMove: (move: Move) => void
   /** AI plays for the current side (used vs. bots) */
@@ -56,6 +58,7 @@ export const useGame = create<GameState & Actions>((set, get) => ({
   quoteBank: [],
   crtEnabled: true,
   musicEnabled: true,
+  voiceEnabled: true,
   damagePulses: [],
   mode: 'vs',
   difficulty: 'normal',
@@ -63,6 +66,11 @@ export const useGame = create<GameState & Actions>((set, get) => ({
   setPhase: (p) => set({ phase: p }),
   toggleCrt: () => set((s) => ({ crtEnabled: !s.crtEnabled })),
   toggleMusic: () => set((s) => ({ musicEnabled: !s.musicEnabled })),
+  toggleVoice: () => set((s) => {
+    const next = !s.voiceEnabled
+    Voice.setEnabled(next)
+    return { voiceEnabled: next }
+  }),
   setScenario: (s) => set({ scenario: s }),
   setSelectedSide: (side, id) => set(() => side === 'a' ? { selectedA: id } : { selectedB: id }),
   selectFighters: (a, b) => set({ selectedA: a, selectedB: b }),
@@ -172,7 +180,13 @@ export const useGame = create<GameState & Actions>((set, get) => ({
       selectedB: b,
     })
     // After cinematic pre-fight beat (stage reveal), the screen transitions to 'fight'
-    setTimeout(() => set({ phase: 'fight' }), 4200)
+    setTimeout(() => {
+      set({ phase: 'fight' })
+      // Both fighters quote their match-start line. Stagger so they don't overlap.
+      const defA = getFighter(a); const defB = getFighter(b)
+      if (defA) Voice.say(defA.voiceLines.matchStart, a)
+      if (defB) setTimeout(() => Voice.say(defB.voiceLines.matchStart, b), 1800)
+    }, 4200)
   },
 
   newRound: () => {
@@ -265,7 +279,13 @@ export const useGame = create<GameState & Actions>((set, get) => ({
         : state.quoteBank,
     })
 
+    // Voice line on key moments — ult lines and K.O. lines.
+    if (result.flash === 'ult') {
+      Voice.say(attackerDef.voiceLines.ult, attackerDef.id)
+    }
+
     if (result.ko) {
+      Voice.say(attackerDef.voiceLines.ko, attackerDef.id)
       // Trigger the K.O. cinematic overlay. The CombatScreen reads
       // koCinematic and runs a 2.4s sequence: slow-mo + white flash +
       // K.O. banner + particle burst. Then we transition to round/match end.

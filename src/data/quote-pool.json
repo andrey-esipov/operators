@@ -1,0 +1,588 @@
+{
+  "chesky": [
+    { "quote": "If you don't use your own product every day, you can't build a great one.", "timestamp": "ep 217 · 02:14" },
+    { "quote": "The deadline is a feature. Six weeks forces decisions you'd otherwise put off.", "timestamp": "ep 217 · 08:42" },
+    { "quote": "When you have founder mode, you can do things others can't.", "timestamp": "ep 217 · 14:30" },
+    { "quote": "I learned this from Steve. Founders see what others can't.", "timestamp": "ep 217 · 18:01" },
+    { "quote": "We thought, what if Airbnb was a city of its own?", "timestamp": "ep 217 · 41:18" },
+    { "quote": "I built the company I would want to work at.", "timestamp": "ep 217 · 22:05" },
+    { "quote": "Most product strategies fail because they solve a problem nobody has.", "timestamp": "ep 217 · 28:30" },
+    { "quote": "Ship the wedge. The bigger product comes after you have earned the right.", "timestamp": "ep 217 · 31:12" },
+    { "quote": "Steve Jobs told me to design the company like a product.", "timestamp": "ep 217 · 35:00" },
+    { "quote": "The 10-star experience is the one that makes you want to call your mom.", "timestamp": "ep 217 · 38:45" }
+  ],
+  "doshi": [
+    {
+      "quote": "I noticed two things, that what made them busy is two things.",
+      "timestamp": "00:55:36"
+    },
+    {
+      "quote": "What I mainly took away is for instance, even at Stripe, when I joined, I was just thinking a lot bigger about the business.",
+      "timestamp": "00:16:22"
+    },
+    {
+      "quote": "What does it take to make it bigger is a habit, I think, that got ingrained for me at Google.",
+      "timestamp": "00:16:22"
+    },
+    {
+      "quote": "Some really great insights came out of a post-mortem about what went wrong and what we could have done better.",
+      "timestamp": "00:23:58"
+    },
+    {
+      "quote": "Those are all really great things and they will enable greater impact and better execution for you.",
+      "timestamp": "00:50:06"
+    },
+    {
+      "quote": "Yep, thinking is cheap, so you should do more thinking, not less.",
+      "timestamp": "00:25:37"
+    },
+    {
+      "quote": "Usually for the same type of activity, we provide the same type of engagement.",
+      "timestamp": "00:38:43"
+    },
+    {
+      "quote": "They sometimes might even backtrack and undo whatever they did.",
+      "timestamp": "00:32:13"
+    },
+    {
+      "quote": "Google, I think the main thing I learned was the power of thinking really big.",
+      "timestamp": "00:14:38"
+    },
+    {
+      "quote": "I think I learned this by just observing Patrick at Stripe, particularly over the last couple of years that I was there.",
+      "timestamp": "01:02:47"
+    },
+    {
+      "quote": "Some of the core engineering leads will also need to be at that meeting.",
+      "timestamp": "00:30:07"
+    },
+    {
+      "quote": "One is that somehow the organization had imposed very high optics requirements.",
+      "timestamp": "00:55:36"
+    },
+    {
+      "quote": "The interesting part though, is nobody remembers that now, people happily use YouTube.",
+      "timestamp": "00:13:42"
+    },
+    {
+      "quote": "They took strong ownership and then they creatively executed through the challenges.",
+      "timestamp": "01:13:56"
+    },
+    {
+      "quote": "The only difference is you got attracted to the catchy metaphor, and the other one is the authority bias, because Bezos said it.",
+      "timestamp": "00:33:53"
+    },
+    {
+      "quote": "The problem is we just fill up our plate with quick wins.",
+      "timestamp": "01:04:36"
+    },
+    {
+      "quote": "I used to like working out of a calendar, those types of things.",
+      "timestamp": "00:07:50"
+    },
+    {
+      "quote": "It had other incredible assets, including the brand.",
+      "timestamp": "00:27:42"
+    },
+    {
+      "quote": "I was in meetings with Larry, Sergey, Eric Schmidt.",
+      "timestamp": "00:18:46"
+    },
+    {
+      "quote": "If you really enjoy the tweets and want to see more, then you can super follow me on Twitter.",
+      "timestamp": "01:15:00"
+    }
+  ],
+  "catwu": [
+    {
+      "quote": "Also, building the automation is often a lot slower than you doing it yourself.",
+      "timestamp": "01:09:46"
+    },
+    {
+      "quote": "This way, we can reduce the amount of overhead for shipping any product.",
+      "timestamp": "00:16:15"
+    },
+    {
+      "quote": "If AI can take care of the grunt work, then you have this extra 20% time now that you might not have before.",
+      "timestamp": "01:08:32"
+    },
+    {
+      "quote": "The product that has most changed my life outside of Claude products is probably Waymo.",
+      "timestamp": "01:18:01"
+    },
+    {
+      "quote": "I see a lot of people playing around with AI and building prototype apps and tinkering with building workflows.",
+      "timestamp": "01:12:08"
+    },
+    {
+      "quote": "We actually have a lot of internal tools that we make.",
+      "timestamp": "00:42:02"
+    },
+    {
+      "quote": "I think the hard thing is figuring out for the current model, how do you elicit the maximum capability?",
+      "timestamp": "00:52:45"
+    },
+    {
+      "quote": "The other group of people who I really trust is just the Claude Code team.",
+      "timestamp": "00:57:01"
+    },
+    {
+      "quote": "One task works, and now you can do six tasks at a time.",
+      "timestamp": "01:05:32"
+    },
+    {
+      "quote": "A lot of the changes that we make with a new model is removing features that are no longer needed.",
+      "timestamp": "01:01:03"
+    },
+    {
+      "quote": "There were a few tweaks, so I did have to give it a round of feedback.",
+      "timestamp": "00:37:33"
+    },
+    {
+      "quote": "How do we build the interface so that you as a human know which tasks you need to look into?",
+      "timestamp": "01:06:30"
+    },
+    {
+      "quote": "I told Cowork the narrative that I wanted to tell, and it actually just worked for an hour.",
+      "timestamp": "00:37:33"
+    },
+    {
+      "quote": "I actually am a rock climber, but I first watched Free Solo before I climbed rocks.",
+      "timestamp": "01:17:22"
+    },
+    {
+      "quote": "What are all the things that this customer has asked me for?",
+      "timestamp": "00:48:19"
+    },
+    {
+      "quote": "A human would make a list of everything that they need to change.",
+      "timestamp": "01:01:03"
+    },
+    {
+      "quote": "I think the beauty of AI is that it can do those tedious parts for you.",
+      "timestamp": "01:07:49"
+    },
+    {
+      "quote": "I think our team is still people who lean into the chaos.",
+      "timestamp": "00:22:39"
+    },
+    {
+      "quote": "We are very lucky to be able to work with the frontier models.",
+      "timestamp": "00:11:46"
+    },
+    {
+      "quote": "With this, it takes a few seconds and you get a tailored deck.",
+      "timestamp": "00:44:14"
+    }
+  ],
+  "madhavan": [
+    {
+      "quote": "Look, when we first launched the book, I used to track some of these copy sales and everything else.",
+      "timestamp": "00:04:05"
+    },
+    {
+      "quote": "I joined because I actually wanted to get to understand the science behind pricing, not just the art.",
+      "timestamp": "00:07:27"
+    },
+    {
+      "quote": "Starbucks actually launched a bingo card, which is the same principle.",
+      "timestamp": "01:25:02"
+    },
+    {
+      "quote": "Just even asking, would you pay for it, is a good question because if someone says no, then ask why.",
+      "timestamp": "00:31:50"
+    },
+    {
+      "quote": "Rahul Vohra from Superhuman actually read the book, and he talked about this in an a16z podcast.",
+      "timestamp": "00:27:42"
+    },
+    {
+      "quote": "Too late, I think is more so the companies, this is why we wrote Monetizing Innovation.",
+      "timestamp": "00:16:15"
+    },
+    {
+      "quote": "Transparency and fairness just means that you charge for the product.",
+      "timestamp": "01:06:08"
+    },
+    {
+      "quote": "In all of these situation, a subscription actually makes a lot more sense.",
+      "timestamp": "01:04:53"
+    },
+    {
+      "quote": "If you change the features and the price, how would you react?",
+      "timestamp": "00:31:21"
+    },
+    {
+      "quote": "When we go and ask companies, do you have a segmentation strategy, roughly about 60% would say, yeah, we have it.",
+      "timestamp": "00:39:38"
+    },
+    {
+      "quote": "The HP print cartridges, same thing, the printer is cheaper, but then the cartridges add up.",
+      "timestamp": "01:22:29"
+    },
+    {
+      "quote": "When you look at french fries and Coke, those are the fillers.",
+      "timestamp": "00:56:36"
+    },
+    {
+      "quote": "When they went and tested this and pitched the idea, they got all kinds of reactions.",
+      "timestamp": "00:19:55"
+    },
+    {
+      "quote": "The first one is skimming strategy, which is your Apple iPhone.",
+      "timestamp": "00:53:42"
+    },
+    {
+      "quote": "I was at Stanford Graduate School, both Graduate School of Business and the Engineering School.",
+      "timestamp": "00:06:36"
+    },
+    {
+      "quote": "Things like, for instance, big cup holder was inside because people loved it, needed an SUV would pay for it.",
+      "timestamp": "00:17:05"
+    },
+    {
+      "quote": "Probably a marketing person does not necessarily understand exactly what an API is and the how you charge question became very critical.",
+      "timestamp": "01:02:09"
+    },
+    {
+      "quote": "The Predictably Irrational was a great book from Dan Ariely, made the concept very famous.",
+      "timestamp": "01:16:34"
+    },
+    {
+      "quote": "It is heterogeneous whether you want to accept it or not.",
+      "timestamp": "00:41:55"
+    },
+    {
+      "quote": "Can we productize to this first compared to the others?",
+      "timestamp": "00:45:14"
+    }
+  ],
+  "spiegel": [
+    {
+      "quote": "I think not every part of the CEO job is glamorous.",
+      "timestamp": "00:52:57"
+    },
+    {
+      "quote": "Technology leaders think that folks will just blindly adopt new technology as it comes out.",
+      "timestamp": "00:00:47"
+    },
+    {
+      "quote": "I was in the product design program back at school, which actually was part of the mechanical engineering department at the time.",
+      "timestamp": "00:22:26"
+    },
+    {
+      "quote": "We empathized and then came up with something new.",
+      "timestamp": "00:27:52"
+    },
+    {
+      "quote": "They were really excited about trying new services.",
+      "timestamp": "00:03:21"
+    },
+    {
+      "quote": "We really wanted to bring some order to that chaos.",
+      "timestamp": "00:47:19"
+    },
+    {
+      "quote": "I fell in love with graphic design and would spend every lunch period in the computer lab.",
+      "timestamp": "00:13:10"
+    },
+    {
+      "quote": "What do you mean you can send things that disappear?",
+      "timestamp": "00:29:19"
+    },
+    {
+      "quote": "I love making new products, services for our community.",
+      "timestamp": "00:37:48"
+    },
+    {
+      "quote": "I think the CEO job has a lot of requirements that are not necessarily things that you love to do in the morning.",
+      "timestamp": "00:52:57"
+    },
+    {
+      "quote": "Humanity is far more important because humanity dictates how technology is adopted.",
+      "timestamp": "00:00:47"
+    },
+    {
+      "quote": "We have a very, very small design team that is constantly innovating and creating new things.",
+      "timestamp": "00:00:25"
+    },
+    {
+      "quote": "They might come from 3D animation or they might come from electrical engineering.",
+      "timestamp": "00:41:19"
+    },
+    {
+      "quote": "First and foremost, yeah, this is what I love to do.",
+      "timestamp": "00:37:48"
+    },
+    {
+      "quote": "We have to run a large public company, serve almost a billion customers.",
+      "timestamp": "00:20:14"
+    },
+    {
+      "quote": "What are you going to do with this skillset drawing things?",
+      "timestamp": "00:35:10"
+    },
+    {
+      "quote": "One of the strengths of our design team has been that people come from lots of different backgrounds.",
+      "timestamp": "00:41:19"
+    },
+    {
+      "quote": "A lot of my view of product management was actually driven by my view of designers and the role that designers should play.",
+      "timestamp": "00:31:34"
+    },
+    {
+      "quote": "That means our service needs to be really reliable and it means that we need to operate really, really effectively to serve our customers.",
+      "timestamp": "00:20:14"
+    },
+    {
+      "quote": "We added a display to be able to overlay digital objects into the world and help you interact with them.",
+      "timestamp": "00:15:04"
+    }
+  ],
+  "turley": [
+    {
+      "quote": "I take co inspiration from WhatsApp where it was a very small team running a very global-scale product.",
+      "timestamp": "01:05:51"
+    },
+    {
+      "quote": "It was like, I think my first task was fix the blinds or something like that.",
+      "timestamp": "01:25:02"
+    },
+    {
+      "quote": "I just wrote a big blog post that we published Monday, and this thing is such an incredible editor.",
+      "timestamp": "00:07:13"
+    },
+    {
+      "quote": "My first task was I fix the blinds, or something like that.",
+      "timestamp": "00:00:05"
+    },
+    {
+      "quote": "GPT-5 is an improvement, which is really exciting for me, but we have more work from there.",
+      "timestamp": "00:57:25"
+    },
+    {
+      "quote": "The birth of that was just to turn away demand originally.",
+      "timestamp": "00:37:48"
+    },
+    {
+      "quote": "I think I spent a lot of time thinking about this with OpenAI, especially after ChatGPT.",
+      "timestamp": "01:03:11"
+    },
+    {
+      "quote": "The fact that you can only find out by shipping, which is why maximally lean into that.",
+      "timestamp": "01:03:11"
+    },
+    {
+      "quote": "One of them is that amazing ideas come from anywhere.",
+      "timestamp": "01:03:46"
+    },
+    {
+      "quote": "The inverse of giving it more inputs on your life is giving it more action space.",
+      "timestamp": "00:10:24"
+    },
+    {
+      "quote": "Because in a world where this thing can answer any question, asking the right question is very, very important.",
+      "timestamp": "01:28:20"
+    },
+    {
+      "quote": "We already had a product out there, which was our developer product.",
+      "timestamp": "00:14:24"
+    },
+    {
+      "quote": "The quality of the stuff is important for empathy.",
+      "timestamp": "00:52:46"
+    },
+    {
+      "quote": "The model is the product and therefore you need to iterate on it like a product.",
+      "timestamp": "00:29:18"
+    },
+    {
+      "quote": "Because A, the stakes are already really high, especially with these models, GPT-5 which is a frontier in so many different ways.",
+      "timestamp": "00:25:02"
+    },
+    {
+      "quote": "We had someone from the supercomputing team who had built an iOS app before.",
+      "timestamp": "00:16:04"
+    },
+    {
+      "quote": "Not having to log in was a huge hit because it removed a ton of the friction.",
+      "timestamp": "00:31:00"
+    },
+    {
+      "quote": "It also allows you to hire people who I think Keith Rabois calls us like barrels, I think.",
+      "timestamp": "01:06:41"
+    },
+    {
+      "quote": "Another good example of I think being first principles in this environment is, does this feature need to be polished?",
+      "timestamp": "01:09:54"
+    },
+    {
+      "quote": "Imagine MS-DOS had gone viral and you were just trying to hack little conversation starters onto it.",
+      "timestamp": "00:50:07"
+    }
+  ],
+  "cagan": [
+    {
+      "quote": "You can also find me reluctantly on social media, but I do the minimum possible.",
+      "timestamp": "00:57:50"
+    },
+    {
+      "quote": "Most of my articles are inspired by questions that I have never got before.",
+      "timestamp": "00:57:50"
+    },
+    {
+      "quote": "Usually because Bill Campbell impacted the companies, but they care about coaching.",
+      "timestamp": "00:46:01"
+    },
+    {
+      "quote": "First of all, they have to really get to know the users and customers.",
+      "timestamp": "00:38:55"
+    },
+    {
+      "quote": "Direct access to customers, direct access to the engineers, direct access to the stakeholders.",
+      "timestamp": "00:55:17"
+    },
+    {
+      "quote": "The first is you need to make sure the team has a problem to solve rather than the feature to build.",
+      "timestamp": "00:36:56"
+    },
+    {
+      "quote": "This is what most people mean by a transformation.",
+      "timestamp": "00:35:42"
+    },
+    {
+      "quote": "Whenever I work with teams, I always try to remember to say this somewhere.",
+      "timestamp": "00:12:16"
+    },
+    {
+      "quote": "You want to give it a shot, be in a real product team.",
+      "timestamp": "00:42:38"
+    },
+    {
+      "quote": "Another good definition are the people who create the tools to help product managers be more productive.",
+      "timestamp": "00:54:29"
+    },
+    {
+      "quote": "These are the four things you need to go out and do.",
+      "timestamp": "00:42:38"
+    },
+    {
+      "quote": "Third, if the team is now going to make decisions, they need the strategic context.",
+      "timestamp": "00:41:33"
+    },
+    {
+      "quote": "The real question is, do you solve it better than everybody else so that they buy you?",
+      "timestamp": "00:00:00"
+    },
+    {
+      "quote": "Where it gets expensive and risky, of course is changing the whole business units.",
+      "timestamp": "00:35:42"
+    },
+    {
+      "quote": "The two that really drive me nuts are all over Europe, you find product owners and those product owners are taught by Agile coaches.",
+      "timestamp": "00:48:35"
+    },
+    {
+      "quote": "The other thing is you can go out, if you can find somebody who can coach or mentor you.",
+      "timestamp": "00:44:12"
+    },
+    {
+      "quote": "That is the single biggest area empowered teams fall down.",
+      "timestamp": "00:41:33"
+    },
+    {
+      "quote": "He had a chance to think through what went well, what went wrong.",
+      "timestamp": "00:16:53"
+    },
+    {
+      "quote": "They have to be considered pretty much one of the experts on the users and customers.",
+      "timestamp": "00:38:55"
+    },
+    {
+      "quote": "Signal to noise ratio on social media is so terrible, I try to focus on other places.",
+      "timestamp": "00:57:50"
+    }
+  ],
+  "lenny": [
+    {
+      "quote": "What do you need to know, what should you do right, do wrong?",
+      "timestamp": "00:41:43"
+    },
+    {
+      "quote": "How many B2B SaaS companies would you estimate need to import CSV files from their customers?",
+      "timestamp": "00:02:05"
+    },
+    {
+      "quote": "Feels also very hard to operationalize and maybe make the best decisions in times.",
+      "timestamp": "00:43:54"
+    },
+    {
+      "quote": "Shishir, thank you so much for being on this podcast.",
+      "timestamp": "01:30:28"
+    },
+    {
+      "quote": "Do you have any sense of when design can be enough of a differentiator?",
+      "timestamp": "00:25:00"
+    },
+    {
+      "quote": "What are some favorite recent movie or TV shows you really enjoyed?",
+      "timestamp": "00:50:12"
+    },
+    {
+      "quote": "Something else that I think what you teach helps with is underdogs coming up against incumbent companies, giving them a chance to stand out.",
+      "timestamp": "00:17:28"
+    },
+    {
+      "quote": "Plus, Fin comes with a 90-day money back guarantee.",
+      "timestamp": "00:26:07"
+    },
+    {
+      "quote": "You said that it was something like 10 days from Hackathon to Sam tweeting about ChatGPT being live?",
+      "timestamp": "00:31:52"
+    },
+    {
+      "quote": "If this is just the one thing people take away from this conversation already, I think that could have a big impact.",
+      "timestamp": "00:44:49"
+    },
+    {
+      "quote": "Is there any other design pattern, agenetic engineering pattern that you think is important to share before we move on to a final topic?",
+      "timestamp": "01:14:44"
+    },
+    {
+      "quote": "Agency is the word that comes to mind when you talk about this role.",
+      "timestamp": "00:20:29"
+    },
+    {
+      "quote": "Also, Three-Body Problem is the other one that I always think about.",
+      "timestamp": "01:31:40"
+    },
+    {
+      "quote": "Before we get in there, can you just define, well, what is a category?",
+      "timestamp": "00:09:53"
+    },
+    {
+      "quote": "Wow, that was an awesome story and an awesome perspective.",
+      "timestamp": "01:03:06"
+    },
+    {
+      "quote": "His background is actually in philosophy, which comes across very clearly when you hear him share his advice.",
+      "timestamp": "00:01:27"
+    },
+    {
+      "quote": "Do you have a favorite life motto that you come back to share with folks, find useful and work during life?",
+      "timestamp": "01:16:59"
+    },
+    {
+      "quote": "When you talk about getting this offer from Facebook, usually those are like you have three days to decide.",
+      "timestamp": "00:30:16"
+    },
+    {
+      "quote": "A lot of people discount as a PM like I should have no opinions.",
+      "timestamp": "00:35:57"
+    },
+    {
+      "quote": "What an incredible combination for someone leading this product [inaudible 01:22:30].",
+      "timestamp": "01:22:27"
+    }
+  ]
+}

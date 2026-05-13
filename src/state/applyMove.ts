@@ -33,11 +33,12 @@ export interface ApplyMoveResult {
   flash?: 'crit' | 'combo' | 'ult'
 }
 
-const CRIT_CHANCE = 0.1
-const CRIT_MULT = 1.5
+const CRIT_CHANCE = 0.12
+const CRIT_MULT = 1.6
 
-const SUPER_GAIN_ON_LAND = 8
-const SUPER_GAIN_ON_HIT = 12
+// Faster super meter so ultimates feel reachable
+const SUPER_GAIN_ON_LAND = 15
+const SUPER_GAIN_ON_HIT = 20
 
 function decrementStatus(status: StatusEffect[]): StatusEffect[] {
   return status
@@ -279,7 +280,8 @@ export function startTurn(runtime: FighterRuntime): {
     runtime: {
       ...runtime,
       hp: newHp,
-      momentum: Math.min(8, runtime.momentum + 1),
+      // +2 per turn (was +1) — combos + heavy chains reachable faster
+      momentum: Math.min(10, runtime.momentum + 2),
       status: decrementStatus(runtime.status),
     },
     selfDamage,
@@ -294,7 +296,8 @@ export function initialRuntime(defId: string): FighterRuntime {
     defId,
     hp: def.maxHp,
     maxHp: def.maxHp,
-    momentum: 1,
+    // Starting momentum 3 = light/setup/heavy all immediately playable
+    momentum: 3,
     superMeter: 0,
     status: [],
     lastMoveId: null,

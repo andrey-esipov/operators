@@ -68,6 +68,11 @@ export interface Move {
   requiresSelfStatus?: StatusKey
 }
 
+export interface QuotePoolEntry {
+  quote: string
+  timestamp: string
+}
+
 export interface FighterDef {
   id: string
   name: string
@@ -134,6 +139,7 @@ export type Phase =
   | 'match-end'
   | 'arcade-victory'
   | 'quote-bank'
+  | 'how-to-play'
 
 export interface BattleLogEntry {
   turn: number

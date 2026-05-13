@@ -8,6 +8,7 @@ import { RoundEnd } from './screens/RoundEnd'
 import { MatchEnd } from './screens/MatchEnd'
 import { ArcadeVictory } from './screens/ArcadeVictory'
 import { QuoteBank } from './screens/QuoteBank'
+import { HowToPlay } from './screens/HowToPlay'
 import { attachQuoteBankSync, loadQuoteBank } from './lib/persist'
 
 export function App() {
@@ -31,6 +32,7 @@ export function App() {
       {phase === 'match-end' && <MatchEnd />}
       {phase === 'arcade-victory' && <ArcadeVictory />}
       {phase === 'quote-bank' && <QuoteBank />}
+      {phase === 'how-to-play' && <HowToPlay />}
       {crtEnabled && <div className="crt-overlay" />}
     </div>
   )

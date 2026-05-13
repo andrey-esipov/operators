@@ -1,0 +1,310 @@
+import { useGame } from '../state/game'
+import { Sfx } from '../lib/audio'
+
+export function HowToPlay() {
+  const setPhase = useGame((s) => s.setPhase)
+
+  return (
+    <div className="relative w-full h-full overflow-y-auto">
+      <div
+        className="absolute inset-0 -z-10"
+        style={{
+          background:
+            'radial-gradient(circle at top, #3B2360 0%, #1A0F2E 60%, #0F0A1A 100%)',
+        }}
+      />
+
+      <div className="max-w-5xl mx-auto px-6 py-8">
+        <div className="flex items-center justify-between mb-6">
+          <button
+            onClick={() => {
+              Sfx.menuMove()
+              setPhase('menu')
+            }}
+            className="font-display text-[10px] tracking-widest text-white/70"
+          >
+            ← MAIN MENU
+          </button>
+          <h1
+            className="font-display text-3xl tracking-widest"
+            style={{ color: '#FFD60A', textShadow: '4px 4px 0 black, 0 0 12px #F77F00' }}
+          >
+            HOW TO PLAY
+          </h1>
+          <div style={{ width: 80 }} />
+        </div>
+
+        <p className="font-body text-2xl text-white/90 mb-8 text-center max-w-3xl mx-auto leading-snug">
+          OPERATORS is a turn-based fighter where 8 guests from Lenny&apos;s Podcast battle on pixel-art
+          stages. Every move is named after a real framework. Every quote is verbatim.
+        </p>
+
+        {/* RESOURCES */}
+        <Section title="RESOURCES" color="#FFD60A">
+          <ResourceCard
+            name="HP"
+            color="#06D6A0"
+            value="1000"
+            desc="Health points. Drops to 0 = K.O. Best of 3 rounds wins the match."
+          />
+          <ResourceCard
+            name="MOMENTUM"
+            color="#FCBF49"
+            value="3 → 10"
+            desc="Currency for moves. Start at 3 (light/setup/heavy all playable). Gain +2 per turn, caps at 10."
+          />
+          <ResourceCard
+            name="SUPER METER"
+            color="#F72585"
+            value="0 → 100"
+            desc="Required for Ultimates. Builds by +15 each move you land, +20 each hit you take. Fills in ~3-4 turns."
+          />
+        </Section>
+
+        {/* MOVES */}
+        <Section title="THE 5-MOVE KIT" color="#06D6A0">
+          <p className="font-body text-xl text-white/80 mb-3 col-span-full">
+            Every fighter has the same five slots. Names + flavor are unique. Quotes are verbatim from real episodes.
+          </p>
+          <MoveCardRow
+            type="LIGHT"
+            color="#90E0EF"
+            cost="1–2 momentum"
+            role="Fast jab. Low damage. Often applies a debuff."
+            ex="Chesky · USE YOUR OWN PRODUCT (applies HONEST FEEDBACK)"
+          />
+          <MoveCardRow
+            type="HEAVY"
+            color="#E63946"
+            cost="3–4 momentum"
+            role="Hard hit. High damage. Slower follow-up."
+            ex="Doshi · TWO ICPs GLUED TOGETHER (90 dmg, CRIT vs HONEST)"
+          />
+          <MoveCardRow
+            type="SETUP"
+            color="#06D6A0"
+            cost="2 momentum"
+            role="Self-buff or opponent-debuff. Sets up the combo finisher."
+            ex="Chesky · FOUNDER MODE (apply F-MODE buff)"
+          />
+          <MoveCardRow
+            type="COMBO"
+            color="#FFD60A"
+            cost="2–3 momentum"
+            role="Finisher. Bonus damage when chained from the right setup."
+            ex="Chesky · AIR-DESIGN (after FOUNDER MODE = BUILT THE COMPANY I'D WANT TO WORK AT)"
+          />
+          <MoveCardRow
+            type="ULTIMATE"
+            color="#F72585"
+            cost="8 momentum + 100 super"
+            role="Character-defining mega move. Often requires a prerequisite status to fire."
+            ex="Chesky · AIR IS A CITY · 220 dmg (requires FOUNDER MODE active)"
+          />
+        </Section>
+
+        {/* SCENARIOS */}
+        <Section title="SCENARIO BONUSES" color="#F72585">
+          <p className="font-body text-xl text-white/80 mb-3 col-span-full">
+            Every fight has a business <em>scenario</em>. Fighters do bonus damage when their framework actually applies.
+          </p>
+          <ScenarioRow name="Brian Chesky" bonus="+50% in PRE-PMF & CRISIS" />
+          <ScenarioRow name="Madhavan Ramanujam" bonus="+50% in MONETIZATION" />
+          <ScenarioRow name="Cat Wu" bonus="+50% in AI-NATIVE" />
+          <ScenarioRow name="Evan Spiegel" bonus="+50% in DISTRIBUTION" />
+          <ScenarioRow name="Nick Turley" bonus="+50% in HYPERGROWTH" />
+          <ScenarioRow name="Shreyas Doshi" bonus="+40% in PLATEAU & IPO-PREP" />
+          <ScenarioRow name="Marty Cagan" bonus="+30% in HYPERGROWTH & PLATEAU" />
+          <ScenarioRow name="Lenny ★" bonus="+20% across ALL scenarios + Pattern Matching ULT" />
+        </Section>
+
+        {/* COMBOS */}
+        <Section title="COMBOS & READS" color="#FFD60A">
+          <div className="col-span-full font-body text-xl text-white/85 space-y-3">
+            <p>
+              <span className="font-display text-base" style={{ color: '#FFD60A' }}>COMBO:</span>{' '}
+              Chain SETUP → COMBO finisher in consecutive turns to trigger a gold banner flash with bonus damage.
+              The banner is the operator&apos;s real story (e.g. <em>BUILT THE COMPANY I&apos;D WANT TO WORK AT</em>).
+            </p>
+            <p>
+              <span className="font-display text-base" style={{ color: '#00B4D8' }}>READ:</span>{' '}
+              Each fighter has one move that hard-counters a specific opponent move type. Cat Wu&apos;s SHIP A
+              RESEARCH PREVIEW counters any &quot;build-in-stealth&quot; setup. Adds prediction depth.
+            </p>
+            <p>
+              <span className="font-display text-base" style={{ color: '#EF233C' }}>CRIT:</span>{' '}
+              12% chance per hit, 1.6× damage. White flash on screen. Builds super meter faster.
+            </p>
+          </div>
+        </Section>
+
+        {/* TURN FLOW */}
+        <Section title="TURN FLOW" color="#90E0EF">
+          <div className="col-span-full grid grid-cols-1 md:grid-cols-4 gap-3 font-body text-lg">
+            <FlowStep n="1" text="Active player picks 1 move (light/heavy/setup/combo/ultimate)." />
+            <FlowStep n="2" text="Move resolves: damage + status + the real podcast quote flashes." />
+            <FlowStep n="3" text="Opponent gains super meter from taking damage. Turn passes." />
+            <FlowStep n="4" text="Each fighter gains +2 momentum at the start of their turn." />
+          </div>
+          <p className="col-span-full font-body text-lg text-white/70 mt-2">
+            90-second round timer. If time runs out, higher HP wins the round. Best of 3 rounds.
+          </p>
+        </Section>
+
+        {/* TIPS */}
+        <Section title="TIPS" color="#06D6A0">
+          <div className="col-span-full font-body text-xl text-white/85 space-y-2">
+            <p>• Hover any fighter on the select screen to see their archetype + signature ult.</p>
+            <p>• Stack 2–3 setup moves before unleashing your Ultimate — combo bonuses add up.</p>
+            <p>• Pay attention to the scenario at the top of the fight screen — that&apos;s where you do bonus damage.</p>
+            <p>• Press <span className="font-display text-base text-white">[ESC]</span> to quit a match back to the menu.</p>
+            <p>• Every move you play unlocks a quote in your <span style={{ color: '#FFD60A' }}>Quote Bank</span>. Beat Arcade Mode to see how many frameworks you&apos;ve collected.</p>
+          </div>
+        </Section>
+
+        <div className="text-center mt-10 mb-4">
+          <button
+            onClick={() => {
+              Sfx.menuSelect()
+              setPhase('menu')
+            }}
+            className="px-8 py-3 font-display text-base tracking-widest"
+            style={{
+              background: 'linear-gradient(180deg, #F77F0044, #E6394644)',
+              color: 'white',
+              border: '2px solid #E63946',
+              boxShadow:
+                'inset -2px -2px 0 rgba(0,0,0,0.6), inset 2px 2px 0 rgba(255,255,255,0.2)',
+            }}
+          >
+            BACK TO MENU
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function Section({
+  title,
+  color,
+  children,
+}: {
+  title: string
+  color: string
+  children: React.ReactNode
+}) {
+  return (
+    <section className="mb-8">
+      <div
+        className="font-display text-xl tracking-widest mb-3 pb-2"
+        style={{ color, borderBottom: `2px solid ${color}` }}
+      >
+        ▌ {title}
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">{children}</div>
+    </section>
+  )
+}
+
+function ResourceCard({
+  name,
+  color,
+  value,
+  desc,
+}: {
+  name: string
+  color: string
+  value: string
+  desc: string
+}) {
+  return (
+    <div
+      className="p-4"
+      style={{
+        background: 'rgba(15,10,26,0.7)',
+        border: `2px solid ${color}`,
+        boxShadow: 'inset -2px -2px 0 rgba(0,0,0,0.5)',
+      }}
+    >
+      <div className="font-display text-[10px] tracking-widest" style={{ color }}>
+        {name}
+      </div>
+      <div className="font-num text-3xl tabular-nums my-2" style={{ color: 'white' }}>
+        {value}
+      </div>
+      <div className="font-body text-lg text-white/80 leading-snug">{desc}</div>
+    </div>
+  )
+}
+
+function MoveCardRow({
+  type,
+  color,
+  cost,
+  role,
+  ex,
+}: {
+  type: string
+  color: string
+  cost: string
+  role: string
+  ex: string
+}) {
+  return (
+    <div
+      className="p-3 col-span-full md:col-span-1"
+      style={{
+        background: `linear-gradient(180deg, ${color}22, ${color}11)`,
+        border: `2px solid ${color}`,
+        boxShadow: 'inset -2px -2px 0 rgba(0,0,0,0.5)',
+      }}
+    >
+      <div className="flex items-baseline gap-2">
+        <span className="font-display text-[9px] tracking-widest" style={{ color }}>
+          {type}
+        </span>
+        <span className="font-body text-base text-white/60">· {cost}</span>
+      </div>
+      <p className="font-body text-base text-white mt-1 leading-tight">{role}</p>
+      <p className="font-body text-base text-white/60 italic mt-2">{ex}</p>
+    </div>
+  )
+}
+
+function ScenarioRow({ name, bonus }: { name: string; bonus: string }) {
+  return (
+    <div
+      className="p-3 col-span-full md:col-span-1"
+      style={{
+        background: 'rgba(0,0,0,0.4)',
+        border: '1px solid rgba(255,255,255,0.2)',
+      }}
+    >
+      <div className="font-display text-[9px] tracking-widest text-white">{name}</div>
+      <div className="font-body text-base mt-1" style={{ color: '#FFD60A' }}>
+        {bonus}
+      </div>
+    </div>
+  )
+}
+
+function FlowStep({ n, text }: { n: string; text: string }) {
+  return (
+    <div className="flex gap-2 items-start">
+      <span
+        className="font-display text-base flex items-center justify-center"
+        style={{
+          color: '#FFD60A',
+          width: 28,
+          height: 28,
+          border: '2px solid #FFD60A',
+          flexShrink: 0,
+        }}
+      >
+        {n}
+      </span>
+      <span className="text-white/90">{text}</span>
+    </div>
+  )
+}

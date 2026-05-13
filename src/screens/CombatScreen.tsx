@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useGame } from '../state/game'
 import { getFighter } from '../data/fighters'
+import { pickQuoteForMove } from '../lib/quotePool'
 import type { Move } from '../types'
 import { Sprite } from '../components/Sprite'
 import { HpBar } from '../components/HpBar'
@@ -77,8 +78,19 @@ export function CombatScreen({ mode = 'vs' }: { mode?: 'vs' | 'arcade' }) {
     if (last.quote) {
       const att = last.attacker === 'a' ? fighterA : fighterB
       const def = att ? getFighter(att.defId) : null
-      setLastQuote({ q: last.quote, ep: last.episode, t: last.timestamp, name: def?.shortName ?? '' })
-      setTimeout(() => setLastQuote(null), 2400)
+      // Rotate quotes per cast — 40% chance pull from fighter's verbatim quote pool
+      const fighterIdForQuote = att?.defId
+      const moveForQuote = def ? [...def.moves, def.ult].find((m) => m.id === last.moveId) : null
+      const rotated = fighterIdForQuote && moveForQuote
+        ? pickQuoteForMove(fighterIdForQuote, moveForQuote)
+        : { quote: last.quote, episode: last.episode, timestamp: last.timestamp }
+      setLastQuote({
+        q: rotated.quote,
+        ep: rotated.episode || last.episode,
+        t: rotated.timestamp || last.timestamp,
+        name: def?.shortName ?? '',
+      })
+      setTimeout(() => setLastQuote(null), 2600)
     }
     // Attack sprite pose: briefly switch the attacker to attack frame
     setAttackingSide(last.attacker)

@@ -10,7 +10,7 @@ export function MomentumBar({ value, side }: Props) {
     <div className={`flex items-center gap-1 ${side === 'b' ? 'flex-row-reverse' : ''}`}>
       <span className="font-display text-[8px] tracking-widest text-white/70">MOM</span>
       <div className={`flex gap-1 ${side === 'b' ? 'flex-row-reverse' : ''}`}>
-        {Array.from({ length: 8 }).map((_, i) => (
+        {Array.from({ length: 10 }).map((_, i) => (
           <div
             key={i}
             className="w-3 h-3"

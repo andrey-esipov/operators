@@ -1123,7 +1123,7 @@ FIGHTERS.push(
     name: 'April Dunford',
     shortName: 'DUNFORD',
     archetype: 'POSITIONING · SNIPER',
-    bio: 'Author of "Obviously Awesome." The most respected positioning consultant in tech.',
+    bio: 'a woman in her 50s with short blonde hair and sharp eyes, wearing a tailored business blazer over a crisp white shirt, holding a thick three-ring binder of positioning frameworks — the most respected positioning consultant in tech',
     episode: 'ep 156',
     accent: '#F77F00',
     maxHp: 880,

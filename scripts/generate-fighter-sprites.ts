@@ -188,8 +188,8 @@ async function main() {
       } catch (e) {
         console.warn(`    ✗ failed: ${(e as Error).message}`)
       }
-      // Polite rate limit
-      await new Promise((r) => setTimeout(r, 800))
+      // Polite rate limit — wait longer between sprites to avoid quota throttling
+      await new Promise((r) => setTimeout(r, 8000))
     }
   }
   console.log('\nDone.')

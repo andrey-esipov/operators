@@ -35,6 +35,16 @@ export function CombatScreen({ mode = 'vs' }: { mode?: 'vs' | 'arcade' }) {
   const [lastQuote, setLastQuote] = useState<{ q: string; ep: string; t: string; name: string } | null>(null)
   /** Which side is currently in attack-pose (briefly after casting) */
   const [attackingSide, setAttackingSide] = useState<'a' | 'b' | null>(null)
+  const resetMatch = useGame((s) => s.resetMatch)
+
+  // ESC key to quit to menu
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') resetMatch()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [resetMatch])
 
   // Audio cues
   useEffect(() => {
@@ -161,6 +171,19 @@ export function CombatScreen({ mode = 'vs' }: { mode?: 'vs' | 'arcade' }) {
           </div>
         </div>
       </div>
+
+      {/* Quit button (top-right) */}
+      <button
+        onClick={() => {
+          Sfx.menuMove()
+          resetMatch()
+        }}
+        className="absolute top-2 right-2 z-30 px-2 py-1 font-display text-[7px] tracking-widest text-white/60 hover:text-white"
+        title="ESC to quit"
+        style={{ background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(255,255,255,0.2)' }}
+      >
+        QUIT [ESC]
+      </button>
 
       {/* FIGHTERS */}
       <div className="absolute left-0 right-0 z-10" style={{ bottom: 200 }}>

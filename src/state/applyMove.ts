@@ -101,10 +101,33 @@ export function applyMove(input: ApplyMoveInput): ApplyMoveResult {
   if (move.requiresSelfStatus && !hasStatus(attacker, move.requiresSelfStatus)) {
     return rejectionLog(attacker, defender, move, turn, attackerSide, `Requires ${move.requiresSelfStatus}`)
   }
+  // Cooldown gating — heavy/combo/ult lock out for a couple of turns
+  const cdRemaining = attacker.cooldowns[move.id] ?? 0
+  if (cdRemaining > 0) {
+    return rejectionLog(attacker, defender, move, turn, attackerSide, `On cooldown (${cdRemaining})`)
+  }
 
   // Spend momentum / super
   attacker.momentum -= move.momentum
   if (move.type === 'ultimate') attacker.superMeter = 0
+
+  // Set cooldown on this move:
+  //  - ultimate: 99 turns (effectively once per round; cleared on newRound)
+  //  - heavy / combo: 2 turns
+  //  - light / setup: no cooldown
+  const newCooldowns = { ...attacker.cooldowns }
+  if (move.type === 'ultimate') newCooldowns[move.id] = 99
+  else if (move.type === 'heavy' || move.type === 'combo') newCooldowns[move.id] = 2
+  attacker.cooldowns = newCooldowns
+
+  // READ resolution — did the defender correctly read this move's TYPE last turn?
+  // If yes: damage halved + reader (defender) gains +20 super.
+  const readCorrect = defender.read === move.type
+  if (readCorrect) {
+    defender.superMeter = Math.min(100, defender.superMeter + 20)
+  }
+  // Consume the read regardless of outcome — one shot.
+  defender.read = null
 
   // ─── Damage calculation ───
   let scenarioMult = attackerDef.scenarioBonus[scenario] ?? 1.0
@@ -144,6 +167,9 @@ export function applyMove(input: ApplyMoveInput): ApplyMoveResult {
   // Distribution moat on defender — 10% damage reduction
   const moat = hasStatus(defender, 'DISTRIBUTION_MOAT') ? 0.9 : 1
 
+  // Read predict — defender called this move's type last turn, halve damage
+  const readMult = readCorrect ? 0.5 : 1
+
   // Preview state — if defender about to whiff (next missed move forgiven). We don't whiff this turn.
 
   // Final damage
@@ -157,6 +183,7 @@ export function applyMove(input: ApplyMoveInput): ApplyMoveResult {
       shipMult *
       priceMult *
       paralysisMult *
+      readMult *
       moat
   )
 
@@ -276,6 +303,12 @@ export function startTurn(runtime: FighterRuntime): {
 
   const newHp = Math.max(0, Math.min(runtime.maxHp, runtime.hp - selfDamage + selfHeal))
 
+  // Tick down cooldowns by 1 each turn
+  const newCooldowns: Record<string, number> = {}
+  for (const [id, turns] of Object.entries(runtime.cooldowns)) {
+    if (turns - 1 > 0) newCooldowns[id] = turns - 1
+  }
+
   return {
     runtime: {
       ...runtime,
@@ -283,6 +316,7 @@ export function startTurn(runtime: FighterRuntime): {
       // +2 per turn (was +1) — combos + heavy chains reachable faster
       momentum: Math.min(10, runtime.momentum + 2),
       status: decrementStatus(runtime.status),
+      cooldowns: newCooldowns,
     },
     selfDamage,
     selfHeal,
@@ -302,6 +336,7 @@ export function initialRuntime(defId: string): FighterRuntime {
     status: [],
     lastMoveId: null,
     read: null,
+    cooldowns: {},
     permanentBuff: 0,
   }
 }

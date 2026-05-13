@@ -485,6 +485,67 @@ export function CombatScreen({ mode = 'vs' }: { mode?: 'vs' | 'arcade' | 'practi
   )
 }
 
+function ReadButton({ momentum, disabled }: { momentum: number; disabled: boolean }) {
+  const [open, setOpen] = useState(false)
+  const castRead = useGame((s) => s.castRead)
+  const canAfford = momentum >= 1
+
+  function pick(type: 'light' | 'heavy' | 'setup' | 'combo' | 'ultimate') {
+    Sfx.menuSelect()
+    setOpen(false)
+    castRead(type)
+  }
+
+  return (
+    <div className="flex justify-center mt-2">
+      {!open ? (
+        <button
+          disabled={!canAfford || disabled}
+          onClick={() => { Sfx.menuMove(); setOpen(true) }}
+          className="px-3 py-1 font-display text-[9px] tracking-widest transition-transform hover:translate-y-[-1px]"
+          style={{
+            background: 'rgba(0,180,216,0.15)',
+            color: '#00B4D8',
+            border: '2px solid #00B4D8',
+            boxShadow: 'inset -2px -2px 0 rgba(0,0,0,0.5), inset 2px 2px 0 rgba(255,255,255,0.1)',
+            opacity: !canAfford || disabled ? 0.4 : 1,
+            cursor: !canAfford || disabled ? 'not-allowed' : 'pointer',
+          }}
+          title={disabled ? 'Read already active' : !canAfford ? 'Needs 1 momentum' : 'Predict opponent type — halves their next attack + +20 super'}
+        >
+          ◎ READ OPPONENT (1 mom)
+        </button>
+      ) : (
+        <div className="flex items-center gap-2 px-3 py-1" style={{ background: 'rgba(0,180,216,0.15)', border: '2px solid #00B4D8' }}>
+          <span className="font-display text-[8px] tracking-widest text-white/70">PREDICT THEIR NEXT MOVE:</span>
+          {(['light','heavy','setup','combo','ultimate'] as const).map((t) => (
+            <button
+              key={t}
+              onClick={() => pick(t)}
+              className="px-1.5 py-0.5 font-display text-[8px] tracking-widest"
+              style={{
+                background: '#0F0A1A',
+                color: '#00B4D8',
+                border: '1px solid #00B4D8',
+                cursor: 'pointer',
+              }}
+            >
+              {t.toUpperCase()}
+            </button>
+          ))}
+          <button
+            onClick={() => { Sfx.menuMove(); setOpen(false) }}
+            className="px-1.5 py-0.5 font-display text-[8px] tracking-widest text-white/50"
+            style={{ background: 'transparent', cursor: 'pointer' }}
+          >
+            ✕
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function ActiveMoves({
   side,
   fighterA,
@@ -515,6 +576,11 @@ function ActiveMoves({
         <>
           <div className="font-display text-[10px] tracking-widest text-center mb-2" style={{ color: side === 'a' ? '#E63946' : '#00B4D8' }}>
             P{side === 'a' ? '1' : '2'} · {def.shortName} · CHOOSE MOVE
+            {activeRt.read && (
+              <span className="ml-2 px-1.5 py-0.5" style={{ background: '#00B4D8', color: '#0F0A1A', fontSize: '8px' }}>
+                READING {activeRt.read.toUpperCase()}
+              </span>
+            )}
           </div>
           <div className="flex gap-2 flex-wrap justify-center">
             {def.moves.map((m) => (
@@ -523,6 +589,7 @@ function ActiveMoves({
                 move={m}
                 canAfford={activeRt.momentum >= m.momentum}
                 lastMoveId={activeRt.lastMoveId}
+                cooldown={activeRt.cooldowns[m.id] ?? 0}
                 onClick={() => onCast(m)}
               />
             ))}
@@ -536,9 +603,11 @@ function ActiveMoves({
                 activeRt.status.some((s) => s.key === def.ult.requiresSelfStatus)
               }
               lastMoveId={activeRt.lastMoveId}
+              cooldown={activeRt.cooldowns[def.ult.id] ?? 0}
               onClick={() => onCast(def.ult)}
             />
           </div>
+          <ReadButton momentum={activeRt.momentum} disabled={!!activeRt.read} />
         </>
       ) : (
         <div className="text-center font-display text-base tracking-widest text-white/60 py-6 animate-pulse">

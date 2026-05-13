@@ -100,20 +100,29 @@ export const Voice = {
   say(text: string, fighterId?: string) {
     if (!enabled) return
     const s = getSynth()
-    if (!s) return
-    // Don't queue — speak the most recent line. Older speech gets cancelled.
-    s.cancel()
+    if (!s) {
+      console.warn('[voice] SpeechSynthesis unavailable in this browser')
+      return
+    }
+    // Cancel any in-flight speech to avoid overlap, but ONLY if currently
+    // speaking — calling cancel() during paused/idle state on some macOS
+    // Chrome versions can leave the engine in a stuck state where the next
+    // .speak() does nothing.
+    if (s.speaking || s.pending) s.cancel()
+
     const profile = (fighterId && FIGHTER_PROFILES[fighterId]) || DEFAULT_PROFILE
     const utter = new SpeechSynthesisUtterance(text)
     const v = pickVoice(profile)
     if (v) utter.voice = v
+    // Explicit lang fixes iOS Safari which won't speak without it set.
+    utter.lang = v?.lang ?? 'en-US'
     utter.rate = profile.rate
     utter.pitch = profile.pitch
     utter.volume = profile.volume
     try {
       s.speak(utter)
-    } catch {
-      // some browsers throw when called before user gesture — silently ignore
+    } catch (err) {
+      console.warn('[voice] speak threw:', err)
     }
   },
   stop() {

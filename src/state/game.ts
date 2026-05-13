@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { GameState, Move, ScenarioId, Side } from '../types'
+import type { FighterRuntime, GameState, Move, ScenarioId, Side } from '../types'
 import { getFighter, STARTING_ROSTER } from '../data/fighters'
 import { AI_PROFILES } from '../data/ai-profiles'
 import { ARCADE_PROGRESSION } from '../data/scenarios'
@@ -21,6 +21,10 @@ interface Actions {
   toggleVoice: () => void
   /** Active player casts a move */
   castMove: (move: Move) => void
+  /** Active player spends 1 momentum to predict opponent's next move type.
+   *  If correct, opponent's next attack deals 50% damage and the predictor
+   *  gains +20 super meter. Ends the active player's turn. */
+  castRead: (type: 'light' | 'heavy' | 'setup' | 'combo' | 'ultimate') => void
   /** AI plays for the current side (used vs. bots) */
   aiPlay: (side: Side) => void
   newRound: () => void
@@ -228,6 +232,7 @@ export const useGame = create<GameState & Actions>((set, get) => ({
     const { selectedA, selectedB, roundsWon } = get()
     if (!selectedA || !selectedB) return
     const nextRound = (get().round + 1) as 1 | 2 | 3
+    // initialRuntime gives fresh cooldowns/reads, so ult is castable again each round
     set({
       fighterA: initialRuntime(selectedA),
       fighterB: initialRuntime(selectedB),
@@ -419,6 +424,53 @@ export const useGame = create<GameState & Actions>((set, get) => ({
     }, 700)
   },
 
+  castRead: (type) => {
+    const state = get()
+    if (state.phase !== 'fight') return
+    const side = state.activeSide
+    const me = side === 'a' ? state.fighterA : state.fighterB
+    if (!me) return
+    if (me.momentum < 1) return  // need 1 momentum
+
+    // Spend 1 momentum, set the read on self. ApplyMove checks the defender's
+    // (= active side's, now the opponent's) `read` field next turn.
+    const updatedMe: FighterRuntime = {
+      ...me,
+      momentum: me.momentum - 1,
+      read: type,
+    }
+
+    // Advance turn — same machinery as castMove, minus damage/log
+    const nextActive: Side = side === 'a' ? 'b' : 'a'
+    const otherRt = nextActive === 'a' ? state.fighterA : state.fighterB
+    if (!otherRt) return
+    const turnStart = startTurn(otherRt)
+    let updatedOther = turnStart.runtime
+    if (state.mode === 'practice' && nextActive === 'a') {
+      updatedOther = {
+        ...updatedOther,
+        momentum: 10,
+        superMeter: 100,
+        hp: Math.max(updatedOther.hp, Math.round(updatedOther.maxHp * 0.8)),
+      }
+    }
+
+    // Sound + small flash to confirm the read landed
+    soundCounter++
+    const sndId = soundCounter
+    set({
+      fighterA: side === 'a' ? updatedMe : (nextActive === 'a' ? updatedOther : state.fighterA),
+      fighterB: side === 'b' ? updatedMe : (nextActive === 'b' ? updatedOther : state.fighterB),
+      soundCue: { kind: 'read', id: sndId },
+    })
+    setTimeout(() => {
+      set((s) => ({
+        activeSide: nextActive,
+        turn: s.turn + 1,
+      }))
+    }, 500)
+  },
+
   aiPlay: (side: Side) => {
     const state = get()
     if (state.phase !== 'fight' || state.activeSide !== side) return
@@ -427,12 +479,14 @@ export const useGame = create<GameState & Actions>((set, get) => ({
     if (!rt || !oppRt) return
     const def = getFighter(rt.defId)!
 
-    // AI personality: weighted random move selection
+    // AI personality: weighted random move selection.
+    // Reject moves on cooldown so the bot doesn't repeat-spam heavy.
     const allMoves: Move[] = [...def.moves, def.ult]
     const affordable = allMoves.filter((m) => {
       if (rt.momentum < m.momentum) return false
       if (m.type === 'ultimate' && rt.superMeter < 100) return false
       if (m.requiresSelfStatus && !rt.status.some((s) => s.key === m.requiresSelfStatus)) return false
+      if ((rt.cooldowns[m.id] ?? 0) > 0) return false
       return true
     })
 
@@ -493,6 +547,28 @@ export const useGame = create<GameState & Actions>((set, get) => ({
       for (const m of affordable) {
         if (m.combosFrom?.includes(rt.lastMoveId)) {
           weights[m.type] *= 3
+        }
+      }
+    }
+
+    // Hard difficulty: sometimes spend 1 momentum to READ the player's
+    // likely next move type. We bias toward the player's most-played type
+    // in this match (from the log).
+    if (difficulty === 'hard' && rt.momentum >= 2 && !rt.read && Math.random() < 0.25) {
+      const playerSide: Side = side === 'a' ? 'b' : 'a'
+      const playerLog = state.log.filter((l) => l.attacker === playerSide)
+      if (playerLog.length >= 2) {
+        const counts: Record<string, number> = {}
+        for (const l of playerLog) {
+          // Look up move type by id on the player's def
+          const pDef = getFighter((playerSide === 'a' ? state.fighterA : state.fighterB)!.defId)
+          const m = pDef ? [...pDef.moves, pDef.ult].find((x) => x.id === l.moveId) : null
+          if (m) counts[m.type] = (counts[m.type] ?? 0) + 1
+        }
+        const best = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]
+        if (best) {
+          get().castRead(best[0] as 'light' | 'heavy' | 'setup' | 'combo' | 'ultimate')
+          return
         }
       }
     }

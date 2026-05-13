@@ -38,11 +38,12 @@ export function HpBar({ hp, maxHp, side, name }: Props) {
           {Array.from({ length: 20 }).map((_, i) => (
             <div
               key={i}
-              className="flex-1 hp-segment"
+              className="flex-1"
               style={{
-                color: i < filled ? color : '#2A1F33',
-                opacity: i < filled ? 1 : 0.4,
+                background: i < filled ? color : '#2A1F33',
+                opacity: i < filled ? 1 : 0.5,
                 border: '1px solid rgba(0,0,0,0.5)',
+                boxShadow: i < filled ? `inset 0 0 0 1px rgba(255,255,255,0.2)` : 'none',
               }}
             />
           ))}

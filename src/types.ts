@@ -141,8 +141,12 @@ export interface FighterRuntime {
   status: StatusEffect[]
   /** Last move id cast by this fighter — used for combo chains */
   lastMoveId: string | null
-  /** Set to a move type if this fighter "read" the opponent next turn */
+  /** Active READ: this fighter predicted opponent's next move type.
+   *  If the prediction is correct, opponent's next attack does 50% dmg
+   *  and the reader gains +20 super. */
   read: MoveType | null
+  /** Per-move cooldown timer: moveId → turns remaining before it can be cast again. */
+  cooldowns: Record<string, number>
   /** Permanent buff stacking (e.g. Gokul's Org Design ult) */
   permanentBuff?: number
 }

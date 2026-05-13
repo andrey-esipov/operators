@@ -12,6 +12,7 @@ import { StageBackground } from '../components/StageBackground'
 import { ComboBanner } from '../components/ComboBanner'
 import { DamageFloats } from '../components/DamageFloat'
 import { StatusChip } from '../components/StatusChip'
+import { KOCinematic } from '../components/KOCinematic'
 import { Sfx } from '../lib/audio'
 import { AnimatePresence, motion } from 'framer-motion'
 
@@ -24,6 +25,7 @@ export function CombatScreen({ mode = 'vs' }: { mode?: 'vs' | 'arcade' }) {
   const activeSide = useGame((s) => s.activeSide)
   const log = useGame((s) => s.log)
   const lastFlash = useGame((s) => s.lastFlash)
+  const koCinematic = useGame((s) => s.koCinematic)
   const soundCue = useGame((s) => s.soundCue)
   const damagePulses = useGame((s) => s.damagePulses)
   const castMove = useGame((s) => s.castMove)
@@ -33,6 +35,8 @@ export function CombatScreen({ mode = 'vs' }: { mode?: 'vs' | 'arcade' }) {
   const [comboBanner, setComboBanner] = useState<{ title: string; kind: 'combo' | 'ult' | 'crit' } | null>(null)
   const [hitFlash, setHitFlash] = useState<'crit' | 'combo' | 'ult' | null>(null)
   const [shaking, setShaking] = useState(false)
+  // Hit-lag: brief desaturate/scale on the side that just took damage. Re-keys on every damagePulse.
+  const [hitLag, setHitLag] = useState<{ side: 'a' | 'b'; id: number } | null>(null)
   const [lastQuote, setLastQuote] = useState<{ q: string; ep: string; t: string; name: string } | null>(null)
   /** Which side is currently in attack-pose (briefly after casting) */
   const [attackingSide, setAttackingSide] = useState<'a' | 'b' | null>(null)
@@ -99,6 +103,14 @@ export function CombatScreen({ mode = 'vs' }: { mode?: 'vs' | 'arcade' }) {
     // without dragging out the turn rhythm.
     setAttackingSide(last.attacker)
     setTimeout(() => setAttackingSide(null), 800)
+
+    // Hit-lag: the defender briefly desaturates + scales. Stronger hits
+    // trigger a slightly longer flash. Re-keys per turn so CSS animation restarts.
+    const defenderSide: 'a' | 'b' = last.attacker === 'a' ? 'b' : 'a'
+    if (last.finalDamage > 0) {
+      setHitLag({ side: defenderSide, id: log.length })
+      setTimeout(() => setHitLag(null), 220)
+    }
   }, [log.length])
 
   // Round timer
@@ -236,11 +248,15 @@ export function CombatScreen({ mode = 'vs' }: { mode?: 'vs' | 'arcade' }) {
       {/* FIGHTERS */}
       <div className="absolute left-0 right-0 z-10" style={{ bottom: 200 }}>
         <div className="flex items-end justify-between px-12 md:px-20">
-          <div style={{
-            width: 340, height: 440,
-            filter: activeSide === 'a' ? 'drop-shadow(0 0 16px #FFD60A)' : 'drop-shadow(0 8px 16px rgba(0,0,0,0.6))',
-            transition: 'filter 0.2s',
-          }}>
+          <div
+            key={`a-${hitLag?.side === 'a' ? hitLag.id : 'idle'}`}
+            className={hitLag?.side === 'a' ? 'hit-lag' : ''}
+            style={{
+              width: 340, height: 440,
+              filter: activeSide === 'a' ? 'drop-shadow(0 0 16px #FFD60A)' : 'drop-shadow(0 8px 16px rgba(0,0,0,0.6))',
+              transition: 'filter 0.2s',
+            }}
+          >
             <Sprite
               fighter={a}
               side="a"
@@ -254,11 +270,15 @@ export function CombatScreen({ mode = 'vs' }: { mode?: 'vs' | 'arcade' }) {
               shake={shaking && damagePulses[damagePulses.length-1]?.side === 'a'}
             />
           </div>
-          <div style={{
-            width: 340, height: 440,
-            filter: activeSide === 'b' ? 'drop-shadow(0 0 16px #FFD60A)' : 'drop-shadow(0 8px 16px rgba(0,0,0,0.6))',
-            transition: 'filter 0.2s',
-          }}>
+          <div
+            key={`b-${hitLag?.side === 'b' ? hitLag.id : 'idle'}`}
+            className={hitLag?.side === 'b' ? 'hit-lag' : ''}
+            style={{
+              width: 340, height: 440,
+              filter: activeSide === 'b' ? 'drop-shadow(0 0 16px #FFD60A)' : 'drop-shadow(0 8px 16px rgba(0,0,0,0.6))',
+              transition: 'filter 0.2s',
+            }}
+          >
             <Sprite
               fighter={b}
               side="b"
@@ -307,6 +327,18 @@ export function CombatScreen({ mode = 'vs' }: { mode?: 'vs' | 'arcade' }) {
 
       {/* Combo banner */}
       <ComboBanner title={comboBanner?.title ?? null} kind={comboBanner?.kind} />
+
+      {/* K.O. cinematic overlay */}
+      {koCinematic && (
+        <KOCinematic
+          key={koCinematic.id}
+          winner={koCinematic.winner}
+          loser={koCinematic.loser}
+          winnerId={koCinematic.winner === 'a' ? fighterA?.defId ?? null : fighterB?.defId ?? null}
+          loserId={koCinematic.loser === 'a' ? fighterA?.defId ?? null : fighterB?.defId ?? null}
+          id={koCinematic.id}
+        />
+      )}
 
       {/* MOVE BAR */}
       <ActiveMoves

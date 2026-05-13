@@ -11,6 +11,8 @@ export function MainMenu() {
   const setMode = useGame((s) => s.setMode)
   const toggleCrt = useGame((s) => s.toggleCrt)
   const crt = useGame((s) => s.crtEnabled)
+  const toggleMusic = useGame((s) => s.toggleMusic)
+  const music = useGame((s) => s.musicEnabled)
 
   // Cycle through hand-curated pull quotes every 7 seconds
   const allQuotes = useMemo(() => {
@@ -127,6 +129,7 @@ export function MainMenu() {
         <div className="flex gap-2">
           <SmallButton label="HOW TO PLAY" onClick={() => { Sfx.menuSelect(); setPhase('how-to-play') }} />
           <SmallButton label="QUOTE BANK" onClick={() => { Sfx.menuSelect(); setPhase('quote-bank') }} />
+          <SmallButton label={`♪ ${music ? 'ON' : 'OFF'}`} onClick={toggleMusic} />
           <SmallButton label={`CRT · ${crt ? 'ON' : 'OFF'}`} onClick={toggleCrt} />
         </div>
       </div>

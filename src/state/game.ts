@@ -14,6 +14,7 @@ interface Actions {
   setScenario: (s: ScenarioId) => void
   setPhase: (p: GameState['phase']) => void
   toggleCrt: () => void
+  toggleMusic: () => void
   /** Active player casts a move */
   castMove: (move: Move) => void
   /** AI plays for the current side (used vs. bots) */
@@ -46,11 +47,13 @@ export const useGame = create<GameState & Actions>((set, get) => ({
   arcadeStep: 0,
   quoteBank: [],
   crtEnabled: true,
+  musicEnabled: true,
   damagePulses: [],
   mode: 'vs',
 
   setPhase: (p) => set({ phase: p }),
   toggleCrt: () => set((s) => ({ crtEnabled: !s.crtEnabled })),
+  toggleMusic: () => set((s) => ({ musicEnabled: !s.musicEnabled })),
   setScenario: (s) => set({ scenario: s }),
   setSelectedSide: (side, id) => set(() => side === 'a' ? { selectedA: id } : { selectedB: id }),
   selectFighters: (a, b) => set({ selectedA: a, selectedB: b }),
@@ -206,15 +209,32 @@ export const useGame = create<GameState & Actions>((set, get) => ({
     })
 
     if (result.ko) {
-      // round end
+      // Trigger the K.O. cinematic overlay. The CombatScreen reads
+      // koCinematic and runs a 2.4s sequence: slow-mo + white flash +
+      // K.O. banner + particle burst. Then we transition to round/match end.
+      flashCounter++
+      const koId = flashCounter
+      set({
+        koCinematic: {
+          winner: attackerSide,
+          loser: defenderSide,
+          comboTitle: result.log.comboTitle,
+          id: koId,
+        },
+      })
+
       const newRoundsWon = {
         a: state.roundsWon.a + (attackerSide === 'a' ? 1 : 0),
         b: state.roundsWon.b + (attackerSide === 'b' ? 1 : 0),
       }
       const matchWinner = newRoundsWon.a >= 2 ? 'a' : newRoundsWon.b >= 2 ? 'b' : null
       setTimeout(() => {
-        set({ phase: matchWinner ? 'match-end' : 'round-end', roundsWon: newRoundsWon })
-      }, 1500)
+        set({
+          phase: matchWinner ? 'match-end' : 'round-end',
+          roundsWon: newRoundsWon,
+          koCinematic: undefined,
+        })
+      }, 2400)
       return
     }
 

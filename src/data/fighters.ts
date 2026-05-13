@@ -2239,7 +2239,7 @@ FIGHTERS.push(
     shortName: 'BORIS',
     archetype: 'AGENT · CLAUDE CODE',
     bio: 'Anthropic engineer. Built Claude Code. Writes 100% of his code via agent loops — ships 20-30 PRs/day from 5 parallel agents.',
-    spriteBio: 'a man in his early 30s with short dark brown hair, friendly face, casual black t-shirt with the Anthropic logo, holding a laptop showing the Claude Code terminal — Anthropic engineer who built Claude Code',
+    spriteBio: 'a bald man in his early 30s with a subtle short blond beard, friendly face, casual black t-shirt with the Anthropic logo, holding a laptop showing the Claude Code terminal — Anthropic engineer who built Claude Code',
     episode: 'ep 311',
     accent: '#D77A5F',
     maxHp: 930,

@@ -92,6 +92,38 @@ export function CombatScreen({ mode = 'vs' }: { mode?: 'vs' | 'arcade' }) {
     return () => clearInterval(id)
   }, [round])
 
+  // Timer expiry → higher-HP side wins the round
+  useEffect(() => {
+    if (timeLeft !== 0) return
+    if (!fighterA || !fighterB) return
+    // Trigger the same end-of-round path that K.O. uses
+    const winner: 'a' | 'b' = fighterA.hp >= fighterB.hp ? 'a' : 'b'
+    useGame.setState((s) => ({
+      phase: s.roundsWon.a + (winner === 'a' ? 1 : 0) >= 2 || s.roundsWon.b + (winner === 'b' ? 1 : 0) >= 2 ? 'match-end' : 'round-end',
+      roundsWon: {
+        a: s.roundsWon.a + (winner === 'a' ? 1 : 0),
+        b: s.roundsWon.b + (winner === 'b' ? 1 : 0),
+      },
+      // Synthesize a "time-up" log entry so RoundEnd shows something useful
+      log: [...s.log, {
+        turn: s.turn,
+        attacker: winner,
+        moveId: 'time-up',
+        moveName: 'TIME UP',
+        baseDamage: 0,
+        scenarioMultiplier: 1,
+        comboBonus: 0,
+        critMultiplier: 1,
+        finalDamage: 0,
+        hpAfter: { a: fighterA.hp, b: fighterB.hp },
+        quote: 'Time wins arguments.',
+        episode: 'host',
+        timestamp: 'TIME',
+        appliedStatuses: [],
+      }],
+    }))
+  }, [timeLeft, fighterA, fighterB])
+
   // Bot AI for player B in arcade mode
   useEffect(() => {
     if (mode !== 'arcade') return

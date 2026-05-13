@@ -235,17 +235,34 @@ function ProfileCard({
               color="#FFD60A"
             />
           </div>
-          <button
-            onClick={onToggle}
-            className="mt-3 font-display text-[9px] tracking-widest px-3 py-1"
-            style={{
-              background: `${fighter.accent}33`,
-              color: fighter.accent,
-              border: `1px solid ${fighter.accent}`,
-            }}
-          >
-            {expanded ? '▾ HIDE MOVE LIST' : '▸ SEE FULL MOVE LIST'}
-          </button>
+          <div className="flex gap-2 mt-3">
+            <button
+              onClick={onToggle}
+              className="font-display text-[9px] tracking-widest px-3 py-1"
+              style={{
+                background: `${fighter.accent}33`,
+                color: fighter.accent,
+                border: `1px solid ${fighter.accent}`,
+              }}
+            >
+              {expanded ? '▾ HIDE MOVE LIST' : '▸ SEE FULL MOVE LIST'}
+            </button>
+            <button
+              onClick={() => {
+                Sfx.menuSelect()
+                useGame.getState().setSpotlightFighter(fighter.id)
+                useGame.getState().setPhase('fighter-spotlight')
+              }}
+              className="font-display text-[9px] tracking-widest px-3 py-1"
+              style={{
+                background: 'rgba(255,214,10,0.18)',
+                color: '#FFD60A',
+                border: '1px solid #FFD60A',
+              }}
+            >
+              ★ SPOTLIGHT →
+            </button>
+          </div>
         </div>
       </div>
 

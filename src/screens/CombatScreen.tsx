@@ -15,6 +15,7 @@ import { StatusChip } from '../components/StatusChip'
 import { KOCinematic } from '../components/KOCinematic'
 import { FightIntro } from '../components/FightIntro'
 import { StatusHalo } from '../components/StatusHalo'
+import { HitSparks } from '../components/HitSparks'
 import { youtubeDeepLink } from '../lib/youtube'
 import { Sfx } from '../lib/audio'
 import { AnimatePresence, motion } from 'framer-motion'
@@ -44,6 +45,8 @@ export function CombatScreen({ mode = 'vs' }: { mode?: 'vs' | 'arcade' | 'practi
   const [critFreeze, setCritFreeze] = useState(false)
   // Live combo counter: number of successive damaging moves by the same side. Resets on side change or KO.
   const [comboStreak, setComboStreak] = useState<{ side: 'a' | 'b'; count: number; id: number } | null>(null)
+  // Hit-spark burst trigger — bumped per damaging hit so <HitSparks/> re-fires
+  const [hitSpark, setHitSpark] = useState<{ id: number; side: 'a' | 'b'; kind: 'light' | 'heavy' | 'crit' | 'combo' | 'ult' } | null>(null)
   const [lastQuote, setLastQuote] = useState<{ q: string; ep: string; t: string; name: string; fighterId: string } | null>(null)
   /** Which side is currently in attack-pose (briefly after casting) */
   const [attackingSide, setAttackingSide] = useState<'a' | 'b' | null>(null)
@@ -135,6 +138,14 @@ export function CombatScreen({ mode = 'vs' }: { mode?: 'vs' | 'arcade' | 'practi
     if (last.finalDamage > 0) {
       setHitLag({ side: defenderSide, id: log.length })
       setTimeout(() => setHitLag(null), 220)
+
+      // Hit sparks at the defender's body
+      const sparkKind: 'light' | 'heavy' | 'crit' | 'combo' | 'ult' =
+        last.flash === 'ult' ? 'ult' :
+        last.flash === 'combo' ? 'combo' :
+        last.flash === 'crit' ? 'crit' :
+        last.finalDamage > 70 ? 'heavy' : 'light'
+      setHitSpark({ id: log.length, side: last.attacker, kind: sparkKind })
     }
   }, [log.length])
 
@@ -319,10 +330,22 @@ export function CombatScreen({ mode = 'vs' }: { mode?: 'vs' | 'arcade' | 'practi
         <div className="flex items-end justify-between px-12 md:px-20">
           <div
             key={`a-${hitLag?.side === 'a' ? hitLag.id : 'idle'}`}
-            className={hitLag?.side === 'a' ? 'hit-lag' : ''}
+            className={hitLag?.side === 'a' ? 'hit-lag-a' : ''}
             style={{
               width: 340, height: 440,
-              filter: activeSide === 'a' ? 'drop-shadow(0 0 16px #FFD60A)' : 'drop-shadow(0 8px 16px rgba(0,0,0,0.6))',
+              filter:
+                // Casting attacker: strong colored backlight by move kind
+                attackingSide === 'a' && lastFlash?.kind === 'ult'
+                  ? 'drop-shadow(0 0 32px #F72585) drop-shadow(0 0 64px #7209B7)'
+                  : attackingSide === 'a' && lastFlash?.kind === 'combo'
+                  ? 'drop-shadow(0 0 28px #FFD60A) drop-shadow(0 0 56px #F77F00)'
+                  : attackingSide === 'a' && lastFlash?.kind === 'crit'
+                  ? 'drop-shadow(0 0 24px white) drop-shadow(0 0 48px #FFD60A)'
+                  : attackingSide === 'a'
+                  ? 'drop-shadow(0 0 18px #FCBF49) drop-shadow(0 8px 16px rgba(0,0,0,0.6))'
+                  : activeSide === 'a'
+                  ? 'drop-shadow(0 0 16px #FFD60A)'
+                  : 'drop-shadow(0 8px 16px rgba(0,0,0,0.6))',
               transition: 'filter 0.2s',
               position: 'relative',
             }}
@@ -343,10 +366,21 @@ export function CombatScreen({ mode = 'vs' }: { mode?: 'vs' | 'arcade' | 'practi
           </div>
           <div
             key={`b-${hitLag?.side === 'b' ? hitLag.id : 'idle'}`}
-            className={hitLag?.side === 'b' ? 'hit-lag' : ''}
+            className={hitLag?.side === 'b' ? 'hit-lag-b' : ''}
             style={{
               width: 340, height: 440,
-              filter: activeSide === 'b' ? 'drop-shadow(0 0 16px #FFD60A)' : 'drop-shadow(0 8px 16px rgba(0,0,0,0.6))',
+              filter:
+                attackingSide === 'b' && lastFlash?.kind === 'ult'
+                  ? 'drop-shadow(0 0 32px #F72585) drop-shadow(0 0 64px #7209B7)'
+                  : attackingSide === 'b' && lastFlash?.kind === 'combo'
+                  ? 'drop-shadow(0 0 28px #FFD60A) drop-shadow(0 0 56px #F77F00)'
+                  : attackingSide === 'b' && lastFlash?.kind === 'crit'
+                  ? 'drop-shadow(0 0 24px white) drop-shadow(0 0 48px #FFD60A)'
+                  : attackingSide === 'b'
+                  ? 'drop-shadow(0 0 18px #FCBF49) drop-shadow(0 8px 16px rgba(0,0,0,0.6))'
+                  : activeSide === 'b'
+                  ? 'drop-shadow(0 0 16px #FFD60A)'
+                  : 'drop-shadow(0 8px 16px rgba(0,0,0,0.6))',
               transition: 'filter 0.2s',
               position: 'relative',
             }}
@@ -367,6 +401,9 @@ export function CombatScreen({ mode = 'vs' }: { mode?: 'vs' | 'arcade' | 'practi
           </div>
         </div>
       </div>
+
+      {/* Hit sparks at the defender's body */}
+      <HitSparks trigger={hitSpark} />
 
       {/* Damage floats */}
       <DamageFloats pulses={damagePulses} />

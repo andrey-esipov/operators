@@ -31,22 +31,59 @@ import { FIGHTERS } from '../src/data/fighters'
 import { SCENARIOS } from '../src/data/scenarios'
 
 // ─── Config ──────────────────────────────────────────────────────────────
+//
+// TTS may live on a DIFFERENT Azure resource than image gen. The config
+// supports both shared-resource (use the base `endpoint` / `api_key`)
+// and split-resource (`tts_endpoint` / `tts_api_key`) modes. When the
+// dedicated TTS fields are present they win.
+//
 function loadAzureConfig() {
   const gstackPath = path.join(os.homedir(), '.gstack', 'openai.json')
-  let file: { azure?: { endpoint?: string; api_key?: string; api_version?: string; tts_deployment?: string } } = {}
+  type AzureFile = {
+    endpoint?: string
+    api_key?: string
+    api_version?: string
+    tts_endpoint?: string
+    tts_api_key?: string
+    tts_api_version?: string
+    tts_deployment?: string
+  }
+  let file: { azure?: AzureFile } = {}
   try {
     if (fs.existsSync(gstackPath)) file = JSON.parse(fs.readFileSync(gstackPath, 'utf-8'))
   } catch {
     // ignore
   }
   const azureFile = file?.azure || {}
-  const endpoint = (process.env.AZURE_OPENAI_ENDPOINT || azureFile.endpoint || '').replace(/\/$/, '')
-  const apiKey = process.env.AZURE_OPENAI_API_KEY || azureFile.api_key || ''
+
+  // TTS resource: prefer dedicated fields, fall back to shared base.
+  const endpoint = (
+    process.env.AZURE_OPENAI_TTS_ENDPOINT ||
+    azureFile.tts_endpoint ||
+    process.env.AZURE_OPENAI_ENDPOINT ||
+    azureFile.endpoint ||
+    ''
+  ).replace(/\/$/, '')
+
+  const apiKey =
+    process.env.AZURE_OPENAI_TTS_API_KEY ||
+    azureFile.tts_api_key ||
+    process.env.AZURE_OPENAI_API_KEY ||
+    azureFile.api_key ||
+    ''
+
   const deployment =
     process.env.AZURE_OPENAI_TTS_DEPLOYMENT ||
     azureFile.tts_deployment ||
     'gpt-4o-mini-tts'
-  const apiVersion = process.env.AZURE_OPENAI_API_VERSION || azureFile.api_version || '2025-04-01-preview'
+
+  const apiVersion =
+    process.env.AZURE_OPENAI_TTS_API_VERSION ||
+    azureFile.tts_api_version ||
+    process.env.AZURE_OPENAI_API_VERSION ||
+    azureFile.api_version ||
+    '2025-04-01-preview'
+
   return { endpoint, apiKey, deployment, apiVersion }
 }
 

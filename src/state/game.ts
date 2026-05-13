@@ -21,6 +21,9 @@ interface Actions {
   toggleVoice: () => void
   /** Active player casts a move */
   castMove: (move: Move) => void
+  /** ID of fighter currently shown on the Fighter Spotlight deep-dive page */
+  spotlightFighter: string | null
+  setSpotlightFighter: (id: string | null) => void
   /** Active player spends 1 momentum to predict opponent's next move type.
    *  If correct, opponent's next attack deals 50% damage and the predictor
    *  gains +20 super meter. Ends the active player's turn. */
@@ -69,6 +72,7 @@ export const useGame = create<GameState & Actions>((set, get) => ({
   damagePulses: [],
   mode: 'vs',
   difficulty: 'normal',
+  spotlightFighter: null,
 
   setPhase: (p) => set({ phase: p }),
   toggleCrt: () => set((s) => ({ crtEnabled: !s.crtEnabled })),
@@ -83,6 +87,7 @@ export const useGame = create<GameState & Actions>((set, get) => ({
   selectFighters: (a, b) => set({ selectedA: a, selectedB: b }),
   setMode: (m) => set({ mode: m }),
   setDifficulty: (d) => set({ difficulty: d }),
+  setSpotlightFighter: (id) => set({ spotlightFighter: id }),
 
   startPractice: (player, opponent) => {
     set({

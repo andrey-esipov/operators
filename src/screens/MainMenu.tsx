@@ -6,6 +6,7 @@ import { FIGHTERS } from '../data/fighters'
 import { Sprite } from '../components/Sprite'
 import { PULL_QUOTES } from '../data/pull-quotes'
 import { Voice } from '../lib/voice'
+import { AttractMode } from './AttractMode'
 
 export function MainMenu() {
   const setPhase = useGame((s) => s.setPhase)
@@ -45,6 +46,25 @@ export function MainMenu() {
     return () => clearInterval(id)
   }, [])
 
+  // Attract mode: idle 12s → fullscreen SF II-style sizzle reel until any
+  // user interaction (pointer/key). Resets the timer every interaction.
+  const [attract, setAttract] = useState(false)
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null
+    function reset() {
+      if (attract) setAttract(false)
+      if (timer) clearTimeout(timer)
+      timer = setTimeout(() => setAttract(true), 12_000)
+    }
+    reset()
+    const events: Array<keyof WindowEventMap> = ['pointermove', 'pointerdown', 'keydown', 'wheel', 'touchstart']
+    events.forEach((e) => window.addEventListener(e, reset))
+    return () => {
+      if (timer) clearTimeout(timer)
+      events.forEach((e) => window.removeEventListener(e, reset))
+    }
+  }, [attract])
+
   // Operator of the Day — deterministic from today's date, same for everyone today.
   const operatorOfDay = useMemo(() => {
     const today = new Date().toISOString().slice(0, 10)
@@ -74,19 +94,32 @@ export function MainMenu() {
   const currentQuote = allQuotes[quoteIdx]
   const focusFighter = FIGHTERS[focusIdx]
 
+  if (attract) {
+    return <AttractMode onExit={() => setAttract(false)} />
+  }
+
   return (
     <div className="relative w-full h-full flex flex-col items-center justify-center overflow-hidden">
-      {/* BG — bespoke gpt-image-2 hero if available, else a fallback */}
+      {/* BG — 5-layer parallax */}
       <HeroBackground />
 
-      {/* Animated geometric overlay */}
+      {/* Layer 2: drifting starfield */}
+      <Starfield />
+
+      {/* Layer 3: animated geometric overlay */}
       <DiamondGrid />
 
-      {/* Animated stage lights */}
+      {/* Layer 4: animated stage lights */}
       <SpotLight />
 
-      {/* TOP: logo */}
-      <div className="relative z-20 pt-6 logo-pulse">
+      {/* Layer 5: floating fighter silhouettes */}
+      <SilhouetteCarousel />
+
+      {/* TOP: logo with subtle 3D depth — two stacked shadows for parallax feel */}
+      <div className="relative z-20 pt-6 logo-pulse" style={{
+        filter: 'drop-shadow(0 4px 0 black) drop-shadow(0 0 24px rgba(255,214,10,0.4)) drop-shadow(0 0 56px rgba(247,127,0,0.3))',
+        animation: 'logoFloat 4s ease-in-out infinite',
+      }}>
         <Logo size={1} />
       </div>
 
@@ -148,8 +181,8 @@ export function MainMenu() {
         </div>
       </div>
 
-      {/* PRESS START / menu buttons */}
-      <div className="relative z-20 flex flex-col gap-3 mt-4 items-center">
+      {/* PRESS START / menu buttons — staggered crash-in entrance */}
+      <div className="relative z-20 flex flex-col gap-3 mt-4 items-center menu-cta-stack">
         <MenuButton
           label="▶ ARCADE MODE"
           subtitle="8-stage gauntlet · final boss Lenny"
@@ -180,6 +213,14 @@ export function MainMenu() {
             subtitle="dice rolls the matchup"
             onClick={() => { Sfx.menuSelect(); startRandom() }}
             accent="#F72585"
+          />
+        </div>
+        <div className="flex gap-2">
+          <MidButton
+            label="★ GENERATE YOU"
+            subtitle="build your own fighter card"
+            onClick={() => { Sfx.menuSelect(); setPhase('generate-fighter') }}
+            accent="#7209B7"
           />
         </div>
         <div className="flex gap-2 flex-wrap justify-center">
@@ -352,6 +393,75 @@ function SpotLight() {
         animation: 'sway 6s ease-in-out infinite',
       }}
     />
+  )
+}
+
+/** Drifting starfield — slow parallax layer behind the title artwork. */
+function Starfield() {
+  return (
+    <div className="absolute inset-0 z-[5] pointer-events-none overflow-hidden">
+      {Array.from({ length: 80 }).map((_, i) => {
+        const left = (i * 13) % 100
+        const top = (i * 7) % 70
+        const size = (i % 3) + 1
+        const colors = ['#FFFFFF', '#FFD60A', '#90E0EF', '#F77F00']
+        return (
+          <div
+            key={i}
+            className="absolute"
+            style={{
+              left: `${left}%`,
+              top: `${top}%`,
+              width: size,
+              height: size,
+              background: colors[i % colors.length],
+              opacity: 0.55,
+              boxShadow: `0 0 ${size * 2}px ${colors[i % colors.length]}`,
+              animation: `starTwinkle ${1.4 + (i % 5) * 0.4}s ease-in-out ${(i * 0.13) % 3}s infinite`,
+            }}
+          />
+        )
+      })}
+      <style>{`
+        @keyframes starTwinkle {
+          0%, 100% { opacity: 0.75; transform: scale(1) }
+          50%      { opacity: 0.15; transform: scale(0.5) }
+        }
+      `}</style>
+    </div>
+  )
+}
+
+/** Fighter silhouettes drifting across the background, very subtle. */
+function SilhouetteCarousel() {
+  const sel = [FIGHTERS[2], FIGHTERS[7], FIGHTERS[12], FIGHTERS[17]]
+  return (
+    <div className="absolute inset-0 z-[6] pointer-events-none overflow-hidden">
+      {sel.map((f, i) => (
+        <div
+          key={f.id}
+          className="absolute"
+          style={{
+            left: `${15 + i * 24}%`,
+            bottom: '8%',
+            width: 70,
+            height: 96,
+            opacity: 0.08,
+            filter: 'brightness(0)',
+            animation: `silhouetteDrift ${28 + i * 4}s linear ${i * 5}s infinite`,
+          }}
+        >
+          <Sprite fighter={f} side="a" state="stance" />
+        </div>
+      ))}
+      <style>{`
+        @keyframes silhouetteDrift {
+          0%   { transform: translateX(0)    translateY(0) }
+          50%  { transform: translateX(80px) translateY(-12px) }
+          100% { transform: translateX(0)    translateY(0) }
+        }
+      `}</style>
+    </div>
   )
 }
 

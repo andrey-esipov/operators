@@ -13,6 +13,8 @@ import { QuoteBank } from './screens/QuoteBank'
 import { HowToPlay } from './screens/HowToPlay'
 import { FrameworkEncyclopedia } from './screens/FrameworkEncyclopedia'
 import { Stats } from './screens/Stats'
+import { FighterSpotlight } from './screens/FighterSpotlight'
+import { GenerateFighter } from './screens/GenerateFighter'
 import { attachQuoteBankSync, loadQuoteBank } from './lib/persist'
 
 export function App() {
@@ -62,6 +64,8 @@ export function App() {
       {phase === 'how-to-play' && <HowToPlay />}
       {phase === 'framework-encyclopedia' && <FrameworkEncyclopedia />}
       {phase === 'stats' && <Stats />}
+      {phase === 'fighter-spotlight' && <FighterSpotlight />}
+      {phase === 'generate-fighter' && <GenerateFighter />}
       {crtEnabled && <div className="crt-overlay" />}
     </div>
   )

@@ -164,6 +164,8 @@ export type Phase =
   | 'how-to-play'
   | 'framework-encyclopedia'
   | 'stats'
+  | 'fighter-spotlight'
+  | 'generate-fighter'
 
 export interface BattleLogEntry {
   turn: number

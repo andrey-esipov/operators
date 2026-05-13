@@ -147,6 +147,26 @@ button {
 }
 .logo-pulse { animation: logo-pulse 2.2s ease-in-out infinite; }
 
+/* Subtle vertical float to suggest depth on the main menu logo */
+@keyframes logoFloat {
+  0%, 100% { transform: translateY(0px) }
+  50%      { transform: translateY(-6px) }
+}
+
+/* Menu CTAs crash-in entrance — each child gets a staggered delay */
+@keyframes menuCtaCrash {
+  0%   { transform: translateY(-30px) scale(0.92); opacity: 0 }
+  60%  { transform: translateY(4px)   scale(1.04); opacity: 1 }
+  100% { transform: translateY(0)     scale(1.00); opacity: 1 }
+}
+.menu-cta-stack > * { animation: menuCtaCrash 0.5s cubic-bezier(0.2, 0.9, 0.3, 1) both; }
+.menu-cta-stack > *:nth-child(1) { animation-delay: 0.10s }
+.menu-cta-stack > *:nth-child(2) { animation-delay: 0.20s }
+.menu-cta-stack > *:nth-child(3) { animation-delay: 0.30s }
+.menu-cta-stack > *:nth-child(4) { animation-delay: 0.40s }
+.menu-cta-stack > *:nth-child(5) { animation-delay: 0.50s }
+.menu-cta-stack > *:nth-child(6) { animation-delay: 0.60s }
+
 /* K.O. cinematic — full-screen impact flash, banner crash, particle burst */
 @keyframes koFlash {
   0%   { opacity: 0; }
@@ -176,12 +196,20 @@ button {
   100% { transform: translate(calc(var(--dx) * 1px), calc(var(--dy) * 1px)); opacity: 0; }
 }
 
-/* Hit lag — brief desaturate + scale on damage taken */
-@keyframes hitLag {
-  0%   { filter: brightness(2.4) saturate(0); transform: scale(1.05); }
-  100% { filter: brightness(1)    saturate(1); transform: scale(1.00); }
+/* Hit lag — brief desaturate + scale + sideways recoil on damage taken.
+   The defender's container is pushed AWAY from the attacker for ~120ms. */
+@keyframes hitLagA {
+  0%   { filter: brightness(2.4) saturate(0); transform: scale(1.05) translateX(-18px); }
+  100% { filter: brightness(1)    saturate(1); transform: scale(1.00) translateX(0); }
 }
-.hit-lag { animation: hitLag 180ms cubic-bezier(0, 0, 0.3, 1); }
+@keyframes hitLagB {
+  0%   { filter: brightness(2.4) saturate(0); transform: scale(1.05) translateX(18px); }
+  100% { filter: brightness(1)    saturate(1); transform: scale(1.00) translateX(0); }
+}
+.hit-lag-a { animation: hitLagA 220ms cubic-bezier(0, 0, 0.3, 1); }
+.hit-lag-b { animation: hitLagB 220ms cubic-bezier(0, 0, 0.3, 1); }
+/* Keep .hit-lag as a compat alias mapping to hit-lag-a for older callers */
+.hit-lag   { animation: hitLagA 220ms cubic-bezier(0, 0, 0.3, 1); }
 
 /* White impact flash for crit/heavy hits */
 @keyframes impactFlash {

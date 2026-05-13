@@ -23,6 +23,18 @@ npm run dev
 # open http://localhost:5173
 ```
 
+## Deploy to Replit (buildathon submission)
+
+1. Go to https://replit.com → Create Repl → Import from GitHub → paste `https://github.com/andrey-esipov/operators`
+2. Replit auto-detects the `.replit` config and runs `npm install && npm run build`
+3. Click `Deploy` → choose `Autoscale` or `Static` deployment
+4. Live at `<your-repl-name>.replit.app`
+5. (Optional) Generate real sprites with Azure gpt-image-2 by adding secrets in the Replit Secrets panel:
+   - `AZURE_OPENAI_ENDPOINT`
+   - `AZURE_OPENAI_API_KEY`
+   - `AZURE_OPENAI_DEPLOYMENT`
+   Then run `npx tsx scripts/generate-fighter-sprites.ts` from the Replit shell.
+
 ## Build
 
 ```bash

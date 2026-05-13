@@ -1,0 +1,26 @@
+modules = ["nodejs-20"]
+
+run = "npm run dev -- --host 0.0.0.0 --port 5000"
+hidden = [".config", "package-lock.json"]
+entrypoint = "src/main.tsx"
+
+[nix]
+channel = "stable-24_05"
+packages = ["nodejs_20"]
+
+[unitTest]
+language = "nodejs"
+
+[deployment]
+build = "npm install && npm run build"
+run = "npx vite preview --host 0.0.0.0 --port 5000"
+deploymentTarget = "static"
+publicDir = "dist"
+
+[[ports]]
+localPort = 5000
+externalPort = 80
+
+[[ports]]
+localPort = 5173
+externalPort = 5173

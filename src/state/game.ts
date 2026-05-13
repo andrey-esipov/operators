@@ -65,15 +65,20 @@ export const useGame = create<GameState & Actions>((set, get) => ({
   nextArcadeFight: () => {
     const state = get()
     const step = state.arcadeStep
-    // Lazy import to avoid circular dep at module init
     const progression = ARCADE_PROGRESSION
     if (step >= progression.length) {
       set({ phase: 'arcade-victory' })
       return
     }
-    const { scenario, opponentId } = progression[step]
+    const { scenario, opponentId: declaredOpp } = progression[step]
     const playerId = state.selectedA
     if (!playerId) return
+    // If declared opponent is the player themselves, fall back to another fighter for the stage
+    let opponentId = declaredOpp
+    if (opponentId === playerId) {
+      const fallbackOrder = ['cagan', 'doshi', 'spiegel', 'turley', 'madhavan', 'catwu', 'chesky', 'lenny']
+      opponentId = fallbackOrder.find((id) => id !== playerId) ?? 'doshi'
+    }
     set({
       mode: 'arcade',
       phase: 'pre-fight',

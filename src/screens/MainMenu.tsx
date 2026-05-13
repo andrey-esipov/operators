@@ -46,15 +46,31 @@ export function MainMenu() {
     return () => clearInterval(id)
   }, [])
 
-  // Attract mode: idle 10s → fullscreen SF II-style sizzle reel. Resets
-  // on clicks/keydowns/significant mouse moves (>40px since last reset)
-  // — micro-moves from a jittery mouse don't keep the timer alive forever.
+  // Attract mode: idle 10s → fullscreen SF II-style sizzle reel.
+  // While menu is showing: any meaningful interaction resets the idle timer.
+  // While attract IS showing: only an explicit click/key/touch exits it
+  // (mouse-hover doesn't kill it — that was making it close instantly when
+  // the cursor was on top of the attract screen after we'd just entered it).
   const [attract, setAttract] = useState(false)
   useEffect(() => {
+    if (attract) {
+      // Only explicit interactions exit. Pointermove is intentionally ignored.
+      function exit() { setAttract(false) }
+      window.addEventListener('pointerdown', exit)
+      window.addEventListener('keydown', exit)
+      window.addEventListener('touchstart', exit)
+      window.addEventListener('wheel', exit)
+      return () => {
+        window.removeEventListener('pointerdown', exit)
+        window.removeEventListener('keydown', exit)
+        window.removeEventListener('touchstart', exit)
+        window.removeEventListener('wheel', exit)
+      }
+    }
+    // Menu is showing — arm the idle timer
     let timer: ReturnType<typeof setTimeout> | null = null
     let lastX = 0, lastY = 0
     function reset() {
-      if (attract) setAttract(false)
       if (timer) clearTimeout(timer)
       timer = setTimeout(() => setAttract(true), 10_000)
     }

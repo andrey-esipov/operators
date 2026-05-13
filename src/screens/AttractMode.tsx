@@ -83,7 +83,6 @@ export function AttractMode({ onExit }: Props) {
     <div
       className="relative w-full h-full overflow-hidden cursor-pointer"
       onClick={onExit}
-      onMouseMove={onExit}
       onKeyDown={onExit}
       tabIndex={-1}
       style={{

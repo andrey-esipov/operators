@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react'
 import type { FighterDef, Side } from '../types'
 
 interface Props {
@@ -9,15 +10,24 @@ interface Props {
 
 /**
  * Renders a fighter sprite.
- * If real sprite art exists at /sprites/{id}-{state}.png it's used.
- * Otherwise a stylized CSS placeholder using fighter accent color +
- * pixel-art primitive shapes is rendered.
  *
- * Either way: pixel-perfect rendering via image-rendering: pixelated.
+ * Auto-resolution order:
+ *   1. fighter.sprites?.[state] (explicit override on the fighter def)
+ *   2. /sprites/<id>/<state>.png (convention — what scripts/generate-fighter-sprites.ts writes)
+ *   3. CSS-pixel-art placeholder
+ *
+ * The generated PNGs come with a solid #808080 background (gpt-image-2 prompted
+ * flat gray bg). We chroma-key it out client-side in a <canvas> so the
+ * sprite floats on the stage cleanly.
  */
 export function Sprite({ fighter, side, state, shake }: Props) {
   const mirror = side === 'b' ? -1 : 1
-  const realSrc = fighter.sprites?.[state]
+  const resolvedState = state === 'ult' ? 'win' : state
+  const candidate =
+    fighter.sprites?.[state] ??
+    `/sprites/${fighter.id}/${resolvedState}.png`
+
+  const [errored, setErrored] = useState(false)
 
   return (
     <div
@@ -30,16 +40,80 @@ export function Sprite({ fighter, side, state, shake }: Props) {
         transformOrigin: 'center bottom',
       }}
     >
-      {realSrc ? (
-        <img
-          src={realSrc}
+      {!errored ? (
+        <KeyedSprite
+          src={candidate}
           alt={fighter.name}
-          style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+          onError={() => setErrored(true)}
         />
       ) : (
         <PlaceholderSprite fighter={fighter} state={state} />
       )}
     </div>
+  )
+}
+
+/**
+ * Loads an image to a canvas, chroma-keys near-gray pixels to transparent,
+ * and renders the canvas. Pixel-perfect rendering preserved.
+ */
+function KeyedSprite({
+  src,
+  alt,
+  onError,
+}: {
+  src: string
+  alt: string
+  onError: () => void
+}) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null)
+  const [loaded, setLoaded] = useState(false)
+
+  useEffect(() => {
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+    img.src = src
+    img.onload = () => {
+      const canvas = canvasRef.current
+      if (!canvas) return
+      canvas.width = img.naturalWidth
+      canvas.height = img.naturalHeight
+      const ctx = canvas.getContext('2d')
+      if (!ctx) return
+      ctx.imageSmoothingEnabled = false
+      ctx.drawImage(img, 0, 0)
+      const id = ctx.getImageData(0, 0, canvas.width, canvas.height)
+      const d = id.data
+      // Chroma-key: any pixel close to mid-gray gets transparent.
+      // Threshold tuned for gpt-image-2's #808080 prompt bg, which varies a bit.
+      for (let i = 0; i < d.length; i += 4) {
+        const r = d[i], g = d[i + 1], b = d[i + 2]
+        const gray = Math.abs(r - 128) < 28 && Math.abs(g - 128) < 28 && Math.abs(b - 128) < 28
+        const sameChannels = Math.abs(r - g) < 12 && Math.abs(g - b) < 12 && Math.abs(r - b) < 12
+        if (gray && sameChannels) {
+          d[i + 3] = 0
+        }
+      }
+      ctx.putImageData(id, 0, 0)
+      setLoaded(true)
+    }
+    img.onerror = () => onError()
+  }, [src, onError])
+
+  return (
+    <canvas
+      ref={canvasRef}
+      aria-label={alt}
+      style={{
+        width: '100%',
+        height: '100%',
+        objectFit: 'contain',
+        imageRendering: 'pixelated',
+        opacity: loaded ? 1 : 0,
+        transition: 'opacity 0.18s',
+        filter: 'drop-shadow(0 4px 0 rgba(0,0,0,0.5))',
+      }}
+    />
   )
 }
 

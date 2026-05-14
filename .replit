@@ -1,4 +1,4 @@
-modules = ["nodejs-22"]
+modules = ["nodejs-24"]
 
 run = "npm run dev -- --host 0.0.0.0 --port 5000"
 hidden = [".config", "package-lock.json"]
@@ -6,7 +6,7 @@ entrypoint = "src/main.tsx"
 
 [nix]
 channel = "stable-24_05"
-packages = ["nodejs_22"]
+packages = ["nodejs_24"]
 
 [unitTest]
 language = "nodejs"

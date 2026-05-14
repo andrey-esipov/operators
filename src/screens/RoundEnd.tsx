@@ -3,6 +3,7 @@ import { useGame } from '../state/game'
 import { getFighter } from '../data/fighters'
 import { Sfx } from '../lib/audio'
 import { Sprite } from '../components/Sprite'
+import type { Side } from '../types'
 
 export function RoundEnd() {
   const fighterA = useGame((s) => s.fighterA)
@@ -11,14 +12,25 @@ export function RoundEnd() {
   const roundsWon = useGame((s) => s.roundsWon)
   const log = useGame((s) => s.log)
 
-  // PERFECT round: winner's HP never dropped — i.e. defender took 0 damage
-  // across all log entries on the winner's side. We check by inspecting
-  // the most-recent hpAfter for the winner. A round is PERFECT iff the
-  // winning side is still at full HP at the moment of K.O.
   const lastEntry = log[log.length - 1]
-  const winnerSide = lastEntry?.attacker
+  // Winner derivation. HP is the source of truth at K.O. — whichever side is
+  // still standing won the round. Falling back to `lastEntry.attacker` was
+  // fragile because the log entry's attacker reflects who CAST the last move,
+  // which can desync from who actually KO'd in edge cases (status DoT applied
+  // by a move that didn't directly land lethal damage, time-up entries, etc).
+  // We only fall back to the log when both sides are still alive (time-up).
+  const winnerSide: Side | null =
+    fighterA && fighterB
+      ? fighterB.hp <= 0 && fighterA.hp > 0 ? 'a'
+        : fighterA.hp <= 0 && fighterB.hp > 0 ? 'b'
+        : (lastEntry?.attacker ?? null)
+      : null
+  const loserSide: Side | null = winnerSide === 'a' ? 'b' : winnerSide === 'b' ? 'a' : null
   const winner = winnerSide && fighterA && fighterB
     ? winnerSide === 'a' ? getFighter(fighterA.defId)! : getFighter(fighterB.defId)!
+    : null
+  const loser = loserSide && fighterA && fighterB
+    ? loserSide === 'a' ? getFighter(fighterA.defId)! : getFighter(fighterB.defId)!
     : null
   const isPerfect = !!(
     winner && winnerSide && fighterA && fighterB &&
@@ -32,7 +44,7 @@ export function RoundEnd() {
     return () => clearTimeout(id)
   }, [isPerfect, newRound])
 
-  if (!fighterA || !fighterB || !winner) return null
+  if (!fighterA || !fighterB || !winner || !loser || !winnerSide || !loserSide) return null
 
   return (
     <div className="relative w-full h-full flex items-center justify-center overflow-hidden">
@@ -69,12 +81,28 @@ export function RoundEnd() {
         }}>
           K.O.
         </div>
-        <div className="flex items-center gap-4">
-          <div style={{ width: 80, height: 110 }}>
-            <Sprite fighter={winner} side={winnerSide!} state="win" />
+        <div className="flex items-end gap-10">
+          <div className="flex flex-col items-center opacity-55">
+            <div style={{ width: 110, height: 150 }}>
+              <Sprite fighter={loser} side={loserSide} state="lose" />
+            </div>
+            <div
+              className="font-display text-[10px] tracking-widest mt-1 text-white/60"
+              style={{ textShadow: '2px 2px 0 black' }}
+            >
+              {loser.shortName} · DEFEATED
+            </div>
           </div>
-          <div className="font-display text-2xl tracking-widest" style={{ color: winner.accent, textShadow: '3px 3px 0 black' }}>
-            {winner.shortName} WINS ROUND
+          <div className="flex flex-col items-center">
+            <div style={{ width: 140, height: 180 }}>
+              <Sprite fighter={winner} side={winnerSide} state="win" />
+            </div>
+            <div
+              className="font-display text-2xl tracking-widest mt-2"
+              style={{ color: winner.accent, textShadow: '3px 3px 0 black' }}
+            >
+              {winner.shortName} WINS ROUND
+            </div>
           </div>
         </div>
         <div className="flex gap-3 mt-2">

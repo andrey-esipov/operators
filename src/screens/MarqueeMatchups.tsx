@@ -14,9 +14,19 @@ import { Sfx } from '../lib/audio'
 export function MarqueeMatchups() {
   const setPhase = useGame((s) => s.setPhase)
   const startMatch = useGame((s) => s.startMatch)
+  const setMode = useGame((s) => s.setMode)
 
   function fight(m: typeof MARQUEE_MATCHUPS[number]) {
     Sfx.menuSelect()
+    // Force single-player semantics — the player picks the matchup, but
+    // they aren't hot-seating both sides. 'daily' is the right mode tag:
+    // it engages the bot AI for side B without dragging the player into
+    // arcade-mode progression (no next-stage advance, no boss anchor).
+    // Without this set, mode stays at whatever was previously selected
+    // (default 'vs'), so the bot useEffect's `if (mode === 'vs') return`
+    // gate skips bot turns entirely — the player ends up controlling
+    // both fighters.
+    setMode('daily')
     startMatch(m.fighterA, m.fighterB, m.scenarioId)
   }
 

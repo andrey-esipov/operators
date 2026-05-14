@@ -3,6 +3,7 @@ import { useGame } from '../state/game'
 import { Sfx } from '../lib/audio'
 import { Logo } from '../components/Logo'
 import { FIGHTERS } from '../data/fighters'
+import { SCENARIO_ORDER } from '../data/scenarios'
 import { Sprite } from '../components/Sprite'
 import { PULL_QUOTES } from '../data/pull-quotes'
 import { Voice } from '../lib/voice'
@@ -167,14 +168,15 @@ export function MainMenu() {
         <Logo size={1} />
       </div>
 
-      {/* Subtitle — accurate stats reflecting full roster. The numbers
-          double as a credibility line: 40 distinct guests, 200 verbatim
-          frameworks (40 × 5 moves), 8 business scenarios. */}
+      {/* Subtitle — accurate stats reflecting full roster. Numbers derive
+          from the canonical data so they stay correct as the roster grows:
+          one operator per FIGHTERS entry, one framework per move+ult, one
+          stage per scenario. */}
       <p
         className="relative z-20 font-display text-[9px] tracking-widest mt-1 text-white/65 subtitle-entry"
         style={{ textShadow: '2px 2px 0 black' }}
       >
-        {FIGHTERS.length} OPERATORS · {FIGHTERS.length * 5} FRAMEWORKS · 8 STAGES
+        {FIGHTERS.length} OPERATORS · {FIGHTERS.reduce((s, f) => s + f.moves.length + 1, 0)} FRAMEWORKS · {SCENARIO_ORDER.length} STAGES
       </p>
 
       {/* MID: rotating fighter spotlight */}

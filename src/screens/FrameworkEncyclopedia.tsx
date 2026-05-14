@@ -15,8 +15,9 @@ interface IndexedMove {
 /**
  * Framework Encyclopedia — a comprehensive learning artifact.
  *
- * Indexes all 27 fighters × 5 moves = 135 verbatim operator frameworks,
- * grouped by topic (pricing, distribution, leadership, AI-native, etc.).
+ * Indexes every fighter × every move (4 moves + 1 ult per fighter) into one
+ * grouped catalog of verbatim operator frameworks, by topic (pricing,
+ * distribution, leadership, AI-native, etc.).
  *
  * This is the "is this useful for PMs?" rubric win — the game produces
  * a real knowledge tool. Click any framework → open the real podcast

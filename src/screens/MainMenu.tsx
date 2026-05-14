@@ -218,7 +218,10 @@ export function MainMenu() {
           Row 4 (preferences): DIFFICULTY · ♪ · 🗣 · CRT · ATTRACT · TEST VOICE
       */}
       <div className="relative z-20 flex flex-col gap-3 mt-4 items-center menu-cta-stack px-4">
-        {/* Row 1: primary CTAs side-by-side */}
+        {/* Row 1: the three headline play modes sit shoulder-to-shoulder
+            so the user can pick the experience that matches what they
+            came in for — climb the gauntlet, fight a friend, or jump
+            straight into a hand-curated dream matchup. */}
         <div className="flex gap-3 flex-wrap justify-center">
           <MenuButton
             label="▶ ARCADE MODE"
@@ -231,6 +234,12 @@ export function MainMenu() {
             subtitle="local 2-player hot seat"
             onClick={() => go('vs')}
             accent="#00B4D8"
+          />
+          <MenuButton
+            label="★ MARQUEE"
+            subtitle="curated dream matchups"
+            onClick={() => { Sfx.menuSelect(); setPhase('marquee-matchups') }}
+            accent="#FFD60A"
           />
         </div>
 
@@ -259,12 +268,6 @@ export function MainMenu() {
             subtitle="your fighter card"
             onClick={() => { Sfx.menuSelect(); setPhase('generate-fighter') }}
             accent="#7209B7"
-          />
-          <MidButton
-            label="★ MARQUEE"
-            subtitle="dream matchups"
-            onClick={() => { Sfx.menuSelect(); setPhase('marquee-matchups') }}
-            accent="#FFD60A"
           />
         </div>
 
@@ -533,13 +536,13 @@ function FighterShowcase({ fighter, side }: { fighter: typeof FIGHTERS[0]; side:
   return (
     <div
       className="flex flex-col items-center"
-      style={{ filter: 'drop-shadow(0 0 16px #FFD60A88)' }}
+      style={{ filter: 'drop-shadow(0 0 20px #FFD60A99)' }}
     >
-      <div style={{ width: 140, height: 200 }} className="idle-bob">
+      <div style={{ width: 220, height: 300 }} className="idle-bob">
         <Sprite fighter={fighter} side={side} state="stance" />
       </div>
       <div
-        className="font-display text-[10px] tracking-widest mt-1"
+        className="font-display text-base tracking-widest mt-1"
         style={{ color: fighter.accent, textShadow: '2px 2px 0 black' }}
       >
         {fighter.shortName}

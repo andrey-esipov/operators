@@ -122,8 +122,10 @@ export function CombatScreen({ mode = 'vs' }: { mode?: 'vs' | 'arcade' | 'practi
         name: def?.shortName ?? '',
         fighterId: fighterIdForQuote ?? '',
       })
-      // Read time: short quotes get less, long ones get more. 4.5s - 6s.
-      const readTime = Math.min(6500, Math.max(4500, rotated.quote.length * 60))
+      // Read time — a touch longer than the previous 4.5-6.5s window so
+      // longer verbatim quotes are readable, but still expire so the
+      // game doesn't feel sluggish.
+      const readTime = Math.min(9000, Math.max(6000, rotated.quote.length * 70))
       setTimeout(() => setLastQuote(null), readTime)
     }
     // Attack sprite pose: briefly switch the attacker to attack frame.

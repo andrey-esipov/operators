@@ -29,7 +29,7 @@ type Scene =
  *   2. Matchup            — random Fighter A vs Fighter B in a stage
  *   3. K.O. flash         — "K.O.!" banner over a winner pose
  *   4. Quote pull-card    — random curated quote
- *   5. Stats              — "27 FIGHTERS · 135 FRAMEWORKS · 8 STAGES"
+ *   5. Stats              — derived counts (fighters / frameworks / stages)
  *   6. Roster grid        — every fighter portrait at once
  *   7. (loop back to title)
  */
@@ -388,12 +388,22 @@ function QuoteScene({ fighterId, quote, episode }: { fighterId: string; quote: s
 }
 
 function StatsScene() {
+  // Derive counts from the canonical data so this never drifts as the roster
+  // grows. Frameworks = every move + every ult across all fighters. Voice
+  // lines = 6 fixed slots (matchStart/win/lose/ko/crit/ult) + the trash-talk
+  // array length per fighter. Game modes are the user-facing menu entries
+  // (Arcade, VS, Marquee, Daily, Practice, Random).
+  const frameworks = FIGHTERS.reduce((sum, f) => sum + f.moves.length + 1, 0)
+  const voiceLines = FIGHTERS.reduce(
+    (sum, f) => sum + 6 + (f.voiceLines.trash?.length ?? 0),
+    0
+  )
   const stats = [
-    { num: '27', label: 'FIGHTERS' },
-    { num: '135', label: 'FRAMEWORKS' },
-    { num: '8', label: 'STAGES' },
-    { num: '262', label: 'VOICE LINES' },
-    { num: '5', label: 'GAME MODES' },
+    { num: String(FIGHTERS.length), label: 'FIGHTERS' },
+    { num: String(frameworks), label: 'FRAMEWORKS' },
+    { num: String(SCENARIO_ORDER.length), label: 'STAGES' },
+    { num: String(voiceLines), label: 'VOICE LINES' },
+    { num: '6', label: 'GAME MODES' },
     { num: '∞', label: 'PATTERN MATCHES' },
   ]
   return (
@@ -452,7 +462,7 @@ function RosterScene() {
           textShadow: '4px 4px 0 black',
         }}
       >
-        27 OPERATORS
+        {FIGHTERS.length} OPERATORS
       </div>
       <div className="grid grid-cols-7 gap-2 max-w-4xl">
         {FIGHTERS.map((f, i) => (

@@ -1,3 +1,8 @@
+import { FIGHTERS } from './fighters'
+
+const ROSTER_SIZE = FIGHTERS.length
+const ROSTER_HALF = Math.ceil(ROSTER_SIZE / 2)
+
 export interface Achievement {
   id: string
   name: string
@@ -84,26 +89,26 @@ export const ACHIEVEMENTS: Achievement[] = [
   {
     id: 'roster-half',
     name: 'OPERATOR FAMILIAR',
-    description: 'Win as 13 different fighters.',
+    description: `Win as ${ROSTER_HALF} different fighters.`,
     icon: '⚐',
     tier: 'silver',
-    check: (s) => s.fightersUsed.length >= 13,
+    check: (s) => s.fightersUsed.length >= ROSTER_HALF,
   },
   {
     id: 'roster-full',
     name: 'POLYMATH',
-    description: 'Win as ALL 27 fighters.',
+    description: `Win as ALL ${ROSTER_SIZE} fighters.`,
     icon: '♛',
     tier: 'gold',
-    check: (s) => s.fightersUsed.length >= 27,
+    check: (s) => s.fightersUsed.length >= ROSTER_SIZE,
   },
   {
     id: 'beat-roster-half',
     name: 'GIANT-KILLER',
-    description: 'Defeat 13 unique fighters.',
+    description: `Defeat ${ROSTER_HALF} unique fighters.`,
     icon: '⚔',
     tier: 'silver',
-    check: (s) => s.fightersBeaten.length >= 13,
+    check: (s) => s.fightersBeaten.length >= ROSTER_HALF,
   },
   {
     id: 'beat-lenny',

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Announcer } from '../lib/announcer'
 import { useGame } from '../state/game'
 import { getFighter } from '../data/fighters'
 import { SCENARIOS } from '../data/scenarios'
@@ -54,13 +55,17 @@ export function PreFight() {
   // 2500 → 4200ms : "FIGHT!" pulse + scenario flavor
   const [beat, setBeat] = useState(0)
   useEffect(() => {
+    // Announce the stage at the start of pre-fight (deferred slightly to
+    // sit cleanly after any previous menu chime).
+    const tStage = setTimeout(() => Announcer.stage(scenario), 300)
     const t1 = setTimeout(() => setBeat(1), 1100)
     const t2 = setTimeout(() => setBeat(2), 2500)
     return () => {
+      clearTimeout(tStage)
       clearTimeout(t1)
       clearTimeout(t2)
     }
-  }, [])
+  }, [scenario])
 
   useEffect(() => {
     if (beat === 0) Sfx.menuSelect()

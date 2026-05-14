@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { ScenarioId } from '../types'
+import { StageAmbient } from './StageAmbient'
 
 interface Props {
   scenario: ScenarioId
@@ -145,6 +146,9 @@ export function StageBackground({ scenario, shake }: Props) {
           }}
         />
       )}
+
+      {/* Per-stage ambient motion: GPU lights, embers, leaves, spotlights, etc. */}
+      <StageAmbient scenario={scenario} />
     </div>
   )
 }

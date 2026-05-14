@@ -4,36 +4,36 @@ import { Sfx } from '../lib/audio'
 import { Logo } from '../components/Logo'
 import { FIGHTERS } from '../data/fighters'
 import { Sprite } from '../components/Sprite'
-import quotePool from '../data/quote-pool.json'
-import type { QuotePoolEntry } from '../types'
-
-const POOL = quotePool as Record<string, QuotePoolEntry[]>
+import { PULL_QUOTES } from '../data/pull-quotes'
+import { Voice } from '../lib/voice'
+import { AttractMode } from './AttractMode'
 
 export function MainMenu() {
   const setPhase = useGame((s) => s.setPhase)
   const setMode = useGame((s) => s.setMode)
   const toggleCrt = useGame((s) => s.toggleCrt)
   const crt = useGame((s) => s.crtEnabled)
+  const toggleMusic = useGame((s) => s.toggleMusic)
+  const music = useGame((s) => s.musicEnabled)
+  const toggleVoice = useGame((s) => s.toggleVoice)
+  const voice = useGame((s) => s.voiceEnabled)
 
-  // Cycle through a random quote every 6 seconds
+  // Cycle through hand-curated pull quotes every 7 seconds
   const allQuotes = useMemo(() => {
-    const flat: Array<{ q: string; who: string; ep: string }> = []
-    for (const [fid, list] of Object.entries(POOL)) {
-      const f = FIGHTERS.find((x) => x.id === fid)
-      if (!f) continue
-      for (const item of list) {
-        flat.push({ q: item.quote, who: f.shortName, ep: item.timestamp })
-      }
+    // Shuffle once so the order isn't predictable but never plays a low-quality auto-extracted line
+    const arr = [...PULL_QUOTES]
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1))
+      ;[arr[i], arr[j]] = [arr[j], arr[i]]
     }
-    return flat
+    return arr
   }, [])
   const [quoteIdx, setQuoteIdx] = useState(0)
   useEffect(() => {
     if (allQuotes.length === 0) return
-    setQuoteIdx(Math.floor(Math.random() * allQuotes.length))
     const id = setInterval(() => {
-      setQuoteIdx((i) => (i + Math.floor(1 + Math.random() * 8)) % allQuotes.length)
-    }, 6000)
+      setQuoteIdx((i) => (i + 1) % allQuotes.length)
+    }, 7000)
     return () => clearInterval(id)
   }, [allQuotes.length])
 
@@ -46,6 +46,66 @@ export function MainMenu() {
     return () => clearInterval(id)
   }, [])
 
+  // Attract mode: defaults ON at first menu load — the sizzle reel IS
+  // the first-impression experience (SF II opens to its attract mode too).
+  // Any explicit click/key/touch/wheel drops the player into the real menu;
+  // 10s of idle on the menu re-arms the reel.
+  const [attract, setAttract] = useState(true)
+  useEffect(() => {
+    if (attract) {
+      // Only explicit interactions exit. Pointermove is intentionally ignored.
+      function exit() { setAttract(false) }
+      window.addEventListener('pointerdown', exit)
+      window.addEventListener('keydown', exit)
+      window.addEventListener('touchstart', exit)
+      window.addEventListener('wheel', exit)
+      return () => {
+        window.removeEventListener('pointerdown', exit)
+        window.removeEventListener('keydown', exit)
+        window.removeEventListener('touchstart', exit)
+        window.removeEventListener('wheel', exit)
+      }
+    }
+    // Menu is showing — arm the idle timer
+    let timer: ReturnType<typeof setTimeout> | null = null
+    let lastX = 0, lastY = 0
+    function reset() {
+      if (timer) clearTimeout(timer)
+      timer = setTimeout(() => setAttract(true), 10_000)
+    }
+    function onMove(e: PointerEvent) {
+      const dx = Math.abs(e.clientX - lastX)
+      const dy = Math.abs(e.clientY - lastY)
+      if (dx + dy > 40) {
+        lastX = e.clientX
+        lastY = e.clientY
+        reset()
+      }
+    }
+    reset()
+    window.addEventListener('pointerdown', reset)
+    window.addEventListener('keydown', reset)
+    window.addEventListener('wheel', reset)
+    window.addEventListener('touchstart', reset)
+    window.addEventListener('pointermove', onMove)
+    return () => {
+      if (timer) clearTimeout(timer)
+      window.removeEventListener('pointerdown', reset)
+      window.removeEventListener('keydown', reset)
+      window.removeEventListener('wheel', reset)
+      window.removeEventListener('touchstart', reset)
+      window.removeEventListener('pointermove', onMove)
+    }
+  }, [attract])
+
+  // Operator of the Day — deterministic from today's date, same for everyone today.
+  const operatorOfDay = useMemo(() => {
+    const today = new Date().toISOString().slice(0, 10)
+    let h = 0
+    for (let i = 0; i < today.length; i++) h = (h * 31 + today.charCodeAt(i)) >>> 0
+    return FIGHTERS[h % FIGHTERS.length]
+  }, [])
+
   // PRESS START blink
   const [blinkOn, setBlinkOn] = useState(true)
   useEffect(() => {
@@ -53,34 +113,68 @@ export function MainMenu() {
     return () => clearInterval(id)
   }, [])
 
-  function go(mode: 'vs' | 'arcade') {
+  function go(mode: 'vs' | 'arcade' | 'practice') {
     Sfx.menuSelect()
     setMode(mode)
     setPhase('character-select')
   }
 
+  const startDaily = useGame((s) => s.startDaily)
+  const startRandom = useGame((s) => s.startRandom)
+  const difficulty = useGame((s) => s.difficulty)
+  const setDifficulty = useGame((s) => s.setDifficulty)
+
   const currentQuote = allQuotes[quoteIdx]
   const focusFighter = FIGHTERS[focusIdx]
 
+  if (attract) {
+    return <AttractMode onExit={() => setAttract(false)} />
+  }
+
   return (
-    <div className="relative w-full h-full flex flex-col items-center justify-center overflow-hidden">
-      {/* BG — bespoke gpt-image-2 hero if available, else a fallback */}
+    <div className="relative w-full h-full flex flex-col items-center overflow-y-auto overflow-x-hidden">
+      {/* BG — 5-layer parallax */}
       <HeroBackground />
-
-      {/* Animated geometric overlay */}
+      <Starfield />
       <DiamondGrid />
-
-      {/* Animated stage lights */}
       <SpotLight />
+      <SilhouetteCarousel />
 
-      {/* TOP: logo */}
-      <div className="relative z-20 pt-6 logo-pulse">
+      {/* Operator-of-the-Day pill — top-left, compact */}
+      <div
+        className="absolute top-3 left-3 z-20 flex items-center gap-2 px-2.5 py-1"
+        style={{
+          background: `linear-gradient(90deg, ${operatorOfDay.accent}44 0%, rgba(0,0,0,0.6) 100%)`,
+          border: `1px solid ${operatorOfDay.accent}AA`,
+          boxShadow: `0 0 10px ${operatorOfDay.accent}66`,
+        }}
+      >
+        <span className="font-display text-[7px] tracking-widest" style={{ color: operatorOfDay.accent }}>
+          ☼ OP OF THE DAY
+        </span>
+        <span className="font-display text-[8px] tracking-widest text-white">
+          {operatorOfDay.shortName}
+        </span>
+      </div>
+
+      {/* LOGO — top, generous breathing room */}
+      <div
+        className="relative z-20 pt-4 logo-pulse"
+        style={{
+          filter: 'drop-shadow(0 4px 0 black) drop-shadow(0 0 24px rgba(255,214,10,0.4)) drop-shadow(0 0 56px rgba(247,127,0,0.3))',
+          animation: 'logoFloat 4s ease-in-out infinite',
+        }}
+      >
         <Logo size={1} />
       </div>
 
-      <p className="relative z-20 font-display text-[10px] tracking-widest mt-2 text-white/80"
-         style={{ textShadow: '2px 2px 0 black' }}>
-        ★ A TACTICAL FIGHTER ON LENNY&apos;S PODCAST ★
+      {/* The tagline lived twice — it's baked into title-hero.png already.
+          Replaced with a sleeker subtitle that doesn't repeat the marquee. */}
+      <p
+        className="relative z-20 font-display text-[9px] tracking-widest mt-1 text-white/65"
+        style={{ textShadow: '2px 2px 0 black' }}
+      >
+        27 OPERATORS · 135 FRAMEWORKS · 8 STAGES
       </p>
 
       {/* MID: rotating fighter spotlight */}
@@ -90,54 +184,128 @@ export function MainMenu() {
         <FighterShowcase fighter={FIGHTERS[(focusIdx + 4) % FIGHTERS.length]} side="b" />
       </div>
 
-      {/* Rotating quote marquee */}
-      <div className="relative z-20 mt-2 max-w-3xl px-4">
+      {/* Rotating quote marquee — compact */}
+      <div className="relative z-20 mt-3 max-w-2xl px-4">
         <div
           key={quoteIdx}
-          className="text-center font-body italic text-white text-xl px-4 py-2"
+          className="text-center font-body italic text-white text-base px-3 py-1.5"
           style={{
             background: 'rgba(0,0,0,0.55)',
-            border: '1px solid rgba(255,255,255,0.2)',
+            border: '1px solid rgba(255,255,255,0.18)',
             boxShadow: '0 0 12px rgba(255,214,10,0.15)',
             animation: 'banner-in 6s ease-out',
-            minHeight: 50,
+            minHeight: 40,
+            lineHeight: 1.35,
           }}
         >
           {currentQuote ? (
             <>
-              &ldquo;{currentQuote.q}&rdquo;{' '}
-              <span className="font-display text-[8px] tracking-widest" style={{ color: '#FFD60A' }}>
-                — {currentQuote.who} · {currentQuote.ep}
+              &ldquo;{currentQuote.quote}&rdquo;{' '}
+              <span className="font-display text-[7px] tracking-widest" style={{ color: '#FFD60A' }}>
+                — {currentQuote.who} · {currentQuote.episode}
               </span>
             </>
           ) : (
-            <span className="text-white/40">…loading verbatim quotes from the archive…</span>
+            <span className="text-white/40">…loading verbatim quotes…</span>
           )}
         </div>
       </div>
 
-      {/* PRESS START / menu buttons */}
-      <div className="relative z-20 flex flex-col gap-3 mt-4 items-center">
-        <MenuButton
-          label="▶ ARCADE MODE"
-          subtitle="8-stage gauntlet · final boss Lenny"
-          onClick={() => go('arcade')}
-          accent="#E63946"
-        />
-        <MenuButton
-          label="VS MODE"
-          subtitle="local 2-player hot seat"
-          onClick={() => go('vs')}
-          accent="#00B4D8"
-        />
-        <div className="flex gap-2">
-          <SmallButton label="HOW TO PLAY" onClick={() => { Sfx.menuSelect(); setPhase('how-to-play') }} />
-          <SmallButton label="QUOTE BANK" onClick={() => { Sfx.menuSelect(); setPhase('quote-bank') }} />
-          <SmallButton label={`CRT · ${crt ? 'ON' : 'OFF'}`} onClick={toggleCrt} />
+      {/* MENU — clean hierarchy:
+          Row 1 (primary):     ARCADE · VS
+          Row 2 (modes):       DAILY · PRACTICE · RANDOM · GENERATE YOU
+          Row 3 (library):     HOW TO PLAY · ENCYCLOPEDIA · QUOTE BANK · STATS
+          Row 4 (preferences): DIFFICULTY · ♪ · 🗣 · CRT · ATTRACT · TEST VOICE
+      */}
+      <div className="relative z-20 flex flex-col gap-3 mt-4 items-center menu-cta-stack px-4">
+        {/* Row 1: primary CTAs side-by-side */}
+        <div className="flex gap-3 flex-wrap justify-center">
+          <MenuButton
+            label="▶ ARCADE MODE"
+            subtitle="8-stage gauntlet · boss Lenny"
+            onClick={() => go('arcade')}
+            accent="#E63946"
+          />
+          <MenuButton
+            label="VS MODE"
+            subtitle="local 2-player hot seat"
+            onClick={() => go('vs')}
+            accent="#00B4D8"
+          />
         </div>
+
+        {/* Row 2: alt modes in one row */}
+        <div className="flex gap-2 flex-wrap justify-center">
+          <MidButton
+            label="◇ DAILY"
+            subtitle="today's matchup"
+            onClick={() => { Sfx.menuSelect(); startDaily() }}
+            accent="#06D6A0"
+          />
+          <MidButton
+            label="◇ PRACTICE"
+            subtitle="train freely"
+            onClick={() => go('practice')}
+            accent="#FCBF49"
+          />
+          <MidButton
+            label="◇ RANDOM"
+            subtitle="dice rolls"
+            onClick={() => { Sfx.menuSelect(); startRandom() }}
+            accent="#F72585"
+          />
+          <MidButton
+            label="★ GENERATE YOU"
+            subtitle="your fighter card"
+            onClick={() => { Sfx.menuSelect(); setPhase('generate-fighter') }}
+            accent="#7209B7"
+          />
+          <MidButton
+            label="★ MARQUEE"
+            subtitle="dream matchups"
+            onClick={() => { Sfx.menuSelect(); setPhase('marquee-matchups') }}
+            accent="#FFD60A"
+          />
+        </div>
+
+        {/* Row 3: library — knowledge tools, grouped */}
+        <ButtonGroup label="LIBRARY">
+          <SmallButton label="HOW TO PLAY"  onClick={() => { Sfx.menuSelect(); setPhase('how-to-play') }} />
+          <SmallButton label="ENCYCLOPEDIA" onClick={() => { Sfx.menuSelect(); setPhase('framework-encyclopedia') }} />
+          <SmallButton label="QUOTE BANK"   onClick={() => { Sfx.menuSelect(); setPhase('quote-bank') }} />
+          <SmallButton label="STATS · ★"    onClick={() => { Sfx.menuSelect(); setPhase('stats') }} />
+        </ButtonGroup>
+
+        {/* Row 4: settings + dev/demo, grouped */}
+        <ButtonGroup label="SETTINGS">
+          <SmallButton
+            label={`DIFFICULTY · ${difficulty.toUpperCase()}`}
+            onClick={() => {
+              Sfx.menuMove()
+              setDifficulty(difficulty === 'easy' ? 'normal' : difficulty === 'normal' ? 'hard' : 'easy')
+            }}
+          />
+          <SmallButton label={`♪ ${music ? 'ON' : 'OFF'}`}  onClick={toggleMusic} />
+          <SmallButton label={`🗣 ${voice ? 'ON' : 'OFF'}`} onClick={toggleVoice} />
+          <SmallButton label={`CRT · ${crt ? 'ON' : 'OFF'}`} onClick={toggleCrt} />
+          <SmallButton label="◇ ATTRACT" onClick={() => { Sfx.menuSelect(); setAttract(true) }} />
+          <SmallButton
+            label="TEST VOICE"
+            onClick={() => {
+              Sfx.menuSelect()
+              if (!voice) {
+                Voice.setEnabled(true)
+                Voice.say(focusFighter.voiceLines.matchStart, focusFighter.id, 'matchStart')
+                setTimeout(() => Voice.setEnabled(false), 100)
+              } else {
+                Voice.say(focusFighter.voiceLines.matchStart, focusFighter.id, 'matchStart')
+              }
+            }}
+          />
+        </ButtonGroup>
       </div>
 
-      {/* BOTTOM: blinking press-start + roster strip */}
+      {/* Blinking press-start */}
       <div className="relative z-20 mt-3" style={{ height: 16 }}>
         <div
           className="font-display text-[9px] tracking-widest"
@@ -275,6 +443,75 @@ function SpotLight() {
   )
 }
 
+/** Drifting starfield — slow parallax layer behind the title artwork. */
+function Starfield() {
+  return (
+    <div className="absolute inset-0 z-[5] pointer-events-none overflow-hidden">
+      {Array.from({ length: 80 }).map((_, i) => {
+        const left = (i * 13) % 100
+        const top = (i * 7) % 70
+        const size = (i % 3) + 1
+        const colors = ['#FFFFFF', '#FFD60A', '#90E0EF', '#F77F00']
+        return (
+          <div
+            key={i}
+            className="absolute"
+            style={{
+              left: `${left}%`,
+              top: `${top}%`,
+              width: size,
+              height: size,
+              background: colors[i % colors.length],
+              opacity: 0.55,
+              boxShadow: `0 0 ${size * 2}px ${colors[i % colors.length]}`,
+              animation: `starTwinkle ${1.4 + (i % 5) * 0.4}s ease-in-out ${(i * 0.13) % 3}s infinite`,
+            }}
+          />
+        )
+      })}
+      <style>{`
+        @keyframes starTwinkle {
+          0%, 100% { opacity: 0.75; transform: scale(1) }
+          50%      { opacity: 0.15; transform: scale(0.5) }
+        }
+      `}</style>
+    </div>
+  )
+}
+
+/** Fighter silhouettes drifting across the background, very subtle. */
+function SilhouetteCarousel() {
+  const sel = [FIGHTERS[2], FIGHTERS[7], FIGHTERS[12], FIGHTERS[17]]
+  return (
+    <div className="absolute inset-0 z-[6] pointer-events-none overflow-hidden">
+      {sel.map((f, i) => (
+        <div
+          key={f.id}
+          className="absolute"
+          style={{
+            left: `${15 + i * 24}%`,
+            bottom: '8%',
+            width: 70,
+            height: 96,
+            opacity: 0.08,
+            filter: 'brightness(0)',
+            animation: `silhouetteDrift ${28 + i * 4}s linear ${i * 5}s infinite`,
+          }}
+        >
+          <Sprite fighter={f} side="a" state="stance" />
+        </div>
+      ))}
+      <style>{`
+        @keyframes silhouetteDrift {
+          0%   { transform: translateX(0)    translateY(0) }
+          50%  { transform: translateX(80px) translateY(-12px) }
+          100% { transform: translateX(0)    translateY(0) }
+        }
+      `}</style>
+    </div>
+  )
+}
+
 function FighterShowcase({ fighter, side }: { fighter: typeof FIGHTERS[0]; side: 'a' | 'b' }) {
   return (
     <div
@@ -350,6 +587,64 @@ function MenuButton({
         {subtitle}
       </div>
     </button>
+  )
+}
+
+function MidButton({
+  label,
+  subtitle,
+  onClick,
+  accent,
+}: {
+  label: string
+  subtitle: string
+  onClick: () => void
+  accent: string
+}) {
+  return (
+    <button
+      onClick={onClick}
+      onMouseEnter={Sfx.menuMove}
+      className="relative px-4 py-1.5 font-display text-base tracking-widest hover:translate-y-[-2px] transition-transform"
+      style={{
+        background: `linear-gradient(180deg, ${accent}55, ${accent}22)`,
+        color: 'white',
+        border: `2px solid ${accent}`,
+        boxShadow:
+          `inset -2px -2px 0 rgba(0,0,0,0.6), inset 2px 2px 0 rgba(255,255,255,0.2), 0 0 16px ${accent}55`,
+        cursor: 'pointer',
+        minWidth: 170,
+        letterSpacing: '2px',
+        textShadow: '2px 2px 0 black',
+      }}
+    >
+      {label}
+      <div
+        className="font-body text-sm tracking-normal mt-0.5"
+        style={{
+          color: 'white',
+          opacity: 0.7,
+          textShadow: 'none',
+          letterSpacing: 'normal',
+        }}
+      >
+        {subtitle}
+      </div>
+    </button>
+  )
+}
+
+function ButtonGroup({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-2 flex-wrap justify-center">
+      <span
+        className="font-display text-[7px] tracking-widest text-white/40 select-none"
+        style={{ letterSpacing: '0.3em' }}
+      >
+        {label} ▸
+      </span>
+      {children}
+    </div>
   )
 }
 

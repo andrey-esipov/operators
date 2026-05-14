@@ -23,17 +23,32 @@ interface Props {
 export function Sprite({ fighter, side, state, shake }: Props) {
   const mirror = side === 'b' ? -1 : 1
   const resolvedState = state === 'ult' ? 'win' : state
-  // Pose fallback chain: state → stance → placeholder
+
+  // Pose-load state. `stateFallback` mirrors the requested pose, and is only
+  // forced back to 'stance' when the requested PNG fails to load.
   const [stateFallback, setStateFallback] = useState<'stance' | 'attack' | 'win' | 'lose'>(resolvedState)
-  // If incoming state changes, reset the fallback
-  if (stateFallback !== resolvedState && stateFallback !== 'stance') {
+  const [errored, setErrored] = useState(false)
+
+  // Whenever the parent asks for a new pose, attempt to load it fresh.
+  // Without this, the sprite would stick on 'stance' forever after mount.
+  useEffect(() => {
     setStateFallback(resolvedState)
-  }
+    setErrored(false)
+  }, [resolvedState])
+
   const candidate =
     fighter.sprites?.[state] ??
     `/sprites/${fighter.id}/${stateFallback}.png`
 
-  const [errored, setErrored] = useState(false)
+  // Per-pose punch-forward micro-animation. The sprite leans into the swing.
+  // Side A swings to the right; side B is mirrored so we keep the same sign
+  // (the outer wrapper applies the X-flip).
+  const lunge =
+    resolvedState === 'attack' ? 12 :
+    resolvedState === 'win' ? 0 :
+    resolvedState === 'lose' ? 0 : 0
+  const scale = resolvedState === 'attack' ? 1.06 : 1.0
+
   function handleError() {
     if (stateFallback !== 'stance') {
       setStateFallback('stance')
@@ -47,8 +62,9 @@ export function Sprite({ fighter, side, state, shake }: Props) {
       className={`relative w-full h-full ${shake ? 'shake' : 'idle-bob'}`}
       style={{
         ['--mirror' as unknown as string]: mirror,
-        transform: `scaleX(${mirror})`,
+        transform: `scaleX(${mirror}) translateX(${lunge}px) scale(${scale})`,
         transformOrigin: 'center bottom',
+        transition: 'transform 120ms cubic-bezier(0.4, 0, 0.2, 1)',
       }}
     >
       {!errored ? (

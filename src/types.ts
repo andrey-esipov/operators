@@ -73,12 +73,29 @@ export interface QuotePoolEntry {
   timestamp: string
 }
 
+export interface AIProfile {
+  /** Aggression — multiplier on heavy / ultimate weight (default 1.0) */
+  aggression: number
+  /** Combo focus — multiplier on combo / setup weight (default 1.0) */
+  comboFocus: number
+  /** Ult rush — bias toward using ult ASAP once available (default 1.0) */
+  ultRush: number
+  /** Defensive bias — chance to play light/setup when below 30% HP (default 0) */
+  defensiveBias: number
+}
+
 export interface FighterDef {
   id: string
   name: string
   shortName: string
   archetype: string
+  /** 1-line bio shown in the UI — who they are, what they're known for. */
   bio: string
+  /** Optional appearance description used only by the sprite generator
+   *  (gpt-image-2 prompt). When set, the UI ignores this field. */
+  spriteBio?: string
+  /** AI personality — when this fighter is bot-controlled. Defaults to neutral. */
+  ai?: AIProfile
   episode: string
   /** Hex accent color (player-side override) */
   accent: string
@@ -124,8 +141,12 @@ export interface FighterRuntime {
   status: StatusEffect[]
   /** Last move id cast by this fighter — used for combo chains */
   lastMoveId: string | null
-  /** Set to a move type if this fighter "read" the opponent next turn */
+  /** Active READ: this fighter predicted opponent's next move type.
+   *  If the prediction is correct, opponent's next attack does 50% dmg
+   *  and the reader gains +20 super. */
   read: MoveType | null
+  /** Per-move cooldown timer: moveId → turns remaining before it can be cast again. */
+  cooldowns: Record<string, number>
   /** Permanent buff stacking (e.g. Gokul's Org Design ult) */
   permanentBuff?: number
 }
@@ -133,6 +154,7 @@ export interface FighterRuntime {
 export type Phase =
   | 'menu'
   | 'character-select'
+  | 'stage-select'
   | 'pre-fight'
   | 'fight'
   | 'round-end'
@@ -140,6 +162,11 @@ export type Phase =
   | 'arcade-victory'
   | 'quote-bank'
   | 'how-to-play'
+  | 'framework-encyclopedia'
+  | 'stats'
+  | 'fighter-spotlight'
+  | 'generate-fighter'
+  | 'marquee-matchups'
 
 export interface BattleLogEntry {
   turn: number
@@ -176,7 +203,9 @@ export interface GameState {
   activeSide: Side
   log: BattleLogEntry[]
   /** Last entry id (UUID) for animations */
-  lastFlash?: { kind: 'crit' | 'combo' | 'ult'; side: Side; id: number }
+  lastFlash?: { kind: 'crit' | 'combo' | 'ult' | 'ko'; side: Side; id: number }
+  /** When the final hit of a round lands, this carries the K.O. cinematic state. */
+  koCinematic?: { winner: Side; loser: Side; comboTitle?: string; id: number }
   /** Sound cue queue for the audio system to consume */
   soundCue?: { kind: string; id: number }
   /** Selected fighters for next match */
@@ -188,6 +217,10 @@ export interface GameState {
   quoteBank: Array<{ fighterId: string; moveId: string; ts: number }>
   /** CRT overlay enabled */
   crtEnabled: boolean
+  /** Music master on/off (procedural chiptune via lib/music.ts) */
+  musicEnabled: boolean
+  /** Voice line TTS on/off (browser SpeechSynthesis) */
+  voiceEnabled: boolean
   /** Last damage events for floating numbers */
   damagePulses: Array<{ id: number; side: Side; amount: number; kind: 'normal' | 'crit' | 'heal' }>
 }

@@ -9,6 +9,8 @@ interface Props {
   lastMoveId?: string | null
   /** Does this fighter currently have the requireSelfStatus active? */
   hasRequiredStatus?: boolean
+  /** Cooldown turns remaining for this move (0 = ready) */
+  cooldown?: number
   onClick: () => void
 }
 
@@ -35,10 +37,12 @@ export function MoveCard({
   superReady,
   lastMoveId,
   hasRequiredStatus,
+  cooldown = 0,
   onClick,
 }: Props) {
+  const onCooldown = cooldown > 0
   const ultGated = isUltimate && (!superReady || (move.requiresSelfStatus && !hasRequiredStatus))
-  const usable = canAfford && !ultGated
+  const usable = canAfford && !ultGated && !onCooldown
   const accent = TYPE_COLOR[move.type]
 
   // Combo-ready: this combo move chains from a previous cast
@@ -139,6 +143,16 @@ export function MoveCard({
             ) : (
               <>NEEDS {move.requiresSelfStatus?.replace('_', ' ')}</>
             )}
+          </div>
+        </div>
+      )}
+      {onCooldown && (
+        <div
+          className="absolute inset-0 pointer-events-none flex items-center justify-center"
+          style={{ background: 'rgba(0,0,0,0.7)' }}
+        >
+          <div className="font-display text-[10px] tracking-widest text-white text-center" style={{ textShadow: '2px 2px 0 black' }}>
+            CD {cooldown >= 99 ? 'NEXT ROUND' : `${cooldown}T`}
           </div>
         </div>
       )}

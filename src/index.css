@@ -146,3 +146,117 @@ button {
   50%      { transform: scale(1.02); filter: drop-shadow(0 0 12px rgba(255, 214, 10, 0.5)); }
 }
 .logo-pulse { animation: logo-pulse 2.2s ease-in-out infinite; }
+
+/* Subtle vertical float to suggest depth on the main menu logo */
+@keyframes logoFloat {
+  0%, 100% { transform: translateY(0px) }
+  50%      { transform: translateY(-6px) }
+}
+
+/* Menu CTAs crash-in entrance — each child gets a staggered delay */
+@keyframes menuCtaCrash {
+  0%   { transform: translateY(-30px) scale(0.92); opacity: 0 }
+  60%  { transform: translateY(4px)   scale(1.04); opacity: 1 }
+  100% { transform: translateY(0)     scale(1.00); opacity: 1 }
+}
+.menu-cta-stack > * { animation: menuCtaCrash 0.5s cubic-bezier(0.2, 0.9, 0.3, 1) both; }
+.menu-cta-stack > *:nth-child(1) { animation-delay: 0.10s }
+.menu-cta-stack > *:nth-child(2) { animation-delay: 0.20s }
+.menu-cta-stack > *:nth-child(3) { animation-delay: 0.30s }
+.menu-cta-stack > *:nth-child(4) { animation-delay: 0.40s }
+.menu-cta-stack > *:nth-child(5) { animation-delay: 0.50s }
+.menu-cta-stack > *:nth-child(6) { animation-delay: 0.60s }
+
+/* K.O. cinematic — full-screen impact flash, banner crash, particle burst */
+@keyframes koFlash {
+  0%   { opacity: 0; }
+  20%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+@keyframes koBannerCrash {
+  0%   { transform: translateY(-200px) scale(1.4) skewX(-12deg); opacity: 0; }
+  60%  { transform: translateY(0)      scale(1.15) skewX(-6deg); opacity: 1; }
+  80%  { transform: translateY(0)      scale(0.96) skewX(-6deg); opacity: 1; }
+  100% { transform: translateY(0)      scale(1.00) skewX(-6deg); opacity: 1; }
+}
+@keyframes koSubFade {
+  0%   { opacity: 0; transform: translateY(8px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+@keyframes koTaunt {
+  0%   { opacity: 0; transform: translateX(40px); }
+  100% { opacity: 1; transform: translateX(0); }
+}
+@keyframes koLoserDim {
+  0%   { opacity: 0.6; }
+  100% { opacity: 0.05; }
+}
+@keyframes koParticle {
+  0%   { transform: translate(0, 0); opacity: 1; }
+  100% { transform: translate(calc(var(--dx) * 1px), calc(var(--dy) * 1px)); opacity: 0; }
+}
+
+/* Hit lag — brief desaturate + scale + sideways recoil on damage taken.
+   The defender's container is pushed AWAY from the attacker for ~120ms. */
+@keyframes hitLagA {
+  0%   { filter: brightness(2.4) saturate(0); transform: scale(1.05) translateX(-18px); }
+  100% { filter: brightness(1)    saturate(1); transform: scale(1.00) translateX(0); }
+}
+@keyframes hitLagB {
+  0%   { filter: brightness(2.4) saturate(0); transform: scale(1.05) translateX(18px); }
+  100% { filter: brightness(1)    saturate(1); transform: scale(1.00) translateX(0); }
+}
+.hit-lag-a { animation: hitLagA 220ms cubic-bezier(0, 0, 0.3, 1); }
+.hit-lag-b { animation: hitLagB 220ms cubic-bezier(0, 0, 0.3, 1); }
+/* Keep .hit-lag as a compat alias mapping to hit-lag-a for older callers */
+.hit-lag   { animation: hitLagA 220ms cubic-bezier(0, 0, 0.3, 1); }
+
+/* White impact flash for crit/heavy hits */
+@keyframes impactFlash {
+  0%   { opacity: 0; }
+  20%  { opacity: 0.7; }
+  100% { opacity: 0; }
+}
+.impact-flash { animation: impactFlash 220ms linear forwards; }
+
+/* Combo streak bump on each new hit */
+@keyframes comboBump {
+  0%   { transform: scale(0.5) skewX(-6deg); opacity: 0 }
+  50%  { transform: scale(1.4) skewX(-6deg); opacity: 1 }
+  100% { transform: scale(1) skewX(-6deg); opacity: 1 }
+}
+
+/* Critical-HP pulse for health bar */
+@keyframes hpCritPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239, 35, 60, 0.7) }
+  50%      { box-shadow: 0 0 16px 4px rgba(239, 35, 60, 0.7) }
+}
+.hp-crit { animation: hpCritPulse 0.9s ease-in-out infinite; }
+
+/* Mobile responsive — the game targets desktop but degrades gracefully */
+@media (max-width: 900px) {
+  /* Allow scroll on mobile menu screens */
+  html, body, #root { overflow: auto; }
+  /* Reduce font-display headlines slightly */
+  .text-2xl { font-size: 1.25rem; }
+  .text-5xl { font-size: 2.25rem; }
+}
+@media (max-width: 640px) {
+  /* On phones, scale combat root by viewport width — keeps the SF II
+     layout but shrinks to fit. Combat UI assumes ~960px wide; we map it. */
+  body::before {
+    content: 'BEST VIEWED ON DESKTOP · 960px+';
+    position: fixed;
+    top: 4px; left: 50%;
+    transform: translateX(-50%);
+    z-index: 100;
+    font-family: var(--font-display);
+    font-size: 7px;
+    letter-spacing: 0.3em;
+    color: #FFD60A;
+    background: rgba(15,10,26,0.92);
+    border: 1px solid #FFD60A;
+    padding: 2px 8px;
+    pointer-events: none;
+  }
+}

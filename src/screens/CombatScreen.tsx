@@ -12,10 +12,15 @@ import { StageBackground } from '../components/StageBackground'
 import { ComboBanner } from '../components/ComboBanner'
 import { DamageFloats } from '../components/DamageFloat'
 import { StatusChip } from '../components/StatusChip'
+import { KOCinematic } from '../components/KOCinematic'
+import { FightIntro } from '../components/FightIntro'
+import { StatusHalo } from '../components/StatusHalo'
+import { HitSparks } from '../components/HitSparks'
+import { youtubeDeepLink } from '../lib/youtube'
 import { Sfx } from '../lib/audio'
 import { AnimatePresence, motion } from 'framer-motion'
 
-export function CombatScreen({ mode = 'vs' }: { mode?: 'vs' | 'arcade' }) {
+export function CombatScreen({ mode = 'vs' }: { mode?: 'vs' | 'arcade' | 'practice' | 'daily' }) {
   const fighterA = useGame((s) => s.fighterA)
   const fighterB = useGame((s) => s.fighterB)
   const scenario = useGame((s) => s.scenario)
@@ -24,6 +29,7 @@ export function CombatScreen({ mode = 'vs' }: { mode?: 'vs' | 'arcade' }) {
   const activeSide = useGame((s) => s.activeSide)
   const log = useGame((s) => s.log)
   const lastFlash = useGame((s) => s.lastFlash)
+  const koCinematic = useGame((s) => s.koCinematic)
   const soundCue = useGame((s) => s.soundCue)
   const damagePulses = useGame((s) => s.damagePulses)
   const castMove = useGame((s) => s.castMove)
@@ -33,7 +39,15 @@ export function CombatScreen({ mode = 'vs' }: { mode?: 'vs' | 'arcade' }) {
   const [comboBanner, setComboBanner] = useState<{ title: string; kind: 'combo' | 'ult' | 'crit' } | null>(null)
   const [hitFlash, setHitFlash] = useState<'crit' | 'combo' | 'ult' | null>(null)
   const [shaking, setShaking] = useState(false)
-  const [lastQuote, setLastQuote] = useState<{ q: string; ep: string; t: string; name: string } | null>(null)
+  // Hit-lag: brief desaturate/scale on the side that just took damage. Re-keys on every damagePulse.
+  const [hitLag, setHitLag] = useState<{ side: 'a' | 'b'; id: number } | null>(null)
+  // Crit slow-mo: brief world-freeze + sepia/contrast filter on critical hits.
+  const [critFreeze, setCritFreeze] = useState(false)
+  // Live combo counter: number of successive damaging moves by the same side. Resets on side change or KO.
+  const [comboStreak, setComboStreak] = useState<{ side: 'a' | 'b'; count: number; id: number } | null>(null)
+  // Hit-spark burst trigger — bumped per damaging hit so <HitSparks/> re-fires
+  const [hitSpark, setHitSpark] = useState<{ id: number; side: 'a' | 'b'; kind: 'light' | 'heavy' | 'crit' | 'combo' | 'ult' } | null>(null)
+  const [lastQuote, setLastQuote] = useState<{ q: string; ep: string; t: string; name: string; fighterId: string } | null>(null)
   /** Which side is currently in attack-pose (briefly after casting) */
   const [attackingSide, setAttackingSide] = useState<'a' | 'b' | null>(null)
   const resetMatch = useGame((s) => s.resetMatch)
@@ -71,6 +85,23 @@ export function CombatScreen({ mode = 'vs' }: { mode?: 'vs' | 'arcade' }) {
       setHitFlash(last.flash)
       setTimeout(() => setHitFlash(null), 200)
     }
+    // Crit slow-mo — freeze the world for 240ms before resuming
+    if (last.flash === 'crit') {
+      setCritFreeze(true)
+      setTimeout(() => setCritFreeze(false), 240)
+    }
+    // Combo streak — increment if same attacker dealt damage again, else reset
+    if (last.finalDamage > 0) {
+      setComboStreak((prev) => {
+        const id = log.length
+        if (prev && prev.side === last.attacker) {
+          return { side: last.attacker, count: prev.count + 1, id }
+        }
+        return { side: last.attacker, count: 1, id }
+      })
+    } else {
+      setComboStreak(null)
+    }
     if (last.finalDamage > 50) {
       setShaking(true)
       setTimeout(() => setShaking(false), 220)
@@ -89,14 +120,33 @@ export function CombatScreen({ mode = 'vs' }: { mode?: 'vs' | 'arcade' }) {
         ep: rotated.episode || last.episode,
         t: rotated.timestamp || last.timestamp,
         name: def?.shortName ?? '',
+        fighterId: fighterIdForQuote ?? '',
       })
       // Read time: short quotes get less, long ones get more. 4.5s - 6s.
       const readTime = Math.min(6500, Math.max(4500, rotated.quote.length * 60))
       setTimeout(() => setLastQuote(null), readTime)
     }
-    // Attack sprite pose: briefly switch the attacker to attack frame
+    // Attack sprite pose: briefly switch the attacker to attack frame.
+    // 800ms is long enough for the pose swap + lunge to register visually
+    // without dragging out the turn rhythm.
     setAttackingSide(last.attacker)
-    setTimeout(() => setAttackingSide(null), 350)
+    setTimeout(() => setAttackingSide(null), 800)
+
+    // Hit-lag: the defender briefly desaturates + scales. Stronger hits
+    // trigger a slightly longer flash. Re-keys per turn so CSS animation restarts.
+    const defenderSide: 'a' | 'b' = last.attacker === 'a' ? 'b' : 'a'
+    if (last.finalDamage > 0) {
+      setHitLag({ side: defenderSide, id: log.length })
+      setTimeout(() => setHitLag(null), 220)
+
+      // Hit sparks at the defender's body
+      const sparkKind: 'light' | 'heavy' | 'crit' | 'combo' | 'ult' =
+        last.flash === 'ult' ? 'ult' :
+        last.flash === 'combo' ? 'combo' :
+        last.flash === 'crit' ? 'crit' :
+        last.finalDamage > 70 ? 'heavy' : 'light'
+      setHitSpark({ id: log.length, side: last.attacker, kind: sparkKind })
+    }
   }, [log.length])
 
   // Round timer
@@ -138,9 +188,9 @@ export function CombatScreen({ mode = 'vs' }: { mode?: 'vs' | 'arcade' }) {
     }))
   }, [timeLeft, fighterA, fighterB])
 
-  // Bot AI for player B in arcade mode
+  // Bot AI for player B in single-player modes (arcade / practice / daily)
   useEffect(() => {
-    if (mode !== 'arcade') return
+    if (mode === 'vs') return
     if (activeSide !== 'b') return
     const id = setTimeout(() => aiPlay('b'), 1200 + Math.random() * 600)
     return () => clearTimeout(id)
@@ -154,7 +204,13 @@ export function CombatScreen({ mode = 'vs' }: { mode?: 'vs' | 'arcade' }) {
   const bSuperReady = fighterB.superMeter >= 100
 
   return (
-    <div className={`relative w-full h-full overflow-hidden ${shaking ? 'shake' : ''}`}>
+    <div
+      className={`relative w-full h-full overflow-hidden ${shaking ? 'shake' : ''}`}
+      style={{
+        filter: critFreeze ? 'saturate(1.6) contrast(1.4) hue-rotate(-12deg)' : 'none',
+        transition: critFreeze ? 'none' : 'filter 180ms ease-out',
+      }}
+    >
       {/* Stage background */}
       <StageBackground scenario={scenario} shake={shaking} />
 
@@ -197,11 +253,49 @@ export function CombatScreen({ mode = 'vs' }: { mode?: 'vs' | 'arcade' }) {
           <div className="font-display text-[10px] tracking-widest text-white/70">
             ROUND {round}/3
           </div>
-          <div className="flex gap-2 mt-1">
-            <span style={{ width: 12, height: 12, background: roundsWon.a > 0 ? '#E63946' : '#2A1F33', border: '1px solid white' }} />
-            <span style={{ width: 12, height: 12, background: roundsWon.b > 0 ? '#00B4D8' : '#2A1F33', border: '1px solid white' }} />
+          {/* Best-of-3 dot grid: 2 dots per side; filled = round won. */}
+          <div className="flex gap-3 mt-1">
+            <div className="flex gap-1.5">
+              {[0, 1].map((i) => (
+                <span
+                  key={`a-${i}`}
+                  style={{
+                    width: 14,
+                    height: 14,
+                    borderRadius: '50%',
+                    background: roundsWon.a > i ? '#E63946' : 'transparent',
+                    border: `2px solid ${roundsWon.a > i ? '#E63946' : 'rgba(230,57,70,0.4)'}`,
+                    boxShadow: roundsWon.a > i ? '0 0 8px #E63946' : 'none',
+                    transition: 'all 0.3s',
+                  }}
+                />
+              ))}
+            </div>
+            <div className="flex gap-1.5">
+              {[0, 1].map((i) => (
+                <span
+                  key={`b-${i}`}
+                  style={{
+                    width: 14,
+                    height: 14,
+                    borderRadius: '50%',
+                    background: roundsWon.b > i ? '#00B4D8' : 'transparent',
+                    border: `2px solid ${roundsWon.b > i ? '#00B4D8' : 'rgba(0,180,216,0.4)'}`,
+                    boxShadow: roundsWon.b > i ? '0 0 8px #00B4D8' : 'none',
+                    transition: 'all 0.3s',
+                  }}
+                />
+              ))}
+            </div>
           </div>
-          <div className="font-num text-5xl tabular-nums mt-2" style={{ color: timeLeft < 15 ? '#EF233C' : '#FFD60A', textShadow: '3px 3px 0 black' }}>
+          <div
+            className="font-num text-5xl tabular-nums mt-2"
+            style={{
+              color: timeLeft < 15 ? '#EF233C' : '#FFD60A',
+              textShadow: '3px 3px 0 black',
+              animation: timeLeft < 10 && timeLeft > 0 ? 'hpCritPulse 0.9s ease-in-out infinite' : undefined,
+            }}
+          >
             {timeLeft}
           </div>
         </div>
@@ -234,11 +328,29 @@ export function CombatScreen({ mode = 'vs' }: { mode?: 'vs' | 'arcade' }) {
       {/* FIGHTERS */}
       <div className="absolute left-0 right-0 z-10" style={{ bottom: 200 }}>
         <div className="flex items-end justify-between px-12 md:px-20">
-          <div style={{
-            width: 340, height: 440,
-            filter: activeSide === 'a' ? 'drop-shadow(0 0 16px #FFD60A)' : 'drop-shadow(0 8px 16px rgba(0,0,0,0.6))',
-            transition: 'filter 0.2s',
-          }}>
+          <div
+            key={`a-${hitLag?.side === 'a' ? hitLag.id : 'idle'}`}
+            className={hitLag?.side === 'a' ? 'hit-lag-a' : ''}
+            style={{
+              width: 340, height: 440,
+              filter:
+                // Casting attacker: strong colored backlight by move kind
+                attackingSide === 'a' && lastFlash?.kind === 'ult'
+                  ? 'drop-shadow(0 0 32px #F72585) drop-shadow(0 0 64px #7209B7)'
+                  : attackingSide === 'a' && lastFlash?.kind === 'combo'
+                  ? 'drop-shadow(0 0 28px #FFD60A) drop-shadow(0 0 56px #F77F00)'
+                  : attackingSide === 'a' && lastFlash?.kind === 'crit'
+                  ? 'drop-shadow(0 0 24px white) drop-shadow(0 0 48px #FFD60A)'
+                  : attackingSide === 'a'
+                  ? 'drop-shadow(0 0 18px #FCBF49) drop-shadow(0 8px 16px rgba(0,0,0,0.6))'
+                  : activeSide === 'a'
+                  ? 'drop-shadow(0 0 16px #FFD60A)'
+                  : 'drop-shadow(0 8px 16px rgba(0,0,0,0.6))',
+              transition: 'filter 0.2s',
+              position: 'relative',
+            }}
+          >
+            <StatusHalo status={fighterA.status} superReady={aSuperReady} />
             <Sprite
               fighter={a}
               side="a"
@@ -252,11 +364,28 @@ export function CombatScreen({ mode = 'vs' }: { mode?: 'vs' | 'arcade' }) {
               shake={shaking && damagePulses[damagePulses.length-1]?.side === 'a'}
             />
           </div>
-          <div style={{
-            width: 340, height: 440,
-            filter: activeSide === 'b' ? 'drop-shadow(0 0 16px #FFD60A)' : 'drop-shadow(0 8px 16px rgba(0,0,0,0.6))',
-            transition: 'filter 0.2s',
-          }}>
+          <div
+            key={`b-${hitLag?.side === 'b' ? hitLag.id : 'idle'}`}
+            className={hitLag?.side === 'b' ? 'hit-lag-b' : ''}
+            style={{
+              width: 340, height: 440,
+              filter:
+                attackingSide === 'b' && lastFlash?.kind === 'ult'
+                  ? 'drop-shadow(0 0 32px #F72585) drop-shadow(0 0 64px #7209B7)'
+                  : attackingSide === 'b' && lastFlash?.kind === 'combo'
+                  ? 'drop-shadow(0 0 28px #FFD60A) drop-shadow(0 0 56px #F77F00)'
+                  : attackingSide === 'b' && lastFlash?.kind === 'crit'
+                  ? 'drop-shadow(0 0 24px white) drop-shadow(0 0 48px #FFD60A)'
+                  : attackingSide === 'b'
+                  ? 'drop-shadow(0 0 18px #FCBF49) drop-shadow(0 8px 16px rgba(0,0,0,0.6))'
+                  : activeSide === 'b'
+                  ? 'drop-shadow(0 0 16px #FFD60A)'
+                  : 'drop-shadow(0 8px 16px rgba(0,0,0,0.6))',
+              transition: 'filter 0.2s',
+              position: 'relative',
+            }}
+          >
+            <StatusHalo status={fighterB.status} superReady={bSuperReady} />
             <Sprite
               fighter={b}
               side="b"
@@ -272,6 +401,9 @@ export function CombatScreen({ mode = 'vs' }: { mode?: 'vs' | 'arcade' }) {
           </div>
         </div>
       </div>
+
+      {/* Hit sparks at the defender's body */}
+      <HitSparks trigger={hitSpark} />
 
       {/* Damage floats */}
       <DamageFloats pulses={damagePulses} />
@@ -296,8 +428,24 @@ export function CombatScreen({ mode = 'vs' }: { mode?: 'vs' | 'arcade' }) {
             <div className="font-body text-2xl text-white leading-snug italic">
               "{lastQuote.q}"
             </div>
-            <div className="font-display text-[8px] tracking-widest mt-2" style={{ color: '#FFD60A' }}>
-              — {lastQuote.name} · {lastQuote.ep} · {lastQuote.t}
+            <div className="flex items-center justify-center gap-3 mt-2">
+              <span className="font-display text-[8px] tracking-widest" style={{ color: '#FFD60A' }}>
+                — {lastQuote.name} · {lastQuote.ep} · {lastQuote.t}
+              </span>
+              {(() => {
+                const link = youtubeDeepLink(lastQuote.fighterId, lastQuote.t)
+                return link ? (
+                  <a
+                    href={link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-display text-[8px] tracking-widest px-2 py-0.5"
+                    style={{ border: '1px solid #FFD60A', color: '#FFD60A', textDecoration: 'none' }}
+                  >
+                    ▶ EPISODE
+                  </a>
+                ) : null
+              })()}
             </div>
           </motion.div>
         )}
@@ -305,6 +453,60 @@ export function CombatScreen({ mode = 'vs' }: { mode?: 'vs' | 'arcade' }) {
 
       {/* Combo banner */}
       <ComboBanner title={comboBanner?.title ?? null} kind={comboBanner?.kind} />
+
+      {/* FIGHT! intro — fires on every fight phase entry */}
+      <FightIntro round={round} triggerKey={`${round}-${roundsWon.a + roundsWon.b}`} />
+
+      {/* Live combo streak counter — shows on the attacker's side */}
+      {comboStreak && comboStreak.count >= 2 && (
+        <div
+          key={comboStreak.id}
+          className="absolute z-30 pointer-events-none"
+          style={{
+            top: '34%',
+            [comboStreak.side === 'a' ? 'left' : 'right']: '22%',
+            animation: 'comboBump 0.4s ease-out',
+          }}
+        >
+          <div
+            className="font-display tracking-widest"
+            style={{
+              color: '#FFD60A',
+              fontSize: 48,
+              textShadow: '4px 4px 0 black, 0 0 16px #F77F00',
+              letterSpacing: '0.1em',
+              transform: 'skewX(-6deg)',
+              lineHeight: 1,
+            }}
+          >
+            {comboStreak.count}×
+          </div>
+          <div
+            className="font-display"
+            style={{
+              color: '#FFD60A',
+              fontSize: 11,
+              letterSpacing: '0.35em',
+              textShadow: '2px 2px 0 black',
+              marginTop: 2,
+            }}
+          >
+            COMBO
+          </div>
+        </div>
+      )}
+
+      {/* K.O. cinematic overlay */}
+      {koCinematic && (
+        <KOCinematic
+          key={koCinematic.id}
+          winner={koCinematic.winner}
+          loser={koCinematic.loser}
+          winnerId={koCinematic.winner === 'a' ? fighterA?.defId ?? null : fighterB?.defId ?? null}
+          loserId={koCinematic.loser === 'a' ? fighterA?.defId ?? null : fighterB?.defId ?? null}
+          id={koCinematic.id}
+        />
+      )}
 
       {/* MOVE BAR */}
       <ActiveMoves
@@ -316,6 +518,67 @@ export function CombatScreen({ mode = 'vs' }: { mode?: 'vs' | 'arcade' }) {
         aSuperReady={aSuperReady}
         bSuperReady={bSuperReady}
       />
+    </div>
+  )
+}
+
+function ReadButton({ momentum, disabled }: { momentum: number; disabled: boolean }) {
+  const [open, setOpen] = useState(false)
+  const castRead = useGame((s) => s.castRead)
+  const canAfford = momentum >= 1
+
+  function pick(type: 'light' | 'heavy' | 'setup' | 'combo' | 'ultimate') {
+    Sfx.menuSelect()
+    setOpen(false)
+    castRead(type)
+  }
+
+  return (
+    <div className="flex justify-center mt-2">
+      {!open ? (
+        <button
+          disabled={!canAfford || disabled}
+          onClick={() => { Sfx.menuMove(); setOpen(true) }}
+          className="px-3 py-1 font-display text-[9px] tracking-widest transition-transform hover:translate-y-[-1px]"
+          style={{
+            background: 'rgba(0,180,216,0.15)',
+            color: '#00B4D8',
+            border: '2px solid #00B4D8',
+            boxShadow: 'inset -2px -2px 0 rgba(0,0,0,0.5), inset 2px 2px 0 rgba(255,255,255,0.1)',
+            opacity: !canAfford || disabled ? 0.4 : 1,
+            cursor: !canAfford || disabled ? 'not-allowed' : 'pointer',
+          }}
+          title={disabled ? 'Read already active' : !canAfford ? 'Needs 1 momentum' : 'Predict opponent type — halves their next attack + +20 super'}
+        >
+          ◎ READ OPPONENT (1 mom)
+        </button>
+      ) : (
+        <div className="flex items-center gap-2 px-3 py-1" style={{ background: 'rgba(0,180,216,0.15)', border: '2px solid #00B4D8' }}>
+          <span className="font-display text-[8px] tracking-widest text-white/70">PREDICT THEIR NEXT MOVE:</span>
+          {(['light','heavy','setup','combo','ultimate'] as const).map((t) => (
+            <button
+              key={t}
+              onClick={() => pick(t)}
+              className="px-1.5 py-0.5 font-display text-[8px] tracking-widest"
+              style={{
+                background: '#0F0A1A',
+                color: '#00B4D8',
+                border: '1px solid #00B4D8',
+                cursor: 'pointer',
+              }}
+            >
+              {t.toUpperCase()}
+            </button>
+          ))}
+          <button
+            onClick={() => { Sfx.menuMove(); setOpen(false) }}
+            className="px-1.5 py-0.5 font-display text-[8px] tracking-widest text-white/50"
+            style={{ background: 'transparent', cursor: 'pointer' }}
+          >
+            ✕
+          </button>
+        </div>
+      )}
     </div>
   )
 }
@@ -333,7 +596,7 @@ function ActiveMoves({
   fighterA: NonNullable<ReturnType<typeof useGame.getState>['fighterA']>
   fighterB: NonNullable<ReturnType<typeof useGame.getState>['fighterB']>
   onCast: (m: Move) => void
-  mode: 'vs' | 'arcade'
+  mode: 'vs' | 'arcade' | 'practice' | 'daily'
   aSuperReady: boolean
   bSuperReady: boolean
 }) {
@@ -341,7 +604,8 @@ function ActiveMoves({
   const def = useMemo(() => getFighter(activeRt.defId)!, [activeRt.defId])
   const superReady = side === 'a' ? aSuperReady : bSuperReady
 
-  const showHumanControls = !(mode === 'arcade' && side === 'b')
+  // In single-player modes (arcade / practice / daily) only player A is human.
+  const showHumanControls = !(mode !== 'vs' && side === 'b')
 
   return (
     <div className="absolute left-0 right-0 bottom-0 z-20 px-6 pb-4">
@@ -349,6 +613,11 @@ function ActiveMoves({
         <>
           <div className="font-display text-[10px] tracking-widest text-center mb-2" style={{ color: side === 'a' ? '#E63946' : '#00B4D8' }}>
             P{side === 'a' ? '1' : '2'} · {def.shortName} · CHOOSE MOVE
+            {activeRt.read && (
+              <span className="ml-2 px-1.5 py-0.5" style={{ background: '#00B4D8', color: '#0F0A1A', fontSize: '8px' }}>
+                READING {activeRt.read.toUpperCase()}
+              </span>
+            )}
           </div>
           <div className="flex gap-2 flex-wrap justify-center">
             {def.moves.map((m) => (
@@ -357,6 +626,7 @@ function ActiveMoves({
                 move={m}
                 canAfford={activeRt.momentum >= m.momentum}
                 lastMoveId={activeRt.lastMoveId}
+                cooldown={activeRt.cooldowns[m.id] ?? 0}
                 onClick={() => onCast(m)}
               />
             ))}
@@ -370,9 +640,11 @@ function ActiveMoves({
                 activeRt.status.some((s) => s.key === def.ult.requiresSelfStatus)
               }
               lastMoveId={activeRt.lastMoveId}
+              cooldown={activeRt.cooldowns[def.ult.id] ?? 0}
               onClick={() => onCast(def.ult)}
             />
           </div>
+          <ReadButton momentum={activeRt.momentum} disabled={!!activeRt.read} />
         </>
       ) : (
         <div className="text-center font-display text-base tracking-widest text-white/60 py-6 animate-pulse">

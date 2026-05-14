@@ -55,7 +55,8 @@ const POSES: PoseSpec[] = [
   { state: 'lose',    description: 'defeated knockdown, lying on side on the ground, one knee bent, side view' },
 ]
 
-const MASTER_PROMPT = `A 16-bit pixel art character sprite of {BIO} in {POSE_DESC}.
+// Initial stance prompt — full character generation from scratch.
+const STANCE_PROMPT = `A 16-bit pixel art character sprite of {BIO} in {POSE_DESC}.
 
 STYLE:
 - Pixel art in the unmistakable style of Street Fighter II, King of Fighters '98, and Street Fighter III: Third Strike
@@ -81,12 +82,37 @@ NEGATIVE:
 
 OUTPUT: 1024x1024 PNG, sharp pixel art sprite ready for a 2D fighting game.`
 
-async function generateSpriteOnce(bio: string, pose: PoseSpec): Promise<Buffer> {
+// Edit prompt — used when a stance.png exists. The model is given the
+// stance as a reference image so it preserves the character identity
+// (face, hair, build, outfit, accessories) and ONLY changes the body pose.
+const EDIT_PROMPT = `Redraw the EXACT SAME CHARACTER from the reference image in a new body pose.
+
+CHARACTER REFERENCE (must match the reference image perfectly):
+- Same face, eyes, hair color, hair style, skin tone
+- Same exact outfit: same shirt, same pants, same jacket, same shoes, same colors
+- Same accessories (glasses, watches, hats, lanyards, props they hold)
+- Same body build, height, proportions
+- Same character description: {BIO}
+
+ONLY CHANGE: The body pose to {POSE_DESC}
+
+STYLE (matches the reference):
+- 16-bit pixel art in the style of Street Fighter II / King of Fighters '98
+- HARD CRISP pixel boundaries, NO anti-aliasing, NO blur
+- Same limited color palette as the reference
+- Same flat mid-gray (#808080) background
+- Same framing: full body, ~80% of frame, centered
+- Same canvas size: 1024x1024 PNG
+
+STRICT: This must look like the same person in a different pose. Do not change the outfit, hair, or face.`
+
+/** Stance pose: full character generation from scratch. */
+async function generateStanceOnce(bio: string, pose: PoseSpec): Promise<Buffer> {
   const cfg = loadAzureConfig()
   if (!cfg.endpoint || !cfg.apiKey) {
     throw new Error('Azure config not found. Set AZURE_OPENAI_* env vars or ~/.gstack/openai.json')
   }
-  const prompt = MASTER_PROMPT
+  const prompt = STANCE_PROMPT
     .replace('{BIO}', bio)
     .replace('{POSE_DESC}', pose.description)
 
@@ -128,12 +154,89 @@ async function generateSpriteOnce(bio: string, pose: PoseSpec): Promise<Buffer> 
   }
 }
 
-async function generateSprite(bio: string, pose: PoseSpec): Promise<Buffer> {
-  const maxAttempts = 4
+/**
+ * Edit pose: takes the fighter's stance.png as a reference and asks the
+ * model to redraw the same character in a new pose. This is the key
+ * mechanism for character consistency across the 4-pose set — without
+ * it, Azure's gpt-image-2 reinvents the character every call.
+ */
+async function editPoseOnce(stanceBuf: Buffer, bio: string, pose: PoseSpec): Promise<Buffer> {
+  const cfg = loadAzureConfig()
+  if (!cfg.endpoint || !cfg.apiKey) {
+    throw new Error('Azure config not found.')
+  }
+  const prompt = EDIT_PROMPT
+    .replace('{BIO}', bio)
+    .replace('{POSE_DESC}', pose.description)
+
+  const url = `${cfg.endpoint}/openai/deployments/${cfg.deployment}/images/edits?api-version=${cfg.apiVersion}`
+
+  const form = new FormData()
+  // Pass the stance as the reference image. `image` (singular) is the
+  // standard edits-endpoint param; multi-image refs use `image[]` but
+  // gpt-image-2 accepts both. Stick with `image` for the single-ref case.
+  const blob = new Blob([new Uint8Array(stanceBuf)], { type: 'image/png' })
+  form.append('image', blob, 'stance.png')
+  form.append('prompt', prompt)
+  form.append('size', '1024x1024')
+  form.append('quality', 'high')
+  form.append('n', '1')
+
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 300_000)
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'api-key': cfg.apiKey },
+      body: form,
+      signal: controller.signal,
+    })
+
+    if (!res.ok) {
+      const text = await res.text()
+      throw new Error(`Azure ${res.status}: ${text.slice(0, 400)}`)
+    }
+
+    const data = (await res.json()) as { data?: Array<{ b64_json?: string; url?: string }> }
+    const first = data.data?.[0]
+    if (!first) throw new Error('No image in response')
+
+    if (first.b64_json) return Buffer.from(first.b64_json, 'base64')
+    if (first.url) {
+      const imgRes = await fetch(first.url)
+      return Buffer.from(await imgRes.arrayBuffer())
+    }
+    throw new Error('No b64 or url in Azure response')
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
+/** Dispatcher: stance → generation, others → edit-with-stance-ref. */
+async function generateSpriteOnce(
+  bio: string,
+  pose: PoseSpec,
+  stanceBuf: Buffer | null,
+): Promise<Buffer> {
+  if (pose.state === 'stance' || !stanceBuf) {
+    return generateStanceOnce(bio, pose)
+  }
+  return editPoseOnce(stanceBuf, bio, pose)
+}
+
+async function generateSprite(
+  bio: string,
+  pose: PoseSpec,
+  stanceBuf: Buffer | null,
+): Promise<Buffer> {
+  // Azure's gpt-image-2 deployment hits EngineOverloaded waves; we need to
+  // be very patient. 10 attempts with backoff capped at 90s gives ~6-8 minutes
+  // of retry budget per sprite — enough to outlast typical overload windows.
+  const maxAttempts = 10
   let lastErr: Error | null = null
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      return await generateSpriteOnce(bio, pose)
+      return await generateSpriteOnce(bio, pose, stanceBuf)
     } catch (e) {
       lastErr = e as Error
       const msg = lastErr.message
@@ -145,10 +248,12 @@ async function generateSprite(bio: string, pose: PoseSpec): Promise<Buffer> {
         msg.includes('503') ||
         msg.includes('504') ||
         msg.includes('aborted') ||
-        msg.includes('ECONNRESET')
+        msg.includes('ECONNRESET') ||
+        msg.includes('EngineOverloaded')
       if (!isRetryable || attempt === maxAttempts) throw lastErr
-      // Exponential backoff: 3s, 9s, 27s
-      const wait = Math.pow(3, attempt) * 1000 + Math.random() * 1500
+      // Exponential backoff capped at 90s + jitter: 5s, 15s, 45s, 90s, 90s, ...
+      const base = Math.min(90_000, Math.pow(3, attempt) * 1000)
+      const wait = base + Math.random() * 3000
       console.log(`    ↻ retry ${attempt}/${maxAttempts - 1} after ${(wait / 1000).toFixed(1)}s — ${msg.slice(0, 80)}`)
       await new Promise((r) => setTimeout(r, wait))
     }
@@ -170,26 +275,52 @@ async function main() {
 
   fs.mkdirSync(OUTPUT_DIR, { recursive: true })
 
+  // CLI flag: --force-edits regenerates non-stance poses using the new
+  // edit-based pipeline even if those PNGs already exist. Useful for
+  // upgrading fighters that have visually-drifted poses.
+  const forceEdits = process.argv.includes('--force-edits')
+
   for (const fighter of targets) {
     const dir = path.join(OUTPUT_DIR, fighter.id)
     fs.mkdirSync(dir, { recursive: true })
 
-    for (const pose of POSES) {
-      const outPath = path.join(dir, `${pose.state}.png`)
-      if (fs.existsSync(outPath) && !force) {
-        console.log(`  · ${fighter.id}/${pose.state}.png exists — skipping (use --force)`)
+    // STEP 1: stance (the character anchor). Generate from scratch.
+    const stancePath = path.join(dir, 'stance.png')
+    let stanceBuf: Buffer | null = null
+    if (fs.existsSync(stancePath) && !force) {
+      console.log(`  · ${fighter.id}/stance.png exists — using as reference`)
+      stanceBuf = fs.readFileSync(stancePath)
+    } else {
+      console.log(`  → ${fighter.id}/stance.png …`)
+      try {
+        stanceBuf = await generateSprite((fighter.spriteBio ?? fighter.bio), POSES[0], null)
+        fs.writeFileSync(stancePath, stanceBuf)
+        console.log(`    ✓ wrote ${stancePath} (${(stanceBuf.byteLength / 1024).toFixed(1)}KB)`)
+      } catch (e) {
+        console.warn(`    ✗ stance failed: ${(e as Error).message} — skipping rest of ${fighter.id}`)
         continue
       }
-      console.log(`  → ${fighter.id}/${pose.state}.png …`)
+      await new Promise((r) => setTimeout(r, 15_000 + Math.random() * 5000))
+    }
+
+    // STEP 2: attack/win/lose — edit from stance reference so the character
+    // identity stays locked.
+    for (const pose of POSES.slice(1)) {
+      const outPath = path.join(dir, `${pose.state}.png`)
+      if (fs.existsSync(outPath) && !force && !forceEdits) {
+        console.log(`  · ${fighter.id}/${pose.state}.png exists — skipping`)
+        continue
+      }
+      console.log(`  → ${fighter.id}/${pose.state}.png (edit from stance) …`)
       try {
-        const buf = await generateSprite(fighter.bio, pose)
+        const buf = await generateSprite((fighter.spriteBio ?? fighter.bio), pose, stanceBuf)
         fs.writeFileSync(outPath, buf)
         console.log(`    ✓ wrote ${outPath} (${(buf.byteLength / 1024).toFixed(1)}KB)`)
       } catch (e) {
         console.warn(`    ✗ failed: ${(e as Error).message}`)
       }
-      // Polite rate limit — wait longer between sprites to avoid quota throttling
-      await new Promise((r) => setTimeout(r, 8000))
+      // Polite rate limit
+      await new Promise((r) => setTimeout(r, 15_000 + Math.random() * 5000))
     }
   }
   console.log('\nDone.')

@@ -10,18 +10,20 @@ const ROSTER_ORDER = [...STARTING_ROSTER, ...UNLOCKABLES]
 
 export function CharacterSelect() {
   const mode = useGame((s) => s.mode)
-  const startMatch = useGame((s) => s.startMatch)
   const startArcade = useGame((s) => s.startArcade)
   const setPhase = useGame((s) => s.setPhase)
   const [side, setSide] = useState<'a' | 'b'>('a')
   const [selectedA, setSelectedA] = useState<string | null>(null)
   const [selectedB, setSelectedB] = useState<string | null>(null)
   const [hovered, setHovered] = useState<string>('chesky')
-  const [scenario, setScenario] = useState<ScenarioId>('pre-pmf')
   const [expanded, setExpanded] = useState(false)
+
+  const setSelectedSide = useGame((s) => s.setSelectedSide)
 
   const hoveredFighter = getFighter(hovered)
   const arcadeMode = mode === 'arcade'
+
+  const startPractice = useGame((s) => s.startPractice)
 
   function pickFighter(id: string) {
     Sfx.menuSelect()
@@ -30,13 +32,29 @@ export function CharacterSelect() {
       setTimeout(() => startArcade(id), 400)
       return
     }
+    if (mode === 'practice') {
+      // Practice mode flow: P1 picks themselves, P2 picks dummy opponent.
+      if (side === 'a') {
+        setSelectedA(id)
+        setSide('b')
+      } else {
+        setSelectedB(id)
+        if (selectedA) {
+          setTimeout(() => startPractice(selectedA, id), 250)
+        }
+      }
+      return
+    }
     if (side === 'a') {
       setSelectedA(id)
       setSide('b')
     } else {
       setSelectedB(id)
       if (selectedA) {
-        startMatch(selectedA, id, scenario)
+        // Persist both picks into the store, then advance to stage select
+        setSelectedSide('a', selectedA)
+        setSelectedSide('b', id)
+        setTimeout(() => useGame.getState().setPhase('stage-select'), 250)
       }
     }
   }
@@ -79,7 +97,7 @@ export function CharacterSelect() {
       {!arcadeMode && (
         <div className="relative z-10 grid grid-cols-3 gap-3 items-end flex-shrink-0">
           <SideCard side="a" id={selectedA} active={side === 'a'} />
-          <ScenarioPicker scenario={scenario} onChange={setScenario} />
+          <NextStepHint hasA={!!selectedA} hasB={!!selectedB} />
           <SideCard side="b" id={selectedB} active={side === 'b'} />
         </div>
       )}
@@ -92,13 +110,14 @@ export function CharacterSelect() {
 
       {/* MAIN AREA: roster + profile */}
       <div className="relative z-10 flex gap-4 flex-1 min-h-0">
-        {/* LEFT: roster grid */}
+        {/* LEFT: roster grid — auto-fits cells to available width.
+            ~92px min-cell means we get 6 cols on a typical desktop pane
+            but degrade to 5 on smaller viewports without overflowing. */}
         <div
           className="grid gap-2 content-start auto-rows-max overflow-y-auto pr-2"
           style={{
-            gridTemplateColumns: 'repeat(5, minmax(0, 1fr))',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(92px, 1fr))',
             flex: '1 1 0',
-            maxWidth: '50%',
           }}
         >
           {ROSTER_ORDER.map((id) => {
@@ -115,7 +134,7 @@ export function CharacterSelect() {
                 }}
                 onClick={() => !isLocked && pickFighter(id)}
                 disabled={isLocked}
-                className="relative aspect-square flex items-center justify-center transition-transform hover:scale-105"
+                className="relative aspect-square flex flex-col items-center justify-center transition-transform hover:scale-105 overflow-hidden"
                 style={{
                   background: `linear-gradient(180deg, ${f.accent}33, ${f.accent}11)`,
                   border: `2px solid ${isSelected ? 'white' : isHovered ? f.accent : f.accent + '88'}`,
@@ -124,12 +143,19 @@ export function CharacterSelect() {
                     : 'inset -2px -2px 0 rgba(0,0,0,0.4), inset 2px 2px 0 rgba(255,255,255,0.15)',
                   cursor: isLocked ? 'not-allowed' : 'pointer',
                   opacity: isLocked ? 0.4 : 1,
+                  minHeight: 92,
                 }}
               >
-                <Sprite fighter={f} side="a" state="stance" />
+                <div className="absolute inset-0 flex items-center justify-center pb-3">
+                  <Sprite fighter={f} side="a" state="stance" />
+                </div>
                 <div
-                  className="absolute left-0 right-0 bottom-0 font-display text-[7px] tracking-widest text-center py-1 text-white"
-                  style={{ background: 'rgba(0,0,0,0.75)' }}
+                  className="absolute left-0 right-0 bottom-0 font-display text-[8px] text-center py-[3px] text-white truncate"
+                  style={{
+                    background: 'rgba(0,0,0,0.78)',
+                    letterSpacing: '0.5px',
+                  }}
+                  title={f.shortName}
                 >
                   {f.shortName}
                 </div>
@@ -149,12 +175,13 @@ export function CharacterSelect() {
         {/* RIGHT: profile card */}
         {hoveredFighter && (
           <div
-            className="flex-1 overflow-y-auto pr-1 min-w-0"
+            className="overflow-y-auto pr-1"
             style={{
               background: 'rgba(15,10,26,0.9)',
               border: `3px solid ${hoveredFighter.accent}`,
               boxShadow: `inset -2px -2px 0 rgba(0,0,0,0.5), inset 2px 2px 0 rgba(255,255,255,0.1), 0 0 24px ${hoveredFighter.accent}55`,
-              minWidth: 420,
+              flex: '0 0 420px',
+              maxWidth: 420,
             }}
           >
             <ProfileCard fighter={hoveredFighter} expanded={expanded} onToggle={() => setExpanded((x) => !x)} />
@@ -197,25 +224,45 @@ function ProfileCard({
             <Stat label="HP" value={String(fighter.maxHp)} color="#06D6A0" />
             <Stat
               label="BEST IN"
-              value={Object.entries(fighter.scenarioBonus)
-                .filter(([, v]) => v >= 1.3)
-                .map(([k]) => SCENARIOS[k as ScenarioId].name.split(' ')[0])
-                .slice(0, 2)
-                .join(' / ')}
+              value={(() => {
+                const tops = Object.entries(fighter.scenarioBonus)
+                  .filter(([, v]) => v >= 1.3)
+                  .sort((a, b) => b[1] - a[1])
+                  .slice(0, 2)
+                  .map(([k]) => SCENARIOS[k as ScenarioId].tag)
+                return tops.length > 0 ? tops.join(' / ') : 'ALL-ROUNDER'
+              })()}
               color="#FFD60A"
             />
           </div>
-          <button
-            onClick={onToggle}
-            className="mt-3 font-display text-[9px] tracking-widest px-3 py-1"
-            style={{
-              background: `${fighter.accent}33`,
-              color: fighter.accent,
-              border: `1px solid ${fighter.accent}`,
-            }}
-          >
-            {expanded ? '▾ HIDE MOVE LIST' : '▸ SEE FULL MOVE LIST'}
-          </button>
+          <div className="flex gap-2 mt-3">
+            <button
+              onClick={onToggle}
+              className="font-display text-[9px] tracking-widest px-3 py-1"
+              style={{
+                background: `${fighter.accent}33`,
+                color: fighter.accent,
+                border: `1px solid ${fighter.accent}`,
+              }}
+            >
+              {expanded ? '▾ HIDE MOVE LIST' : '▸ SEE FULL MOVE LIST'}
+            </button>
+            <button
+              onClick={() => {
+                Sfx.menuSelect()
+                useGame.getState().setSpotlightFighter(fighter.id)
+                useGame.getState().setPhase('fighter-spotlight')
+              }}
+              className="font-display text-[9px] tracking-widest px-3 py-1"
+              style={{
+                background: 'rgba(255,214,10,0.18)',
+                color: '#FFD60A',
+                border: '1px solid #FFD60A',
+              }}
+            >
+              ★ SPOTLIGHT →
+            </button>
+          </div>
         </div>
       </div>
 
@@ -388,45 +435,34 @@ function SideCard({ side, id, active }: { side: 'a' | 'b'; id: string | null; ac
   )
 }
 
-function ScenarioPicker({
-  scenario,
-  onChange,
-}: {
-  scenario: ScenarioId
-  onChange: (s: ScenarioId) => void
-}) {
-  const ids = Object.keys(SCENARIOS) as ScenarioId[]
+function NextStepHint({ hasA, hasB }: { hasA: boolean; hasB: boolean }) {
+  const ready = hasA && hasB
   return (
     <div
-      className="flex flex-col items-center gap-1 p-2"
+      className="flex flex-col items-center justify-center gap-1 p-3 text-center"
       style={{
-        background: 'rgba(0,0,0,0.3)',
-        border: '2px solid #FFD60A',
+        background: 'rgba(0,0,0,0.4)',
+        border: `2px solid ${ready ? '#06D6A0' : '#FFD60A66'}`,
+        boxShadow: ready
+          ? '0 0 14px #06D6A0AA, inset -2px -2px 0 rgba(0,0,0,0.5)'
+          : 'inset -2px -2px 0 rgba(0,0,0,0.5)',
       }}
     >
-      <span className="font-display text-[10px] tracking-widest" style={{ color: '#FFD60A' }}>
-        STAGE
-      </span>
-      <select
-        value={scenario}
-        onChange={(e) => {
-          Sfx.menuMove()
-          onChange(e.target.value as ScenarioId)
-        }}
-        className="font-display text-[9px] tracking-widest bg-transparent text-white border-2 border-yellow-400 px-2 py-1 w-full"
+      <span
+        className="font-display text-[10px] tracking-widest"
+        style={{ color: ready ? '#06D6A0' : '#FFD60A' }}
       >
-        {ids.map((id) => (
-          <option key={id} value={id} style={{ background: '#1A1230' }}>
-            {SCENARIOS[id].name}
-          </option>
-        ))}
-      </select>
-      <p className="font-body text-sm text-white/80 text-center px-1 leading-tight">
-        {SCENARIOS[scenario].description}
+        {hasA && !hasB ? '↓ P2 PICKS' : hasA && hasB ? '✓ READY' : 'P1 PICKS FIRST'}
+      </span>
+      <p className="font-body text-sm text-white/70 leading-snug">
+        {ready
+          ? 'Next: select your battleground.'
+          : 'After both picks you choose the stage (or let it auto-pick).'}
       </p>
     </div>
   )
 }
 
-// Suppress unused-import warning for FIGHTERS
+// Suppress unused-import warning for FIGHTERS / ScenarioId — kept for type references inside SCENARIOS lookups
 void FIGHTERS
+void (null as ScenarioId | null)

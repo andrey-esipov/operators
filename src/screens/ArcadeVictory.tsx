@@ -94,21 +94,40 @@ export function ArcadeVictory() {
         </div>
       </div>
 
-      <button
-        onClick={() => {
-          Sfx.menuSelect()
-          resetMatch()
-        }}
-        className="relative z-10 mt-8 px-8 py-4 font-display text-base tracking-widest"
-        style={{
-          background: 'linear-gradient(180deg, #FFD60A44, #F7798044)',
-          color: 'white',
-          border: '2px solid #FFD60A',
-          boxShadow: 'inset -2px -2px 0 rgba(0,0,0,0.6), inset 2px 2px 0 rgba(255,255,255,0.2), 0 0 24px rgba(255,214,10,0.4)',
-        }}
-      >
-        MAIN MENU
-      </button>
+      <div className="relative z-10 mt-8 flex gap-3 flex-wrap justify-center">
+        <button
+          onClick={() => {
+            Sfx.menuSelect()
+            useGame.getState().setPhase('generate-fighter')
+          }}
+          className="px-8 py-4 font-display text-base tracking-widest"
+          style={{
+            background: 'linear-gradient(180deg, #7209B788, #F7258588)',
+            color: 'white',
+            border: '2px solid #F72585',
+            boxShadow: 'inset -2px -2px 0 rgba(0,0,0,0.6), inset 2px 2px 0 rgba(255,255,255,0.2), 0 0 24px #F7258588',
+            cursor: 'pointer',
+          }}
+        >
+          ★ UNLOCK YOURSELF →
+        </button>
+        <button
+          onClick={() => {
+            Sfx.menuSelect()
+            resetMatch()
+          }}
+          className="px-8 py-4 font-display text-base tracking-widest"
+          style={{
+            background: 'linear-gradient(180deg, #FFD60A44, #F7798044)',
+            color: 'white',
+            border: '2px solid #FFD60A',
+            boxShadow: 'inset -2px -2px 0 rgba(0,0,0,0.6), inset 2px 2px 0 rgba(255,255,255,0.2), 0 0 24px rgba(255,214,10,0.4)',
+            cursor: 'pointer',
+          }}
+        >
+          MAIN MENU
+        </button>
+      </div>
     </div>
   )
 }

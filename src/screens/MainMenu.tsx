@@ -157,24 +157,24 @@ export function MainMenu() {
         </span>
       </div>
 
-      {/* LOGO — top, generous breathing room */}
+      {/* LOGO — entry animation (scale-in + fade-in) then settle into float */}
       <div
-        className="relative z-20 pt-4 logo-pulse"
+        className="relative z-20 pt-4 logo-pulse logo-entry"
         style={{
           filter: 'drop-shadow(0 4px 0 black) drop-shadow(0 0 24px rgba(255,214,10,0.4)) drop-shadow(0 0 56px rgba(247,127,0,0.3))',
-          animation: 'logoFloat 4s ease-in-out infinite',
         }}
       >
         <Logo size={1} />
       </div>
 
-      {/* The tagline lived twice — it's baked into title-hero.png already.
-          Replaced with a sleeker subtitle that doesn't repeat the marquee. */}
+      {/* Subtitle — accurate stats reflecting full roster. The numbers
+          double as a credibility line: 40 distinct guests, 200 verbatim
+          frameworks (40 × 5 moves), 8 business scenarios. */}
       <p
-        className="relative z-20 font-display text-[9px] tracking-widest mt-1 text-white/65"
+        className="relative z-20 font-display text-[9px] tracking-widest mt-1 text-white/65 subtitle-entry"
         style={{ textShadow: '2px 2px 0 black' }}
       >
-        27 OPERATORS · 135 FRAMEWORKS · 8 STAGES
+        {FIGHTERS.length} OPERATORS · {FIGHTERS.length * 5} FRAMEWORKS · 8 STAGES
       </p>
 
       {/* MID: rotating fighter spotlight */}
@@ -218,7 +218,10 @@ export function MainMenu() {
           Row 4 (preferences): DIFFICULTY · ♪ · 🗣 · CRT · ATTRACT · TEST VOICE
       */}
       <div className="relative z-20 flex flex-col gap-3 mt-4 items-center menu-cta-stack px-4">
-        {/* Row 1: primary CTAs side-by-side */}
+        {/* Row 1: the three headline play modes sit shoulder-to-shoulder
+            so the user can pick the experience that matches what they
+            came in for — climb the gauntlet, fight a friend, or jump
+            straight into a hand-curated dream matchup. */}
         <div className="flex gap-3 flex-wrap justify-center">
           <MenuButton
             label="▶ ARCADE MODE"
@@ -231,6 +234,12 @@ export function MainMenu() {
             subtitle="local 2-player hot seat"
             onClick={() => go('vs')}
             accent="#00B4D8"
+          />
+          <MenuButton
+            label="★ MARQUEE"
+            subtitle="curated dream matchups"
+            onClick={() => { Sfx.menuSelect(); setPhase('marquee-matchups') }}
+            accent="#FFD60A"
           />
         </div>
 
@@ -260,12 +269,6 @@ export function MainMenu() {
             onClick={() => { Sfx.menuSelect(); setPhase('generate-fighter') }}
             accent="#7209B7"
           />
-          <MidButton
-            label="★ MARQUEE"
-            subtitle="dream matchups"
-            onClick={() => { Sfx.menuSelect(); setPhase('marquee-matchups') }}
-            accent="#FFD60A"
-          />
         </div>
 
         {/* Row 3: library — knowledge tools, grouped */}
@@ -289,6 +292,7 @@ export function MainMenu() {
           <SmallButton label={`🗣 ${voice ? 'ON' : 'OFF'}`} onClick={toggleVoice} />
           <SmallButton label={`CRT · ${crt ? 'ON' : 'OFF'}`} onClick={toggleCrt} />
           <SmallButton label="◇ ATTRACT" onClick={() => { Sfx.menuSelect(); setAttract(true) }} />
+          <SmallButton label="◇ CREDITS" onClick={() => { Sfx.menuSelect(); setPhase('credits') }} />
           <SmallButton
             label="TEST VOICE"
             onClick={() => {
@@ -320,25 +324,41 @@ export function MainMenu() {
         </div>
       </div>
 
-      {/* Roster strip — all 8 fighters at the bottom */}
-      <div className="relative z-20 mt-2 mb-2 flex gap-2 px-4">
-        {FIGHTERS.map((f, i) => (
-          <div
-            key={f.id}
-            style={{
-              width: 56,
-              height: 56,
-              border: `2px solid ${i === focusIdx ? '#FFD60A' : f.accent}`,
-              boxShadow: i === focusIdx ? `0 0 12px #FFD60A` : 'none',
-              background: `linear-gradient(180deg, ${f.accent}33, ${f.accent}11)`,
-              padding: 2,
-              transform: i === focusIdx ? 'scale(1.1)' : 'scale(1)',
-              transition: 'transform 0.2s',
-            }}
-          >
-            <Sprite fighter={f} side="a" state="stance" />
-          </div>
-        ))}
+      {/* Roster strip — 40 fighters, horizontally scrollable.
+          The focused fighter auto-scrolls into view so the rotation reads
+          as a live carousel (matches SF II's character-select pacing). */}
+      <div className="relative z-20 mt-2 mb-2 w-full px-4">
+        <div
+          className="flex gap-2 overflow-x-auto pb-2 roster-strip"
+          style={{
+            scrollbarWidth: 'thin',
+            scrollBehavior: 'smooth',
+          }}
+        >
+          {FIGHTERS.map((f, i) => (
+            <div
+              key={f.id}
+              ref={(el) => {
+                if (i === focusIdx && el) {
+                  el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
+                }
+              }}
+              style={{
+                width: 56,
+                height: 56,
+                flexShrink: 0,
+                border: `2px solid ${i === focusIdx ? '#FFD60A' : f.accent}`,
+                boxShadow: i === focusIdx ? `0 0 12px #FFD60A` : 'none',
+                background: `linear-gradient(180deg, ${f.accent}33, ${f.accent}11)`,
+                padding: 2,
+                transform: i === focusIdx ? 'scale(1.12)' : 'scale(1)',
+                transition: 'transform 0.25s',
+              }}
+            >
+              <Sprite fighter={f} side="a" state="stance" />
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Bottom footer */}
@@ -516,13 +536,13 @@ function FighterShowcase({ fighter, side }: { fighter: typeof FIGHTERS[0]; side:
   return (
     <div
       className="flex flex-col items-center"
-      style={{ filter: 'drop-shadow(0 0 16px #FFD60A88)' }}
+      style={{ filter: 'drop-shadow(0 0 20px #FFD60A99)' }}
     >
-      <div style={{ width: 140, height: 200 }} className="idle-bob">
+      <div style={{ width: 220, height: 300 }} className="idle-bob">
         <Sprite fighter={fighter} side={side} state="stance" />
       </div>
       <div
-        className="font-display text-[10px] tracking-widest mt-1"
+        className="font-display text-base tracking-widest mt-1"
         style={{ color: fighter.accent, textShadow: '2px 2px 0 black' }}
       >
         {fighter.shortName}

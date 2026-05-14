@@ -65,6 +65,7 @@ export const useGame = create<GameState & Actions>((set, get) => ({
   selectedA: null,
   selectedB: null,
   arcadeStep: 0,
+  arcadeOpponentQueue: [],
   quoteBank: [],
   crtEnabled: true,
   musicEnabled: true,
@@ -164,8 +165,65 @@ export const useGame = create<GameState & Actions>((set, get) => ({
   },
 
   startArcade: (fighterId: string) => {
-    set({ mode: 'arcade', arcadeStep: 0, selectedA: fighterId })
-    // First arcade fight setup
+    // Build the opponent queue up front so each arcade run is internally
+    // consistent. Difficulty determines whether opponents are scenario
+    // specialists (HARD) or random non-specialists (EASY / NORMAL).
+    const { difficulty } = get()
+    const progression = ARCADE_PROGRESSION
+    const nonBoss = progression.slice(0, -1)
+    const queue: string[] = []
+
+    if (difficulty === 'hard') {
+      // Hard: the punishing scenario-specialist progression. Each
+      // opponent has +30-50% damage on the stage they show up on.
+      for (const stage of nonBoss) {
+        const id = stage.opponentId === fighterId ? 'doshi' : stage.opponentId
+        queue.push(id)
+      }
+    } else {
+      // Easy / Normal: shuffle the playable roster (sans player + boss)
+      // and consume from the shuffled list so no opponent repeats in
+      // one run.
+      const pool = STARTING_ROSTER.filter((id) => id !== fighterId && id !== 'lenny')
+      for (let i = pool.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1))
+        ;[pool[i], pool[j]] = [pool[j], pool[i]]
+      }
+      const used = new Set<string>()
+
+      if (difficulty === 'easy') {
+        // Easy: actively prefer opponents who do NOT specialize in this
+        // scenario (bonus < 1.3x). Falls back to any unused fighter
+        // if no weak match exists.
+        for (const stage of nonBoss) {
+          const weak = pool.find((id) => {
+            if (used.has(id)) return false
+            const bonus = getFighter(id)?.scenarioBonus[stage.scenario] ?? 1.0
+            return bonus < 1.3
+          })
+          const fallback = pool.find((id) => !used.has(id))
+          const chosen = weak ?? fallback ?? 'doshi'
+          queue.push(chosen)
+          used.add(chosen)
+        }
+      } else {
+        // Normal: fully random — take the first N from the shuffled
+        // pool. Variety per run, no engineered difficulty spike.
+        for (let i = 0; i < nonBoss.length; i++) {
+          queue.push(pool[i] ?? 'doshi')
+        }
+      }
+    }
+
+    // Lenny is always the final boss.
+    queue.push('lenny')
+
+    set({
+      mode: 'arcade',
+      arcadeStep: 0,
+      selectedA: fighterId,
+      arcadeOpponentQueue: queue,
+    })
     setTimeout(() => get().nextArcadeFight(), 200)
   },
 
@@ -182,13 +240,16 @@ export const useGame = create<GameState & Actions>((set, get) => ({
       set({ phase: 'arcade-victory' })
       return
     }
-    const { scenario, opponentId: declaredOpp } = progression[step]
+    const { scenario } = progression[step]
     const playerId = state.selectedA
     if (!playerId) return
-    // If declared opponent is the player themselves, fall back to another fighter for the stage
-    let opponentId = declaredOpp
+
+    // Prefer the queue (built at startArcade); fall back to the legacy
+    // hardcoded opponent for back-compat with older saves / dev calls
+    // that bypass startArcade.
+    let opponentId = state.arcadeOpponentQueue[step] ?? progression[step].opponentId
     if (opponentId === playerId) {
-      const fallbackOrder = ['cagan', 'doshi', 'spiegel', 'turley', 'madhavan', 'catwu', 'chesky', 'lenny']
+      const fallbackOrder = ['cagan', 'doshi', 'spiegel', 'turley', 'madhavan', 'catwu', 'chesky']
       opponentId = fallbackOrder.find((id) => id !== playerId) ?? 'doshi'
     }
     set({
@@ -267,6 +328,7 @@ export const useGame = create<GameState & Actions>((set, get) => ({
       selectedA: null,
       selectedB: null,
       arcadeStep: 0,
+      arcadeOpponentQueue: [],
     })
   },
 
@@ -417,6 +479,94 @@ export const useGame = create<GameState & Actions>((set, get) => ({
         superMeter: 100,
         hp: Math.max(updatedTarget.hp, Math.round(updatedTarget.maxHp * 0.8)),
       }
+    }
+
+    // If the next active fighter's start-of-turn DoT killed them, end
+    // the round here with credit to the OPPONENT (whoever applied the
+    // status, or simply the other side for self-applied burns like
+    // Turley's HYPERGROWTH_BURN). Otherwise the next move would
+    // mis-attribute the K.O. — the opponent's attack would land on a
+    // fighter who was already at 0 HP and grab the round.
+    if (turnStart.koDueToDoT && state.mode !== 'practice') {
+      const dotWinnerSide: Side = nextActive === 'a' ? 'b' : 'a'
+      const dotLoserSide: Side = nextActive
+      flashCounter++
+      const koId = flashCounter
+
+      const dotNewRoundsWon = {
+        a: state.roundsWon.a + (dotWinnerSide === 'a' ? 1 : 0),
+        b: state.roundsWon.b + (dotWinnerSide === 'b' ? 1 : 0),
+      }
+      const dotMatchWinner = dotNewRoundsWon.a >= 2 ? 'a' : dotNewRoundsWon.b >= 2 ? 'b' : null
+
+      // Synthesize a "BURNED OUT" log entry so RoundEnd / MatchEnd can
+      // attribute the round-win correctly via the log's `attacker` field.
+      const burnLogEntry = {
+        turn: state.turn,
+        attacker: dotWinnerSide,
+        moveId: 'dot-finish',
+        moveName: 'BURNED OUT',
+        baseDamage: turnStart.selfDamage,
+        scenarioMultiplier: 1,
+        comboBonus: 0,
+        critMultiplier: 1,
+        finalDamage: turnStart.selfDamage,
+        hpAfter: {
+          a: nextActive === 'a' ? 0 : (newA?.hp ?? 0),
+          b: nextActive === 'b' ? 0 : (newB?.hp ?? 0),
+        },
+        quote: 'Burn rate caught up.',
+        episode: 'host',
+        timestamp: 'BURNOUT',
+        appliedStatuses: [],
+      }
+
+      set({
+        fighterA: nextActive === 'a' ? updatedTarget : newA,
+        fighterB: nextActive === 'b' ? updatedTarget : newB,
+        log: [...state.log, burnLogEntry],
+        koCinematic: {
+          winner: dotWinnerSide,
+          loser: dotLoserSide,
+          id: koId,
+        },
+      })
+
+      const ks = loadStats()
+      ks.totalKOs += 1
+      saveStats(ks)
+      checkAndUnlock(ks)
+
+      // Match-end stats parity with the cast-K.O. path.
+      if (dotMatchWinner) {
+        const ms = loadStats()
+        ms.totalMatches += 1
+        const playerWon = dotMatchWinner === 'a'
+        if (playerWon && state.mode !== 'vs') {
+          ms.totalWins += 1
+          if (state.selectedA && !ms.fightersUsed.includes(state.selectedA)) {
+            ms.fightersUsed.push(state.selectedA)
+          }
+          if (state.selectedB && !ms.fightersBeaten.includes(state.selectedB)) {
+            ms.fightersBeaten.push(state.selectedB)
+          }
+          if (state.selectedB === 'lenny') {
+            ms.lennyDefeats += 1
+            if (state.difficulty === 'hard') ms.hardModeWins += 1
+          }
+        }
+        saveStats(ms)
+        checkAndUnlock(ms)
+      }
+
+      setTimeout(() => {
+        set({
+          phase: dotMatchWinner ? 'match-end' : 'round-end',
+          roundsWon: dotNewRoundsWon,
+          koCinematic: undefined,
+        })
+      }, 2400)
+      return
     }
 
     setTimeout(() => {

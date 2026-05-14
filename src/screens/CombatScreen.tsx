@@ -52,14 +52,60 @@ export function CombatScreen({ mode = 'vs' }: { mode?: 'vs' | 'arcade' | 'practi
   const [attackingSide, setAttackingSide] = useState<'a' | 'b' | null>(null)
   const resetMatch = useGame((s) => s.resetMatch)
 
-  // ESC key to quit to menu
+  // ESC quits to menu. ZXCVB casts moves 1-4 + ult (alt: 12345). R fires
+  // a READ. Keys are only honored on the human player's turn during the
+  // fight phase — the VS mode hot-seat is hands-off whenever the bot is
+  // thinking, so this maps cleanly to "your turn" without extra gating.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') resetMatch()
+      if (e.key === 'Escape') { resetMatch(); return }
+      // Ignore typed input in an input/textarea (search bars elsewhere)
+      const t = e.target as HTMLElement | null
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return
+
+      const s = useGame.getState()
+      if (s.phase !== 'fight') return
+      // Active-side gating: in single-player (arcade/practice/daily) only
+      // player A is human; in vs both sides are human and bind in turn.
+      const humanIsActive = s.mode === 'vs' || s.activeSide === 'a'
+      if (!humanIsActive) return
+
+      const activeRt = s.activeSide === 'a' ? s.fighterA : s.fighterB
+      if (!activeRt) return
+      const def = getFighter(activeRt.defId)
+      if (!def) return
+
+      // Z X C V → moves[0..3]; B → ult; R → read; 1..5 mirrors ZXCVB.
+      const key = e.key.toLowerCase()
+      const idxFromLetter: Record<string, number> = { z: 0, x: 1, c: 2, v: 3, b: 4 }
+      const idxFromNum: Record<string, number> = { '1': 0, '2': 1, '3': 2, '4': 3, '5': 4 }
+      const idx = idxFromLetter[key] ?? idxFromNum[key]
+      if (idx !== undefined) {
+        e.preventDefault()
+        const m = idx < 4 ? def.moves[idx] : def.ult
+        if (!m) return
+        // Standard affordability gate — castMove itself also rejects but
+        // checking here avoids the click sfx for an obviously-invalid cast.
+        const canAfford = activeRt.momentum >= m.momentum
+        const cd = (activeRt.cooldowns[m.id] ?? 0) > 0
+        if (!canAfford || cd) return
+        if (m.type === 'ultimate' && activeRt.superMeter < 100) return
+        if (m.requiresSelfStatus && !activeRt.status.some((x) => x.key === m.requiresSelfStatus)) return
+        castMove(m)
+        return
+      }
+      if (key === 'r' && !activeRt.read && activeRt.momentum >= 1) {
+        // Open the READ picker with a quick-pick to 'heavy' as default.
+        // We don't have a multi-key cascade for picking subtype, so the
+        // keyboard shortcut just predicts the most common type (heavy).
+        // Mouse-users still get the full picker via the on-screen button.
+        e.preventDefault()
+        useGame.getState().castRead('heavy')
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [resetMatch])
+  }, [resetMatch, castMove])
 
   // Audio cues
   useEffect(() => {
@@ -122,8 +168,10 @@ export function CombatScreen({ mode = 'vs' }: { mode?: 'vs' | 'arcade' | 'practi
         name: def?.shortName ?? '',
         fighterId: fighterIdForQuote ?? '',
       })
-      // Read time: short quotes get less, long ones get more. 4.5s - 6s.
-      const readTime = Math.min(6500, Math.max(4500, rotated.quote.length * 60))
+      // Read time — a touch longer than the previous 4.5-6.5s window so
+      // longer verbatim quotes are readable, but still expire so the
+      // game doesn't feel sluggish.
+      const readTime = Math.min(9000, Math.max(6000, rotated.quote.length * 70))
       setTimeout(() => setLastQuote(null), readTime)
     }
     // Attack sprite pose: briefly switch the attacker to attack frame.
@@ -550,7 +598,7 @@ function ReadButton({ momentum, disabled }: { momentum: number; disabled: boolea
           }}
           title={disabled ? 'Read already active' : !canAfford ? 'Needs 1 momentum' : 'Predict opponent type — halves their next attack + +20 super'}
         >
-          ◎ READ OPPONENT (1 mom)
+          ◎ READ OPPONENT [R] · 1 mom
         </button>
       ) : (
         <div className="flex items-center gap-2 px-3 py-1" style={{ background: 'rgba(0,180,216,0.15)', border: '2px solid #00B4D8' }}>
@@ -620,13 +668,14 @@ function ActiveMoves({
             )}
           </div>
           <div className="flex gap-2 flex-wrap justify-center">
-            {def.moves.map((m) => (
+            {def.moves.map((m, i) => (
               <MoveCard
                 key={m.id}
                 move={m}
                 canAfford={activeRt.momentum >= m.momentum}
                 lastMoveId={activeRt.lastMoveId}
                 cooldown={activeRt.cooldowns[m.id] ?? 0}
+                hotkey={['Z', 'X', 'C', 'V'][i]}
                 onClick={() => onCast(m)}
               />
             ))}
@@ -641,6 +690,7 @@ function ActiveMoves({
               }
               lastMoveId={activeRt.lastMoveId}
               cooldown={activeRt.cooldowns[def.ult.id] ?? 0}
+              hotkey="B"
               onClick={() => onCast(def.ult)}
             />
           </div>

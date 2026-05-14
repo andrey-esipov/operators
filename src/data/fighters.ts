@@ -1220,7 +1220,7 @@ FIGHTERS.push(
   {
     id: 'andreessen',
     name: 'Marc Andreessen',
-    shortName: 'a16z',
+    shortName: 'Andreessen',
     archetype: 'ORACLE · MEGA-WAVES',
     bio: 'Netscape co-founder. a16z founding GP. Bets on the next mega-wave before anyone else can see it. "Software is eating the world."',
     spriteBio: 'a tall imposing man in his mid-50s with a completely bald shaved head, broad shoulders and stocky build, intense piercing eyes, clean-shaven, wearing a dark navy polo shirt or fitted button-down over slacks, holding a tablet showing a multi-decade tech roadmap — the Netscape co-founder turned a16z venture titan Marc Andreessen',

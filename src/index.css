@@ -153,6 +153,23 @@ button {
   50%      { transform: translateY(-6px) }
 }
 
+/* Logo entry — fade in + scale up on first menu render, then settle into
+   the persistent gentle float. Keeps the float animation by chaining via
+   `forwards` + class composition with .logo-pulse. */
+@keyframes logoEntry {
+  0%   { opacity: 0; transform: scale(0.6) translateY(-40px); filter: blur(6px) }
+  60%  { opacity: 1; transform: scale(1.08) translateY(2px);  filter: blur(0) }
+  100% { opacity: 1; transform: scale(1) translateY(0);       filter: blur(0) }
+}
+.logo-entry { animation: logoEntry 0.9s cubic-bezier(0.34, 1.56, 0.64, 1) both, logoFloat 4s ease-in-out 0.9s infinite; }
+
+/* Subtitle entry — slides up + fades in, 200ms after the logo lands */
+@keyframes subtitleEntry {
+  0%   { opacity: 0; transform: translateY(12px) }
+  100% { opacity: 0.65; transform: translateY(0) }
+}
+.subtitle-entry { animation: subtitleEntry 0.6s ease-out 0.6s both; }
+
 /* Menu CTAs crash-in entrance — each child gets a staggered delay */
 @keyframes menuCtaCrash {
   0%   { transform: translateY(-30px) scale(0.92); opacity: 0 }
@@ -226,6 +243,37 @@ button {
   100% { transform: scale(1) skewX(-6deg); opacity: 1 }
 }
 
+/* Character-select lock-in — when a fighter is picked, their cell
+   scales up + glows briefly before the screen transitions. The 250ms
+   handoff in CharacterSelect.tsx lets this animation finish first. */
+@keyframes lockInPulse {
+  0%   { transform: scale(1) }
+  40%  { transform: scale(1.18) }
+  100% { transform: scale(1) }
+}
+.lock-in-pulse { animation: lockInPulse 0.4s cubic-bezier(0.2, 0.9, 0.3, 1); }
+
+/* PERFECT banner — bursts in then pulses while the rest of the
+   round-end overlay holds. Reuses the SF II "PERFECT" energy where a
+   no-damage round earns a distinct cheer beyond the standard K.O. */
+@keyframes perfectBannerCrash {
+  0%   { transform: scale(2.2) skewX(-6deg); opacity: 0 }
+  50%  { transform: scale(0.92) skewX(-6deg); opacity: 1 }
+  100% { transform: scale(1) skewX(-6deg); opacity: 1 }
+}
+
+/* Boss-fight cinematic accents — only used when the opponent is Lenny.
+   Both effects are subtle pulses (not flashy) so they don't drown the
+   pre-fight banners but still convey "this one is different." */
+@keyframes bossAura {
+  0%, 100% { opacity: 0.55 }
+  50%      { opacity: 0.85 }
+}
+@keyframes bossBannerPulse {
+  0%, 100% { transform: scale(1);     box-shadow: 0 0 16px #F72585, inset -2px -2px 0 rgba(0,0,0,0.5) }
+  50%      { transform: scale(1.04);  box-shadow: 0 0 28px #F72585, inset -2px -2px 0 rgba(0,0,0,0.5) }
+}
+
 /* Critical-HP pulse for health bar */
 @keyframes hpCritPulse {
   0%, 100% { box-shadow: 0 0 0 0 rgba(239, 35, 60, 0.7) }
@@ -241,22 +289,5 @@ button {
   .text-2xl { font-size: 1.25rem; }
   .text-5xl { font-size: 2.25rem; }
 }
-@media (max-width: 640px) {
-  /* On phones, scale combat root by viewport width — keeps the SF II
-     layout but shrinks to fit. Combat UI assumes ~960px wide; we map it. */
-  body::before {
-    content: 'BEST VIEWED ON DESKTOP · 960px+';
-    position: fixed;
-    top: 4px; left: 50%;
-    transform: translateX(-50%);
-    z-index: 100;
-    font-family: var(--font-display);
-    font-size: 7px;
-    letter-spacing: 0.3em;
-    color: #FFD60A;
-    background: rgba(15,10,26,0.92);
-    border: 1px solid #FFD60A;
-    padding: 2px 8px;
-    pointer-events: none;
-  }
-}
+/* Phone viewports get the same layout as desktop — the menu and combat
+   UI scroll naturally; no nag banner. */

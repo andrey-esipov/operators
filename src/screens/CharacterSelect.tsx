@@ -70,15 +70,40 @@ export function CharacterSelect() {
       />
 
       <div className="relative z-10 flex items-center justify-between flex-shrink-0">
-        <button
-          onClick={() => {
-            Sfx.menuMove()
-            setPhase('menu')
-          }}
-          className="font-display text-[10px] tracking-widest text-white/70"
-        >
-          ← BACK
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              Sfx.menuMove()
+              setPhase('menu')
+            }}
+            className="font-display text-[10px] tracking-widest text-white/70"
+          >
+            ← BACK
+          </button>
+          {/* RANDOM pick — handy when players don't know who to pick, and
+              for press/replay value. Picks an unlocked fighter for whichever
+              side is currently choosing. */}
+          <button
+            onClick={() => {
+              Sfx.menuSelect()
+              const playable = ROSTER_ORDER.filter((id) => !UNLOCKABLES.includes(id))
+              const pick = playable[Math.floor(Math.random() * playable.length)]
+              setHovered(pick)
+              setTimeout(() => pickFighter(pick), 200)
+            }}
+            className="font-display text-[10px] tracking-widest px-2 py-1"
+            style={{
+              background: 'rgba(247,37,133,0.2)',
+              color: '#F72585',
+              border: '1px solid #F72585',
+              boxShadow: 'inset -2px -2px 0 rgba(0,0,0,0.4)',
+              cursor: 'pointer',
+            }}
+            title="Random fighter"
+          >
+            🎲 RANDOM
+          </button>
+        </div>
         <h1
           className="font-display text-2xl tracking-widest"
           style={{
@@ -134,11 +159,13 @@ export function CharacterSelect() {
                 }}
                 onClick={() => !isLocked && pickFighter(id)}
                 disabled={isLocked}
-                className="relative aspect-square flex flex-col items-center justify-center transition-transform hover:scale-105 overflow-hidden"
+                className={`relative aspect-square flex flex-col items-center justify-center transition-transform hover:scale-105 overflow-hidden ${isSelected ? 'lock-in-pulse' : ''}`}
                 style={{
                   background: `linear-gradient(180deg, ${f.accent}33, ${f.accent}11)`,
                   border: `2px solid ${isSelected ? 'white' : isHovered ? f.accent : f.accent + '88'}`,
-                  boxShadow: isHovered
+                  boxShadow: isSelected
+                    ? `0 0 24px white, 0 0 48px ${f.accent}, inset -2px -2px 0 rgba(0,0,0,0.4)`
+                    : isHovered
                     ? `0 0 16px ${f.accent}, inset -2px -2px 0 rgba(0,0,0,0.4)`
                     : 'inset -2px -2px 0 rgba(0,0,0,0.4), inset 2px 2px 0 rgba(255,255,255,0.15)',
                   cursor: isLocked ? 'not-allowed' : 'pointer',

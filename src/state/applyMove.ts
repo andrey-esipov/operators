@@ -280,11 +280,15 @@ function rejectionLog(
  *   - +1 momentum
  *   - decrement status remaining; remove expired
  *   - apply DoT effects (OUTCOME_DEBT, HYPERGROWTH_BURN)
+ *   - report `koDueToDoT` so the caller can credit the round to the
+ *     opponent when start-of-turn damage finishes a fighter off (instead
+ *     of letting the next attacker grab undeserved K.O. attribution)
  */
 export function startTurn(runtime: FighterRuntime): {
   runtime: FighterRuntime
   selfDamage: number
   selfHeal: number
+  koDueToDoT: boolean
 } {
   let selfDamage = 0
   let selfHeal = 0
@@ -309,6 +313,11 @@ export function startTurn(runtime: FighterRuntime): {
     if (turns - 1 > 0) newCooldowns[id] = turns - 1
   }
 
+  // The fighter was alive before this start-of-turn tick and is at 0 HP
+  // after the DoT — the round needs to end here, with credit to the
+  // OPPONENT (i.e. whoever applied the DoT, or simply the other side).
+  const koDueToDoT = runtime.hp > 0 && newHp <= 0 && selfDamage > selfHeal
+
   return {
     runtime: {
       ...runtime,
@@ -320,6 +329,7 @@ export function startTurn(runtime: FighterRuntime): {
     },
     selfDamage,
     selfHeal,
+    koDueToDoT,
   }
 }
 

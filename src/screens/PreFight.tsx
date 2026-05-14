@@ -48,6 +48,8 @@ export function PreFight() {
   const fighterB = useGame((s) => s.fighterB)
   const scenario = useGame((s) => s.scenario)
   const round = useGame((s) => s.round)
+  const selectedB = useGame((s) => s.selectedB)
+  const isBossFight = selectedB === 'lenny'
 
   // Pre-fight has 3 beats:
   // 0  → 1100ms : "STAGE" reveal with location image + tagline
@@ -81,17 +83,36 @@ export function PreFight() {
 
   return (
     <div className="relative w-full h-full flex items-center justify-center overflow-hidden">
-      {/* The actual stage image as the backdrop */}
+      {/* The actual stage image as the backdrop. Parallax zoom-in across
+          beats sells the "camera pushes in on the arena" feel from SF II. */}
       <img
         src={realStage}
         alt={stage.name}
         className="absolute inset-0 w-full h-full object-cover"
         style={{
           imageRendering: 'pixelated',
-          filter: beat < 2 ? 'brightness(0.55) saturate(1.1)' : 'brightness(0.85) saturate(1.1)',
-          transition: 'filter 0.6s',
+          filter: isBossFight && beat >= 1
+            ? 'brightness(0.65) saturate(1.4) hue-rotate(-10deg) contrast(1.15)'
+            : beat < 2
+            ? 'brightness(0.55) saturate(1.1)'
+            : 'brightness(0.85) saturate(1.1)',
+          transform: beat === 0 ? 'scale(1.18)' : beat === 1 ? 'scale(1.06)' : 'scale(1.02)',
+          transition: 'filter 0.6s, transform 1.8s cubic-bezier(0.2, 0.7, 0.3, 1)',
         }}
       />
+
+      {/* Boss-mode crimson aura overlay — only when the opponent is Lenny.
+          A pulsing radial darkens the periphery and tints the scene blood-red. */}
+      {isBossFight && beat >= 1 && (
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            background: 'radial-gradient(ellipse at center, rgba(247,37,133,0.15) 0%, rgba(114,9,183,0.25) 40%, rgba(15,10,26,0.6) 100%)',
+            mixBlendMode: 'screen',
+            animation: 'bossAura 2.4s ease-in-out infinite',
+          }}
+        />
+      )}
       {/* Vignette */}
       <div
         className="absolute inset-0"
@@ -153,8 +174,22 @@ export function PreFight() {
               filter: 'drop-shadow(0 0 24px #E63946)',
             }}
           >
-            <div style={{ width: 200, height: 280 }}>
+            <div style={{ width: 200, height: 280, position: 'relative' }}>
               <Sprite fighter={a} side="a" state="stance" />
+              {/* Floor shadow — soft ellipse beneath the sprite to anchor
+                  it to the stage. Without this, fighters appear to float. */}
+              <div
+                className="absolute"
+                style={{
+                  left: '50%',
+                  bottom: '-6px',
+                  transform: 'translateX(-50%)',
+                  width: 130,
+                  height: 22,
+                  background: 'radial-gradient(ellipse at center, rgba(0,0,0,0.65) 0%, rgba(0,0,0,0) 70%)',
+                  pointerEvents: 'none',
+                }}
+              />
             </div>
             <div
               className="font-display text-base tracking-widest mt-3 px-4 py-1"
@@ -191,11 +226,44 @@ export function PreFight() {
             style={{
               transform: beat >= 1 ? 'translateX(0)' : 'translateX(200px)',
               transition: 'transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1)',
-              filter: 'drop-shadow(0 0 24px #00B4D8)',
+              filter: isBossFight
+                ? 'drop-shadow(0 0 24px #F72585) drop-shadow(0 0 48px #7209B7)'
+                : 'drop-shadow(0 0 24px #00B4D8)',
             }}
           >
-            <div style={{ width: 200, height: 280 }}>
+            {/* FINAL BOSS banner — only on Lenny matches. Sits above the
+                sprite so the player understands the stakes immediately. */}
+            {isBossFight && (
+              <div
+                className="font-display tracking-widest mb-2 px-3 py-1"
+                style={{
+                  background: 'linear-gradient(90deg, #7209B7 0%, #F72585 50%, #7209B7 100%)',
+                  color: 'white',
+                  fontSize: 11,
+                  letterSpacing: '0.4em',
+                  border: '2px solid white',
+                  boxShadow: '0 0 16px #F72585, inset -2px -2px 0 rgba(0,0,0,0.5)',
+                  textShadow: '2px 2px 0 black',
+                  animation: 'bossBannerPulse 1.4s ease-in-out infinite',
+                }}
+              >
+                ★ FINAL BOSS ★
+              </div>
+            )}
+            <div style={{ width: 200, height: 280, position: 'relative' }}>
               <Sprite fighter={b} side="b" state="stance" />
+              <div
+                className="absolute"
+                style={{
+                  left: '50%',
+                  bottom: '-6px',
+                  transform: 'translateX(-50%)',
+                  width: 130,
+                  height: 22,
+                  background: 'radial-gradient(ellipse at center, rgba(0,0,0,0.65) 0%, rgba(0,0,0,0) 70%)',
+                  pointerEvents: 'none',
+                }}
+              />
             </div>
             <div
               className="font-display text-base tracking-widest mt-3 px-4 py-1"

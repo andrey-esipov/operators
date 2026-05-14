@@ -62,4 +62,19 @@ export const AI_PROFILES: Record<string, AIProfile> = {
   // ─── BOSS — LENNY ───────────────────────────────────────────────
   // Pattern-matches everything; aggressive late-game with pattern-match ult.
   lenny:     { aggression: 1.3, comboFocus: 1.5, ultRush: 1.4, defensiveBias: 0.2 },
+
+  // ─── Wave 3 — May 2026 final cut ──────────────────────────────
+  benioff:   { aggression: 1.4, comboFocus: 1.2, ultRush: 1.3, defensiveBias: 0.3 },  // Big bets, big plays
+  horowitz:  { aggression: 0.9, comboFocus: 1.5, ultRush: 1.1, defensiveBias: 0.5 },  // Wartime CEO defends low HP
+  feifei:    { aggression: 0.9, comboFocus: 1.4, ultRush: 1.0, defensiveBias: 0.4 },  // Scholarly patience
+  dharmesh:  { aggression: 1.1, comboFocus: 1.4, ultRush: 1.1, defensiveBias: 0.2 },  // Flywheel — chains
+  melanie:   { aggression: 1.2, comboFocus: 1.3, ultRush: 1.2, defensiveBias: 0.2 },  // Crazy big goals
+  ries:      { aggression: 0.7, comboFocus: 1.6, ultRush: 0.8, defensiveBias: 0.6 },  // Measured + structured
+  boz:       { aggression: 1.3, comboFocus: 1.3, ultRush: 1.3, defensiveBias: 0.3 },  // Long bets, big swings
+  tavel:     { aggression: 0.9, comboFocus: 1.5, ultRush: 1.0, defensiveBias: 0.4 },  // VC patience
+  rahul:     { aggression: 1.3, comboFocus: 1.2, ultRush: 1.3, defensiveBias: 0.1 },  // Game-feel snipe
+  aparna:    { aggression: 1.1, comboFocus: 1.3, ultRush: 1.2, defensiveBias: 0.3 },  // Polymath balance
+  maples:    { aggression: 1.2, comboFocus: 1.2, ultRush: 1.4, defensiveBias: 0.2 },  // Inflection sniper
+  jessica:   { aggression: 0.8, comboFocus: 1.4, ultRush: 0.9, defensiveBias: 0.5 },  // Founder-read patience
+  elena:     { aggression: 1.4, comboFocus: 1.3, ultRush: 1.3, defensiveBias: 0.1 },  // PLG aggressive
 }

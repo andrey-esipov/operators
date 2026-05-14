@@ -40,6 +40,20 @@ const FIGHTER_TRANSCRIPTS: Record<string, string[]> = {
   julie: ['julie-zhuo'],
   annie: ['annie-duke'],
   boris: ['boris-cherny'],
+  // Wave 3 — May 2026 final cut
+  benioff: ['marc-benioff'],
+  horowitz: ['ben-horowitz'],
+  feifei: ['fei-fei'],
+  dharmesh: ['dharmesh-shah'],
+  melanie: ['melanie-perkins'],
+  ries: ['eric-ries'],
+  boz: ['boz'],
+  tavel: ['sarah-tavel'],
+  rahul: ['rahul-vohra'],
+  aparna: ['aparna-chennapragada'],
+  maples: ['mike-maples'],
+  jessica: ['jessica-livingston'],
+  elena: ['elena-verna'],
   lenny: [], // host — extract from every episode
 }
 

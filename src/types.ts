@@ -166,6 +166,7 @@ export type Phase =
   | 'stats'
   | 'fighter-spotlight'
   | 'generate-fighter'
+  | 'marquee-matchups'
 
 export interface BattleLogEntry {
   turn: number

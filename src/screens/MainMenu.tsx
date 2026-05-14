@@ -260,6 +260,12 @@ export function MainMenu() {
             onClick={() => { Sfx.menuSelect(); setPhase('generate-fighter') }}
             accent="#7209B7"
           />
+          <MidButton
+            label="★ MARQUEE"
+            subtitle="dream matchups"
+            onClick={() => { Sfx.menuSelect(); setPhase('marquee-matchups') }}
+            accent="#FFD60A"
+          />
         </div>
 
         {/* Row 3: library — knowledge tools, grouped */}

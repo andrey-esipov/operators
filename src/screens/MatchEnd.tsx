@@ -46,7 +46,16 @@ export function MatchEnd() {
   }, [log])
 
   if (!fighterA || !fighterB) return null
-  const winnerSide: 'a' | 'b' = roundsWon.a >= 2 ? 'a' : 'b'
+  // Winner derivation — primary source is roundsWon (must be >= 2 for
+  // either side to have legitimately reached match-end). If neither side
+  // shows >= 2 (shouldn't happen, but be defensive against any future
+  // state-mutation bug), fall back to the last log entry's attacker so
+  // the screen at least matches the K.O.-landing fighter. The default of
+  // 'a' (player) on a total tie is safer than the old default of 'b'.
+  const winnerSide: 'a' | 'b' =
+    roundsWon.a >= 2 ? 'a'
+    : roundsWon.b >= 2 ? 'b'
+    : (log[log.length - 1]?.attacker ?? 'a')
   const winner = winnerSide === 'a' ? getFighter(fighterA.defId)! : getFighter(fighterB.defId)!
   const loser = winnerSide === 'a' ? getFighter(fighterB.defId)! : getFighter(fighterA.defId)!
   const winnerHpPct = Math.round(

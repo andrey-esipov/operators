@@ -481,6 +481,94 @@ export const useGame = create<GameState & Actions>((set, get) => ({
       }
     }
 
+    // If the next active fighter's start-of-turn DoT killed them, end
+    // the round here with credit to the OPPONENT (whoever applied the
+    // status, or simply the other side for self-applied burns like
+    // Turley's HYPERGROWTH_BURN). Otherwise the next move would
+    // mis-attribute the K.O. — the opponent's attack would land on a
+    // fighter who was already at 0 HP and grab the round.
+    if (turnStart.koDueToDoT && state.mode !== 'practice') {
+      const dotWinnerSide: Side = nextActive === 'a' ? 'b' : 'a'
+      const dotLoserSide: Side = nextActive
+      flashCounter++
+      const koId = flashCounter
+
+      const dotNewRoundsWon = {
+        a: state.roundsWon.a + (dotWinnerSide === 'a' ? 1 : 0),
+        b: state.roundsWon.b + (dotWinnerSide === 'b' ? 1 : 0),
+      }
+      const dotMatchWinner = dotNewRoundsWon.a >= 2 ? 'a' : dotNewRoundsWon.b >= 2 ? 'b' : null
+
+      // Synthesize a "BURNED OUT" log entry so RoundEnd / MatchEnd can
+      // attribute the round-win correctly via the log's `attacker` field.
+      const burnLogEntry = {
+        turn: state.turn,
+        attacker: dotWinnerSide,
+        moveId: 'dot-finish',
+        moveName: 'BURNED OUT',
+        baseDamage: turnStart.selfDamage,
+        scenarioMultiplier: 1,
+        comboBonus: 0,
+        critMultiplier: 1,
+        finalDamage: turnStart.selfDamage,
+        hpAfter: {
+          a: nextActive === 'a' ? 0 : (newA?.hp ?? 0),
+          b: nextActive === 'b' ? 0 : (newB?.hp ?? 0),
+        },
+        quote: 'Burn rate caught up.',
+        episode: 'host',
+        timestamp: 'BURNOUT',
+        appliedStatuses: [],
+      }
+
+      set({
+        fighterA: nextActive === 'a' ? updatedTarget : newA,
+        fighterB: nextActive === 'b' ? updatedTarget : newB,
+        log: [...state.log, burnLogEntry],
+        koCinematic: {
+          winner: dotWinnerSide,
+          loser: dotLoserSide,
+          id: koId,
+        },
+      })
+
+      const ks = loadStats()
+      ks.totalKOs += 1
+      saveStats(ks)
+      checkAndUnlock(ks)
+
+      // Match-end stats parity with the cast-K.O. path.
+      if (dotMatchWinner) {
+        const ms = loadStats()
+        ms.totalMatches += 1
+        const playerWon = dotMatchWinner === 'a'
+        if (playerWon && state.mode !== 'vs') {
+          ms.totalWins += 1
+          if (state.selectedA && !ms.fightersUsed.includes(state.selectedA)) {
+            ms.fightersUsed.push(state.selectedA)
+          }
+          if (state.selectedB && !ms.fightersBeaten.includes(state.selectedB)) {
+            ms.fightersBeaten.push(state.selectedB)
+          }
+          if (state.selectedB === 'lenny') {
+            ms.lennyDefeats += 1
+            if (state.difficulty === 'hard') ms.hardModeWins += 1
+          }
+        }
+        saveStats(ms)
+        checkAndUnlock(ms)
+      }
+
+      setTimeout(() => {
+        set({
+          phase: dotMatchWinner ? 'match-end' : 'round-end',
+          roundsWon: dotNewRoundsWon,
+          koCinematic: undefined,
+        })
+      }, 2400)
+      return
+    }
+
     setTimeout(() => {
       set((s) => ({
         activeSide: nextActive,

@@ -39,7 +39,12 @@ export function App() {
     if (phase === 'menu' || phase === 'character-select' || phase === 'stage-select' || phase === 'quote-bank' || phase === 'how-to-play') {
       Music.play('menu')
     } else if (phase === 'pre-fight' || phase === 'fight') {
-      Music.play(selectedB === 'lenny' ? 'boss' : phase === 'fight' ? 'fight' : 'fight')
+      if (selectedB === 'lenny') {
+        Music.play('boss')
+      } else {
+        // Rotate fight / fight-b each match for variety
+        Music.playFight()
+      }
     } else if (phase === 'round-end') {
       // hold current track
     } else if (phase === 'match-end') {

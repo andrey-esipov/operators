@@ -25,6 +25,79 @@ let stopFlag = 0  // incremented to cancel pending scheduled callbacks
 let userVolume = 0.35  // 0..1 — kept modest; chiptune is loud
 let unlockListenerAttached = false
 
+// ─── Pre-rendered Suno tracks ─────────────────────────────────────────
+// When an MP3 exists for a track, we play it instead of the procedural
+// chiptune. Significantly higher musical quality. Procedural stays as
+// graceful fallback if a file 404s or can't decode.
+let currentAudio: HTMLAudioElement | null = null
+let currentMp3Track: TrackId | null = null
+const knownMissing = new Set<TrackId>()
+
+const MP3_MAP: Partial<Record<TrackId, string>> = {
+  menu:     '/audio/music/menu.mp3',
+  fight:    '/audio/music/fight.mp3',
+  'fight-b':'/audio/music/fight-b.mp3',
+  boss:     '/audio/music/boss.mp3',
+  victory:  '/audio/music/victory.mp3',
+  defeat:   '/audio/music/defeat.mp3',
+}
+
+function playMp3(track: TrackId): boolean {
+  if (knownMissing.has(track)) return false
+  const url = MP3_MAP[track]
+  if (!url) return false
+
+  // Cross-fade out current MP3 if same source would be requested
+  if (currentMp3Track === track && currentAudio && !currentAudio.paused) return true
+
+  // Stop current MP3
+  stopMp3()
+
+  const a = new Audio(url)
+  // victory/defeat are one-shots; everything else loops
+  a.loop = !(track === 'victory' || track === 'defeat')
+  // Music sits behind SFX/voice — lower its baseline a touch
+  a.volume = Math.min(1, userVolume * 1.6)
+  a.addEventListener('error', () => {
+    knownMissing.add(track)
+    // If MP3 fails to load, fall back to procedural
+    if (currentMp3Track === track) {
+      currentMp3Track = null
+      currentAudio = null
+      // Trigger procedural fallback
+      Music.play(track)
+    }
+  })
+  a.play().catch(() => {
+    knownMissing.add(track)
+    if (currentMp3Track === track) {
+      currentMp3Track = null
+      currentAudio = null
+    }
+  })
+  currentAudio = a
+  currentMp3Track = track
+  return true
+}
+
+function stopMp3() {
+  if (currentAudio) {
+    try {
+      currentAudio.pause()
+      currentAudio.currentTime = 0
+    } catch {
+      // ignore
+    }
+    currentAudio = null
+    currentMp3Track = null
+  }
+}
+
+function stopProcedural() {
+  stopFlag++  // cancels in-flight setTimeout reschedules
+  // (already-scheduled WebAudio nodes will play out their remaining envelope)
+}
+
 function getCtx(): AudioContext {
   if (!ctx) {
     ctx = new (window.AudioContext || (window as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext!)()
@@ -349,16 +422,30 @@ function scheduleLoop(track: Track, loopStart: number, myStopFlag: number) {
 
 export const Music = {
   play(track: TrackId) {
-    if (currentTrack === track) return
+    if (currentTrack === track && currentMp3Track === track) return
+    // For fight music — if a fight track is already playing, don't switch.
+    // (App.tsx calls Music.play('fight') on every phase change; we don't
+    // want to interrupt fight-b mid-loop just because phase re-fired.)
+    if ((track === 'fight' || track === 'fight-b') &&
+        (currentMp3Track === 'fight' || currentMp3Track === 'fight-b')) {
+      return
+    }
+
+    // Try the pre-rendered Suno MP3 first.
+    if (MP3_MAP[track] && !knownMissing.has(track)) {
+      stopProcedural()
+      if (playMp3(track)) {
+        currentTrack = track  // record what's "playing" for state checks
+        return
+      }
+    }
+
+    // Procedural fallback
+    if (currentTrack === track && !currentMp3Track) return
     Music.stop()
     const c = getCtx()
     attachUnlockListener()
 
-    // If the AudioContext is still suspended (no user gesture yet), queue
-    // this track and abort scheduling — the unlock listener will replay
-    // when the first click/key/touch arrives. Scheduling notes against a
-    // suspended context wastes them: the clock advances past their start
-    // times silently.
     if (c.state === 'suspended') {
       pendingTrack = track
       c.resume().catch(() => {})
@@ -370,15 +457,24 @@ export const Music = {
     const myStopFlag = stopFlag
     scheduleLoop(TRACKS[track], c.currentTime + 0.05, myStopFlag)
   },
+  /**
+   * Convenience: pick between fight + fight-b randomly so consecutive
+   * fights don't feel identical. App.tsx can call this instead of play('fight').
+   */
+  playFight() {
+    if (currentMp3Track === 'fight' || currentMp3Track === 'fight-b') return
+    const choice: TrackId = Math.random() < 0.5 ? 'fight' : 'fight-b'
+    Music.play(choice)
+  },
   stop() {
-    stopFlag++  // cancels in-flight setTimeout reschedules
+    stopProcedural()
+    stopMp3()
     currentTrack = null
-    // Note: already-scheduled WebAudio nodes will play out their remaining
-    // envelope (≤1 loop). This avoids audible clicks from sudden silencing.
   },
   setVolume(v: number) {
     userVolume = Math.max(0, Math.min(1, v))
     if (masterGain) masterGain.gain.value = userVolume
+    if (currentAudio) currentAudio.volume = Math.min(1, userVolume * 1.6)
   },
   getVolume() {
     return userVolume

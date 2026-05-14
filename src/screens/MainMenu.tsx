@@ -6,7 +6,6 @@ import { FIGHTERS } from '../data/fighters'
 import { SCENARIO_ORDER } from '../data/scenarios'
 import { Sprite } from '../components/Sprite'
 import { PULL_QUOTES } from '../data/pull-quotes'
-import { Voice } from '../lib/voice'
 import { AttractMode } from './AttractMode'
 
 export function MainMenu() {
@@ -214,10 +213,10 @@ export function MainMenu() {
       </div>
 
       {/* MENU — clean hierarchy:
-          Row 1 (primary):     ARCADE · VS
+          Row 1 (primary):     ARCADE · VS · MARQUEE
           Row 2 (modes):       DAILY · PRACTICE · RANDOM · GENERATE YOU
           Row 3 (library):     HOW TO PLAY · ENCYCLOPEDIA · QUOTE BANK · STATS
-          Row 4 (preferences): DIFFICULTY · ♪ · 🗣 · CRT · ATTRACT · TEST VOICE
+          Row 4 (preferences): DIFFICULTY · ♪ · 🗣 · CRT · ATTRACT · CREDITS
       */}
       <div className="relative z-20 flex flex-col gap-3 mt-4 items-center menu-cta-stack px-4">
         {/* Row 1: the three headline play modes sit shoulder-to-shoulder
@@ -295,19 +294,6 @@ export function MainMenu() {
           <SmallButton label={`CRT · ${crt ? 'ON' : 'OFF'}`} onClick={toggleCrt} />
           <SmallButton label="◇ ATTRACT" onClick={() => { Sfx.menuSelect(); setAttract(true) }} />
           <SmallButton label="◇ CREDITS" onClick={() => { Sfx.menuSelect(); setPhase('credits') }} />
-          <SmallButton
-            label="TEST VOICE"
-            onClick={() => {
-              Sfx.menuSelect()
-              if (!voice) {
-                Voice.setEnabled(true)
-                Voice.say(focusFighter.voiceLines.matchStart, focusFighter.id, 'matchStart')
-                setTimeout(() => Voice.setEnabled(false), 100)
-              } else {
-                Voice.say(focusFighter.voiceLines.matchStart, focusFighter.id, 'matchStart')
-              }
-            }}
-          />
         </ButtonGroup>
       </div>
 

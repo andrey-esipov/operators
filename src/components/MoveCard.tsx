@@ -11,6 +11,8 @@ interface Props {
   hasRequiredStatus?: boolean
   /** Cooldown turns remaining for this move (0 = ready) */
   cooldown?: number
+  /** Single-letter keyboard shortcut to display on the card (e.g. "Z") */
+  hotkey?: string
   onClick: () => void
 }
 
@@ -38,6 +40,7 @@ export function MoveCard({
   lastMoveId,
   hasRequiredStatus,
   cooldown = 0,
+  hotkey,
   onClick,
 }: Props) {
   const onCooldown = cooldown > 0
@@ -165,6 +168,23 @@ export function MoveCard({
             animation: 'flash 1.6s infinite',
           }}
         />
+      )}
+      {hotkey && (
+        <div
+          className="absolute top-0.5 right-0.5 font-display text-[8px] tracking-widest"
+          style={{
+            background: 'rgba(0,0,0,0.75)',
+            color: usable ? accent : '#666',
+            border: `1px solid ${usable ? accent : '#444'}`,
+            padding: '1px 4px',
+            minWidth: 14,
+            textAlign: 'center',
+            lineHeight: 1,
+          }}
+          title={`Press ${hotkey} to cast`}
+        >
+          {hotkey}
+        </div>
       )}
     </button>
   )

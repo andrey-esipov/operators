@@ -214,6 +214,12 @@ export interface GameState {
   selectedB: string | null
   /** Arcade progression — current step (1-8) */
   arcadeStep: number
+  /** Pre-built opponent queue for the current arcade run. Index = step.
+   *  The final entry is always 'lenny' (boss). Built at startArcade based
+   *  on difficulty: hard uses scenario specialists, easy/normal randomize
+   *  to avoid the structural difficulty spike of always facing the
+   *  opponent who has +30-50% bonus damage on that stage. */
+  arcadeOpponentQueue: string[]
   /** Quote bank entries unlocked */
   quoteBank: Array<{ fighterId: string; moveId: string; ts: number }>
   /** CRT overlay enabled */

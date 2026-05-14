@@ -158,6 +158,8 @@ export function HowToPlay() {
             <p>• Stack 2–3 setup moves before unleashing your Ultimate — combo bonuses add up.</p>
             <p>• Pay attention to the scenario at the top of the fight screen — that&apos;s where you do bonus damage.</p>
             <p>• Press <span className="font-display text-base text-white">[ESC]</span> to quit a match back to the menu.</p>
+            <p>• <span className="font-display text-base text-white">Keyboard shortcuts</span> during combat: <span className="font-display text-base text-white">[Z] [X] [C] [V]</span> cast moves 1–4, <span className="font-display text-base text-white">[B]</span> fires your Ultimate, <span className="font-display text-base text-white">[R]</span> spends 1 momentum to READ the opponent. <span className="font-display text-base text-white">[1]–[5]</span> work as alternates for ZXCVB.</p>
+            <p>• <span className="font-display text-base text-white">Difficulty</span> changes arcade opponents: <span style={{ color: '#06D6A0' }}>EASY</span> picks bots who are weak on the current scenario · <span style={{ color: '#FCBF49' }}>NORMAL</span> randomizes opponents · <span style={{ color: '#E63946' }}>HARD</span> faces the scenario specialist who has +30–50% damage on that stage. Lenny is always the final boss.</p>
             <p>• Every move you play unlocks a quote in your <span style={{ color: '#FFD60A' }}>Quote Bank</span>. Beat Arcade Mode to see how many frameworks you&apos;ve collected.</p>
           </div>
         </Section>

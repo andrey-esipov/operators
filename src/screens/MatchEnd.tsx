@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import { useGame } from '../state/game'
 import { getFighter } from '../data/fighters'
 import { Sprite } from '../components/Sprite'
@@ -11,6 +11,7 @@ export function MatchEnd() {
   const roundsWon = useGame((s) => s.roundsWon)
   const resetMatch = useGame((s) => s.resetMatch)
   const quoteBank = useGame((s) => s.quoteBank)
+  const log = useGame((s) => s.log)
   const mode = useGame((s) => s.mode)
   const arcadeStep = useGame((s) => s.arcadeStep)
   const nextArcadeFight = useGame((s) => s.nextArcadeFight)
@@ -21,10 +22,37 @@ export function MatchEnd() {
     else if (roundsWon.b >= 2) Sfx.defeat()
   }, [])
 
+  // Final-round stats — biggest single hit and the longest combo streak.
+  // We only have the final round's log (newRound clears between rounds),
+  // but that's still the most exciting fragment to surface as a "highlight."
+  const matchStats = useMemo(() => {
+    let biggest = 0
+    let longestCombo = 0
+    let currentStreak = 0
+    let currentSide: 'a' | 'b' | null = null
+    for (const entry of log) {
+      if (entry.finalDamage > biggest) biggest = entry.finalDamage
+      if (entry.finalDamage > 0) {
+        if (entry.attacker === currentSide) {
+          currentStreak += 1
+        } else {
+          currentSide = entry.attacker
+          currentStreak = 1
+        }
+        if (currentStreak > longestCombo) longestCombo = currentStreak
+      }
+    }
+    return { biggest, longestCombo }
+  }, [log])
+
   if (!fighterA || !fighterB) return null
   const winnerSide: 'a' | 'b' = roundsWon.a >= 2 ? 'a' : 'b'
   const winner = winnerSide === 'a' ? getFighter(fighterA.defId)! : getFighter(fighterB.defId)!
   const loser = winnerSide === 'a' ? getFighter(fighterB.defId)! : getFighter(fighterA.defId)!
+  const winnerHpPct = Math.round(
+    ((winnerSide === 'a' ? fighterA.hp : fighterB.hp) /
+     (winnerSide === 'a' ? fighterA.maxHp : fighterB.maxHp)) * 100
+  )
 
   const arcadePlayerWon = mode === 'arcade' && winnerSide === 'a'
   const arcadePlayerLost = mode === 'arcade' && winnerSide === 'b'
@@ -93,7 +121,15 @@ export function MatchEnd() {
         </div>
       </div>
 
-      <div className="relative z-10 mt-6 px-6 py-3 max-w-xl text-center" style={{
+      {/* MATCH STATS — biggest hit, longest combo, final HP %.
+          This is the highlight reel that turns into a tweet. */}
+      <div className="relative z-10 mt-5 grid grid-cols-3 gap-3 max-w-2xl">
+        <StatTile label="BIGGEST HIT" value={`${matchStats.biggest} DMG`} accent="#E63946" />
+        <StatTile label="LONGEST STREAK" value={`${matchStats.longestCombo}× COMBO`} accent="#FFD60A" />
+        <StatTile label="WINNER HP" value={`${winnerHpPct}%`} accent={winnerHpPct >= 90 ? '#06D6A0' : '#FCBF49'} />
+      </div>
+
+      <div className="relative z-10 mt-4 px-6 py-3 max-w-xl text-center" style={{
         background: 'rgba(15,10,26,0.7)',
         border: '2px solid #FFD60A',
       }}>
@@ -139,16 +175,52 @@ export function MatchEnd() {
             MAIN MENU
           </button>
         )}
-        <ShareButton winner={winner.shortName} loser={loser.shortName} quoteBank={quoteBank.length} />
+        <ShareButton
+          winner={winner.shortName}
+          loser={loser.shortName}
+          quoteBank={quoteBank.length}
+          biggest={matchStats.biggest}
+          combo={matchStats.longestCombo}
+          hpPct={winnerHpPct}
+        />
       </div>
     </div>
   )
 }
 
-function ShareButton({ winner, loser, quoteBank }: { winner: string; loser: string; quoteBank: number }) {
+function StatTile({ label, value, accent }: { label: string; value: string; accent: string }) {
+  return (
+    <div
+      className="p-3 text-center"
+      style={{
+        background: 'rgba(15,10,26,0.7)',
+        border: `2px solid ${accent}`,
+        boxShadow: 'inset -2px -2px 0 rgba(0,0,0,0.5)',
+      }}
+    >
+      <div className="font-display text-[8px] tracking-widest" style={{ color: accent }}>{label}</div>
+      <div className="font-num text-2xl tabular-nums text-white mt-1">{value}</div>
+    </div>
+  )
+}
+
+function ShareButton({
+  winner, loser, quoteBank, biggest, combo, hpPct,
+}: {
+  winner: string; loser: string; quoteBank: number
+  biggest: number; combo: number; hpPct: number
+}) {
   function tweet() {
     Sfx.menuSelect()
-    const text = `Just played OPERATORS — ${winner} beat ${loser}. Unlocked ${quoteBank} real Lenny's Podcast quotes. Built for #lennysbuildathon`
+    // Lead with the highlight — the biggest hit or longest combo is more
+    // compelling than just "X beat Y." Include the HP% so screenshots
+    // make sense at a glance.
+    const highlight = combo >= 3
+      ? `${combo}-hit combo`
+      : biggest >= 200
+      ? `${biggest}-dmg finisher`
+      : `${hpPct}% HP left`
+    const text = `OPERATORS · ${winner} beat ${loser} (${highlight}). ${quoteBank} real Lenny quotes unlocked. Vibe-coded for #lennysbuildathon — play at`
     const url = 'https://operators.replit.app'
     const tweetUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`
     window.open(tweetUrl, '_blank', 'noopener,noreferrer')

@@ -234,14 +234,14 @@ export function QuoteBank() {
           </div>
         )}
         {filtered.map((e) => (
-          <QuoteCard key={`${e.fighterId}:${e.moveId}`} entry={e} />
+          <QuoteCard key={`${e.fighterId}:${e.moveId}`} entry={e} query={query} />
         ))}
       </div>
     </div>
   )
 }
 
-function QuoteCard({ entry: e }: { entry: Entry }) {
+function QuoteCard({ entry: e, query }: { entry: Entry; query: string }) {
   const ytLink = youtubeDeepLink(e.fighterId, e.timestamp)
 
   return (
@@ -255,14 +255,14 @@ function QuoteCard({ entry: e }: { entry: Entry }) {
     >
       <div className="flex items-baseline justify-between">
         <span className="font-display text-[10px] tracking-widest" style={{ color: e.accent }}>
-          {e.shortName}
+          {highlight(e.shortName, query)}
         </span>
         <span className="font-display text-[7px] tracking-widest text-white/40">
           {e.type.toUpperCase()}
         </span>
       </div>
-      <div className="font-display text-base tracking-wider text-white">{e.moveName}</div>
-      <div className="font-body text-xl italic text-white/90 leading-snug">"{e.quote}"</div>
+      <div className="font-display text-base tracking-wider text-white">{highlight(e.moveName, query)}</div>
+      <div className="font-body text-xl italic text-white/90 leading-snug">"{highlight(e.quote, query)}"</div>
 
       <div className="flex items-center justify-between mt-auto pt-2 border-t border-white/10">
         <div className="font-display text-[8px] tracking-widest text-white/50">
@@ -304,6 +304,25 @@ function QuoteCard({ entry: e }: { entry: Entry }) {
         </div>
       )}
     </div>
+  )
+}
+
+/**
+ * Wrap any case-insensitive matches of `query` inside the given string in
+ * a yellow <mark> so the user can see why a quote came up. Empty query =
+ * pass-through. Splits on the literal match boundary (no regex injection
+ * worries — we escape special chars).
+ */
+function highlight(text: string, query: string): React.ReactNode {
+  const q = query.trim()
+  if (!q) return text
+  const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const re = new RegExp(`(${escaped})`, 'ig')
+  const parts = text.split(re)
+  return parts.map((part, i) =>
+    i % 2 === 1
+      ? <mark key={i} style={{ background: '#FFD60A', color: '#0F0A1A', padding: '0 2px' }}>{part}</mark>
+      : part
   )
 }
 

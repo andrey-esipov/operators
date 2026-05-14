@@ -73,12 +73,29 @@ export function ArcadeVictory() {
         "You found a new pattern. I'll add it to the show." — Lenny Rachitsky
       </div>
 
-      <div className="relative z-10 mt-10 flex flex-col items-center gap-4">
-        <div style={{ width: 220, height: 300 }}>
-          <Sprite fighter={player} side="a" state="win" />
-        </div>
-        <div className="font-display text-2xl tracking-widest" style={{ color: player.accent, textShadow: '3px 3px 0 black' }}>
-          {player.shortName} · CHAMPION
+      {/* Champion victorious — defeated Lenny lies beside them. Sells the
+          "you climbed the gauntlet" beat with one image instead of words. */}
+      <div className="relative z-10 mt-10 flex items-end gap-12">
+        {(() => {
+          const lenny = getFighter('lenny')
+          return lenny ? (
+            <div className="flex flex-col items-center" style={{ opacity: 0.55, transform: 'translateY(20px)' }}>
+              <div style={{ width: 160, height: 220 }}>
+                <Sprite fighter={lenny} side="b" state="lose" />
+              </div>
+              <div className="font-display text-base tracking-widest mt-2 text-white/55">
+                LENNY · DEFEATED
+              </div>
+            </div>
+          ) : null
+        })()}
+        <div className="flex flex-col items-center" style={{ filter: 'drop-shadow(0 0 32px #FFD60A)' }}>
+          <div style={{ width: 240, height: 320 }}>
+            <Sprite fighter={player} side="a" state="win" />
+          </div>
+          <div className="font-display text-2xl tracking-widest mt-3" style={{ color: player.accent, textShadow: '3px 3px 0 black' }}>
+            {player.shortName} · CHAMPION
+          </div>
         </div>
       </div>
 

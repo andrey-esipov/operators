@@ -16,6 +16,7 @@ import { Stats } from './screens/Stats'
 import { FighterSpotlight } from './screens/FighterSpotlight'
 import { GenerateFighter } from './screens/GenerateFighter'
 import { MarqueeMatchups } from './screens/MarqueeMatchups'
+import { Credits } from './screens/Credits'
 import { attachQuoteBankSync, loadQuoteBank } from './lib/persist'
 
 export function App() {
@@ -37,7 +38,7 @@ export function App() {
       Music.stop()
       return
     }
-    if (phase === 'menu' || phase === 'character-select' || phase === 'stage-select' || phase === 'quote-bank' || phase === 'how-to-play') {
+    if (phase === 'menu' || phase === 'character-select' || phase === 'stage-select' || phase === 'quote-bank' || phase === 'how-to-play' || phase === 'credits') {
       Music.play('menu')
     } else if (phase === 'pre-fight' || phase === 'fight') {
       if (selectedB === 'lenny') {
@@ -73,6 +74,7 @@ export function App() {
       {phase === 'fighter-spotlight' && <FighterSpotlight />}
       {phase === 'generate-fighter' && <GenerateFighter />}
       {phase === 'marquee-matchups' && <MarqueeMatchups />}
+      {phase === 'credits' && <Credits />}
       {crtEnabled && <div className="crt-overlay" />}
     </div>
   )

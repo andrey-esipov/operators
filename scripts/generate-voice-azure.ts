@@ -224,6 +224,60 @@ const PROFILES: Record<string, ToneProfile> = {
     voice: 'shimmer',
     instructions: 'Positioning consultant. Direct, professional, slight smile in the delivery. Like someone who refuses to let your strategy stay muddy.',
   },
+
+  // ─── Wave 3 — May 2026 final cut ──────────────────────────────────
+  benioff: {
+    voice: 'onyx',
+    instructions: 'Salesforce CEO. Warm but commanding. Hawaiian-shirt-meets-boardroom energy. Delivers every line like a keynote — confident, generous, slightly evangelical about cloud and AI.',
+  },
+  horowitz: {
+    voice: 'onyx',
+    instructions: 'Wartime CEO. Direct, weathered, slightly weary in a way that signals experience. Slower than average. Each phrase delivered like advice you should write down.',
+  },
+  feifei: {
+    voice: 'nova',
+    instructions: 'Stanford AI researcher. Calm, articulate, slight scholarly cadence with warmth. Pauses thoughtfully. Each phrase carries the weight of a career spent building computer vision.',
+  },
+  dharmesh: {
+    voice: 'echo',
+    instructions: 'HubSpot CTO and builder. Friendly, thoughtful, slightly playful. Talks about marketing and AI like a tinkerer who genuinely loves the craft.',
+  },
+  melanie: {
+    voice: 'nova',
+    instructions: 'Canva CEO. Bright, optimistic, deeply purposeful. Sounds like someone who genuinely believes in empowering the world to design. Australian-friendly without forced accent.',
+  },
+  ries: {
+    voice: 'ash',
+    instructions: 'Lean Startup author. Methodical, precise, slightly didactic. Each phrase structured like a hypothesis statement. Patient and a little nerdy in the best way.',
+  },
+  boz: {
+    voice: 'onyx',
+    instructions: 'Meta CTO. Direct, confident, slightly clipped. Sounds like someone running thousands of engineers on decade-long bets. No-nonsense.',
+  },
+  tavel: {
+    voice: 'shimmer',
+    instructions: 'Benchmark partner. Sharp, considered, slightly skeptical in the best way. Speaks like someone who has heard 10,000 pitches and seen every pattern.',
+  },
+  rahul: {
+    voice: 'echo',
+    instructions: 'Superhuman CEO. Precise, intelligent, slightly enthusiastic about craft. Delivers each line like he is showing you a perfectly designed keystroke.',
+  },
+  aparna: {
+    voice: 'nova',
+    instructions: 'Microsoft CPO. Warm, polished, deeply experienced. Speaks like a senior consumer-product executive who has shipped at planet-scale and stayed kind about it.',
+  },
+  maples: {
+    voice: 'sage',
+    instructions: 'Floodgate co-founder. Patient, thoughtful, slightly contrarian. Talks about inflections and pattern-breakers like someone who has spent twenty years studying them.',
+  },
+  jessica: {
+    voice: 'shimmer',
+    instructions: 'YC co-founder. Warm, friendly, generous with founders. Each phrase delivered with the patience of someone who has read 10,000 startup pitches and seen them all start the same way.',
+  },
+  elena: {
+    voice: 'nova',
+    instructions: 'Growth executive. Sharp, fast-paced, slightly cocky in a likable way. Speaks like someone running PLG at 100x scale, dropping framework names with confidence.',
+  },
 }
 
 const DEFAULT_PROFILE: ToneProfile = {

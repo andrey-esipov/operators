@@ -20,7 +20,8 @@ import { youtubeDeepLink } from '../lib/youtube'
 import { Sfx } from '../lib/audio'
 import { AnimatePresence, motion } from 'framer-motion'
 
-export function CombatScreen({ mode = 'vs' }: { mode?: 'vs' | 'arcade' | 'practice' | 'daily' }) {
+export function CombatScreen() {
+  const mode = useGame((s) => s.mode)
   const fighterA = useGame((s) => s.fighterA)
   const fighterB = useGame((s) => s.fighterB)
   const scenario = useGame((s) => s.scenario)

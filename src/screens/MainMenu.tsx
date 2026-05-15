@@ -7,6 +7,7 @@ import { SCENARIO_ORDER } from '../data/scenarios'
 import { Sprite } from '../components/Sprite'
 import { PULL_QUOTES } from '../data/pull-quotes'
 import { AttractMode } from './AttractMode'
+import { prefetchScreen } from './registry'
 
 export function MainMenu() {
   const setPhase = useGame((s) => s.setPhase)
@@ -228,18 +229,21 @@ export function MainMenu() {
             label="▶ ARCADE MODE"
             subtitle="8-stage gauntlet · boss Lenny"
             onClick={() => go('arcade')}
+            onHover={() => prefetchScreen('character-select')}
             accent="#E63946"
           />
           <MenuButton
             label="VS MODE"
             subtitle="local 2-player hot seat"
             onClick={() => go('vs')}
+            onHover={() => prefetchScreen('character-select')}
             accent="#00B4D8"
           />
           <MenuButton
             label="★ MARQUEE"
             subtitle="curated dream matchups"
             onClick={() => { Sfx.menuSelect(); setPhase('marquee-matchups') }}
+            onHover={() => prefetchScreen('marquee-matchups')}
             accent="#FFD60A"
           />
         </div>
@@ -250,34 +254,38 @@ export function MainMenu() {
             label="◇ DAILY"
             subtitle="today's matchup"
             onClick={() => { Sfx.menuSelect(); startDaily() }}
+            onHover={() => prefetchScreen('pre-fight')}
             accent="#06D6A0"
           />
           <MidButton
             label="◇ PRACTICE"
             subtitle="train freely"
             onClick={() => go('practice')}
+            onHover={() => prefetchScreen('character-select')}
             accent="#FCBF49"
           />
           <MidButton
             label="◇ RANDOM"
             subtitle="dice rolls"
             onClick={() => { Sfx.menuSelect(); startRandom() }}
+            onHover={() => prefetchScreen('pre-fight')}
             accent="#F72585"
           />
           <MidButton
             label="★ GENERATE YOU"
             subtitle="your fighter card"
             onClick={() => { Sfx.menuSelect(); setPhase('generate-fighter') }}
+            onHover={() => prefetchScreen('generate-fighter')}
             accent="#7209B7"
           />
         </div>
 
         {/* Row 3: library — knowledge tools, grouped */}
         <ButtonGroup label="LIBRARY">
-          <SmallButton label="HOW TO PLAY"  onClick={() => { Sfx.menuSelect(); setPhase('how-to-play') }} />
-          <SmallButton label="ENCYCLOPEDIA" onClick={() => { Sfx.menuSelect(); setPhase('framework-encyclopedia') }} />
-          <SmallButton label="QUOTE BANK"   onClick={() => { Sfx.menuSelect(); setPhase('quote-bank') }} />
-          <SmallButton label="STATS · ★"    onClick={() => { Sfx.menuSelect(); setPhase('stats') }} />
+          <SmallButton label="HOW TO PLAY"  onClick={() => { Sfx.menuSelect(); setPhase('how-to-play') }}             onHover={() => prefetchScreen('how-to-play')} />
+          <SmallButton label="ENCYCLOPEDIA" onClick={() => { Sfx.menuSelect(); setPhase('framework-encyclopedia') }} onHover={() => prefetchScreen('framework-encyclopedia')} />
+          <SmallButton label="QUOTE BANK"   onClick={() => { Sfx.menuSelect(); setPhase('quote-bank') }}              onHover={() => prefetchScreen('quote-bank')} />
+          <SmallButton label="STATS · ★"    onClick={() => { Sfx.menuSelect(); setPhase('stats') }}                   onHover={() => prefetchScreen('stats')} />
         </ButtonGroup>
 
         {/* Row 4: settings + dev/demo, grouped */}
@@ -294,7 +302,7 @@ export function MainMenu() {
           <SmallButton label={`🗣 ${voice ? 'ON' : 'OFF'}`} onClick={toggleVoice} title="Toggle fighter voice lines (TTS)" />
           <SmallButton label={`CRT · ${crt ? 'ON' : 'OFF'}`} onClick={toggleCrt} title="Toggle the CRT scanline overlay" />
           <SmallButton label="◇ ATTRACT" onClick={() => { Sfx.menuSelect(); setAttract(true) }} title="Replay the demo reel" />
-          <SmallButton label="◇ CREDITS" onClick={() => { Sfx.menuSelect(); setPhase('credits') }} title="Credits" />
+          <SmallButton label="◇ CREDITS" onClick={() => { Sfx.menuSelect(); setPhase('credits') }} title="Credits" onHover={() => prefetchScreen('credits')} />
         </ButtonGroup>
       </div>
 
@@ -559,17 +567,20 @@ function MenuButton({
   label,
   subtitle,
   onClick,
+  onHover,
   accent,
 }: {
   label: string
   subtitle: string
   onClick: () => void
+  onHover?: () => void
   accent: string
 }) {
   return (
     <button
       onClick={onClick}
-      onMouseEnter={Sfx.menuMove}
+      onMouseEnter={() => { Sfx.menuMove(); onHover?.() }}
+      onFocus={() => onHover?.()}
       aria-label={`${label.replace(/[▶★◇\s]+/g, ' ').trim()} — ${subtitle}`}
       className="relative px-6 py-2 font-display text-lg tracking-widest hover:translate-y-[-2px] transition-transform"
       style={{
@@ -604,17 +615,20 @@ function MidButton({
   label,
   subtitle,
   onClick,
+  onHover,
   accent,
 }: {
   label: string
   subtitle: string
   onClick: () => void
+  onHover?: () => void
   accent: string
 }) {
   return (
     <button
       onClick={onClick}
-      onMouseEnter={Sfx.menuMove}
+      onMouseEnter={() => { Sfx.menuMove(); onHover?.() }}
+      onFocus={() => onHover?.()}
       aria-label={`${label.replace(/[▶★◇\s]+/g, ' ').trim()} — ${subtitle}`}
       className="relative px-4 py-1.5 font-display text-base tracking-widest hover:translate-y-[-2px] transition-transform"
       style={{
@@ -659,11 +673,12 @@ function ButtonGroup({ label, children }: { label: string; children: React.React
   )
 }
 
-function SmallButton({ label, onClick, title }: { label: string; onClick: () => void; title?: string }) {
+function SmallButton({ label, onClick, title, onHover }: { label: string; onClick: () => void; title?: string; onHover?: () => void }) {
   return (
     <button
       onClick={onClick}
-      onMouseEnter={Sfx.menuMove}
+      onMouseEnter={() => { Sfx.menuMove(); onHover?.() }}
+      onFocus={() => onHover?.()}
       title={title}
       className="px-3 py-1.5 font-display text-[9px] tracking-widest hover:translate-y-[-1px] transition-transform"
       style={{

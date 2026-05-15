@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useGame } from '../state/game'
 import { getFighter } from '../data/fighters'
 import { Sprite } from '../components/Sprite'
@@ -82,6 +82,32 @@ export function MatchEnd() {
     }
   }
 
+  // Arcade-mode auto-advance. Players were getting stuck on the Victory
+  // screen — either missing the NEXT STAGE button or assuming the game
+  // would proceed on its own. We give a visible 6-second countdown that
+  // clicking the button can override (handleContinue is idempotent enough
+  // since it both increments step and triggers nextArcadeFight). Cancels
+  // if the player navigates away or the phase changes.
+  const ARCADE_AUTOADVANCE_SECONDS = 6
+  const [secondsLeft, setSecondsLeft] = useState(ARCADE_AUTOADVANCE_SECONDS)
+  useEffect(() => {
+    if (!arcadePlayerWon) return
+    if (isFinalBoss) return  // Final boss → user clicks "CLAIM YOUR PRIZE"
+    setSecondsLeft(ARCADE_AUTOADVANCE_SECONDS)
+    const tick = setInterval(() => {
+      setSecondsLeft((s) => Math.max(0, s - 1))
+    }, 1000)
+    const advance = setTimeout(() => {
+      // Same flow as the manual NEXT STAGE click.
+      useGame.setState((s) => ({ arcadeStep: s.arcadeStep + 1 }))
+      nextArcadeFight()
+    }, ARCADE_AUTOADVANCE_SECONDS * 1000)
+    return () => {
+      clearInterval(tick)
+      clearTimeout(advance)
+    }
+  }, [arcadePlayerWon, isFinalBoss, nextArcadeFight])
+
   return (
     <div className="relative w-full h-full flex flex-col items-center justify-center overflow-hidden p-6">
       <div
@@ -159,11 +185,14 @@ export function MatchEnd() {
               background: 'linear-gradient(180deg, #FFD60A44, #F7798044)',
               color: 'white',
               border: '2px solid #FFD60A',
-              boxShadow: 'inset -2px -2px 0 rgba(0,0,0,0.6), inset 2px 2px 0 rgba(255,255,255,0.2)',
+              boxShadow: 'inset -2px -2px 0 rgba(0,0,0,0.6), inset 2px 2px 0 rgba(255,255,255,0.2), 0 0 16px rgba(255,214,10,0.45)',
               cursor: 'pointer',
+              animation: !isFinalBoss ? 'flash 1.2s ease-in-out infinite' : undefined,
             }}
           >
-            {isFinalBoss ? 'CLAIM YOUR PRIZE →' : 'NEXT STAGE →'}
+            {isFinalBoss
+              ? 'CLAIM YOUR PRIZE →'
+              : `NEXT STAGE → (auto in ${secondsLeft}s)`}
           </button>
         )}
         {!arcadePlayerWon && (

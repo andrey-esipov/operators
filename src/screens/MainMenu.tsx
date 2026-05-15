@@ -284,16 +284,17 @@ export function MainMenu() {
         <ButtonGroup label="SETTINGS">
           <SmallButton
             label={`DIFFICULTY · ${difficulty.toUpperCase()}`}
+            title="EASY: weak bots · NORMAL: random bots · HARD: scenario specialists with greedy ult AI"
             onClick={() => {
               Sfx.menuMove()
               setDifficulty(difficulty === 'easy' ? 'normal' : difficulty === 'normal' ? 'hard' : 'easy')
             }}
           />
-          <SmallButton label={`♪ ${music ? 'ON' : 'OFF'}`}  onClick={toggleMusic} />
-          <SmallButton label={`🗣 ${voice ? 'ON' : 'OFF'}`} onClick={toggleVoice} />
-          <SmallButton label={`CRT · ${crt ? 'ON' : 'OFF'}`} onClick={toggleCrt} />
-          <SmallButton label="◇ ATTRACT" onClick={() => { Sfx.menuSelect(); setAttract(true) }} />
-          <SmallButton label="◇ CREDITS" onClick={() => { Sfx.menuSelect(); setPhase('credits') }} />
+          <SmallButton label={`♪ ${music ? 'ON' : 'OFF'}`}  onClick={toggleMusic} title="Toggle music" />
+          <SmallButton label={`🗣 ${voice ? 'ON' : 'OFF'}`} onClick={toggleVoice} title="Toggle fighter voice lines (TTS)" />
+          <SmallButton label={`CRT · ${crt ? 'ON' : 'OFF'}`} onClick={toggleCrt} title="Toggle the CRT scanline overlay" />
+          <SmallButton label="◇ ATTRACT" onClick={() => { Sfx.menuSelect(); setAttract(true) }} title="Replay the demo reel" />
+          <SmallButton label="◇ CREDITS" onClick={() => { Sfx.menuSelect(); setPhase('credits') }} title="Credits" />
         </ButtonGroup>
       </div>
 
@@ -308,7 +309,7 @@ export function MainMenu() {
             transition: 'opacity 80ms',
           }}
         >
-          ◇ PRESS ARCADE TO START ◇
+          ◇ PRESS START ◇
         </div>
       </div>
 
@@ -656,11 +657,12 @@ function ButtonGroup({ label, children }: { label: string; children: React.React
   )
 }
 
-function SmallButton({ label, onClick }: { label: string; onClick: () => void }) {
+function SmallButton({ label, onClick, title }: { label: string; onClick: () => void; title?: string }) {
   return (
     <button
       onClick={onClick}
       onMouseEnter={Sfx.menuMove}
+      title={title}
       className="px-3 py-1.5 font-display text-[9px] tracking-widest hover:translate-y-[-1px] transition-transform"
       style={{
         background: 'rgba(0,0,0,0.4)',

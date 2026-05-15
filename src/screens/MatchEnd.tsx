@@ -229,7 +229,9 @@ function ShareButton({
       : biggest >= 200
       ? `${biggest}-dmg finisher`
       : `${hpPct}% HP left`
-    const text = `OPERATORS · ${winner} beat ${loser} (${highlight}). ${quoteBank} real Lenny quotes unlocked. Vibe-coded for #lennysbuildathon — play at`
+    // Lead the hook: every move is a real framework from a real podcast
+    // guest. The numbers are the proof; the framework angle is the share-worthy reason.
+    const text = `OPERATORS · ${winner} beat ${loser} (${highlight}) using real frameworks from Lenny's guests. ${quoteBank} verbatim quotes unlocked. Built for #lennysbuildathon —`
     const url = 'https://operators.replit.app'
     const tweetUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`
     window.open(tweetUrl, '_blank', 'noopener,noreferrer')

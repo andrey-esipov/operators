@@ -107,6 +107,13 @@ export function Stats() {
         {/* ACHIEVEMENTS */}
         <section>
           <h2 className="font-display text-sm tracking-widest text-white/70 mb-3">▌ ACHIEVEMENTS</h2>
+          {unlocked.size === 0 && (
+            <p className="font-body text-base text-white/60 mb-3 italic">
+              Play any mode to earn badges. <span style={{ color: '#CD7F32' }}>Bronze</span> tier
+              unlocks fast; <span style={{ color: '#C0C0C0' }}>silver</span> rewards mastery;
+              <span style={{ color: '#FFD60A' }}> gold</span> requires defeating Lenny on hard.
+            </p>
+          )}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {ACHIEVEMENTS.map((a) => {
               const got = unlocked.has(a.id)

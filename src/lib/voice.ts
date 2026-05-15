@@ -203,10 +203,7 @@ export const Voice = {
     }
 
     const s = getSynth()
-    if (!s) {
-      console.warn('[voice] SpeechSynthesis unavailable in this browser')
-      return
-    }
+    if (!s) return  // SpeechSynthesis unavailable — silently no-op
     // Cancel any in-flight speech to avoid overlap, but ONLY if currently
     // speaking — calling cancel() during paused/idle state on some macOS
     // Chrome versions can leave the engine in a stuck state where the next
@@ -225,8 +222,9 @@ export const Voice = {
     utter.volume = profile.volume
     try {
       s.speak(utter)
-    } catch (err) {
-      console.warn('[voice] speak threw:', err)
+    } catch {
+      // SpeechSynthesis can throw on some browsers when the synth is in a
+      // bad state. Swallow — voice lines are non-critical flavor.
     }
   },
   stop() {

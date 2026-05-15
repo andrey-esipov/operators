@@ -204,7 +204,7 @@ export interface GameState {
   activeSide: Side
   log: BattleLogEntry[]
   /** Last entry id (UUID) for animations */
-  lastFlash?: { kind: 'crit' | 'combo' | 'ult' | 'ko'; side: Side; id: number }
+  lastFlash?: { kind: 'crit' | 'combo' | 'ult'; side: Side; id: number }
   /** When the final hit of a round lands, this carries the K.O. cinematic state. */
   koCinematic?: { winner: Side; loser: Side; comboTitle?: string; id: number }
   /** Sound cue queue for the audio system to consume */

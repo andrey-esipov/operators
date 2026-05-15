@@ -50,11 +50,15 @@ export const FIGHTERS: FighterDef[] = [
         type: 'setup',
         momentum: 2,
         baseDamage: 30,
-        description: 'Buff: immune to defensive moves.',
+        description: 'Buff: +10% damage. Unlocks AIR-IS-A-CITY ult.',
         quote: 'When you have founder mode, you can do that.',
         episode: 'ep 217',
         timestamp: '14:30',
-        selfApplies: [{ key: 'FOUNDER_MODE', label: 'F-MODE', remaining: 2 }],
+        // remaining: 3 so the air-design combo (turn N+1) AND the
+        // 8-momentum ult (typically reachable turn N+2) can both land
+        // while F-MODE is still active. With remaining: 2 the ult
+        // requirement expired before the player could afford the cast.
+        selfApplies: [{ key: 'FOUNDER_MODE', label: 'F-MODE', remaining: 3 }],
       },
       {
         id: 'air-design',
@@ -616,7 +620,12 @@ export const FIGHTERS: FighterDef[] = [
     spriteBio: 'a friendly-faced man in his late 30s with short light brown / dirty-blond hair, clean-shaven, wearing a casual button-up shirt with rolled-up sleeves, large studio headphones around his neck, holding a podcast microphone on a desk arm — Lenny Rachitsky, host of Lenny\'s Podcast',
     episode: 'ep 1–298',
     accent: '#FFD60A',
-    maxHp: 1200,
+    // Boss tier: 1080 HP. Was 1200 — meaningfully harder than any non-boss
+    // matchup on its own, which made the arcade gauntlet's final fight feel
+    // tanky in a way that scaled poorly with the bonus scenario damage.
+    // 1080 keeps Lenny clearly above the 950-1050 roster band without
+    // tipping into "this is just an HP wall."
+    maxHp: 1080,
     scenarioBonus: {
       'pre-pmf': 1.2,
       hypergrowth: 1.2,

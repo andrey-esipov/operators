@@ -56,10 +56,20 @@ export function MoveCard({
     lastMoveId !== null &&
     move.combosFrom.includes(lastMoveId)
 
+  const ariaLabel = `${TYPE_LABEL[move.type]} ${move.name} — ${move.baseDamage} damage, ${move.momentum} momentum${
+    onCooldown ? `, on cooldown ${cooldown} turns` : ''
+  }${
+    ultGated ? `, requires ${!superReady ? 'full super meter' : move.requiresSelfStatus ?? 'condition'}` : ''
+  }${
+    !usable && !onCooldown && !ultGated ? ', insufficient momentum' : ''
+  }`
+
   return (
     <button
       onClick={usable ? onClick : undefined}
       disabled={!usable}
+      aria-label={ariaLabel}
+      title={move.description}
       className="relative px-2 py-1.5 text-left transition-transform hover:translate-y-[-2px]"
       style={{
         background: usable ? `linear-gradient(180deg, ${accent}33, ${accent}11)` : '#1A1230',

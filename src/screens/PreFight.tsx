@@ -322,15 +322,20 @@ export function PreFight() {
           </div>
         </div>
 
-        {/* Scenario bonus reminder at bottom */}
+        {/* Scenario bonus reminder at bottom — bumped to base font 12px and
+            stronger glow so the "this fighter does more damage in THIS
+            scenario" beat reads instantly. First-time players are otherwise
+            likely to miss the link between scenario flavor and the bonus. */}
         <div className="absolute bottom-10 left-0 right-0 text-center px-6">
           <div
-            className="inline-block px-4 py-2 font-display text-[9px] tracking-widest"
+            className="inline-block px-5 py-2.5 font-display text-xs tracking-widest"
             style={{
-              background: 'rgba(0,0,0,0.7)',
+              background: 'rgba(0,0,0,0.78)',
               border: '2px solid #FFD60A',
               color: '#FFD60A',
-              textShadow: '2px 2px 0 black',
+              textShadow: '2px 2px 0 black, 0 0 12px #F77F00',
+              boxShadow: '0 0 18px rgba(255,214,10,0.45), inset -2px -2px 0 rgba(0,0,0,0.5)',
+              animation: 'flash 1.8s ease-in-out infinite',
             }}
           >
             {scenarioBonusLine(a, b, scenario)}

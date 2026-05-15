@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
-import { FIGHTERS, getFighter } from '../data/fighters'
+import { FIGHTERS, FEATURED_ROSTER, getFighter } from '../data/fighters'
+import type { FighterDef } from '../types'
 import { SCENARIOS, SCENARIO_ORDER } from '../data/scenarios'
 import { PULL_QUOTES } from '../data/pull-quotes'
 import { Sprite } from '../components/Sprite'
@@ -34,9 +35,16 @@ type Scene =
  *   7. (loop back to title)
  */
 export function AttractMode({ onExit }: Props) {
-  // Pre-compute a randomized scene sequence (8 scenes ≈ 32 seconds)
+  // Pre-compute a randomized scene sequence (8 scenes ≈ 32 seconds). The
+  // matchup + KO scenes draw from FEATURED_ROSTER so the demo reel only
+  // shows fighters with finished sprite art — wave-4 placeholder figures
+  // shouldn't headline the marquee. RosterScene still renders all FIGHTERS.
   const scenes = useMemo<Scene[]>(() => {
-    const shuffled = [...FIGHTERS].sort(() => Math.random() - 0.5)
+    const featuredDefs = FEATURED_ROSTER
+      .map((id) => getFighter(id))
+      .filter((f): f is FighterDef => !!f)
+    const pool = featuredDefs.length >= 5 ? featuredDefs : FIGHTERS
+    const shuffled = [...pool].sort(() => Math.random() - 0.5)
     const sc = SCENARIO_ORDER
     return [
       { kind: 'title' },

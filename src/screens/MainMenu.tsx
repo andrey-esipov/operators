@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useGame } from '../state/game'
 import { Sfx } from '../lib/audio'
 import { Logo } from '../components/Logo'
-import { FIGHTERS } from '../data/fighters'
+import { FIGHTERS, FEATURED_ROSTER, getFighter } from '../data/fighters'
 import { SCENARIO_ORDER } from '../data/scenarios'
 import { Sprite } from '../components/Sprite'
 import { PULL_QUOTES } from '../data/pull-quotes'
@@ -38,14 +38,23 @@ export function MainMenu() {
     return () => clearInterval(id)
   }, [allQuotes.length])
 
-  // Animated focus on a fighter — rotates every 2.5s
+  // Featured fighters — only the ones with hand-curated sprite art appear
+  // in the menu's hero rotation, silhouette carousel, and roster strip.
+  // Wave-4 fighters live in CharacterSelect but stay off the marquee until
+  // their sprites ship.
+  const featured = useMemo(() => {
+    const out = FEATURED_ROSTER.map((id) => getFighter(id)).filter((f): f is typeof FIGHTERS[number] => !!f)
+    return out.length > 0 ? out : FIGHTERS  // defensive fallback
+  }, [])
+
+  // Animated focus on a fighter — rotates every 2.5s through FEATURED only.
   const [focusIdx, setFocusIdx] = useState(0)
   useEffect(() => {
     const id = setInterval(() => {
-      setFocusIdx((i) => (i + 1) % FIGHTERS.length)
+      setFocusIdx((i) => (i + 1) % featured.length)
     }, 2500)
     return () => clearInterval(id)
-  }, [])
+  }, [featured.length])
 
   // Attract mode: defaults ON at first menu load — the sizzle reel IS
   // the first-impression experience (SF II opens to its attract mode too).
@@ -99,13 +108,15 @@ export function MainMenu() {
     }
   }, [attract])
 
-  // Operator of the Day — deterministic from today's date, same for everyone today.
+  // Operator of the Day — deterministic from today's date, same for everyone
+  // today. Drawn from the featured pool so the pill always names a fighter
+  // with finished art.
   const operatorOfDay = useMemo(() => {
     const today = new Date().toISOString().slice(0, 10)
     let h = 0
     for (let i = 0; i < today.length; i++) h = (h * 31 + today.charCodeAt(i)) >>> 0
-    return FIGHTERS[h % FIGHTERS.length]
-  }, [])
+    return featured[h % featured.length]
+  }, [featured])
 
   // PRESS START blink
   const [blinkOn, setBlinkOn] = useState(true)
@@ -126,7 +137,8 @@ export function MainMenu() {
   const setDifficulty = useGame((s) => s.setDifficulty)
 
   const currentQuote = allQuotes[quoteIdx]
-  const focusFighter = FIGHTERS[focusIdx]
+  const focusFighter = featured[focusIdx % featured.length]
+  const opposingFighter = featured[(focusIdx + Math.floor(featured.length / 2)) % featured.length]
 
   if (attract) {
     return <AttractMode onExit={() => setAttract(false)} />
@@ -179,11 +191,14 @@ export function MainMenu() {
         {FIGHTERS.length} OPERATORS · {FIGHTERS.reduce((s, f) => s + f.moves.length + 1, 0)} FRAMEWORKS · {SCENARIO_ORDER.length} STAGES
       </p>
 
-      {/* MID: rotating fighter spotlight */}
+      {/* MID: rotating fighter spotlight — drawn from FEATURED_ROSTER only
+          so the player always sees recognizable hand-drawn art on the hero
+          screen. The opposing fighter is offset by half-roster so the pair
+          rotates as a balanced VS, not the same neighbor every tick. */}
       <div className="relative z-20 mt-3 flex items-center gap-6">
         <FighterShowcase fighter={focusFighter} side="a" />
         <VsBadge />
-        <FighterShowcase fighter={FIGHTERS[(focusIdx + 4) % FIGHTERS.length]} side="b" />
+        <FighterShowcase fighter={opposingFighter} side="b" />
       </div>
 
       {/* Rotating quote marquee — compact */}
@@ -321,9 +336,10 @@ export function MainMenu() {
         </div>
       </div>
 
-      {/* Roster strip — 40 fighters, horizontally scrollable.
-          The focused fighter auto-scrolls into view so the rotation reads
-          as a live carousel (matches SF II's character-select pacing). */}
+      {/* Roster strip — horizontally scrollable. Shows only featured fighters
+          (the ones with finished art) so the live carousel never highlights
+          a placeholder silhouette. The focused fighter auto-scrolls into
+          view, matching SF II's character-select pacing. */}
       <div className="relative z-20 mt-2 mb-2 w-full px-4">
         <div
           className="flex gap-2 overflow-x-auto pb-2 roster-strip"
@@ -332,7 +348,7 @@ export function MainMenu() {
             scrollBehavior: 'smooth',
           }}
         >
-          {FIGHTERS.map((f, i) => (
+          {featured.map((f, i) => (
             <div
               key={f.id}
               ref={(el) => {
@@ -351,6 +367,7 @@ export function MainMenu() {
                 transform: i === focusIdx ? 'scale(1.12)' : 'scale(1)',
                 transition: 'transform 0.25s',
               }}
+              title={f.shortName}
             >
               <Sprite fighter={f} side="a" state="stance" />
             </div>
@@ -498,7 +515,15 @@ function Starfield() {
 
 /** Fighter silhouettes drifting across the background, very subtle. */
 function SilhouetteCarousel() {
-  const sel = [FIGHTERS[2], FIGHTERS[7], FIGHTERS[12], FIGHTERS[17]]
+  // Hand-picked silhouettes from the featured pool: a CEO, an investor, a
+  // PM heavyweight, and a designer — so the drifting background figures
+  // read as a varied roster rather than a single archetype.
+  const sel = [
+    getFighter('chesky'),
+    getFighter('andreessen'),
+    getFighter('doshi'),
+    getFighter('dylan'),
+  ].filter((f): f is NonNullable<typeof f> => !!f)
   return (
     <div className="absolute inset-0 z-[6] pointer-events-none overflow-hidden">
       {sel.map((f, i) => (
@@ -530,10 +555,16 @@ function SilhouetteCarousel() {
 }
 
 function FighterShowcase({ fighter, side }: { fighter: typeof FIGHTERS[0]; side: 'a' | 'b' }) {
+  // Showcase keys on `fighter.id` so the sprite + name + archetype all
+  // re-mount together — the small entry animation runs on every rotation,
+  // which reads as a "vs cabinet" character roll instead of a static swap.
   return (
     <div
-      className="flex flex-col items-center"
-      style={{ filter: 'drop-shadow(0 0 20px #FFD60A99)' }}
+      key={fighter.id}
+      className="flex flex-col items-center showcase-entry"
+      style={{
+        filter: `drop-shadow(0 0 22px ${fighter.accent}AA) drop-shadow(0 8px 0 rgba(0,0,0,0.6))`,
+      }}
     >
       <div style={{ width: 220, height: 300 }} className="idle-bob">
         <Sprite fighter={fighter} side={side} state="stance" />
@@ -543,6 +574,12 @@ function FighterShowcase({ fighter, side }: { fighter: typeof FIGHTERS[0]; side:
         style={{ color: fighter.accent, textShadow: '2px 2px 0 black' }}
       >
         {fighter.shortName}
+      </div>
+      <div
+        className="font-display text-[7px] tracking-widest mt-0.5 text-white/55"
+        style={{ letterSpacing: '0.25em' }}
+      >
+        {fighter.archetype}
       </div>
     </div>
   )

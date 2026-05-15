@@ -2792,6 +2792,7 @@ FIGHTERS.push(
   {
     id: 'reid', name: 'Reid Hoffman', shortName: 'REID',
     archetype: 'ORACLE · BLITZSCALE', bio: 'LinkedIn founder. Greylock partner. The blitzscaling philosopher who taught a generation when speed beats efficiency.',
+    spriteBio: 'a man in his 50s, completely bald, wearing wire-frame glasses, dark navy suit jacket over a light button-up shirt with no tie, holding a small leather notebook — Reid Hoffman, LinkedIn founder',
     episode: 'ep 142', accent: '#0077B6', maxHp: 1020,
     scenarioBonus: { hypergrowth: 1.5, 'pre-pmf': 1.3, distribution: 1.2 },
     moves: [
@@ -2819,6 +2820,7 @@ FIGHTERS.push(
   {
     id: 'sellis', name: 'Sean Ellis', shortName: 'S.ELLIS',
     archetype: 'STRATEGY · PMF SURVEY', bio: 'Coined "growth hacking." Author of the 40% PMF survey. North Star metric pioneer.',
+    spriteBio: 'a man in his late 40s with short medium-brown hair, clean-shaven, wearing a navy zip-up hoodie over a heather-grey t-shirt, holding a clipboard with a survey on it — Sean Ellis, growth hacker',
     episode: 'ep 47', accent: '#06D6A0', maxHp: 970,
     scenarioBonus: { 'pre-pmf': 1.5, hypergrowth: 1.3 },
     moves: [
@@ -2846,6 +2848,7 @@ FIGHTERS.push(
   {
     id: 'achen', name: 'Andrew Chen', shortName: 'A.CHEN',
     archetype: 'STRATEGY · COLD START', bio: 'a16z general partner. Wrote "The Cold Start Problem." Decade of growth at Uber, Tinder, and consumer.',
+    spriteBio: 'a Taiwanese-American man in his early 40s with short black hair, clean-shaven, wearing an unbuttoned charcoal blazer over a plain white t-shirt with dark jeans — Andrew Chen, a16z growth partner',
     episode: 'ep 158', accent: '#FFD60A', maxHp: 990,
     scenarioBonus: { 'pre-pmf': 1.5, hypergrowth: 1.3, distribution: 1.3 },
     moves: [
@@ -2873,6 +2876,7 @@ FIGHTERS.push(
   {
     id: 'balfour', name: 'Brian Balfour', shortName: 'BALFOUR',
     archetype: 'STRATEGY · FOUR FITS', bio: 'CEO of Reforge. Architect of growth as a discipline. Defined product-channel-market fit.',
+    spriteBio: 'a man in his early 40s with short medium-brown hair, athletic build, clean-shaven, wearing a dark navy long-sleeve crew-neck shirt with dark slacks — Brian Balfour, Reforge CEO',
     episode: 'ep 116', accent: '#F77F00', maxHp: 980,
     scenarioBonus: { hypergrowth: 1.4, plateau: 1.3, 'ipo-prep': 1.2 },
     moves: [
@@ -2900,6 +2904,7 @@ FIGHTERS.push(
   {
     id: 'kscott', name: 'Kim Scott', shortName: 'K.SCOTT',
     archetype: 'CONTROL · RADICAL CANDOR', bio: 'Ex-Google, ex-Apple. Author of "Radical Candor." Defined the language of caring personally + challenging directly.',
+    spriteBio: 'a woman in her 50s with chin-length silver-grey hair, dark-frame glasses, warm but determined expression, wearing a black structured blazer over a magenta top — Kim Scott, Radical Candor author',
     episode: 'ep 73', accent: '#E63946', maxHp: 990,
     scenarioBonus: { plateau: 1.4, crisis: 1.3, 'ipo-prep': 1.1 },
     moves: [
@@ -2927,6 +2932,7 @@ FIGHTERS.push(
   {
     id: 'torres', name: 'Teresa Torres', shortName: 'TORRES',
     archetype: 'CONTROL · CONTINUOUS DISCOVERY', bio: 'Product discovery coach. Defined the opportunity solution tree and continuous interviewing as the default cadence.',
+    spriteBio: 'a woman in her 40s with long straight brown hair, dark-frame rectangular glasses, warm smile, wearing a teal blouse with a fine pendant necklace — Teresa Torres, product discovery coach',
     episode: 'ep 168', accent: '#06D6A0', maxHp: 970,
     scenarioBonus: { 'pre-pmf': 1.4, plateau: 1.3 },
     moves: [
@@ -2954,6 +2960,7 @@ FIGHTERS.push(
   {
     id: 'perri', name: 'Melissa Perri', shortName: 'PERRI',
     archetype: 'CONTROL · BUILD TRAP', bio: 'Author of "Escaping the Build Trap." Defined product-as-strategy versus feature-as-output for a generation of orgs.',
+    spriteBio: 'a woman in her late 30s with long wavy blonde hair, dark-frame round glasses, wearing a black turtleneck sweater with a silver chain necklace — Melissa Perri, product strategist',
     episode: 'ep 134', accent: '#7209B7', maxHp: 970,
     scenarioBonus: { plateau: 1.4, 'ipo-prep': 1.3 },
     moves: [
@@ -2981,6 +2988,7 @@ FIGHTERS.push(
   {
     id: 'wlarson', name: 'Will Larson', shortName: 'WLARSON',
     archetype: 'BUILDER · STAFF PATH', bio: 'Author of "Staff Engineer\'s Path." CTO at Carta. Defined the modern individual contributor career ladder.',
+    spriteBio: 'a man in his late 30s with short light-brown hair and a full short beard, wearing a charcoal zip-up hoodie over a heather-grey t-shirt — Will Larson, engineering leader',
     episode: 'ep 211', accent: '#00B4D8', maxHp: 1010,
     scenarioBonus: { plateau: 1.4, 'ipo-prep': 1.3 },
     moves: [
@@ -3008,6 +3016,7 @@ FIGHTERS.push(
   {
     id: 'cfournier', name: 'Camille Fournier', shortName: 'CAMILLE',
     archetype: 'CONTROL · MANAGER PATH', bio: 'Author of "The Manager\'s Path." MD at Two Sigma. The canonical map of engineering management ladders.',
+    spriteBio: 'a woman in her late 30s with curly shoulder-length auburn hair, dark-frame glasses, wearing a dark navy blazer over a maroon blouse — Camille Fournier, engineering manager',
     episode: 'ep 132', accent: '#F72585', maxHp: 990,
     scenarioBonus: { plateau: 1.4, crisis: 1.2 },
     moves: [
@@ -3035,6 +3044,7 @@ FIGHTERS.push(
   {
     id: 'belsky', name: 'Scott Belsky', shortName: 'BELSKY',
     archetype: 'ARTISAN · MESSY MIDDLE', bio: 'Behance founder. Chief Product Officer at Adobe. Author of "The Messy Middle" — the canonical map of the long boring phase.',
+    spriteBio: 'a man in his early 40s with short dark-brown hair, clean-shaven, round-frame designer tortoiseshell glasses, wearing a navy henley shirt and dark slacks — Scott Belsky, Behance founder',
     episode: 'ep 184', accent: '#F77F00', maxHp: 980,
     scenarioBonus: { plateau: 1.5, hypergrowth: 1.2 },
     moves: [
@@ -3062,6 +3072,7 @@ FIGHTERS.push(
   {
     id: 'rabois', name: 'Keith Rabois', shortName: 'RABOIS',
     archetype: 'TANK · TALENT BAR', bio: 'PayPal mafia. Square, Khosla, Founders Fund. The most uncompromising voice on hiring in Silicon Valley.',
+    spriteBio: 'a man in his early 50s, completely bald, clean-shaven, sharp intense focused gaze, wearing a crisp white button-up shirt with the top button undone and no tie — Keith Rabois, PayPal mafia investor',
     episode: 'ep 209', accent: '#E63946', maxHp: 1020,
     scenarioBonus: { 'pre-pmf': 1.3, hypergrowth: 1.3, crisis: 1.2 },
     moves: [
@@ -3089,6 +3100,7 @@ FIGHTERS.push(
   {
     id: 'forsgren', name: 'Nicole Forsgren', shortName: 'FORSGREN',
     archetype: 'BUILDER · DORA METRICS', bio: 'Co-author of "Accelerate." Created the DORA metrics. Defined how high-performing engineering orgs measure themselves.',
+    spriteBio: 'a woman in her early 40s with long straight platinum-blonde hair, dark-frame rectangular glasses, sharp confident smile, wearing a charcoal blazer over a teal blouse — Nicole Forsgren, DORA researcher',
     episode: 'ep 264', accent: '#06D6A0', maxHp: 1000,
     scenarioBonus: { 'ipo-prep': 1.4, plateau: 1.3 },
     moves: [
@@ -3116,6 +3128,7 @@ FIGHTERS.push(
   {
     id: 'duarte', name: 'Nancy Duarte', shortName: 'DUARTE',
     archetype: 'ARTISAN · STORY ARC', bio: 'CEO of Duarte Inc. The presentation designer who shaped Steve Jobs\'s keynotes and a million pitch decks since.',
+    spriteBio: 'a woman in her 50s with chin-length auburn hair, warm engaging smile, wearing a vibrant fuchsia blouse with a sleek silver chain necklace — Nancy Duarte, presentation designer',
     episode: 'ep 121', accent: '#FFD60A', maxHp: 970,
     scenarioBonus: { 'pre-pmf': 1.3, 'ipo-prep': 1.4, distribution: 1.2 },
     moves: [
@@ -3143,6 +3156,7 @@ FIGHTERS.push(
   {
     id: 'pcampbell', name: 'Patrick Campbell', shortName: 'PATRICK',
     archetype: 'CONTROL · PRICING DATA', bio: 'Founder of ProfitWell (acquired by Paddle). The most-cited operator on pricing-by-data in SaaS.',
+    spriteBio: 'a man in his late 30s with short medium-brown hair and a closely-trimmed beard, wearing a dark slate-grey polo shirt and dark slacks — Patrick Campbell, ProfitWell founder',
     episode: 'ep 187', accent: '#7209B7', maxHp: 970,
     scenarioBonus: { monetization: 1.5, plateau: 1.2 },
     moves: [
@@ -3170,6 +3184,7 @@ FIGHTERS.push(
   {
     id: 'eliz', name: 'Eli Schwartz', shortName: 'ELI',
     archetype: 'STRATEGY · PRODUCT-LED SEO', bio: 'Author of "Product-Led SEO." Built SurveyMonkey\'s and Wix\'s organic engines. Treats search as a product surface.',
+    spriteBio: 'a man in his early 40s with short dark brown hair, clean-shaven, wearing a heather-grey crew-neck t-shirt with dark jeans, holding a laptop — Eli Schwartz, SEO strategist',
     episode: 'ep 173', accent: '#F77F00', maxHp: 960,
     scenarioBonus: { distribution: 1.5, plateau: 1.2 },
     moves: [
@@ -3197,6 +3212,7 @@ FIGHTERS.push(
   {
     id: 'wodtke', name: 'Christina Wodtke', shortName: 'WODTKE',
     archetype: 'CONTROL · RADICAL FOCUS', bio: 'Author of "Radical Focus." Taught a generation of teams how to actually use OKRs as a forcing function.',
+    spriteBio: 'a woman in her 50s with short silver-grey hair styled with a slight wave, bold red-frame designer glasses, wearing a colorful geometric-patterned blazer — Christina Wodtke, OKR author',
     episode: 'ep 105', accent: '#06D6A0', maxHp: 970,
     scenarioBonus: { plateau: 1.4, 'pre-pmf': 1.2 },
     moves: [
@@ -3224,6 +3240,7 @@ FIGHTERS.push(
   {
     id: 'gilad', name: 'Itamar Gilad', shortName: 'GILAD',
     archetype: 'STRATEGY · EVIDENCE', bio: 'Ex-Google PM. Creator of the GIST framework and the Confidence Meter. Defined evidence-based prioritization.',
+    spriteBio: 'an Israeli-American man in his 40s with short dark hair and a closely-trimmed dark beard, wearing a navy crew-neck t-shirt and dark jeans — Itamar Gilad, ex-Google product manager',
     episode: 'ep 163', accent: '#FFD60A', maxHp: 970,
     scenarioBonus: { plateau: 1.3, 'pre-pmf': 1.3 },
     moves: [
@@ -3251,6 +3268,7 @@ FIGHTERS.push(
   {
     id: 'gmoore', name: 'Geoffrey Moore', shortName: 'G.MOORE',
     archetype: 'ORACLE · CHASM', bio: 'Author of "Crossing the Chasm." Defined how tech products move from early adopters to the mainstream and survive the gap.',
+    spriteBio: 'a man in his late 60s with neat white hair, clean-shaven, wearing a navy suit jacket over a light-blue dress shirt with no tie — Geoffrey Moore, strategy author',
     episode: 'ep 145', accent: '#0077B6', maxHp: 1000,
     scenarioBonus: { 'pre-pmf': 1.4, hypergrowth: 1.3 },
     moves: [
@@ -3278,6 +3296,7 @@ FIGHTERS.push(
   {
     id: 'rmartin', name: 'Roger Martin', shortName: 'R.MARTIN',
     archetype: 'CONTROL · PLAYING TO WIN', bio: 'Ex-dean of Rotman. Strategy advisor to P&G. Author of "Playing to Win." The five-question strategy frame.',
+    spriteBio: 'a man in his 70s with neat short grey hair, clean-shaven, rimless glasses, wearing a charcoal suit jacket over a crisp white dress shirt — Roger Martin, strategy professor',
     episode: 'ep 174', accent: '#7209B7', maxHp: 1000,
     scenarioBonus: { plateau: 1.4, 'ipo-prep': 1.3 },
     moves: [
@@ -3305,6 +3324,7 @@ FIGHTERS.push(
   {
     id: 'rumelt', name: 'Richard Rumelt', shortName: 'RUMELT',
     archetype: 'ORACLE · KERNEL', bio: 'UCLA strategy professor. Author of "Good Strategy / Bad Strategy." The kernel: diagnosis, guiding policy, coherent action.',
+    spriteBio: 'a man in his late 70s with neatly-cropped white hair and a full neat white beard, square-frame glasses, wearing a dark sweater vest over a light-blue button-up shirt — Richard Rumelt, UCLA strategy professor',
     episode: 'ep 199', accent: '#E63946', maxHp: 1010,
     scenarioBonus: { plateau: 1.4, crisis: 1.4 },
     moves: [
@@ -3332,6 +3352,7 @@ FIGHTERS.push(
   {
     id: 'moesta', name: 'Bob Moesta', shortName: 'MOESTA',
     archetype: 'STRATEGY · JOBS TO BE DONE', bio: 'Co-creator of Jobs to be Done. The interviewer who taught teams to ask "what made you buy?" instead of "what features do you want?"',
+    spriteBio: 'a man in his late 50s with short grey hair and a neatly-trimmed grey beard, wearing a medium-blue button-up shirt with sleeves rolled to the elbow — Bob Moesta, JTBD practitioner',
     episode: 'ep 191', accent: '#F77F00', maxHp: 980,
     scenarioBonus: { 'pre-pmf': 1.4, monetization: 1.2 },
     moves: [
@@ -3359,6 +3380,7 @@ FIGHTERS.push(
   {
     id: 'cutler', name: 'John Cutler', shortName: 'CUTLER',
     archetype: 'CONTROL · PRODUCT OPS', bio: 'Ex-Amplitude product evangelist. The clearest thinker on what teams actually do day-to-day vs what they claim in the deck.',
+    spriteBio: 'a man in his late 30s with short medium-brown hair, clean-shaven, friendly thoughtful expression, wearing a heather-grey t-shirt under an open dark zip-up jacket — John Cutler, product evangelist',
     episode: 'ep 152', accent: '#06D6A0', maxHp: 970,
     scenarioBonus: { plateau: 1.4, 'ipo-prep': 1.2 },
     moves: [
@@ -3386,6 +3408,7 @@ FIGHTERS.push(
   {
     id: 'logan', name: 'Logan Kilpatrick', shortName: 'LOGAN',
     archetype: 'BUILDER · AI DEVREL', bio: 'AI Studio at Google, formerly head of developer relations at OpenAI. The connective tissue between every AI lab and the developer who tries it.',
+    spriteBio: 'a man in his late 20s with short dark-brown hair, clean-shaven, friendly smile, wearing a black tech-company hoodie with small embroidered logo and dark jeans — Logan Kilpatrick, AI developer relations',
     episode: 'ep 296', accent: '#7209B7', maxHp: 970,
     scenarioBonus: { 'ai-native': 1.5, distribution: 1.2 },
     moves: [
@@ -3413,6 +3436,7 @@ FIGHTERS.push(
   {
     id: 'truell', name: 'Michael Truell', shortName: 'TRUELL',
     archetype: 'BUILDER · CURSOR', bio: 'Co-founder of Cursor. Bet on the IDE as the future of AI-assisted coding when "AI in the IDE" was still considered a feature.',
+    spriteBio: 'a man in his mid-20s with short dark hair, clean-shaven, focused intense expression, wearing a black zip-up hoodie over a plain dark t-shirt, holding a thin laptop — Michael Truell, Cursor co-founder',
     episode: 'ep 314', accent: '#00B4D8', maxHp: 990,
     scenarioBonus: { 'ai-native': 1.5, hypergrowth: 1.3 },
     moves: [
@@ -3464,3 +3488,21 @@ export const STARTING_ROSTER: string[] = [
 ]
 
 export const UNLOCKABLES: string[] = ['lenny']
+
+/**
+ * Subset of STARTING_ROSTER whose fighters have hand-curated sprite art
+ * (custom PNGs in public/sprites/<id>/). MainMenu and AttractMode draw
+ * their hero rotations from this list so the player only ever sees a
+ * recognizable character on the marquee screens. Wave-4 fighters
+ * graduate into FEATURED_ROSTER once their sprite PNGs ship.
+ */
+export const FEATURED_ROSTER: string[] = [
+  'chesky', 'doshi', 'catwu', 'madhavan', 'spiegel', 'turley', 'cagan',
+  'altman', 'taylor', 'lazar', 'amjad', 'gokul', 'dunford',
+  'andreessen', 'tobi', 'drew', 'dylan', 'krieger', 'stewart',
+  'jason', 'simon', 'seth', 'nikita', 'julie', 'annie',
+  'boris',
+  'benioff', 'horowitz', 'feifei', 'dharmesh', 'melanie',
+  'ries', 'boz', 'tavel', 'rahul', 'aparna',
+  'maples', 'jessica', 'elena',
+]

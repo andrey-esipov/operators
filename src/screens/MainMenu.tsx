@@ -12,8 +12,6 @@ import { prefetchScreen } from './registry'
 export function MainMenu() {
   const setPhase = useGame((s) => s.setPhase)
   const setMode = useGame((s) => s.setMode)
-  const toggleCrt = useGame((s) => s.toggleCrt)
-  const crt = useGame((s) => s.crtEnabled)
   const toggleMusic = useGame((s) => s.toggleMusic)
   const music = useGame((s) => s.musicEnabled)
   const toggleVoice = useGame((s) => s.toggleVoice)
@@ -232,7 +230,7 @@ export function MainMenu() {
           Row 1 (primary):     ARCADE · VS · MARQUEE
           Row 2 (modes):       DAILY · PRACTICE · RANDOM · GENERATE YOU
           Row 3 (library):     HOW TO PLAY · ENCYCLOPEDIA · QUOTE BANK · STATS
-          Row 4 (preferences): DIFFICULTY · MUSIC · VOICE · CRT · CREDITS
+          Row 4 (preferences): DIFFICULTY · MUSIC · VOICE · CREDITS
       */}
       <div className="relative z-20 flex flex-col gap-3 mt-4 items-center menu-cta-stack px-4">
         {/* Row 1: the three headline play modes sit shoulder-to-shoulder
@@ -315,7 +313,6 @@ export function MainMenu() {
           />
           <SmallButton label={`MUSIC · ${music ? 'ON' : 'OFF'}`}  onClick={toggleMusic} title="Toggle background music" />
           <SmallButton label={`VOICE · ${voice ? 'ON' : 'OFF'}`} onClick={toggleVoice} title="Toggle fighter voice lines (browser TTS)" />
-          <SmallButton label={`CRT · ${crt ? 'ON' : 'OFF'}`} onClick={toggleCrt} title="Retro CRT scanline filter — toggle off for a flat modern look" />
           <SmallButton label="◇ CREDITS" onClick={() => { Sfx.menuSelect(); setPhase('credits') }} title="Credits" onHover={() => prefetchScreen('credits')} />
         </ButtonGroup>
       </div>

@@ -47,7 +47,7 @@ export function Credits() {
             {' '}is a turn-based tactical fighter built on the 298-episode archive of
             Lenny's Podcast. {FIGHTERS.length} guests are playable. Every move name is a real
             framework. Every flavor quote is verbatim with an episode + timestamp link.
-            Built in 16 days for the Lenny × Replit Buildathon (May 6 – 27, 2026).
+            Built for the Lenny × Replit Buildathon — submission window 2026.
           </p>
         </Section>
 

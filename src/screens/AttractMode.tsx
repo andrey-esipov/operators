@@ -42,12 +42,18 @@ export function AttractMode({ onExit }: Props) {
       { kind: 'title' },
       { kind: 'matchup', fighterA: shuffled[0].id, fighterB: shuffled[1].id, scenarioId: sc[Math.floor(Math.random() * sc.length)] },
       { kind: 'ko', winner: shuffled[2].id, loser: shuffled[3].id },
-      {
-        kind: 'quote',
-        fighterId: PULL_QUOTES[Math.floor(Math.random() * PULL_QUOTES.length)].fighterId,
-        quote: PULL_QUOTES[Math.floor(Math.random() * PULL_QUOTES.length)].quote,
-        episode: PULL_QUOTES[Math.floor(Math.random() * PULL_QUOTES.length)].episode,
-      },
+      (() => {
+        // Single coherent pick — otherwise fighterId / quote / episode were
+        // sourced from three independent random PULL_QUOTES entries and the
+        // reel could attribute one guest's quote to another guest's episode.
+        const pq = PULL_QUOTES[Math.floor(Math.random() * PULL_QUOTES.length)]
+        return {
+          kind: 'quote' as const,
+          fighterId: pq.fighterId,
+          quote: pq.quote,
+          episode: pq.episode,
+        }
+      })(),
       { kind: 'matchup', fighterA: shuffled[4].id, fighterB: 'lenny', scenarioId: 'ipo-prep' },
       { kind: 'stats' },
       { kind: 'roster' },

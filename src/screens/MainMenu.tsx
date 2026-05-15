@@ -570,6 +570,7 @@ function MenuButton({
     <button
       onClick={onClick}
       onMouseEnter={Sfx.menuMove}
+      aria-label={`${label.replace(/[▶★◇\s]+/g, ' ').trim()} — ${subtitle}`}
       className="relative px-6 py-2 font-display text-lg tracking-widest hover:translate-y-[-2px] transition-transform"
       style={{
         background: `linear-gradient(180deg, ${accent}55, ${accent}22)`,
@@ -614,6 +615,7 @@ function MidButton({
     <button
       onClick={onClick}
       onMouseEnter={Sfx.menuMove}
+      aria-label={`${label.replace(/[▶★◇\s]+/g, ' ').trim()} — ${subtitle}`}
       className="relative px-4 py-1.5 font-display text-base tracking-widest hover:translate-y-[-2px] transition-transform"
       style={{
         background: `linear-gradient(180deg, ${accent}55, ${accent}22)`,

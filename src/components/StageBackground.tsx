@@ -27,7 +27,7 @@ const STAGE_THEMES: Record<ScenarioId, {
     floor: '#1A1230', accent: '#F77F00', silhouettes: '#FCBF49',
   },
   hypergrowth: {
-    skyTop: '#0F1F3D', skyBot: '#06B6D4',
+    skyTop: '#0F1F3D', skyBot: '#00B4D8',
     midDark: '#0A1530', midLight: '#1E3B6E',
     floor: '#0F1F3D', accent: '#06D6A0', silhouettes: '#90E0EF',
   },

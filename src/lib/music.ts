@@ -33,13 +33,14 @@ let currentAudio: HTMLAudioElement | null = null
 let currentMp3Track: TrackId | null = null
 const knownMissing = new Set<TrackId>()
 
+// Only tracks with shipped pre-rendered MP3s belong here — everything else
+// falls through to the procedural chiptune scheduler below. Listing missing
+// files (boss/victory/defeat) here would log a 404 per attempted play, which
+// looks broken even though the fallback works.
 const MP3_MAP: Partial<Record<TrackId, string>> = {
   menu:     '/audio/music/menu.mp3',
   fight:    '/audio/music/fight.mp3',
   'fight-b':'/audio/music/fight-b.mp3',
-  boss:     '/audio/music/boss.mp3',
-  victory:  '/audio/music/victory.mp3',
-  defeat:   '/audio/music/defeat.mp3',
 }
 
 function playMp3(track: TrackId): boolean {

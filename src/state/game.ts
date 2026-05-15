@@ -653,16 +653,20 @@ export const useGame = create<GameState & Actions>((set, get) => ({
         get().castMove(cheapest)
         return
       }
-      // Otherwise we just skip the turn by advancing
+      // Hard pass: nothing affordable, no cheapest light playable. Yield the
+      // turn AND tick the yielder's own cooldowns + momentum so they recover
+      // next time around. Without the self-startTurn the yielder's cooldowns
+      // freeze, which on bad RNG could chain several yielded turns in a row.
       const nextSide: Side = side === 'a' ? 'b' : 'a'
       const target = nextSide === 'a' ? state.fighterA : state.fighterB
       if (!target) return
-      const turnStart = startTurn(target)
+      const yieldTurn = startTurn(rt)
+      const nextTurn = startTurn(target)
       set((s) => ({
         activeSide: nextSide,
         turn: s.turn + 1,
-        fighterA: nextSide === 'a' ? turnStart.runtime : s.fighterA,
-        fighterB: nextSide === 'b' ? turnStart.runtime : s.fighterB,
+        fighterA: side === 'a' ? yieldTurn.runtime : (nextSide === 'a' ? nextTurn.runtime : s.fighterA),
+        fighterB: side === 'b' ? yieldTurn.runtime : (nextSide === 'b' ? nextTurn.runtime : s.fighterB),
       }))
       return
     }

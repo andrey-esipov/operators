@@ -42,12 +42,12 @@ interface Slot {
 // flank the mic tightly; outer pair anchor the corners; middle pair fill.
 // All values are tuned for the 1536×1024 stage render.
 const LINEUP: Slot[] = [
-  { id: 'chesky',     cx: 0.08, by: 0.95, h: 360, mirror: false },
-  { id: 'doshi',      cx: 0.23, by: 0.97, h: 400, mirror: false },
-  { id: 'dylan',      cx: 0.36, by: 0.95, h: 360, mirror: false },
-  { id: 'dunford',    cx: 0.64, by: 0.95, h: 360, mirror: true  },
-  { id: 'julie',      cx: 0.77, by: 0.97, h: 400, mirror: true  },
-  { id: 'andreessen', cx: 0.92, by: 0.95, h: 360, mirror: true  },
+  { id: 'amjad',      cx: 0.11, by: 0.95, h: 360, mirror: false },
+  { id: 'turley',     cx: 0.25, by: 0.97, h: 400, mirror: false },
+  { id: 'boris',      cx: 0.38, by: 0.95, h: 360, mirror: false },
+  { id: 'feifei',     cx: 0.62, by: 0.95, h: 360, mirror: true  },
+  { id: 'seth',       cx: 0.75, by: 0.97, h: 400, mirror: true  },
+  { id: 'andreessen', cx: 0.89, by: 0.95, h: 360, mirror: true  },
 ]
 
 /**

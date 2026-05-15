@@ -10,7 +10,13 @@ interface Props {
 /** Segmented SF II-style HP bar. 20 segments + pulse when critical. */
 export function HpBar({ hp, maxHp, side, name }: Props) {
   const pct = Math.max(0, Math.min(1, hp / maxHp))
-  const filled = Math.round(pct * 20)
+  // Guarantee at least one segment lit while hp > 0 — otherwise rounding can
+  // empty the bar at sub-2.5% HP and the player reads it as "they're dead"
+  // before the K.O. cinematic plays. Watching a still-alive opponent
+  // counter-attack from a "0 HP" bar is the worst kind of UI lie. Damage
+  // resistance (DISTRIBUTION_MOAT, READ-correct) trims the killing blow
+  // often enough that this fires regularly in real matches.
+  const filled = hp > 0 ? Math.max(1, Math.round(pct * 20)) : 0
   const isCritical = pct > 0 && pct <= 0.25
   const color =
     pct > 0.6 ? 'var(--color-hp-good)' : pct > 0.3 ? 'var(--color-hp-warn)' : 'var(--color-hp-crit)'

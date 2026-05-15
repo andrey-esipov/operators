@@ -33,27 +33,31 @@ const PROMPTS: Array<{ id: string; size: string; prompt: string }> = [
   {
     id: 'title-hero',
     size: '1536x1024',
-    prompt: `A Street Fighter II / King of Fighters '98 arcade title screen.
+    prompt: `A Street Fighter II / King of Fighters '98 arcade title screen background — STAGE ONLY, no characters.
 
 CENTRAL FOCUS: a large stylized retro podcast microphone (chrome and gold, with vintage windscreen) at the dead center of the composition. Behind the mic, golden headphones glow with neon energy. The mic and headphones are the iconic motif — like Ryu's headband in SF II.
 
 BACKGROUND: a sweeping pixel-art arcade cityscape at sunset. Neon signs in the distance. A glowing horizon with bold orange-to-purple gradient sky. Geometric pixel-art accents — diamonds, dot patterns, arcade-style pillars on either side framing the composition.
 
-FOREGROUND: 8 stylized pixel-art fighter silhouettes — diverse business operators in fighting stances, arranged in a dramatic semicircle around the microphone. Their poses face outward like the SF II character lineup. Each silhouette glints with rim-light from the central mic.
+STAGE FLOOR: a dramatic pixel-art arcade stage floor in the lower third (checkerboard or rim-lit panels) — empty, ready for character sprites to be composited on top by the game engine.
 
 STYLE:
 - 16-bit pixel art in the iconic Street Fighter II / King of Fighters '98 / Capcom arcade tradition
 - HARD crisp pixel boundaries — NO anti-aliasing, NO blur
 - Vibrant saturated arcade palette: red, gold, orange, electric purple, neon pink, deep navy
-- Dramatic stage lighting with rim-light highlights on every silhouette
+- Dramatic stage lighting and rim-light highlights
 - Painterly pixel-art background reminiscent of Eastward and Octopath Traveler
 - High contrast, dramatic composition
 
-LEAVE EMPTY SPACE: leave a clear horizontal band across the upper third of the image where a TITLE WORDMARK will be overlaid by the game later. The middle and lower thirds should be the visual showpiece.
+CRITICAL NEGATIVE — DO NOT DRAW:
+- NO people, NO fighters, NO characters, NO silhouettes of humans, NO figures
+- NO text, NO logos, NO words, NO watermarks
+- NO modern flat illustration, NO Disney style, NO 3D rendering, NO photorealism
+The composition is ONLY the empty stage, microphone, headphones, cityscape, and stage floor. The game overlays its own characters on top at runtime.
 
-NEGATIVE: no text, no logos, no words, no watermarks, no modern flat illustration, no Disney style, no 3D rendering, no photorealism.
+LEAVE EMPTY SPACE: a clear horizontal band across the upper third for a TITLE WORDMARK overlay. Lower third should be the empty stage floor for character composites.
 
-OUTPUT: 1536x1024 pixel-art title screen background, no text.`,
+OUTPUT: 1536x1024 pixel-art title screen background. Stage only. No characters. No text.`,
   },
 ]
 

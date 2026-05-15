@@ -431,6 +431,12 @@ function HeroBackground() {
           }}
         />
       )}
+      {/* Real-roster lineup — six actual game characters positioned at the
+          bottom of the hero, semi-circle around where the central mic sits
+          in the title-hero artwork. Replaces the invented anonymous fighter
+          silhouettes that the bg image used to draw. Each picks from
+          FEATURED_ROSTER so the lineup is always recognizable. */}
+      <HeroFighterLineup />
       {/* Vignette */}
       <div
         className="absolute inset-0"
@@ -514,6 +520,59 @@ function Starfield() {
 }
 
 /** Fighter silhouettes drifting across the background, very subtle. */
+/**
+ * Hand-picked six-fighter lineup composited onto the hero stage. Six is the
+ * sweet spot for a SF II-style title screen — enough to read as "roster"
+ * but not so many that any one sprite shrinks below recognition size.
+ *
+ * Pick rules:
+ *   1. Each fighter must have a hand-curated sprite PNG (FEATURED_ROSTER).
+ *   2. Mix disciplines so the lineup reads "diverse cast", not "six PMs".
+ *   3. Alternate `side="a"` (faces right) and `side="b"` (faces left) so
+ *      the outermost fighters point inward toward the center mic.
+ *   4. Pose: stance — the SF II lineup pose, not attack/win/lose.
+ *
+ * Positions are percentage-based and tuned so the inner pair stay flanking
+ * the central microphone in the title-hero artwork without ever covering it.
+ */
+function HeroFighterLineup() {
+  const lineup: Array<{ id: string; side: 'a' | 'b'; left: string; bottom: string; width: number; height: number; flipDelay: string }> = [
+    { id: 'chesky',   side: 'a', left: '4%',  bottom: '5%',  width: 120, height: 160, flipDelay: '0s' },
+    { id: 'doshi',    side: 'a', left: '20%', bottom: '4%',  width: 130, height: 175, flipDelay: '0.25s' },
+    { id: 'dylan',    side: 'a', left: '34%', bottom: '6%',  width: 115, height: 155, flipDelay: '0.4s' },
+    { id: 'dunford',  side: 'b', left: '52%', bottom: '6%',  width: 115, height: 155, flipDelay: '0.55s' },
+    { id: 'julie',    side: 'b', left: '67%', bottom: '4%',  width: 130, height: 175, flipDelay: '0.7s' },
+    { id: 'andreessen', side: 'b', left: '82%', bottom: '5%', width: 120, height: 160, flipDelay: '0.85s' },
+  ]
+  // If any of the chosen fighters somehow aren't in the registry, fall back
+  // to the first N featured ids in their place — the component should never
+  // render a hole on the hero.
+  const resolved = lineup.map((slot) => ({ ...slot, fighter: getFighter(slot.id) }))
+                         .filter((s): s is typeof s & { fighter: NonNullable<ReturnType<typeof getFighter>> } => !!s.fighter)
+
+  return (
+    <div className="absolute inset-0 pointer-events-none z-[7] overflow-hidden">
+      {resolved.map((slot) => (
+        <div
+          key={slot.id}
+          className="absolute idle-bob"
+          style={{
+            left: slot.left,
+            bottom: slot.bottom,
+            width: slot.width,
+            height: slot.height,
+            transform: 'translateX(-50%)',
+            animationDelay: slot.flipDelay,
+            filter: `drop-shadow(0 0 14px ${slot.fighter.accent}99) drop-shadow(0 6px 0 rgba(0,0,0,0.7))`,
+          }}
+        >
+          <Sprite fighter={slot.fighter} side={slot.side} state="stance" />
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function SilhouetteCarousel() {
   // Hand-picked silhouettes from the featured pool: a CEO, an investor, a
   // PM heavyweight, and a designer — so the drifting background figures

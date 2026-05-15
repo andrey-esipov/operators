@@ -351,7 +351,7 @@ export function MainMenu() {
 
       {/* Bottom footer */}
       <div className="absolute bottom-1 left-0 right-0 text-center font-display text-[7px] tracking-widest text-white/40 z-20">
-        v1.0.0 · BUILD #LENNYSBUILDATHON · MAY 27 SUBMISSION · OPERATORS.REPLIT.APP
+        v1.0 · #LENNYSBUILDATHON · JUNE 3 SUBMISSION · OPERATORS.REPLIT.APP
       </div>
     </div>
   )

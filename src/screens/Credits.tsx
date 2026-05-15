@@ -118,7 +118,7 @@ export function Credits() {
 
         <div className="text-center py-8">
           <div className="font-display text-[8px] tracking-widest text-white/40">
-            ◇ OPERATORS · v1.0 · May 2026 · operators.replit.app ◇
+            ◇ OPERATORS · v1.0 · #LENNYSBUILDATHON · operators.replit.app ◇
           </div>
         </div>
       </div>

@@ -157,6 +157,11 @@ export function applyMove(input: ApplyMoveInput): ApplyMoveResult {
   const shipping = getStatus(attacker, 'SHIPPING_MOMENTUM')
   const shipMult = shipping ? (1 + (shipping.magnitude ?? 0.2)) : 1
 
+  // Hypergrowth burn on attacker = +25% damage dealt (paired with the DoT
+  // self-damage applied in startTurn — the design contract is "burn fast,
+  // hit harder"). Without this the status only hurts the bearer.
+  const burnMult = hasStatus(attacker, 'HYPERGROWTH_BURN') ? 1.25 : 1
+
   // Pricing pressure on attacker = -10% damage dealt
   const priceMult = hasStatus(attacker, 'PRICING_PRESSURE') ? 0.9 : 1
 
@@ -181,6 +186,7 @@ export function applyMove(input: ApplyMoveInput): ApplyMoveResult {
       confusedMult *
       founderBuff *
       shipMult *
+      burnMult *
       priceMult *
       paralysisMult *
       readMult *

@@ -15,7 +15,7 @@ export function DamageFloats({ pulses }: Props) {
           animate={{ y: -90, opacity: 0 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 1.1, ease: 'easeOut' }}
-          className="absolute font-num text-5xl tabular-nums z-20 pointer-events-none"
+          className="absolute font-num text-5xl tabular-nums z-[55] pointer-events-none"
           style={{
             color: p.kind === 'crit' ? '#FFFFFF' : p.kind === 'heal' ? '#06D6A0' : '#FFD60A',
             textShadow: '3px 3px 0 rgba(0,0,0,0.8)',

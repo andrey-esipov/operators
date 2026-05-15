@@ -252,6 +252,18 @@ export function CombatScreen() {
   const aSuperReady = fighterA.superMeter >= 100
   const bSuperReady = fighterB.superMeter >= 100
 
+  // Flash kind of the move currently animating. `lastFlash` in the store is
+  // sticky — game.ts only overwrites it when the new move ALSO carries a
+  // flash (crit/combo/ult). For light/heavy hits between flashy moves the
+  // value persists, which caused the ult win-pose to stay locked on for
+  // both fighters after any ultimate was cast. Reading the flash from the
+  // log entry that matches the currently-attacking side instead means the
+  // pose + colored drop-shadow only apply to the move that actually had
+  // the flash.
+  const lastLogEntry = log[log.length - 1]
+  const inFlightFlash: 'ult' | 'combo' | 'crit' | undefined =
+    attackingSide && lastLogEntry?.attacker === attackingSide ? lastLogEntry.flash : undefined
+
   return (
     <div
       className={`relative w-full h-full overflow-hidden ${shaking ? 'shake' : ''}`}
@@ -384,11 +396,11 @@ export function CombatScreen() {
               width: 340, height: 440,
               filter:
                 // Casting attacker: strong colored backlight by move kind
-                attackingSide === 'a' && lastFlash?.kind === 'ult'
+                attackingSide === 'a' && inFlightFlash === 'ult'
                   ? 'drop-shadow(0 0 32px #F72585) drop-shadow(0 0 64px #7209B7)'
-                  : attackingSide === 'a' && lastFlash?.kind === 'combo'
+                  : attackingSide === 'a' && inFlightFlash === 'combo'
                   ? 'drop-shadow(0 0 28px #FFD60A) drop-shadow(0 0 56px #F77F00)'
-                  : attackingSide === 'a' && lastFlash?.kind === 'crit'
+                  : attackingSide === 'a' && inFlightFlash === 'crit'
                   ? 'drop-shadow(0 0 24px white) drop-shadow(0 0 48px #FFD60A)'
                   : attackingSide === 'a'
                   ? 'drop-shadow(0 0 18px #FCBF49) drop-shadow(0 8px 16px rgba(0,0,0,0.6))'
@@ -407,7 +419,7 @@ export function CombatScreen() {
                 fighterA.hp <= 0
                   ? 'lose'
                   : attackingSide === 'a'
-                  ? (lastFlash?.kind === 'ult' ? 'ult' : 'attack')
+                  ? (inFlightFlash === 'ult' ? 'ult' : 'attack')
                   : 'stance'
               }
               shake={shaking && damagePulses[damagePulses.length-1]?.side === 'a'}
@@ -419,11 +431,11 @@ export function CombatScreen() {
             style={{
               width: 340, height: 440,
               filter:
-                attackingSide === 'b' && lastFlash?.kind === 'ult'
+                attackingSide === 'b' && inFlightFlash === 'ult'
                   ? 'drop-shadow(0 0 32px #F72585) drop-shadow(0 0 64px #7209B7)'
-                  : attackingSide === 'b' && lastFlash?.kind === 'combo'
+                  : attackingSide === 'b' && inFlightFlash === 'combo'
                   ? 'drop-shadow(0 0 28px #FFD60A) drop-shadow(0 0 56px #F77F00)'
-                  : attackingSide === 'b' && lastFlash?.kind === 'crit'
+                  : attackingSide === 'b' && inFlightFlash === 'crit'
                   ? 'drop-shadow(0 0 24px white) drop-shadow(0 0 48px #FFD60A)'
                   : attackingSide === 'b'
                   ? 'drop-shadow(0 0 18px #FCBF49) drop-shadow(0 8px 16px rgba(0,0,0,0.6))'
@@ -442,7 +454,7 @@ export function CombatScreen() {
                 fighterB.hp <= 0
                   ? 'lose'
                   : attackingSide === 'b'
-                  ? (lastFlash?.kind === 'ult' ? 'ult' : 'attack')
+                  ? (inFlightFlash === 'ult' ? 'ult' : 'attack')
                   : 'stance'
               }
               shake={shaking && damagePulses[damagePulses.length-1]?.side === 'b'}

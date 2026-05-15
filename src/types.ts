@@ -4,6 +4,30 @@ export type Side = 'a' | 'b'
 
 export type MoveType = 'light' | 'heavy' | 'setup' | 'combo' | 'ultimate'
 
+/**
+ * Functional discipline of the operator. Used by CharacterSelect to filter
+ * the roster down to "I want to play a PM" / "I want a growth specialist"
+ * / etc. — fighter-game equivalent of country flags or fighting style.
+ */
+export type Discipline =
+  | 'product'      // PM, product strategy, product leadership
+  | 'design'       // designers, design leadership
+  | 'engineering'  // CTOs, eng leaders, builders
+  | 'growth'       // growth, distribution, marketing
+  | 'ai'           // AI / ML founders, applied AI leaders
+  | 'capital'      // VCs, founder-funders, investor-operators
+  | 'ops'          // operations, org design, hiring, leadership
+  | 'host'         // Lenny — sui generis
+
+/**
+ * Era buckets mapped to Lenny's Podcast episode ranges. "Season"-style
+ * grouping for the filter UI; arbitrary cut-offs but mnemonically useful.
+ */
+export type Era =
+  | 'early'   // ep 1-99 (foundations)
+  | 'mid'     // ep 100-199 (growth phase)
+  | 'recent' // ep 200+ (current canon)
+
 export type ScenarioId =
   | 'pre-pmf'
   | 'hypergrowth'
@@ -89,6 +113,13 @@ export interface FighterDef {
   name: string
   shortName: string
   archetype: string
+  /** Functional discipline — used by CharacterSelect filter chips. Optional;
+   *  the data layer provides a `getDiscipline()` helper that falls back to a
+   *  lookup table so existing entries don't all need to inline this field. */
+  discipline?: Discipline
+  /** Era bucket — used by CharacterSelect filter chips. Optional, same
+   *  fallback pattern as `discipline`. */
+  era?: Era
   /** 1-line bio shown in the UI — who they are, what they're known for. */
   bio: string
   /** Optional appearance description used only by the sprite generator

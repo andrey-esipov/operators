@@ -74,6 +74,28 @@ export function PreFight() {
     if (beat === 2) Sfx.fight()
   }, [beat])
 
+  // Warm the browser cache for every sprite pose we'll need mid-fight. The
+  // PreFight cinematic gives us a free ~4s window; without this, lose.png
+  // was being fetched at the moment the KO landed, which meant the defeated
+  // sprite appeared a half-second late — long enough that users thought the
+  // K.O. didn't fire. Light, native preload; no canvas chroma-keying yet.
+  useEffect(() => {
+    if (!fighterA || !fighterB) return
+    const POSES = ['stance', 'attack', 'win', 'lose'] as const
+    const urls: string[] = []
+    for (const id of [fighterA.defId, fighterB.defId]) {
+      for (const pose of POSES) {
+        urls.push(`/sprites/${id}/${pose}.png`)
+      }
+    }
+    const imgs = urls.map((u) => {
+      const img = new Image()
+      img.src = u
+      return img
+    })
+    return () => { imgs.forEach((i) => { i.src = '' }) }
+  }, [fighterA?.defId, fighterB?.defId])
+
   if (!fighterA || !fighterB) return null
   const a = getFighter(fighterA.defId)!
   const b = getFighter(fighterB.defId)!

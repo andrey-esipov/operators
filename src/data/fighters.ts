@@ -3493,8 +3493,9 @@ export const UNLOCKABLES: string[] = ['lenny']
  * Subset of STARTING_ROSTER whose fighters have hand-curated sprite art
  * (custom PNGs in public/sprites/<id>/). MainMenu and AttractMode draw
  * their hero rotations from this list so the player only ever sees a
- * recognizable character on the marquee screens. Wave-4 fighters
- * graduate into FEATURED_ROSTER once their sprite PNGs ship.
+ * recognizable character on the marquee screens. As of 2026-05-15 all
+ * 63 playable fighters (everyone except the boss Lenny) have shipped
+ * sprites, so FEATURED_ROSTER mirrors STARTING_ROSTER.
  */
 export const FEATURED_ROSTER: string[] = [
   'chesky', 'doshi', 'catwu', 'madhavan', 'spiegel', 'turley', 'cagan',
@@ -3505,4 +3506,9 @@ export const FEATURED_ROSTER: string[] = [
   'benioff', 'horowitz', 'feifei', 'dharmesh', 'melanie',
   'ries', 'boz', 'tavel', 'rahul', 'aparna',
   'maples', 'jessica', 'elena',
+  // Wave 4 — sprite PNGs landed 2026-05-15
+  'reid', 'sellis', 'achen', 'balfour', 'kscott', 'torres', 'perri',
+  'wlarson', 'cfournier', 'belsky', 'rabois', 'forsgren', 'duarte',
+  'pcampbell', 'eliz', 'wodtke', 'gilad', 'gmoore', 'rmartin', 'rumelt',
+  'moesta', 'cutler', 'logan', 'truell',
 ]

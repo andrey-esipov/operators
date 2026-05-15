@@ -3488,3 +3488,21 @@ export const STARTING_ROSTER: string[] = [
 ]
 
 export const UNLOCKABLES: string[] = ['lenny']
+
+/**
+ * Subset of STARTING_ROSTER whose fighters have hand-curated sprite art
+ * (custom PNGs in public/sprites/<id>/). MainMenu and AttractMode draw
+ * their hero rotations from this list so the player only ever sees a
+ * recognizable character on the marquee screens. Wave-4 fighters
+ * graduate into FEATURED_ROSTER once their sprite PNGs ship.
+ */
+export const FEATURED_ROSTER: string[] = [
+  'chesky', 'doshi', 'catwu', 'madhavan', 'spiegel', 'turley', 'cagan',
+  'altman', 'taylor', 'lazar', 'amjad', 'gokul', 'dunford',
+  'andreessen', 'tobi', 'drew', 'dylan', 'krieger', 'stewart',
+  'jason', 'simon', 'seth', 'nikita', 'julie', 'annie',
+  'boris',
+  'benioff', 'horowitz', 'feifei', 'dharmesh', 'melanie',
+  'ries', 'boz', 'tavel', 'rahul', 'aparna',
+  'maples', 'jessica', 'elena',
+]

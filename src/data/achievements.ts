@@ -27,6 +27,12 @@ export interface PlayerStats {
   lennyDefeats: number
   dailyStreak: number
   hardModeWins: number
+  /** Times you Shattered an opponent's Conviction (counts the chip-to-zero hit). */
+  totalShatters: number
+  /** Times you landed a Signature Sequence (ult on a shattered defender). */
+  totalSignatures: number
+  /** EX-cast moves landed. */
+  totalEx: number
 }
 
 export const ACHIEVEMENTS: Achievement[] = [
@@ -151,6 +157,38 @@ export const ACHIEVEMENTS: Achievement[] = [
     check: (s) => s.totalKOs >= 50,
   },
   {
+    id: 'first-shatter',
+    name: 'FIRST SHATTER',
+    description: 'Break an opponent\'s Conviction.',
+    icon: '⚡',
+    tier: 'bronze',
+    check: (s) => s.totalShatters >= 1,
+  },
+  {
+    id: 'shatter-streak',
+    name: 'PATTERN-MATCHER',
+    description: 'Shatter Conviction 10 times.',
+    icon: '◆',
+    tier: 'silver',
+    check: (s) => s.totalShatters >= 10,
+  },
+  {
+    id: 'first-signature',
+    name: 'SIGNATURE MOMENT',
+    description: 'Land an Ult on a shattered defender.',
+    icon: '★',
+    tier: 'silver',
+    check: (s) => s.totalSignatures >= 1,
+  },
+  {
+    id: 'signature-master',
+    name: 'OPERATOR ICON',
+    description: 'Land 10 Signature Sequences.',
+    icon: '★',
+    tier: 'gold',
+    check: (s) => s.totalSignatures >= 10,
+  },
+  {
     id: 'match-veteran',
     name: 'VETERAN',
     description: 'Play 100 total matches.',
@@ -175,6 +213,9 @@ export function emptyStats(): PlayerStats {
     lennyDefeats: 0,
     dailyStreak: 0,
     hardModeWins: 0,
+    totalShatters: 0,
+    totalSignatures: 0,
+    totalEx: 0,
   }
 }
 

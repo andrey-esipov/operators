@@ -181,7 +181,7 @@ export function FighterSpotlight() {
           >
             <div className="flex items-baseline justify-between">
               <span className="font-display text-[10px] tracking-widest" style={{ color: '#F72585' }}>
-                ⚡ {f.ult.type.toUpperCase()} · MOMENTUM {f.ult.momentum} · SUPER 100
+                ⚡ {f.ult.type.toUpperCase()} · MOMENTUM {Math.min(f.ult.momentum, 5)} · SUPER 100
               </span>
               <span className="font-num text-2xl text-white tabular-nums">
                 {f.ult.baseDamage} DMG
@@ -199,7 +199,7 @@ export function FighterSpotlight() {
             <div className="flex items-center justify-between mt-3 text-[9px] font-display tracking-widest">
               <span className="text-white/50">{f.ult.episode} · {f.ult.timestamp}</span>
               {f.ult.requiresSelfStatus && (
-                <span style={{ color: '#FFD60A' }}>REQUIRES: {f.ult.requiresSelfStatus.replace('_', ' ')}</span>
+                <span style={{ color: '#FFD60A' }}>★ SIGNATURE +50% W/ {f.ult.requiresSelfStatus.replace('_', ' ')}</span>
               )}
               {(() => {
                 const link = youtubeDeepLink(f.id, f.ult.timestamp)
@@ -391,7 +391,7 @@ function MoveDetailCard({ move, fighterId, accent }: { move: Move; fighterId: st
     >
       <div className="flex items-baseline justify-between">
         <span className="font-display text-[9px] tracking-widest" style={{ color: typeColor[move.type] }}>
-          {move.type.toUpperCase()} · MOM {move.momentum}
+          {move.type.toUpperCase()} · MOM {move.type === 'ultimate' ? Math.min(move.momentum, 5) : move.momentum}
         </span>
         <span className="font-num text-xl text-white tabular-nums">{move.baseDamage} DMG</span>
       </div>

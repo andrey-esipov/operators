@@ -21,3 +21,15 @@ dataset/
 .vscode/
 .idea/
 *.swp
+
+# Playwright MCP test artifacts (snapshots, console logs, screenshots)
+.playwright-mcp/
+page-*.yml
+
+# Ad-hoc screenshots from interactive QA sessions — kept local only
+current-state.png
+fight-*.png
+howtoplay.png
+shatter-*.png
+sig-*.png
+signature-peak*.png

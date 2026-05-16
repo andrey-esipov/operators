@@ -19,8 +19,9 @@ interface Actions {
   toggleCrt: () => void
   toggleMusic: () => void
   toggleVoice: () => void
-  /** Active player casts a move */
-  castMove: (move: Move) => void
+  /** Active player casts a move. Pass `opts.ex` to EX-cast (spend 50 super
+   *  for +50% damage; ignored on ultimates). */
+  castMove: (move: Move, opts?: { ex?: boolean }) => void
   /** ID of fighter currently shown on the Fighter Spotlight deep-dive page */
   spotlightFighter: string | null
   setSpotlightFighter: (id: string | null) => void
@@ -295,13 +296,17 @@ export const useGame = create<GameState & Actions>((set, get) => ({
   },
 
   newRound: () => {
-    const { selectedA, selectedB, roundsWon } = get()
+    const { selectedA, selectedB, roundsWon, fighterA: prevA, fighterB: prevB } = get()
     if (!selectedA || !selectedB) return
     const nextRound = (get().round + 1) as 1 | 2 | 3
-    // initialRuntime gives fresh cooldowns/reads, so ult is castable again each round
+    // Cross-round super-meter carryover. Cooldowns + status reset, but the
+    // meter persists so banking it for a clutch round-2 ult is a viable
+    // strategy. Capped at 100 (the existing per-cast cap).
+    const carryA = prevA?.superMeter ?? 0
+    const carryB = prevB?.superMeter ?? 0
     set({
-      fighterA: initialRuntime(selectedA),
-      fighterB: initialRuntime(selectedB),
+      fighterA: initialRuntime(selectedA, carryA),
+      fighterB: initialRuntime(selectedB, carryB),
       round: nextRound,
       turn: 1,
       activeSide: 'a',
@@ -336,7 +341,7 @@ export const useGame = create<GameState & Actions>((set, get) => ({
     set((s) => ({ arcadeStep: s.arcadeStep + 1 }))
   },
 
-  castMove: (move: Move) => {
+  castMove: (move: Move, opts?: { ex?: boolean }) => {
     const state = get()
     if (state.phase !== 'fight') return
     const attackerSide = state.activeSide
@@ -357,6 +362,7 @@ export const useGame = create<GameState & Actions>((set, get) => ({
       move,
       scenario: state.scenario,
       turn: state.turn,
+      ex: opts?.ex,
     })
 
     if (result.rejected) {
@@ -371,12 +377,19 @@ export const useGame = create<GameState & Actions>((set, get) => ({
     const newA = attackerSide === 'a' ? result.attacker : result.defender
     const newB = attackerSide === 'a' ? result.defender : result.attacker
 
+    // Sound cue: include "+ex" suffix so CombatScreen's audio effect plays
+    // the EX sting *additively* on top of the primary cue (crit/combo/light).
+    const primarySound = result.flash === 'ex'
+      ? 'ex'
+      : result.flash ?? (result.log.finalDamage > 70 ? 'heavy' : 'light')
+    const soundKind = result.ex && result.flash !== 'ex' ? `${primarySound}+ex` : primarySound
+
     set({
       fighterA: newA,
       fighterB: newB,
       log: [...state.log, result.log],
       lastFlash: result.flash ? { kind: result.flash, side: attackerSide, id: flashId } : state.lastFlash,
-      soundCue: { kind: result.flash ?? (result.log.finalDamage > 70 ? 'heavy' : 'light'), id: sndId },
+      soundCue: { kind: soundKind, id: sndId },
       damagePulses: [
         ...state.damagePulses.filter((d) => Date.now() - d.id < 1200),
         { id: dmgId, side: defenderSide, amount: result.log.finalDamage, kind: result.flash === 'crit' ? 'crit' : 'normal' },
@@ -391,16 +404,124 @@ export const useGame = create<GameState & Actions>((set, get) => ({
       Voice.say(attackerDef.voiceLines.ult, attackerDef.id, 'ult')
     }
 
-    // Stats: every move counts. Combo / crit / ult specifically tracked.
+    // Stats: every move counts. Combo / crit / ult / EX / shatter / signature tracked.
     const stats = loadStats()
     if (result.flash === 'combo') stats.totalCombos += 1
     if (result.flash === 'crit') stats.totalCrits += 1
-    if (result.flash === 'ult') stats.totalUlts += 1
+    if (result.flash === 'ult' || result.flash === 'signature') stats.totalUlts += 1
+    if (result.ex) stats.totalEx += 1
+    if (result.shattered) stats.totalShatters += 1
+    if (result.signature) stats.totalSignatures += 1
     if (result.log.appliedStatuses.length > 0 || result.log.finalDamage > 0) {
       stats.totalQuotes = Math.max(stats.totalQuotes, get().quoteBank.length + 1)
     }
     saveStats(stats)
     checkAndUnlock(stats)
+
+    // ─── SIGNATURE SEQUENCE branch ───
+    // When an ult lands on a shattered defender, intercept both the K.O.
+    // path and the normal turn-advance path with a 4s cinematic. After the
+    // cinematic, fold back into the regular K.O. → round-end flow OR the
+    // normal turn switch, depending on whether the hit was lethal.
+    if (result.signature) {
+      flashCounter++
+      const sigId = flashCounter
+      // Tagline: ult.comboTitle if set, else the ult name itself (which is
+      // already the operator's iconic line — "AIR IS A CITY", "LNO
+      // FRAMEWORK", "PATTERN MATCHING", etc.).
+      const tagline = attackerDef.ult.comboTitle || attackerDef.ult.name
+
+      // Fire the K.O. voice line up front so it overlaps with the
+      // signature audio sting rather than waiting for the K.O. banner.
+      if (result.ko) Voice.say(attackerDef.voiceLines.ko, attackerDef.id, 'ko')
+
+      set({
+        soundCue: { kind: 'signature', id: ++soundCounter },
+        signatureCinematic: {
+          attackerSide,
+          defenderSide,
+          tagline,
+          fighterId: attackerDef.id,
+          id: sigId,
+          ko: result.ko,
+        },
+      })
+
+      // Stats: count signature ults as ult + 1 special tally.
+      if (result.ko) {
+        const ks = loadStats()
+        ks.totalKOs += 1
+        saveStats(ks)
+        checkAndUnlock(ks)
+      }
+
+      setTimeout(() => {
+        if (result.ko) {
+          // Round/match end after the cinematic finishes.
+          const newRoundsWon = {
+            a: state.roundsWon.a + (attackerSide === 'a' ? 1 : 0),
+            b: state.roundsWon.b + (attackerSide === 'b' ? 1 : 0),
+          }
+          const matchWinner = newRoundsWon.a >= 2 ? 'a' : newRoundsWon.b >= 2 ? 'b' : null
+          if (matchWinner) {
+            const ms = loadStats()
+            ms.totalMatches += 1
+            const playerWon = matchWinner === 'a'
+            if (playerWon && state.mode !== 'vs') {
+              ms.totalWins += 1
+              if (state.selectedA && !ms.fightersUsed.includes(state.selectedA)) ms.fightersUsed.push(state.selectedA)
+              if (state.selectedB && !ms.fightersBeaten.includes(state.selectedB)) ms.fightersBeaten.push(state.selectedB)
+              if (state.selectedB === 'lenny') {
+                ms.lennyDefeats += 1
+                if (state.difficulty === 'hard') ms.hardModeWins += 1
+              }
+            }
+            saveStats(ms)
+            checkAndUnlock(ms)
+          }
+          flashCounter++
+          const koId = flashCounter
+          set({
+            signatureCinematic: undefined,
+            koCinematic: { winner: attackerSide, loser: defenderSide, comboTitle: tagline, id: koId },
+          })
+          setTimeout(() => {
+            set({
+              phase: matchWinner ? 'match-end' : 'round-end',
+              roundsWon: newRoundsWon,
+              koCinematic: undefined,
+            })
+          }, 2000)
+        } else {
+          // No K.O. — clear cinematic, advance turn to the (now-revived)
+          // defender. Start their turn normally so cooldowns/status tick.
+          const cur = get()
+          const tgt = defenderSide === 'a' ? cur.fighterA : cur.fighterB
+          if (!tgt) {
+            set({ signatureCinematic: undefined })
+            return
+          }
+          const ts = startTurn(tgt)
+          let updated = ts.runtime
+          if (state.mode === 'practice' && defenderSide === 'a') {
+            updated = {
+              ...updated,
+              momentum: 10,
+              superMeter: 100,
+              hp: Math.max(updated.hp, Math.round(updated.maxHp * 0.8)),
+            }
+          }
+          set((s) => ({
+            signatureCinematic: undefined,
+            activeSide: defenderSide,
+            turn: s.turn + 1,
+            fighterA: defenderSide === 'a' ? updated : s.fighterA,
+            fighterB: defenderSide === 'b' ? updated : s.fighterB,
+          }))
+        }
+      }, 4000)
+      return
+    }
 
     if (result.ko) {
       Voice.say(attackerDef.voiceLines.ko, attackerDef.id, 'ko')
@@ -569,6 +690,45 @@ export const useGame = create<GameState & Actions>((set, get) => ({
       return
     }
 
+    // CONVICTION SHATTERED path: when the cast just broke the defender's
+    // conviction, the defender loses their turn to the cinematic and the
+    // attacker keeps the active flag. We still tick the defender's
+    // start-of-turn so cooldowns/status decrements progress (and a +2
+    // momentum starts the attacker's punish turn). The +75% damage bonus
+    // attaches to the attacker's NEXT damaging hit on this defender.
+    if (result.shattered) {
+      flashCounter++
+      const shatterId = flashCounter
+      const attackerRt = attackerSide === 'a' ? newA : newB
+      if (!attackerRt) return
+
+      // Tick the defender's clocks. Conviction regen is suppressed inside
+      // startTurn while shattered is true (so the bonus window stays open
+      // for the attacker's punish hit, which clears the flag itself).
+      const defenderTick = startTurn(updatedTarget).runtime
+      // Attacker starts a fresh turn — +2 momentum, status tick, etc.
+      const attackerTick = startTurn(attackerRt).runtime
+
+      set({
+        soundCue: { kind: 'shatter', id: ++soundCounter },
+        shatterCinematic: { shatteredSide: defenderSide, id: shatterId },
+      })
+
+      setTimeout(() => {
+        set((s) => ({
+          // Active side STAYS on the attacker — they get the punish turn.
+          activeSide: attackerSide,
+          // Bump turn count by 2: one for the silent skip, one for the new
+          // attacker turn. Keeps the turn log roughly accurate.
+          turn: s.turn + 2,
+          fighterA: attackerSide === 'a' ? attackerTick : defenderTick,
+          fighterB: attackerSide === 'b' ? attackerTick : defenderTick,
+          shatterCinematic: undefined,
+        }))
+      }, 2400)
+      return
+    }
+
     setTimeout(() => {
       set((s) => ({
         activeSide: nextActive,
@@ -629,6 +789,9 @@ export const useGame = create<GameState & Actions>((set, get) => ({
   aiPlay: (side: Side) => {
     const state = get()
     if (state.phase !== 'fight' || state.activeSide !== side) return
+    // Don't act while a cinematic is playing — the state will be restored
+    // when the cinematic ends, and acting before then races the restore.
+    if (state.koCinematic || state.shatterCinematic) return
     const rt = side === 'a' ? state.fighterA : state.fighterB
     const oppRt = side === 'a' ? state.fighterB : state.fighterA
     if (!rt || !oppRt) return
@@ -638,9 +801,12 @@ export const useGame = create<GameState & Actions>((set, get) => ({
     // Reject moves on cooldown so the bot doesn't repeat-spam heavy.
     const allMoves: Move[] = [...def.moves, def.ult]
     const affordable = allMoves.filter((m) => {
-      if (rt.momentum < m.momentum) return false
+      // Ultimates are clamped to 5 momentum system-wide (see applyMove.ts).
+      const effMomentum = m.type === 'ultimate' ? Math.min(m.momentum, 5) : m.momentum
+      if (rt.momentum < effMomentum) return false
       if (m.type === 'ultimate' && rt.superMeter < 100) return false
-      if (m.requiresSelfStatus && !rt.status.some((s) => s.key === m.requiresSelfStatus)) return false
+      // requiresSelfStatus is no longer a hard gate — it's a +50% damage
+      // bonus. AI is free to cast the ult even without the buff active.
       if ((rt.cooldowns[m.id] ?? 0) > 0) return false
       return true
     })
@@ -734,6 +900,27 @@ export const useGame = create<GameState & Actions>((set, get) => ({
 
     const weighted = affordable.flatMap((m) => Array(Math.max(1, Math.round(weights[m.type] ?? 1))).fill(m))
     const choice = weighted[Math.floor(Math.random() * weighted.length)]
+
+    // Hard difficulty EX rolls: when the bot is below 60% HP and sitting on
+    // a healthy super meter, splash 50 super into a heavy/combo for the
+    // +50% damage boost. Roughly 20% chance per eligible pick — common
+    // enough to feel like real pressure, rare enough that the player can
+    // still bait it out.
+    const exEligible = (choice.type === 'heavy' || choice.type === 'combo')
+      && difficulty === 'hard'
+      && rt.superMeter >= 75
+      && rt.hp / rt.maxHp < 0.6
+    if (exEligible && Math.random() < 0.2) {
+      get().castMove(choice, { ex: true })
+      return
+    }
     get().castMove(choice)
   },
 }))
+
+// Dev/debug hook: expose the store on window in dev builds only. Lets
+// browser-MCP smoke tests poke runtime state (set conviction, etc.) without
+// having to play through 50 turns. Stripped in production builds.
+if (import.meta.env?.DEV && typeof window !== 'undefined') {
+  ;(window as unknown as { __useGame: typeof useGame }).__useGame = useGame
+}

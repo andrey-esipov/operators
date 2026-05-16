@@ -637,7 +637,7 @@ function MoveDetail({ move }: { move: Move }) {
           {move.type.toUpperCase()}
         </span>
         <span className="font-display text-[8px] tracking-widest text-white/60">
-          {move.momentum} MOM · {move.baseDamage} DMG
+          {move.type === 'ultimate' ? Math.min(move.momentum, 5) : move.momentum} MOM · {move.baseDamage} DMG
         </span>
       </div>
       <div className="font-display text-[10px] tracking-wider text-white mt-1">{move.name}</div>

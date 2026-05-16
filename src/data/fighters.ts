@@ -81,7 +81,7 @@ export const FIGHTERS: FighterDef[] = [
       type: 'ultimate',
       momentum: 8,
       baseDamage: 220,
-      description: 'Devastating ult. Requires FOUNDER MODE.',
+      description: 'Devastating ult. +50% damage with FOUNDER MODE active.',
       quote: 'We thought: what if Airbnb was a city of its own?',
       episode: 'ep 217',
       timestamp: '41:18',
@@ -423,11 +423,15 @@ export const FIGHTERS: FighterDef[] = [
       type: 'ultimate',
       momentum: 8,
       baseDamage: 120,
-      description: 'Heal to full + 3-turn shield.',
+      description: 'Big heal + 3-turn shield.',
       quote: 'Distribution has become the most important moat.',
       episode: 'ep 308',
       timestamp: '44:22',
-      selfHeal: 9999,
+      // Was 9999 (heal-to-full). With ult cooldown removed in the resource
+      // pass, Spiegel could chain heal-to-full ults every 5-7 turns,
+      // making the matchup an unwinnable war of attrition. 500 is ~45% of
+      // maxHp — a real comeback tool, not a reset button.
+      selfHeal: 500,
     },
     voiceLines: {
       matchStart: 'Distribution is destiny.',
@@ -892,7 +896,7 @@ FIGHTERS.push(
     episode: 'ep 287',
     accent: '#F72585',
     maxHp: 900,
-    scenarioBonus: { 'ai-native': 1.7, hypergrowth: 1.2 },
+    scenarioBonus: { 'ai-native': 1.5, hypergrowth: 1.2 },
     moves: [
       {
         id: 'vibe-prompt',
@@ -1205,7 +1209,7 @@ FIGHTERS.push(
       quote: 'When you\'re obviously awesome, you don\'t need a sales pitch.',
       episode: 'ep 156',
       timestamp: '38:12',
-      applies: [{ key: 'CONFUSED_ICP', label: 'OUTSNIPED', remaining: 3, magnitude: 0.4 }],
+      applies: [{ key: 'CONFUSED_ICP', label: 'OUTSNIPED', remaining: 3, magnitude: 0.3 }],
     },
     voiceLines: {
       matchStart: 'What do you do, and for who?',
@@ -1297,7 +1301,7 @@ FIGHTERS.push(
       quote: "The real AI boom hasn't even started yet.",
       episode: 'ep 320',
       timestamp: '54:48',
-      applies: [{ key: 'CONFUSED_ICP', label: 'BEHIND-THE-CURVE', remaining: 3, magnitude: 0.35 }],
+      applies: [{ key: 'CONFUSED_ICP', label: 'BEHIND-THE-CURVE', remaining: 3, magnitude: 0.3 }],
     },
     voiceLines: {
       matchStart: "We're early. Most people don't see it yet.",
@@ -1383,7 +1387,7 @@ FIGHTERS.push(
       quote: "Speed is a feature. We don't slow down to look organized.",
       episode: 'ep 219',
       timestamp: '49:33',
-      selfApplies: [{ key: 'SHIPPING_MOMENTUM', label: 'SHIP-MODE', remaining: 3, magnitude: 0.4 }],
+      selfApplies: [{ key: 'SHIPPING_MOMENTUM', label: 'SHIP-MODE', remaining: 3, magnitude: 0.3 }],
     },
     voiceLines: {
       matchStart: "Let's ship something.",
@@ -1893,7 +1897,7 @@ FIGHTERS.push(
       quote: "We've passed the inflection point. Everyone is still calibrating to last year's model.",
       episode: 'ep 312',
       timestamp: '52:48',
-      applies: [{ key: 'CONFUSED_ICP', label: 'STALE-MODEL', remaining: 3, magnitude: 0.4 }],
+      applies: [{ key: 'CONFUSED_ICP', label: 'STALE-MODEL', remaining: 3, magnitude: 0.3 }],
     },
     voiceLines: {
       matchStart: "I'll just pipe it through Claude.",
@@ -2318,7 +2322,7 @@ FIGHTERS.push(
       quote: 'This is the world now. The model is the author. We are the editor-in-chief.',
       episode: 'ep 311',
       timestamp: '54:11',
-      applies: [{ key: 'CONFUSED_ICP', label: 'PRE-AGENT', remaining: 3, magnitude: 0.4 }],
+      applies: [{ key: 'CONFUSED_ICP', label: 'PRE-AGENT', remaining: 3, magnitude: 0.3 }],
     },
     voiceLines: {
       matchStart: 'Five agents running. Let\'s see what happens.',

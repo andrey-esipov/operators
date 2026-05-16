@@ -6,6 +6,7 @@ import type { Move } from '../types'
 import { Sprite } from '../components/Sprite'
 import { HpBar } from '../components/HpBar'
 import { SuperMeter } from '../components/SuperMeter'
+import { ConvictionBar } from '../components/ConvictionBar'
 import { MomentumBar } from '../components/MomentumBar'
 import { MoveCard } from '../components/MoveCard'
 import { StageBackground } from '../components/StageBackground'
@@ -13,6 +14,7 @@ import { ComboBanner } from '../components/ComboBanner'
 import { DamageFloats } from '../components/DamageFloat'
 import { StatusChip } from '../components/StatusChip'
 import { KOCinematic } from '../components/KOCinematic'
+import { SignatureSequence } from '../components/SignatureSequence'
 import { FightIntro } from '../components/FightIntro'
 import { StatusHalo } from '../components/StatusHalo'
 import { HitSparks } from '../components/HitSparks'
@@ -31,6 +33,8 @@ export function CombatScreen() {
   const log = useGame((s) => s.log)
   const lastFlash = useGame((s) => s.lastFlash)
   const koCinematic = useGame((s) => s.koCinematic)
+  const shatterCinematic = useGame((s) => s.shatterCinematic)
+  const signatureCinematic = useGame((s) => s.signatureCinematic)
   const soundCue = useGame((s) => s.soundCue)
   const damagePulses = useGame((s) => s.damagePulses)
   const castMove = useGame((s) => s.castMove)
@@ -38,7 +42,7 @@ export function CombatScreen() {
 
   const [timeLeft, setTimeLeft] = useState(90)
   const [comboBanner, setComboBanner] = useState<{ title: string; kind: 'combo' | 'ult' | 'crit' } | null>(null)
-  const [hitFlash, setHitFlash] = useState<'crit' | 'combo' | 'ult' | null>(null)
+  const [hitFlash, setHitFlash] = useState<'crit' | 'combo' | 'ult' | 'ex' | 'signature' | null>(null)
   const [shaking, setShaking] = useState(false)
   // Hit-lag: brief desaturate/scale on the side that just took damage. Re-keys on every damagePulse.
   const [hitLag, setHitLag] = useState<{ side: 'a' | 'b'; id: number } | null>(null)
@@ -47,7 +51,7 @@ export function CombatScreen() {
   // Live combo counter: number of successive damaging moves by the same side. Resets on side change or KO.
   const [comboStreak, setComboStreak] = useState<{ side: 'a' | 'b'; count: number; id: number } | null>(null)
   // Hit-spark burst trigger — bumped per damaging hit so <HitSparks/> re-fires
-  const [hitSpark, setHitSpark] = useState<{ id: number; side: 'a' | 'b'; kind: 'light' | 'heavy' | 'crit' | 'combo' | 'ult' } | null>(null)
+  const [hitSpark, setHitSpark] = useState<{ id: number; side: 'a' | 'b'; kind: 'light' | 'heavy' | 'crit' | 'combo' | 'ult' | 'ex' } | null>(null)
   const [lastQuote, setLastQuote] = useState<{ q: string; ep: string; t: string; name: string; fighterId: string } | null>(null)
   /** Which side is currently in attack-pose (briefly after casting) */
   const [attackingSide, setAttackingSide] = useState<'a' | 'b' | null>(null)
@@ -70,6 +74,10 @@ export function CombatScreen() {
       // player A is human; in vs both sides are human and bind in turn.
       const humanIsActive = s.mode === 'vs' || s.activeSide === 'a'
       if (!humanIsActive) return
+      // Lock input during K.O., CONVICTION SHATTERED, or SIGNATURE
+      // cinematics — the state will be restored when each cinematic ends,
+      // and acting before then races the restore.
+      if (s.koCinematic || s.shatterCinematic || s.signatureCinematic) return
 
       const activeRt = s.activeSide === 'a' ? s.fighterA : s.fighterB
       if (!activeRt) return
@@ -87,12 +95,19 @@ export function CombatScreen() {
         if (!m) return
         // Standard affordability gate — castMove itself also rejects but
         // checking here avoids the click sfx for an obviously-invalid cast.
-        const canAfford = activeRt.momentum >= m.momentum
+        // Ultimate momentum cost is clamped to 5 (see applyMove.ts).
+        const effMomentum = m.type === 'ultimate' ? Math.min(m.momentum, 5) : m.momentum
+        const canAfford = activeRt.momentum >= effMomentum
         const cd = (activeRt.cooldowns[m.id] ?? 0) > 0
         if (!canAfford || cd) return
         if (m.type === 'ultimate' && activeRt.superMeter < 100) return
-        if (m.requiresSelfStatus && !activeRt.status.some((x) => x.key === m.requiresSelfStatus)) return
-        castMove(m)
+        // EX-cast: Shift held during a non-ult key. Costs +50 super and
+        // gives +50% damage. We pre-check the gate here so the click sfx
+        // doesn't fire on an invalid EX attempt (silent reject is better).
+        const wantsEx = e.shiftKey && m.type !== 'ultimate'
+        if (wantsEx && activeRt.superMeter < 50) return
+        // requiresSelfStatus no longer hard-gates; it's a +50% damage bonus.
+        castMove(m, wantsEx ? { ex: true } : undefined)
         return
       }
       if (key === 'r' && !activeRt.read && activeRt.momentum >= 1) {
@@ -108,16 +123,25 @@ export function CombatScreen() {
     return () => window.removeEventListener('keydown', onKey)
   }, [resetMatch, castMove])
 
-  // Audio cues
+  // Audio cues. Sound kind may be a single signal (`crit`, `combo`, `ult`,
+  // `heavy`, `light`, `ex`) OR a primary+ex compound (e.g. `combo+ex`) when
+  // an EX-cast amplified a categorical move. We play the primary cue and
+  // then layer the EX sting on top with a tiny delay so they don't phase.
   useEffect(() => {
     if (!soundCue) return
-    switch (soundCue.kind) {
+    const [primary, ...rest] = soundCue.kind.split('+')
+    const hasEx = rest.includes('ex')
+    switch (primary) {
       case 'crit': Sfx.crit(); break
       case 'combo': Sfx.combo(); break
       case 'ult': Sfx.ult(); break
       case 'heavy': Sfx.heavy(); break
+      case 'ex': Sfx.ex(); break
+      case 'shatter': Sfx.shatter(); break
+      case 'signature': Sfx.signature(); break
       default: Sfx.light()
     }
+    if (hasEx && primary !== 'ex') setTimeout(() => Sfx.ex(), 40)
   }, [soundCue?.id])
 
   // Combat log effects: combo banner + hit flash + screen shake + quote callout
@@ -125,7 +149,11 @@ export function CombatScreen() {
     if (log.length === 0) return
     const last = log[log.length - 1]
     if (last.comboTitle) {
-      setComboBanner({ title: last.comboTitle, kind: last.flash ?? 'combo' })
+      // EX-cast combos still display as combo banners (the EX is an
+      // amplifier, the categorical flash is 'combo').
+      const bannerKind: 'combo' | 'ult' | 'crit' =
+        last.flash === 'combo' || last.flash === 'ult' || last.flash === 'crit' ? last.flash : 'combo'
+      setComboBanner({ title: last.comboTitle, kind: bannerKind })
       setTimeout(() => setComboBanner(null), 2400)
     }
     if (last.flash) {
@@ -189,10 +217,11 @@ export function CombatScreen() {
       setTimeout(() => setHitLag(null), 220)
 
       // Hit sparks at the defender's body
-      const sparkKind: 'light' | 'heavy' | 'crit' | 'combo' | 'ult' =
+      const sparkKind: 'light' | 'heavy' | 'crit' | 'combo' | 'ult' | 'ex' =
         last.flash === 'ult' ? 'ult' :
         last.flash === 'combo' ? 'combo' :
         last.flash === 'crit' ? 'crit' :
+        last.flash === 'ex' || last.ex ? 'ex' :
         last.finalDamage > 70 ? 'heavy' : 'light'
       setHitSpark({ id: log.length, side: last.attacker, kind: sparkKind })
     }
@@ -237,13 +266,19 @@ export function CombatScreen() {
     }))
   }, [timeLeft, fighterA, fighterB])
 
-  // Bot AI for player B in single-player modes (arcade / practice / daily)
+  // Bot AI for player B in single-player modes (arcade / practice / daily).
+  // We depend on `turn` as well as `activeSide` so the AI re-fires when the
+  // turn counter bumps without flipping sides (e.g. after a CONVICTION
+  // SHATTERED skip when the AI is the attacker and keeps the active flag
+  // for the punish hit).
+  const turn = useGame((s) => s.turn)
   useEffect(() => {
     if (mode === 'vs') return
     if (activeSide !== 'b') return
+    if (shatterCinematic || koCinematic || signatureCinematic) return
     const id = setTimeout(() => aiPlay('b'), 1200 + Math.random() * 600)
     return () => clearTimeout(id)
-  }, [activeSide, mode, aiPlay])
+  }, [activeSide, mode, aiPlay, turn, shatterCinematic, koCinematic, signatureCinematic])
 
   if (!fighterA || !fighterB) return null
   const a = getFighter(fighterA.defId)!
@@ -251,6 +286,19 @@ export function CombatScreen() {
 
   const aSuperReady = fighterA.superMeter >= 100
   const bSuperReady = fighterB.superMeter >= 100
+
+  // Ult-state hint shown next to the super meter when it's full. We only
+  // surface it for *resource gates* — the meter pulsing + MoveCard glow
+  // already tell the player when the ult is castable; the hint exists to
+  // explain "I have meter, why can't I cast?" That was the original UX bug.
+  function ultHint(rt: typeof fighterA, ult: typeof a.ult): string | undefined {
+    if (!rt || rt.superMeter < 100) return undefined
+    const effMom = Math.min(ult.momentum, 5)
+    if (rt.momentum < effMom) return `NEED ${effMom - rt.momentum} MOM`
+    return undefined
+  }
+  const aUltHint = ultHint(fighterA, a.ult)
+  const bUltHint = ultHint(fighterB, b.ult)
 
   // Flash kind of the move currently animating. `lastFlash` in the store is
   // sticky — game.ts only overwrites it when the new move ALSO carries a
@@ -261,7 +309,7 @@ export function CombatScreen() {
   // pose + colored drop-shadow only apply to the move that actually had
   // the flash.
   const lastLogEntry = log[log.length - 1]
-  const inFlightFlash: 'ult' | 'combo' | 'crit' | undefined =
+  const inFlightFlash: 'ult' | 'combo' | 'crit' | 'ex' | 'signature' | undefined =
     attackingSide && lastLogEntry?.attacker === attackingSide ? lastLogEntry.flash : undefined
 
   return (
@@ -291,6 +339,8 @@ export function CombatScreen() {
                   ? '#F72585'
                   : hitFlash === 'crit'
                   ? '#FFFFFF'
+                  : hitFlash === 'ex'
+                  ? '#00E5FF'
                   : '#FFD60A',
             }}
           />
@@ -301,8 +351,9 @@ export function CombatScreen() {
       <div className="absolute left-0 right-0 top-0 z-20 px-6 pt-3 flex items-start justify-between">
         <div className="flex flex-col gap-1">
           <HpBar hp={fighterA.hp} maxHp={fighterA.maxHp} side="a" name={a.shortName} />
+          <ConvictionBar value={fighterA.conviction} max={fighterA.maxConviction} side="a" shattered={fighterA.shattered} />
           <div className="flex items-center gap-4 mt-1">
-            <SuperMeter value={fighterA.superMeter} side="a" />
+            <SuperMeter value={fighterA.superMeter} side="a" hint={aUltHint} />
             <MomentumBar value={fighterA.momentum} side="a" />
           </div>
           <div className="flex gap-1 mt-1">
@@ -363,8 +414,9 @@ export function CombatScreen() {
 
         <div className="flex flex-col gap-1 items-end">
           <HpBar hp={fighterB.hp} maxHp={fighterB.maxHp} side="b" name={b.shortName} />
+          <ConvictionBar value={fighterB.conviction} max={fighterB.maxConviction} side="b" shattered={fighterB.shattered} />
           <div className="flex items-center gap-4 mt-1 flex-row-reverse">
-            <SuperMeter value={fighterB.superMeter} side="b" />
+            <SuperMeter value={fighterB.superMeter} side="b" hint={bUltHint} />
             <MomentumBar value={fighterB.momentum} side="b" />
           </div>
           <div className="flex gap-1 mt-1 flex-row-reverse">
@@ -469,9 +521,11 @@ export function CombatScreen() {
       {/* Damage floats */}
       <DamageFloats pulses={damagePulses} />
 
-      {/* Quote callout (real podcast quote) */}
+      {/* Quote callout (real podcast quote). Hidden during the Signature
+       *  Sequence so the cinematic's giant tagline isn't covered by the
+       *  smaller quote bubble. */}
       <AnimatePresence>
-        {lastQuote && (
+        {lastQuote && !signatureCinematic && (
           <motion.div
             key={lastQuote.q}
             initial={{ y: 30, opacity: 0 }}
@@ -557,6 +611,23 @@ export function CombatScreen() {
         </div>
       )}
 
+      {/* SIGNATURE SEQUENCE overlay — ult landing on shattered defender.
+       *  Plays for ~4s with echo bursts, then either advances turn (no ko)
+       *  or hands off to the K.O. cinematic + round-end transition. */}
+      <AnimatePresence>
+        {signatureCinematic && (
+          <SignatureSequence
+            key={signatureCinematic.id}
+            attackerSide={signatureCinematic.attackerSide}
+            defenderSide={signatureCinematic.defenderSide}
+            tagline={signatureCinematic.tagline}
+            fighterId={signatureCinematic.fighterId}
+            ko={signatureCinematic.ko}
+            id={signatureCinematic.id}
+          />
+        )}
+      </AnimatePresence>
+
       {/* K.O. cinematic overlay */}
       {koCinematic && (
         <KOCinematic
@@ -569,12 +640,78 @@ export function CombatScreen() {
         />
       )}
 
+      {/* CONVICTION SHATTERED overlay — plays for ~2.4s when a fighter's
+       *  conviction hits zero. Same z-band as combo banner / K.O.; dimmed
+       *  desaturate on the shattered side. */}
+      <AnimatePresence>
+        {shatterCinematic && (
+          <motion.div
+            key={shatterCinematic.id}
+            initial={{ opacity: 0, scale: 0.85 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 1.1 }}
+            transition={{ duration: 0.25 }}
+            className="absolute inset-0 z-40 pointer-events-none flex items-center justify-center"
+          >
+            {/* dim wash that's heavier on the shattered side */}
+            <div
+              className="absolute inset-0"
+              style={{
+                background: shatterCinematic.shatteredSide === 'a'
+                  ? 'linear-gradient(90deg, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.4) 50%, transparent 100%)'
+                  : 'linear-gradient(270deg, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.4) 50%, transparent 100%)',
+              }}
+            />
+            <div className="relative text-center">
+              <div
+                className="font-display tracking-widest"
+                style={{
+                  color: '#E63946',
+                  fontSize: 52,
+                  letterSpacing: '0.18em',
+                  textShadow: '4px 4px 0 black, 0 0 24px #E63946',
+                  transform: 'skewX(-4deg)',
+                  lineHeight: 1,
+                }}
+              >
+                CONVICTION
+              </div>
+              <div
+                className="font-display tracking-widest mt-1"
+                style={{
+                  color: '#FFFFFF',
+                  fontSize: 72,
+                  letterSpacing: '0.22em',
+                  textShadow: '6px 6px 0 black, 0 0 32px #FFD60A',
+                  transform: 'skewX(-4deg)',
+                  lineHeight: 1,
+                  animation: 'comboBump 0.5s ease-out',
+                }}
+              >
+                SHATTERED
+              </div>
+              <div
+                className="font-display tracking-widest mt-3"
+                style={{
+                  color: '#FFD60A',
+                  fontSize: 12,
+                  letterSpacing: '0.35em',
+                  textShadow: '2px 2px 0 black',
+                }}
+              >
+                NEXT HIT +75% DAMAGE
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* MOVE BAR */}
       <ActiveMoves
         side={activeSide}
         fighterA={fighterA}
         fighterB={fighterB}
-        onCast={(m) => castMove(m)}
+        onCast={(m, opts) => castMove(m, opts)}
         mode={mode}
         aSuperReady={aSuperReady}
         bSuperReady={bSuperReady}
@@ -656,7 +793,7 @@ function ActiveMoves({
   side: 'a' | 'b'
   fighterA: NonNullable<ReturnType<typeof useGame.getState>['fighterA']>
   fighterB: NonNullable<ReturnType<typeof useGame.getState>['fighterB']>
-  onCast: (m: Move) => void
+  onCast: (m: Move, opts?: { ex?: boolean }) => void
   mode: 'vs' | 'arcade' | 'practice' | 'daily'
   aSuperReady: boolean
   bSuperReady: boolean
@@ -689,12 +826,14 @@ function ActiveMoves({
                 lastMoveId={activeRt.lastMoveId}
                 cooldown={activeRt.cooldowns[m.id] ?? 0}
                 hotkey={['Z', 'X', 'C', 'V'][i]}
-                onClick={() => onCast(m)}
+                superMeter={activeRt.superMeter}
+                onClick={(opts) => onCast(m, opts)}
               />
             ))}
             <MoveCard
               move={def.ult}
-              canAfford={activeRt.momentum >= def.ult.momentum}
+              // Ult momentum clamped to 5 (see applyMove.ts).
+              canAfford={activeRt.momentum >= Math.min(def.ult.momentum, 5)}
               isUltimate
               superReady={superReady}
               hasRequiredStatus={
@@ -704,6 +843,7 @@ function ActiveMoves({
               lastMoveId={activeRt.lastMoveId}
               cooldown={activeRt.cooldowns[def.ult.id] ?? 0}
               hotkey="B"
+              superMeter={activeRt.superMeter}
               onClick={() => onCast(def.ult)}
             />
           </div>

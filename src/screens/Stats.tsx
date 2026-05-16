@@ -60,14 +60,17 @@ export function Stats() {
         <section>
           <h2 className="font-display text-sm tracking-widest text-white/70 mb-3">▌ CAREER</h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <StatTile label="MATCHES" value={stats.totalMatches} accent="#FFD60A" />
-            <StatTile label="WINS"    value={stats.totalWins}    accent="#06D6A0" />
-            <StatTile label="WIN RATE" value={`${winRate}%`}     accent="#FCBF49" />
-            <StatTile label="K.O.s"   value={stats.totalKOs}     accent="#EF233C" />
-            <StatTile label="COMBOS"  value={stats.totalCombos}  accent="#F72585" />
-            <StatTile label="CRITS"   value={stats.totalCrits}   accent="#FFFFFF" />
-            <StatTile label="ULTS"    value={stats.totalUlts}    accent="#7209B7" />
-            <StatTile label="QUOTES"  value={stats.totalQuotes}  accent="#00B4D8" />
+            <StatTile label="MATCHES" value={stats.totalMatches}   accent="#FFD60A" />
+            <StatTile label="WINS"    value={stats.totalWins}      accent="#06D6A0" />
+            <StatTile label="WIN RATE" value={`${winRate}%`}       accent="#FCBF49" />
+            <StatTile label="K.O.s"   value={stats.totalKOs}       accent="#EF233C" />
+            <StatTile label="COMBOS"  value={stats.totalCombos}    accent="#F72585" />
+            <StatTile label="CRITS"   value={stats.totalCrits}     accent="#FFFFFF" />
+            <StatTile label="ULTS"    value={stats.totalUlts}      accent="#7209B7" />
+            <StatTile label="EX MOVES" value={stats.totalEx}       accent="#00E5FF" />
+            <StatTile label="SHATTERS" value={stats.totalShatters} accent="#E63946" />
+            <StatTile label="SIGNATURES" value={stats.totalSignatures} accent="#F77F00" />
+            <StatTile label="QUOTES"  value={stats.totalQuotes}    accent="#00B4D8" />
           </div>
         </section>
 

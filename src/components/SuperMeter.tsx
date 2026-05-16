@@ -3,10 +3,14 @@ import type { Side } from '../types'
 interface Props {
   value: number
   side: Side
+  /** Optional inline gate hint — shown only when value ≥ 100 to tell the
+   *  player WHY the ult isn't firing (e.g. "NEED 3 MOM"). When omitted,
+   *  the bar just pulses to indicate readiness. */
+  hint?: string
 }
 
 /** Segmented super meter. 10 segments. Pulses when full. */
-export function SuperMeter({ value, side }: Props) {
+export function SuperMeter({ value, side, hint }: Props) {
   const filled = Math.round((value / 100) * 10)
   const full = value >= 100
 
@@ -31,6 +35,21 @@ export function SuperMeter({ value, side }: Props) {
           />
         ))}
       </div>
+      {full && hint && (
+        <span
+          className="font-display text-[7px] tracking-widest px-1 py-0.5"
+          style={{
+            color: 'var(--color-sm-end)',
+            background: 'rgba(247,37,133,0.15)',
+            border: '1px solid var(--color-sm-end)',
+            whiteSpace: 'nowrap',
+            animation: 'flash 1.4s infinite',
+          }}
+          title={`Ult state: ${hint}`}
+        >
+          ⚡ {hint}
+        </span>
+      )}
     </div>
   )
 }

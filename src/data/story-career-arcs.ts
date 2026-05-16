@@ -88,10 +88,11 @@ const CHESKY_ARC: StoryArc = {
       setting: 'Y Combinator. Demo Day.',
       chapterTitle: 'CEREAL FUNDED THIS',
       chapterIntro:
-        "Welcome back to the show. Today we go to 2008. You and Joe and Nate are sleeping on " +
+        "Welcome back to the show. Tonight's guest is Brian Chesky. " +
+        "Brian, take us back to 2008. You and Joe and Nate are sleeping on " +
         "air mattresses in San Francisco. The investors won't take your meetings. " +
         "You shipped Obama O's and Cap'n McCain's cereal to keep the company alive. " +
-        "Tonight your guest is the man who passed on you. Marc Andreessen.",
+        "Tonight, the operator across from you is the man who passed on you. Marc Andreessen.",
       preFightDialogue: [
         { speakerId: 'andreessen', text: "I literally told you no. Now you want a sit-down?" },
         { speakerId: 'chesky', text: "I want a sit-down because I'm still here." },
@@ -111,7 +112,7 @@ const CHESKY_ARC: StoryArc = {
         "You found fit. The line goes vertical. Hosts in 89 countries. " +
         "Reservations doubling every six months. " +
         "The product you designed for three users now serves a million. " +
-        "Your guest tonight built a scaling curve they teach in business schools.",
+        "The operator across from you tonight built a scaling curve they teach in business schools.",
       preFightDialogue: [
         { speakerId: 'turley', text: "Doubling every month isn't a chart. It's a brawl." },
         { speakerId: 'chesky', text: "Then we don't blink. Ship it." },
@@ -130,7 +131,7 @@ const CHESKY_ARC: StoryArc = {
       chapterIntro:
         "Growth is real but mature. The PR pivot from 'cool startup' to 'serious company' " +
         "is awkward. Hosts are organizing. Cities are pushing back. " +
-        "Your guest has lived in this room more than anyone. " +
+        "The operator across from youhas lived in this room more than anyone. " +
         "Shreyas Doshi. The strategist who forces decisions when growth gets honest.",
       preFightDialogue: [
         { speakerId: 'doshi', text: "Two ICPs glued together. Hosts and guests. Pick one." },
@@ -151,7 +152,7 @@ const CHESKY_ARC: StoryArc = {
         "A new substrate arrived. " +
         "Search is now a conversation. Trip planning is now an agent. " +
         "Your competitors are racing to bolt AI on top of stale stacks. " +
-        "Your guest ships a research preview every week and learns at the speed of customers.",
+        "The operator across from youships a research preview every week and learns at the speed of customers.",
       preFightDialogue: [
         { speakerId: 'catwu', text: "You can't bolt AI onto a 15-year-old product. You rebuild." },
         { speakerId: 'chesky', text: "Then we rebuild. From the booking flow up." },
@@ -170,7 +171,7 @@ const CHESKY_ARC: StoryArc = {
       chapterIntro:
         "Take rate matters now. Host fees vs guest fees. Listed currency. Tiered insurance. " +
         "Every conversation is leverage. " +
-        "Your guest studied 400 companies to learn what willingness to pay actually looks like.",
+        "The operator across from youstudied 400 companies to learn what willingness to pay actually looks like.",
       preFightDialogue: [
         { speakerId: 'madhavan', text: "Your hosts will pay outcomes. Your guests will pay experience. Stop confusing them." },
         { speakerId: 'chesky', text: "Three tiers. Anchor, target, premium. Got it." },
@@ -190,7 +191,7 @@ const CHESKY_ARC: StoryArc = {
         "March 2020. " +
         "Travel disappeared. Bookings dropped 80% in two weeks. " +
         "You did the hard work. 1,900 people. The severance memo became the textbook example. " +
-        "Your guest has lived in this exact room: discovery before delivery, even when there's no time.",
+        "The operator across from youhas lived in this exact room: discovery before delivery, even when there's no time.",
       preFightDialogue: [
         { speakerId: 'cagan', text: "The discovery you skipped two years ago is the crisis you're in now." },
         { speakerId: 'chesky', text: "I know. I'm not skipping it again." },
@@ -210,7 +211,7 @@ const CHESKY_ARC: StoryArc = {
       chapterIntro:
         "The product is great. The team is great. " +
         "The question is whether anyone hears about it past your current users. " +
-        "Your guest built a distribution moat so deep it survived three model platform shifts.",
+        "The operator across from youbuilt a distribution moat so deep it survived three model platform shifts.",
       preFightDialogue: [
         { speakerId: 'spiegel', text: "You stopped buying Google ads. People said you were crazy." },
         { speakerId: 'chesky', text: "Brand is the only moat ad spend can't buy." },
@@ -263,21 +264,24 @@ const AMJAD_ARC: StoryArc = {
       chapter: 1,
       scenario: 'pre-pmf',
       year: '2011',
-      setting: 'Jordan. A web IDE prototype.',
+      setting: 'Amman. The IDE in a browser tab.',
       chapterTitle: 'OPEN A REPL',
       chapterIntro:
-        "Welcome back. We go to Amman, 2011. " +
+        "Welcome back to the show. Tonight's guest is Amjad Masad. " +
+        "Amjad, take us back to Amman in 2011. " +
         "You're a self-taught engineer building a code editor that runs in the browser. " +
         "Your friends say nobody will ever write production code in a tab. " +
-        "Your guest tonight built three startups before this one — and one of those was the platform.",
+        "The operator across from you tonight made his company by shipping cereal boxes " +
+        "when investors said no — he knows what doing-things-that-don't-scale really means. " +
+        "Brian Chesky.",
       preFightDialogue: [
-        { speakerId: 'chesky', text: "Web IDEs have been tried. Cloud9. Koding. They all died." },
-        { speakerId: 'amjad', text: "They optimized for the IDE. I'm optimizing for the URL." },
+        { speakerId: 'chesky', text: "I shipped cereal boxes to keep the lights on. You're shipping a tab and calling it a company." },
+        { speakerId: 'amjad', text: "Different cereal. Same conviction. The browser IS the company." },
       ],
-      postFightReaction: { speakerId: 'chesky', text: "The URL is the product. I see it now." },
+      postFightReaction: { speakerId: 'chesky', text: "The browser is the company. I would have killed for that wedge in 2008." },
       chapterOutro:
-        "Every category-defining product started with a primitive nobody appreciated. " +
-        "Amjad's was the link.",
+        "Every category-defining product starts with a primitive nobody appreciates. " +
+        "Chesky's was the air mattress. Amjad's was the link. Same insight, different decade.",
     },
     {
       chapter: 2,
@@ -289,7 +293,7 @@ const AMJAD_ARC: StoryArc = {
         "The world locked down. " +
         "Suddenly every CS class needed to run somewhere. Replit's free tier exploded. " +
         "Servers melting, costs ballooning, eight engineers trying to hold it together. " +
-        "Your guest knows scaling curves better than anyone on the show.",
+        "The operator across from youknows scaling curves better than anyone on the show.",
       preFightDialogue: [
         { speakerId: 'turley', text: "Your servers will be your epitaph if you don't price soon." },
         { speakerId: 'amjad', text: "Free is the wedge. The product comes first." },
@@ -308,7 +312,7 @@ const AMJAD_ARC: StoryArc = {
       chapterIntro:
         "Growth flatlined. The free tier is now the cost center. " +
         "Investors want a clear path to revenue. Users want everything to stay free. " +
-        "Your guest is the strategist who forces choice. " +
+        "The operator across from youis the strategist who forces choice. " +
         "Shreyas Doshi.",
       preFightDialogue: [
         { speakerId: 'doshi', text: "You can't be a free product, a power-user tool, and an enterprise platform. Pick one." },
@@ -328,7 +332,7 @@ const AMJAD_ARC: StoryArc = {
       chapterTitle: 'REPLIT AGENT',
       chapterIntro:
         "Replit Agent shipped. Anyone could type 'build me a CRM' and watch it appear. " +
-        "But your guest tonight runs the team that ships THE dev-tool agent at Anthropic. " +
+        "But the operator across from you tonight runs the team that ships THE dev-tool agent at Anthropic. " +
         "Two visions of the future, on the same stage, on the same night.",
       preFightDialogue: [
         { speakerId: 'boris', text: "You ship the workspace. I ship the model. Why do we collide?" },
@@ -349,7 +353,7 @@ const AMJAD_ARC: StoryArc = {
       chapterIntro:
         "Now the agent costs real GPU money. " +
         "Per-token? Per-output? Per-build? " +
-        "Your guest studied four hundred companies to figure out how to price outcomes. " +
+        "The operator across from youstudied four hundred companies to figure out how to price outcomes. " +
         "Madhavan Ramanujam.",
       preFightDialogue: [
         { speakerId: 'madhavan', text: "Don't price the input. Price the output. Builders pay for built things." },
@@ -370,7 +374,7 @@ const AMJAD_ARC: StoryArc = {
         "The market correction. " +
         "Your free-tier costs exploded post-AI. " +
         "You made the call: cut a third, double down on the agent. " +
-        "Your guest has coached more founders through this room than anyone.",
+        "The operator across from youhas coached more founders through this room than anyone.",
       preFightDialogue: [
         { speakerId: 'cagan', text: "You burned trust to survive. That's the math. Did you do it humanely?" },
         { speakerId: 'amjad', text: "Severance, references, founder mode in every exit conversation. Yes." },
@@ -390,7 +394,7 @@ const AMJAD_ARC: StoryArc = {
         "Every weekend, a thousand operators are building on Replit. " +
         "AI hackathons, founder retreats, full-stack tutorials. " +
         "You discovered the new top of funnel: the builder who didn't know they were a founder yet. " +
-        "Your guest knows distribution like no one else.",
+        "The operator across from youknows distribution like no one else.",
       preFightDialogue: [
         { speakerId: 'spiegel', text: "You're subsidizing the hackathon. You'd better know which side of the marketplace pays." },
         { speakerId: 'amjad', text: "Both sides. Subsidize discovery. Charge for shipping." },
@@ -444,11 +448,12 @@ const REID_ARC: StoryArc = {
       setting: 'Mountain View. After PayPal.',
       chapterTitle: "EMBARRASS YOURSELF",
       chapterIntro:
-        "Welcome back. We go to 2002. " +
+        "Welcome back to the show. Tonight's guest is Reid Hoffman. " +
+        "Reid, take us back to 2002. " +
         "You just sold PayPal. You could have retired. " +
         "Instead you sketched a network for professionals that everyone said was redundant — " +
         "Friendster existed; LinkedIn was supposedly DOA before it launched. " +
-        "Your guest is the founder who taught you what shipping really means.",
+        "The operator across from you tonight is a founder you mentored. Brian Chesky.",
       preFightDialogue: [
         { speakerId: 'chesky', text: "Professionals don't need a social network. They have email." },
         { speakerId: 'reid', text: "If you're not embarrassed by your first version, you launched too late." },
@@ -467,7 +472,7 @@ const REID_ARC: StoryArc = {
       chapterIntro:
         "LinkedIn has fit. Now the question is whether speed beats efficiency. " +
         "You wrote the playbook later. " +
-        "Your guest tonight built ChatGPT on a curve that taught the world what blitzscaling looks like.",
+        "The operator across from you tonight built ChatGPT on a curve that taught the world what blitzscaling looks like.",
       preFightDialogue: [
         { speakerId: 'turley', text: "Blitzscaling has a cost. Servers, hires, regret." },
         { speakerId: 'reid', text: "Speed over efficiency. The market only rewards the winners." },
@@ -486,7 +491,7 @@ const REID_ARC: StoryArc = {
       chapterIntro:
         "LinkedIn is public. Growth is real but the obvious S-curve is over. " +
         "Job board, content network, or recruiting platform? " +
-        "Your guest forces the choice no founder wants to make.",
+        "The operator across from youforces the choice no founder wants to make.",
       preFightDialogue: [
         { speakerId: 'doshi', text: "You're three companies. Pick the critical few." },
         { speakerId: 'reid', text: "I'll pick the network. The rest are surfaces on top of it." },
@@ -505,7 +510,7 @@ const REID_ARC: StoryArc = {
       chapterIntro:
         "You co-founded Inflection. You sit on the OpenAI board. " +
         "You're funding AI companies at Greylock. " +
-        "Your guest builds at the speed of the model itself.",
+        "The operator across from youbuilds at the speed of the model itself.",
       preFightDialogue: [
         { speakerId: 'catwu', text: "You're an investor, not a builder. The cadence is different." },
         { speakerId: 'reid', text: "Then I'll build a portfolio at your cadence. Watch." },
@@ -524,7 +529,7 @@ const REID_ARC: StoryArc = {
       chapterIntro:
         "Premium subscriptions. Sales Navigator. Recruiter. " +
         "Three revenue lines into three buyer personas. " +
-        "Your guest studied four hundred companies to learn what willingness to pay looks like.",
+        "The operator across from youstudied four hundred companies to learn what willingness to pay looks like.",
       preFightDialogue: [
         { speakerId: 'madhavan', text: "Three buyers. Three tiers. Anchor the recruiter line and the rest follows." },
         { speakerId: 'reid', text: "Recruiter is the anchor. Premium is the entry. Sales Nav is the leverage." },
@@ -543,7 +548,7 @@ const REID_ARC: StoryArc = {
       chapterIntro:
         "Lehman fell. Hiring froze. Recruiters stopped paying. " +
         "Your subscription line was suddenly the only line that didn't crater. " +
-        "Your guest knows discovery before delivery — and what discovery actually means in a crisis.",
+        "The operator across from youknows discovery before delivery — and what discovery actually means in a crisis.",
       preFightDialogue: [
         { speakerId: 'cagan', text: "In a crisis you find out which line was actually load-bearing." },
         { speakerId: 'reid', text: "The network. It always was." },
@@ -563,7 +568,7 @@ const REID_ARC: StoryArc = {
         "You launched Masters of Scale. " +
         "A weekly conversation with founders about counter-intuitive moves. " +
         "Built a platform-of-platforms before podcasts were a category. " +
-        "Your guest knows distribution like no one else.",
+        "The operator across from youknows distribution like no one else.",
       preFightDialogue: [
         { speakerId: 'spiegel', text: "Podcasting is media. Media isn't a moat." },
         { speakerId: 'reid', text: "The moat is the wisdom compounded across episodes. Network effects on conversation." },
@@ -620,10 +625,11 @@ const BORIS_ARC: StoryArc = {
       setting: 'Anthropic HQ. The CLI that nobody asked for.',
       chapterTitle: 'JUST A TOOL',
       chapterIntro:
-        "Welcome back. We go to early 2024. " +
+        "Welcome back to the show. Tonight's guest is Boris Cherny. " +
+        "Boris, take us back to early 2024. " +
         "You're an engineer at Anthropic. You build a small CLI that lets Claude write code. " +
         "Internally it's a curiosity. Externally it's vapor. " +
-        "Your guest tonight runs the platform you'd ship into.",
+        "The operator across from you tonight runs the platform you'd ship into. Amjad Masad.",
       preFightDialogue: [
         { speakerId: 'amjad', text: "A CLI? In 2024? Builders live in browsers." },
         { speakerId: 'boris', text: "Builders live in keyboards. The CLI is the keyboard for agents." },
@@ -643,7 +649,7 @@ const BORIS_ARC: StoryArc = {
         "You shipped to GA. Engineers wrote about it on X. " +
         "Within a month every dev team you talked to had Claude Code in their workflow. " +
         "The curve looks like ChatGPT's first month. " +
-        "Your guest knows what to do when the curve breaks the org.",
+        "The operator across from youknows what to do when the curve breaks the org.",
       preFightDialogue: [
         { speakerId: 'turley', text: "Curves like this rip teams apart. How are you not burning out?" },
         { speakerId: 'boris', text: "We codify the work. The agent is the team multiplier." },
@@ -662,7 +668,7 @@ const BORIS_ARC: StoryArc = {
       chapterIntro:
         "Growth steadies. Now the question every Anthropic team asks: " +
         "is Claude Code a feature of the API or a product of its own? " +
-        "Your guest forces the choice no founder wants to make.",
+        "The operator across from youforces the choice no founder wants to make.",
       preFightDialogue: [
         { speakerId: 'doshi', text: "Two ICPs glued together. Anthropic devs and external devs." },
         { speakerId: 'boris', text: "Codify once. Both ICPs ship from the same surface." },
@@ -681,7 +687,7 @@ const BORIS_ARC: StoryArc = {
       chapterTitle: 'TWO MODELS, ONE KEYBOARD',
       chapterIntro:
         "Cursor ships its agent. Codex from OpenAI lands. The dev-tools layer is on fire. " +
-        "Your guest runs the lab on the other side of the city. " +
+        "The operator across from youruns the lab on the other side of the city. " +
         "Two foundation models, two product strategies, one engineer paying the bill.",
       preFightDialogue: [
         { speakerId: 'altman', text: "Why ship a coding agent when I sell you the model that runs it?" },
@@ -701,7 +707,7 @@ const BORIS_ARC: StoryArc = {
       chapterIntro:
         "Claude Code costs Anthropic real money to run. " +
         "Tokens in, tokens out, plus the agent's whole reasoning chain. " +
-        "Your guest studied four hundred companies to figure out what willingness-to-pay looks like.",
+        "The operator across from youstudied four hundred companies to figure out what willingness-to-pay looks like.",
       preFightDialogue: [
         { speakerId: 'madhavan', text: "Don't price tokens. Price shipped PRs. Engineers pay for outcomes." },
         { speakerId: 'boris', text: "Per-merge. Per-feature. Per-agent-hour. Three tiers." },
@@ -720,7 +726,7 @@ const BORIS_ARC: StoryArc = {
       chapterIntro:
         "Friday afternoon. Sandboxes leaked across customer boundaries. " +
         "Twitter lit up. Engineering ate the weekend. " +
-        "Your guest has coached more teams through this exact failure mode than anyone.",
+        "The operator across from youhas coached more teams through this exact failure mode than anyone.",
       preFightDialogue: [
         { speakerId: 'cagan', text: "Crisis IS discovery. What did the bug teach you about the product?" },
         { speakerId: 'boris', text: "Trust boundaries belong in the model layer, not the sandbox layer. I'm moving them." },
@@ -739,7 +745,7 @@ const BORIS_ARC: StoryArc = {
       chapterIntro:
         "You open-sourced the agent SDK. Now VS Code, Zed, JetBrains plugins are shipping. " +
         "Distribution by ubiquity, not by acquisition. " +
-        "Your guest knows distribution like no one else.",
+        "The operator across from youknows distribution like no one else.",
       preFightDialogue: [
         { speakerId: 'spiegel', text: "You gave away the wedge. What's the moat?" },
         { speakerId: 'boris', text: "The model. The SDK is the wedge. The Anthropic API is the moat." },
@@ -793,10 +799,11 @@ const ALTMAN_ARC: StoryArc = {
       setting: 'Y Combinator. President.',
       chapterTitle: 'BEFORE THE LAB',
       chapterIntro:
-        "Welcome back. We go to 2014. " +
-        "You just took over Y Combinator. Loopt is behind you. " +
+        "Welcome back to the show. Tonight's guest is Sam Altman. " +
+        "Sam, take us back to 2014. " +
+        "You just took over as president of Y Combinator. Loopt is behind you. " +
         "Nobody has named OpenAI yet. " +
-        "Your guest tonight is the operator who taught YC what shipping means.",
+        "The operator across from you tonight is the most famous founder to come through your batches. Brian Chesky.",
       preFightDialogue: [
         { speakerId: 'chesky', text: "You're not a builder anymore, Sam. You're a coach. Different game." },
         { speakerId: 'altman', text: "Coach for now. The next game is bigger than any of yours." },
@@ -816,7 +823,7 @@ const ALTMAN_ARC: StoryArc = {
         "November 30, 2022. You ship ChatGPT as a research preview. " +
         "Five days later it hit a million users. " +
         "Three months later, a hundred million. " +
-        "Your guest knows what scaling curves do to the people who survive them.",
+        "The operator across from youknows what scaling curves do to the people who survive them.",
       preFightDialogue: [
         { speakerId: 'turley', text: "I was on the team. We were not ready. Nobody is ready for that curve." },
         { speakerId: 'altman', text: "Ready is a luxury. The market doesn't wait. Ship anyway." },
@@ -835,7 +842,7 @@ const ALTMAN_ARC: StoryArc = {
       chapterIntro:
         "GPT-4 is everywhere. Scaling laws say there's another jump. " +
         "Critics say the curve is bending. " +
-        "Your guest forces the strategic question every model lab refuses to name.",
+        "The operator across from youforces the strategic question every model lab refuses to name.",
       preFightDialogue: [
         { speakerId: 'doshi', text: "Two ICPs glued together. ChatGPT consumer and the API enterprise." },
         { speakerId: 'altman', text: "Both. Forever. The platform is the integration." },
@@ -855,7 +862,7 @@ const ALTMAN_ARC: StoryArc = {
       chapterIntro:
         "Anthropic ships Claude. Anthropic ships Claude Code. " +
         "The rival lab keeps shipping. " +
-        "Your guest runs their dev-tools layer.",
+        "The operator across from youruns their dev-tools layer.",
       preFightDialogue: [
         { speakerId: 'boris', text: "You sell the model. I sell the keyboard for it. Same engineer pays us both." },
         { speakerId: 'altman', text: "Then we're allies in disguise. Engineers win, both labs win." },
@@ -874,7 +881,7 @@ const ALTMAN_ARC: StoryArc = {
       chapterIntro:
         "You shipped a $20/month plan over the holidays. " +
         "By Q2 you have ten million subscribers. " +
-        "Your guest studied four hundred companies on willingness to pay.",
+        "The operator across from youstudied four hundred companies on willingness to pay.",
       preFightDialogue: [
         { speakerId: 'madhavan', text: "You anchored at twenty. You could have anchored at fifty." },
         { speakerId: 'altman', text: "I anchored at twenty because I wanted everyone in. The next jump comes later." },
@@ -894,7 +901,7 @@ const ALTMAN_ARC: StoryArc = {
         "Friday afternoon. The board fired you. " +
         "On Monday morning seven hundred employees threatened to leave with you. " +
         "By Tuesday you were back. " +
-        "Your guest knows what discovery means when the floor disappears.",
+        "The operator across from youknows what discovery means when the floor disappears.",
       preFightDialogue: [
         { speakerId: 'cagan', text: "The discovery wasn't the firing. It was who walked out the door with you." },
         { speakerId: 'altman', text: "I learned what we built when it almost ended. " +
@@ -914,7 +921,7 @@ const ALTMAN_ARC: StoryArc = {
       chapterIntro:
         "DevDay 2024. You announced agents, the GPT store, custom GPTs. " +
         "You turned a model into a marketplace. " +
-        "Your guest built a distribution moat so deep it survived three model shifts.",
+        "The operator across from youbuilt a distribution moat so deep it survived three model shifts.",
       preFightDialogue: [
         { speakerId: 'spiegel', text: "The GPT store was a stalled marketplace. The Operator agent isn't shipping fast enough." },
         { speakerId: 'altman', text: "Both are wedges. The model behind them is the moat." },
@@ -967,10 +974,11 @@ const BENIOFF_ARC: StoryArc = {
       setting: 'San Francisco. A one-bedroom apartment that became HQ.',
       chapterTitle: 'NO SOFTWARE',
       chapterIntro:
-        "Welcome back. We go to 1999. " +
+        "Welcome back to the show. Tonight's guest is Marc Benioff. " +
+        "Marc, take us back to 1999. " +
         "You left Oracle at 36 to start a software company that wouldn't ship software. " +
         "Wall Street called you delusional. Oracle called you naive. " +
-        "Your guest tonight is the founder who shipped a planet from a couch.",
+        "The operator across from you tonight is the founder who later shipped a planet from a couch. Brian Chesky.",
       preFightDialogue: [
         { speakerId: 'chesky', text: "Selling enterprise software in a browser? Everyone said it couldn't work." },
         { speakerId: 'benioff', text: "Everyone said your air mattress couldn't work either. We were both right." },
@@ -990,7 +998,7 @@ const BENIOFF_ARC: StoryArc = {
         "June 2004. You ring the bell. " +
         "Salesforce IPOs at $11. By close it's $17. " +
         "The slogan that mocked Oracle is now embroidered on Wall Street ties. " +
-        "Your guest knows hypergrowth curves intimately.",
+        "The operator across from youknows hypergrowth curves intimately.",
       preFightDialogue: [
         { speakerId: 'turley', text: "Going public is the easy part. The next ten years are the test." },
         { speakerId: 'benioff', text: "Then the test is what I build. Watch." },
@@ -1009,7 +1017,7 @@ const BENIOFF_ARC: StoryArc = {
       chapterIntro:
         "Sales Cloud is mature. Service Cloud is shipping. Marketing Cloud is brewing. " +
         "Three product lines, three sales motions, three ICPs. " +
-        "Your guest is the strategist who forces the synthesis.",
+        "The operator across from youis the strategist who forces the synthesis.",
       preFightDialogue: [
         { speakerId: 'doshi', text: "Three clouds is three companies. Pick one." },
         { speakerId: 'benioff', text: "One platform. Many clouds. The platform IS the strategy." },
@@ -1028,7 +1036,7 @@ const BENIOFF_ARC: StoryArc = {
       chapterIntro:
         "The agentic shift arrived. You bet the company on Agentforce. " +
         "Critics said Salesforce was too big to pivot. " +
-        "Your guest moves at the cadence of model releases.",
+        "The operator across from youmoves at the cadence of model releases.",
       preFightDialogue: [
         { speakerId: 'catwu', text: "You can't bolt agents onto a twenty-five-year-old CRM. You rebuild." },
         { speakerId: 'benioff', text: "Then we rebuild. From the data layer up." },
@@ -1047,7 +1055,7 @@ const BENIOFF_ARC: StoryArc = {
       chapterIntro:
         "Sales Cloud. Service. Marketing. Commerce. Data. Tableau. Slack. " +
         "Seven products, each priced as a separate SKU on a platform contract. " +
-        "Your guest studied four hundred companies to figure out how the cap table breathes.",
+        "The operator across from youstudied four hundred companies to figure out how the cap table breathes.",
       preFightDialogue: [
         { speakerId: 'madhavan', text: "Seven SKUs is seven negotiations. You're leaving money on the table." },
         { speakerId: 'benioff', text: "Or I'm leaving room for the eighth. Watch the platform price." },
@@ -1066,7 +1074,7 @@ const BENIOFF_ARC: StoryArc = {
       chapterIntro:
         "Activist investors targeted you for the Slack acquisition. " +
         "Earnings missed. Layoffs followed. " +
-        "Your guest has coached more public-company founders through this room than anyone.",
+        "The operator across from youhas coached more public-company founders through this room than anyone.",
       preFightDialogue: [
         { speakerId: 'cagan', text: "Discovery before delivery. What did the Slack acquisition actually buy you?" },
         { speakerId: 'benioff', text: "A second moat. Workflow. Around the data we already owned." },
@@ -1085,7 +1093,7 @@ const BENIOFF_ARC: StoryArc = {
       chapterIntro:
         "Dreamforce becomes the biggest software conference on earth. " +
         "Tens of thousands of developers, partners, customers, all calling each other Ohana. " +
-        "Your guest knows distribution like no one else.",
+        "The operator across from youknows distribution like no one else.",
       preFightDialogue: [
         { speakerId: 'spiegel', text: "Your conference is a moat. People come for the trust, stay for the contracts." },
         { speakerId: 'benioff', text: "Ohana is the distribution. Trust compounds across years of attendance." },
@@ -1139,10 +1147,11 @@ const FEIFEI_ARC: StoryArc = {
       setting: 'Princeton lab. Curating a dataset by hand.',
       chapterTitle: 'IMAGENET',
       chapterIntro:
-        "Welcome back. We go to 2007. " +
+        "Welcome back to the show. Tonight's guest is Fei-Fei Li. " +
+        "Fei-Fei, take us back to 2007 at Princeton. " +
         "You're a junior professor with an unfundable idea: " +
         "label millions of images by hand and call it a benchmark. " +
-        "Your guest tonight is the founder who scaled a labeling problem into a planet.",
+        "The operator across from you tonight is the founder who scaled a hand-curated marketplace into a planet. Brian Chesky.",
       preFightDialogue: [
         { speakerId: 'chesky', text: "Mechanical Turk for an academic dataset? That's not a business." },
         { speakerId: 'feifei', text: "It isn't. It's the substrate every business will sit on." },
@@ -1162,7 +1171,7 @@ const FEIFEI_ARC: StoryArc = {
         "AlexNet crushes the ImageNet competition. " +
         "The room you've sat in for five years finally believes. " +
         "Suddenly every lab on earth wants compute. " +
-        "Your guest knows scaling curves at consumer scale.",
+        "The operator across from youknows scaling curves at consumer scale.",
       preFightDialogue: [
         { speakerId: 'turley', text: "The benchmark fell. Now the curve goes vertical. Hope you're ready." },
         { speakerId: 'feifei', text: "The curve has been bending for ten years. I've just been waiting for the world." },
@@ -1181,7 +1190,7 @@ const FEIFEI_ARC: StoryArc = {
         "ImageNet is everywhere in research. " +
         "Industry still treats AI as a toy. " +
         "You're being asked to cross from professor to operator. " +
-        "Your guest forces the choice no academic wants to name.",
+        "The operator across from youforces the choice no academic wants to name.",
       preFightDialogue: [
         { speakerId: 'doshi', text: "Stay academic or build product. You can't be two ICPs glued together." },
         { speakerId: 'feifei', text: "Both. Research and product. The work is the same work." },
@@ -1200,7 +1209,7 @@ const FEIFEI_ARC: StoryArc = {
       chapterIntro:
         "You ran Google Cloud AI. " +
         "Vision API. AutoML. The research-to-product translation. " +
-        "Your guest moves at research speed and ships at product speed.",
+        "The operator across from youmoves at research speed and ships at product speed.",
       preFightDialogue: [
         { speakerId: 'catwu', text: "Research-to-product is a cadence problem. How do you compress it?" },
         { speakerId: 'feifei', text: "You stop separating them. The model is the product. The product is the research." },
@@ -1219,7 +1228,7 @@ const FEIFEI_ARC: StoryArc = {
       chapterIntro:
         "You left Stanford to start World Labs. " +
         "Spatial intelligence. World models. A business case that didn't exist a year ago. " +
-        "Your guest studied four hundred companies on willingness to pay.",
+        "The operator across from youstudied four hundred companies on willingness to pay.",
       preFightDialogue: [
         { speakerId: 'madhavan', text: "Who pays for a world model? Pricing has to anchor somewhere." },
         { speakerId: 'feifei', text: "Robotics. Simulation. Embodied agents. Three buyers, three tiers." },
@@ -1238,7 +1247,7 @@ const FEIFEI_ARC: StoryArc = {
       chapterIntro:
         "You've lived through three AI winters. " +
         "Grants frozen. Mentors leaving. Conferences shrinking. " +
-        "Your guest knows the discovery-before-delivery discipline that survives that room.",
+        "The operator across from youknows the discovery-before-delivery discipline that survives that room.",
       preFightDialogue: [
         { speakerId: 'cagan', text: "What do you discover when the field everyone tells you is dead is the only place you'll work?" },
         { speakerId: 'feifei', text: "That a summer comes after every winter. The dataset I built was the spring." },
@@ -1258,7 +1267,7 @@ const FEIFEI_ARC: StoryArc = {
       chapterIntro:
         "AI4ALL. World Labs research demos. Your TED Talk. " +
         "You turned the godmother title into a global teaching platform. " +
-        "Your guest knows distribution like no one else.",
+        "The operator across from youknows distribution like no one else.",
       preFightDialogue: [
         { speakerId: 'spiegel', text: "Research talks aren't distribution. They're brand." },
         { speakerId: 'feifei', text: "Brand IS distribution when the brand is trust in the curve." },
@@ -1312,10 +1321,11 @@ const ELENA_ARC: StoryArc = {
       setting: 'SurveyMonkey. First "VP Growth" role.',
       chapterTitle: 'INVENTING THE ROLE',
       chapterIntro:
-        "Welcome back. We go to 2012. " +
-        "You're at SurveyMonkey. The title 'VP of Growth' barely exists. " +
-        "You're writing the playbook in real time on a $200M ARR business. " +
-        "Your guest tonight is the founder who knows what shipping really means.",
+        "Welcome back to the show. Tonight's guest is Elena Verna. " +
+        "Elena, take us back to SurveyMonkey in the early 2010s. " +
+        "You're running growth before the title 'VP of Growth' really exists. " +
+        "You're writing the playbook in real time on a nine-figure ARR business. " +
+        "The operator across from you tonight is the founder who knows what shipping really means. Brian Chesky.",
       preFightDialogue: [
         { speakerId: 'chesky', text: "Growth is a function or a feature? Most people get it wrong." },
         { speakerId: 'elena', text: "Growth is a loop. Funnels run out. Loops compound." },
@@ -1335,7 +1345,7 @@ const ELENA_ARC: StoryArc = {
         "March 2020. Every remote team needed a whiteboard. " +
         "Miro's free-tier signups went 20x in a month. " +
         "You held the activation curve through chaos. " +
-        "Your guest knows scaling curves at ChatGPT speed.",
+        "The operator across from youknows scaling curves at ChatGPT speed.",
       preFightDialogue: [
         { speakerId: 'turley', text: "Curves like that break activation. How did you hold it?" },
         { speakerId: 'elena', text: "Aha moment first. Everything else is overhead." },
@@ -1354,7 +1364,7 @@ const ELENA_ARC: StoryArc = {
       chapterIntro:
         "The pandemic surge is over. Free signups are still growing but paid conversion is bending. " +
         "Every CFO wants a paywall. " +
-        "Your guest forces the choice every PLG operator dreads.",
+        "The operator across from youforces the choice every PLG operator dreads.",
       preFightDialogue: [
         { speakerId: 'doshi', text: "Two ICPs glued together. Self-serve and enterprise. Pick." },
         { speakerId: 'elena', text: "Self-serve is the wedge. Enterprise is the upsell. The loop runs through both." },
@@ -1372,7 +1382,7 @@ const ELENA_ARC: StoryArc = {
       chapterTitle: 'GROWTH IN THE AI ERA',
       chapterIntro:
         "AI changes the funnel. Search dies. Inbound shifts. Ahas happen inside the agent. " +
-        "Your guest moves at the cadence of new models.",
+        "The operator across from youmoves at the cadence of new models.",
       preFightDialogue: [
         { speakerId: 'catwu', text: "The funnel you spent a decade building just got rewritten by an LLM." },
         { speakerId: 'elena', text: "Then I rewrite. Aha moments in chat. Loops through the agent." },
@@ -1391,7 +1401,7 @@ const ELENA_ARC: StoryArc = {
       chapterIntro:
         "Growth and pricing usually fight. " +
         "You proved they don't have to. " +
-        "Your guest studied four hundred companies on willingness to pay.",
+        "The operator across from youstudied four hundred companies on willingness to pay.",
       preFightDialogue: [
         { speakerId: 'madhavan', text: "Growth optimizes for top of funnel. Pricing optimizes for bottom. Who wins?" },
         { speakerId: 'elena', text: "Loop wins. Price for retention, not acquisition. The loop is the moat." },
@@ -1410,7 +1420,7 @@ const ELENA_ARC: StoryArc = {
       chapterIntro:
         "Companies froze hiring. Marketing budgets evaporated. " +
         "Growth teams were the first cut. " +
-        "Your guest has coached more operators through this exact room than anyone.",
+        "The operator across from youhas coached more operators through this exact room than anyone.",
       preFightDialogue: [
         { speakerId: 'cagan', text: "When growth freezes the discipline matters more, not less. What did you discover?" },
         { speakerId: 'elena', text: "That loops are still the answer. The CFOs who cut growth cut their compounding." },
@@ -1429,7 +1439,7 @@ const ELENA_ARC: StoryArc = {
       chapterIntro:
         "You stopped operating full-time. You started advising six companies at once. " +
         "Your playbook now ships through everybody else's growth team. " +
-        "Your guest knows distribution like no one else.",
+        "The operator across from youknows distribution like no one else.",
       preFightDialogue: [
         { speakerId: 'spiegel', text: "Advisor work is brand, not distribution. You're trading hours for trust." },
         { speakerId: 'elena', text: "Trust IS distribution when the trust is in the loop." },

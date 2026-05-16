@@ -4,6 +4,7 @@ import { getFighter, STARTING_ROSTER } from '../data/fighters'
 import { AI_PROFILES } from '../data/ai-profiles'
 import { ARCADE_PROGRESSION } from '../data/scenarios'
 import { STORY_PROGRESSION, PROCEDURAL_ENDING_EPITAPH } from './../data/story-tournament'
+import { getArc } from './../data/story-career-arcs'
 import { applyMove, initialRuntime, startTurn } from './applyMove'
 import { Voice } from '../lib/voice'
 import { loadStats, saveStats, checkAndUnlock } from '../data/achievements'
@@ -286,16 +287,21 @@ export const useGame = create<GameState & Actions>((set, get) => ({
   //   → post-fight-reaction → chapter-outro → next chapter
   // After chapter 8 (Lenny boss): ending-splash.
   startStory: (fighterId: string) => {
-    // The marquee 8 get bespoke career arcs (Tier 2 wires this in).
-    const MARQUEE = ['amjad', 'chesky', 'boris', 'altman', 'benioff', 'feifei', 'elena', 'reid']
-    const arcMode: 'tournament' | 'career' = MARQUEE.includes(fighterId) ? 'career' : 'tournament'
+    // The marquee 8 get bespoke career arcs via MARQUEE_ARCS lookup.
+    // Fighters with an arc in the table use 'career' mode; the rest use
+    // 'tournament' (universal STORY_PROGRESSION content).
+    const arc = getArc(fighterId)
+    const arcMode: 'tournament' | 'career' = arc ? 'career' : 'tournament'
 
-    // Build opponent queue from the story progression (fixed order).
-    // If the player IS the scenario specialist for a chapter, swap in a
-    // sensible alternative so we don't fight ourselves.
-    const queue: string[] = STORY_PROGRESSION.map((ch) => {
+    // Build opponent queue. For arc fighters, each chapter's
+    // `opponentOverride` (when set) takes priority — that's the bespoke
+    // "famous moment" matchup (e.g. Chesky vs Andreessen for Pre-PMF).
+    // Otherwise fall back to the universal STORY_PROGRESSION opponent,
+    // with a self-collision swap so we don't fight ourselves.
+    const queue: string[] = STORY_PROGRESSION.map((ch, i) => {
+      const override = arc?.chapters[i]?.opponentOverride
+      if (override) return override
       if (ch.opponentId === fighterId) {
-        // Pick a thematic alt for each scenario (mirrors arcade fallback).
         const altByScenario: Record<string, string> = {
           'pre-pmf': 'doshi',
           hypergrowth: 'cagan',
@@ -312,7 +318,11 @@ export const useGame = create<GameState & Actions>((set, get) => ({
     })
 
     flashCounter++
-    const firstChapter = STORY_PROGRESSION[0]
+    // Use the arc's chapter 1 content if present, else the tournament default.
+    const firstChapterArc = arc?.chapters[0]
+    const firstChapterDefault = STORY_PROGRESSION[0]
+    const introText = firstChapterArc?.chapterIntro ?? firstChapterDefault.chapterIntro
+
     set({
       mode: 'story',
       arcadeStep: 0,
@@ -323,7 +333,7 @@ export const useGame = create<GameState & Actions>((set, get) => ({
       storyCutscene: {
         beat: 'chapter-intro',
         chapter: 1,
-        text: firstChapter.chapterIntro,
+        text: introText,
         speakerId: 'lenny',
         opponentId: queue[0],
         id: flashCounter,
@@ -341,18 +351,24 @@ export const useGame = create<GameState & Actions>((set, get) => ({
     const playerId = state.storyState.playerFighterId
     const opponentId = state.arcadeOpponentQueue[chapterIdx] ?? chapter.opponentId
     const playerDef = getFighter(playerId)
+    // Pull the bespoke arc chapter (if any) — overrides chapter content
+    // for the marquee 8.
+    const arc = getArc(playerId)
+    const arcChapter = arc?.chapters[chapterIdx]
 
     flashCounter++
 
     switch (cs.beat) {
       case 'chapter-intro': {
-        // Move to pre-fight dialogue: opponent challenges, then player's
-        // matchStart line is the response (rendered as a second bubble).
+        // Move to pre-fight dialogue. Arc fighters get bespoke
+        // opponent line + bespoke player response; tournament default
+        // uses chapter.opponentChallenge + the player's matchStart voiceLine.
+        const opponentLine = arcChapter?.preFightDialogue[0].text ?? chapter.opponentChallenge
         set({
           storyCutscene: {
             beat: 'pre-fight-dialogue',
             chapter: cs.chapter,
-            text: chapter.opponentChallenge,
+            text: opponentLine,
             speakerId: opponentId,
             opponentId,
             id: flashCounter,
@@ -386,13 +402,15 @@ export const useGame = create<GameState & Actions>((set, get) => ({
         return
       }
       case 'post-fight-reaction': {
-        // After the fight resolved, advance to the chapter outro (Lenny's
-        // reflective wrap-up before next chapter / ending).
+        // After the fight resolved, advance to the chapter outro. Arc
+        // fighters get bespoke outro text; tournament default uses
+        // STORY_PROGRESSION.chapterOutro.
+        const outroText = arcChapter?.chapterOutro ?? chapter.chapterOutro
         set({
           storyCutscene: {
             beat: 'chapter-outro',
             chapter: cs.chapter,
-            text: chapter.chapterOutro,
+            text: outroText,
             speakerId: 'lenny',
             opponentId,
             id: flashCounter,
@@ -404,10 +422,11 @@ export const useGame = create<GameState & Actions>((set, get) => ({
         // Move to next chapter (or ending if this was chapter 8).
         const nextChapterIdx = chapterIdx + 1
         if (nextChapterIdx >= STORY_PROGRESSION.length) {
-          // Reached the end — show ending splash.
-          const epitaph = playerDef
-            ? PROCEDURAL_ENDING_EPITAPH(playerDef.shortName)
-            : "That's the operator who went the distance."
+          // Reached the end — show ending splash. Arc fighters get
+          // their bespoke epitaph; tournament default uses procedural.
+          const epitaph = arc?.careerEnding.epitaph
+            ?? (playerDef ? PROCEDURAL_ENDING_EPITAPH(playerDef.shortName)
+                          : "That's the operator who went the distance.")
           set({
             arcadeStep: nextChapterIdx,
             storyCutscene: {
@@ -420,15 +439,18 @@ export const useGame = create<GameState & Actions>((set, get) => ({
           })
           return
         }
-        // Next chapter intro.
+        // Next chapter intro. Arc fighters get bespoke intro text;
+        // tournament default uses STORY_PROGRESSION.chapterIntro.
         const next = STORY_PROGRESSION[nextChapterIdx]
+        const nextArcChapter = arc?.chapters[nextChapterIdx]
         const nextOpponent = state.arcadeOpponentQueue[nextChapterIdx] ?? next.opponentId
+        const nextIntro = nextArcChapter?.chapterIntro ?? next.chapterIntro
         set({
           arcadeStep: nextChapterIdx,
           storyCutscene: {
             beat: 'chapter-intro',
             chapter: next.chapter,
-            text: next.chapterIntro,
+            text: nextIntro,
             speakerId: 'lenny',
             opponentId: nextOpponent,
             id: flashCounter,
@@ -673,7 +695,11 @@ export const useGame = create<GameState & Actions>((set, get) => ({
               const chapterIdx = state.arcadeStep
               const chapter = STORY_PROGRESSION[chapterIdx]
               const opponentDef = getFighter(state.selectedB ?? '')
-              const reaction = opponentDef ? opponentDef.voiceLines.lose : 'A new pattern.'
+              // Bespoke arc reaction overrides opponent's default `lose` line.
+              const playerArc = state.storyState ? getArc(state.storyState.playerFighterId) : null
+              const arcReaction = playerArc?.chapters[chapterIdx]?.postFightReaction.text
+              const reaction = arcReaction
+                ?? (opponentDef ? opponentDef.voiceLines.lose : 'A new pattern.')
               set({
                 roundsWon: newRoundsWon,
                 koCinematic: undefined,
@@ -790,11 +816,11 @@ export const useGame = create<GameState & Actions>((set, get) => ({
           const chapterIdx = state.arcadeStep
           const chapter = STORY_PROGRESSION[chapterIdx]
           const opponentDef = getFighter(state.selectedB ?? '')
-          // Post-fight reaction: opponent concedes (their `lose` voice line),
-          // displayed in opponent's portrait. Fallback if def missing.
-          const reaction = opponentDef
-            ? opponentDef.voiceLines.lose
-            : 'A new pattern.'
+          // Bespoke arc reaction overrides the opponent's default `lose` line.
+          const playerArc = state.storyState ? getArc(state.storyState.playerFighterId) : null
+          const arcReaction = playerArc?.chapters[chapterIdx]?.postFightReaction.text
+          const reaction = arcReaction
+            ?? (opponentDef ? opponentDef.voiceLines.lose : 'A new pattern.')
           set({
             roundsWon: newRoundsWon,
             koCinematic: undefined,

@@ -4,6 +4,7 @@ import { useGame } from '../state/game'
 import { getFighter } from '../data/fighters'
 import { SCENARIOS } from '../data/scenarios'
 import { STORY_PROGRESSION } from '../data/story-tournament'
+import { getArc } from '../data/story-career-arcs'
 import { Voice } from '../lib/voice'
 import { Sfx } from '../lib/audio'
 import { StoryPortrait } from './StoryPortrait'
@@ -99,6 +100,18 @@ export function StoryCutscene() {
   const opponentDef = cs.opponentId ? getFighter(cs.opponentId) : null
   const lennyDef = getFighter('lenny')
 
+  // Bespoke arc data — overrides the player's matchStart in pre-fight
+  // dialogue and provides per-chapter title overrides.
+  const playerArc = playerFighterId ? getArc(playerFighterId) : null
+  const arcChapter = playerArc?.chapters[cs.chapter - 1]
+  const playerDialogueLine = arcChapter?.preFightDialogue[1].text
+    ?? playerDef?.voiceLines.matchStart
+    ?? ''
+  const chapterTitle = arcChapter?.chapterTitle ?? chapter?.chapterTitle ?? ''
+  const chapterYearOrTimeframe = arcChapter
+    ? `${arcChapter.year} · ${arcChapter.setting}`
+    : (chapter?.chapterTimeframe ?? '')
+
   // Per-beat layout dispatcher
   return (
     <motion.div
@@ -165,7 +178,7 @@ export function StoryCutscene() {
               textShadow: '2px 2px 0 black',
             }}
           >
-            ◆ {chapter.chapterTimeframe.toUpperCase()} · {scenario?.name ?? ''}
+            ◆ {chapterYearOrTimeframe.toUpperCase()} · {scenario?.name ?? ''}
           </div>
         )}
       </div>
@@ -197,7 +210,7 @@ export function StoryCutscene() {
                 transform: 'skewX(-4deg)',
               }}
             >
-              {chapter?.chapterTitle ?? ''}
+              {chapterTitle}
             </div>
             <div
               className="font-body text-center max-w-3xl leading-snug"
@@ -246,7 +259,7 @@ export function StoryCutscene() {
                 <DialogueColumn
                   fighter={playerDef}
                   side="b"
-                  line={playerDef.voiceLines.matchStart}
+                  line={playerDialogueLine}
                   accent={playerDef.accent ?? '#FFD60A'}
                 />
               )}

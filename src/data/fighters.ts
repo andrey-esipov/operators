@@ -96,6 +96,7 @@ export const FIGHTERS: FighterDef[] = [
       ult: 'AIR IS A CITY.',
       trash: ['Steve told me this would happen.', 'Designers run the world now.', 'Build the company you\'d want to work at.'],
     },
+    ttsVoice: 'fable',
   },
 
   // ─────────────────────────── SHREYAS DOSHI ───────────────────────────
@@ -711,6 +712,7 @@ export const FIGHTERS: FighterDef[] = [
       ult: 'PATTERN MATCHING.',
       trash: ['I\'ve heard this before — episode 173.', 'You\'re missing the meta-pattern.', 'Your framework is incomplete.'],
     },
+    ttsVoice: 'onyx',
   },
 ]
 
@@ -799,6 +801,7 @@ FIGHTERS.push(
       ult: 'AGI HORIZON.',
       trash: ['You\'re thinking too small.', 'The next paradigm is already here.', 'My API just shipped that.'],
     },
+    ttsVoice: 'alloy',
   },
 
   // ─────────────────────────── BRET TAYLOR ───────────────────────────
@@ -1051,6 +1054,7 @@ FIGHTERS.push(
       ult: 'AUTONOMOUS ENGINEER.',
       trash: ['You\'re still hand-coding?', 'My agent shipped already.', 'The Repl is hot.'],
     },
+    ttsVoice: 'echo',
   },
 
   // ─────────────────────────── GOKUL RAJARAM ───────────────────────────
@@ -2333,6 +2337,7 @@ FIGHTERS.push(
       ult: 'THIS IS THE WORLD NOW.',
       trash: ["You're still writing code by hand?", 'My agents shipped 20 PRs while you read the diff.', 'Codify it once. Forever after.'],
     },
+    ttsVoice: 'nova',
   },
 )
 
@@ -2373,6 +2378,7 @@ FIGHTERS.push(
       ko: 'Ohana means no one gets left behind.', crit: 'V2MOM hit.', ult: 'NO SOFTWARE.',
       trash: ['Your stack is on-prem.', 'My agent already solved that.', 'Trust is the moat.'],
     },
+    ttsVoice: 'fable',
   },
 
   // ─────────────────────────── BEN HOROWITZ ───────────────────────────
@@ -2441,6 +2447,7 @@ FIGHTERS.push(
       ko: 'You needed better training data.', crit: 'ImageNet-level result.', ult: 'GODMOTHER OF AI.',
       trash: ['Show me your training set.', "That model has bias problems.", 'Curate before you scale.'],
     },
+    ttsVoice: 'shimmer',
   },
 
   // ─────────────────────────── DHARMESH SHAH ───────────────────────────
@@ -2781,6 +2788,7 @@ FIGHTERS.push(
       ko: 'Growth was the truth.', crit: 'Aha clicked.', ult: 'GROWTH IS TRUTH.',
       trash: ['That\'s a funnel, not a loop.', "Self-serve or die.", 'Show me the activation curve.'],
     },
+    ttsVoice: 'nova',
   },
 )
 
@@ -2819,6 +2827,7 @@ FIGHTERS.push(
       ko: 'I was embarrassed by v1. That\'s the point.', crit: 'First-mover advantage.', ult: 'YOU ARE A STARTUP.',
       trash: ['Anything less is commodity.', 'Theory of the firm.', 'You needed a tribe.'],
     },
+    ttsVoice: 'echo',
   },
   // ─── SEAN ELLIS ────────────────────────────────────────────
   {

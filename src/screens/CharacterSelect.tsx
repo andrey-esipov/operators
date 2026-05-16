@@ -26,6 +26,7 @@ const ERA_FILTER_ORDER: EraFilter[] = ['all', 'early', 'mid', 'recent']
 export function CharacterSelect() {
   const mode = useGame((s) => s.mode)
   const startArcade = useGame((s) => s.startArcade)
+  const startStory = useGame((s) => s.startStory)
   const setPhase = useGame((s) => s.setPhase)
   const [side, setSide] = useState<'a' | 'b'>('a')
   const [selectedA, setSelectedA] = useState<string | null>(null)
@@ -44,6 +45,8 @@ export function CharacterSelect() {
 
   const hoveredFighter = getFighter(hovered)
   const arcadeMode = mode === 'arcade'
+  const storyMode = mode === 'story'
+  const singlePickerMode = arcadeMode || storyMode
 
   const startPractice = useGame((s) => s.startPractice)
 
@@ -92,6 +95,11 @@ export function CharacterSelect() {
 
   function pickFighter(id: string) {
     Sfx.menuSelect()
+    if (storyMode) {
+      setSelectedA(id)
+      setTimeout(() => startStory(id), 400)
+      return
+    }
     if (arcadeMode) {
       setSelectedA(id)
       setTimeout(() => startArcade(id), 400)
@@ -188,15 +196,19 @@ export function CharacterSelect() {
             textShadow: '4px 4px 0 rgba(0,0,0,0.6)',
           }}
         >
-          {arcadeMode ? 'ARCADE MODE · PICK YOUR FIGHTER' : 'SELECT YOUR OPERATOR'}
+          {storyMode
+            ? "STORY MODE · WHO'S TONIGHT'S GUEST?"
+            : arcadeMode
+              ? 'ARCADE MODE · PICK YOUR FIGHTER'
+              : 'SELECT YOUR OPERATOR'}
         </h1>
         <div className="font-display text-[10px] tracking-widest text-white/70">
-          {arcadeMode ? 'PLAYER 1' : `P${side === 'a' ? '1' : '2'} PICKING`}
+          {singlePickerMode ? 'PLAYER 1' : `P${side === 'a' ? '1' : '2'} PICKING`}
         </div>
       </div>
 
       {/* Selected sides (VS mode only) */}
-      {!arcadeMode && (
+      {!singlePickerMode && (
         <div className="relative z-10 grid grid-cols-3 gap-3 items-end flex-shrink-0">
           <SideCard side="a" id={selectedA} active={side === 'a'} />
           <NextStepHint hasA={!!selectedA} hasB={!!selectedB} />
@@ -207,6 +219,12 @@ export function CharacterSelect() {
       {arcadeMode && (
         <div className="relative z-10 px-4 py-2 text-center font-display text-base tracking-widest text-white/80 flex-shrink-0">
           Beat 8 stages. Final boss: Lenny himself.
+        </div>
+      )}
+
+      {storyMode && (
+        <div className="relative z-10 px-4 py-2 text-center font-display text-base tracking-widest flex-shrink-0" style={{ color: '#F72585', textShadow: '2px 2px 0 black' }}>
+          8 chapters on the podcast. Lenny in the final segment.
         </div>
       )}
 

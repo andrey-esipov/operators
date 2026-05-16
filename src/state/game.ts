@@ -3,6 +3,7 @@ import type { FighterRuntime, GameState, Move, ScenarioId, Side } from '../types
 import { getFighter, STARTING_ROSTER } from '../data/fighters'
 import { AI_PROFILES } from '../data/ai-profiles'
 import { ARCADE_PROGRESSION } from '../data/scenarios'
+import { STORY_PROGRESSION, PROCEDURAL_ENDING_EPITAPH } from './../data/story-tournament'
 import { applyMove, initialRuntime, startTurn } from './applyMove'
 import { Voice } from '../lib/voice'
 import { loadStats, saveStats, checkAndUnlock } from '../data/achievements'
@@ -39,9 +40,15 @@ interface Actions {
   startArcade: (fighterId: string) => void
   /** Continue to next arcade fight */
   nextArcadeFight: () => void
-  /** Game mode (vs = hot seat 2P; arcade = vs bots) */
-  mode: 'vs' | 'arcade' | 'practice' | 'daily'
-  setMode: (m: 'vs' | 'arcade' | 'practice' | 'daily') => void
+  /** Start Story Mode — The Operator Tournament. Universal 8-chapter
+   *  arc; marquee 8 fighters get bespoke overlays. */
+  startStory: (fighterId: string) => void
+  /** Advance the Story Mode cutscene state machine to the next beat.
+   *  Called by SPACE / click during a story-cutscene phase. */
+  advanceStoryBeat: () => void
+  /** Game mode (vs = hot seat 2P; arcade = vs bots; story = career mode) */
+  mode: 'vs' | 'arcade' | 'practice' | 'daily' | 'story'
+  setMode: (m: 'vs' | 'arcade' | 'practice' | 'daily' | 'story') => void
   /** AI difficulty applied to bots */
   difficulty: 'easy' | 'normal' | 'hard'
   setDifficulty: (d: 'easy' | 'normal' | 'hard') => void
@@ -270,6 +277,178 @@ export const useGame = create<GameState & Actions>((set, get) => ({
     setTimeout(() => set({ phase: 'fight' }), 4200)
   },
 
+  // ─── STORY MODE — The Operator Tournament ───────────────────────────
+  //
+  // Reuses the arcade fight machinery (initialRuntime, scenario, round,
+  // KO bookkeeping) but inserts a 4-beat cutscene state machine around
+  // each fight:
+  //   chapter-intro      → pre-fight-dialogue → [PreFight → Combat → MatchEnd]
+  //   → post-fight-reaction → chapter-outro → next chapter
+  // After chapter 8 (Lenny boss): ending-splash.
+  startStory: (fighterId: string) => {
+    // The marquee 8 get bespoke career arcs (Tier 2 wires this in).
+    const MARQUEE = ['amjad', 'chesky', 'boris', 'altman', 'benioff', 'feifei', 'elena', 'reid']
+    const arcMode: 'tournament' | 'career' = MARQUEE.includes(fighterId) ? 'career' : 'tournament'
+
+    // Build opponent queue from the story progression (fixed order).
+    // If the player IS the scenario specialist for a chapter, swap in a
+    // sensible alternative so we don't fight ourselves.
+    const queue: string[] = STORY_PROGRESSION.map((ch) => {
+      if (ch.opponentId === fighterId) {
+        // Pick a thematic alt for each scenario (mirrors arcade fallback).
+        const altByScenario: Record<string, string> = {
+          'pre-pmf': 'doshi',
+          hypergrowth: 'cagan',
+          plateau: 'spiegel',
+          'ai-native': 'altman',
+          monetization: 'turley',
+          crisis: 'chesky',
+          distribution: 'madhavan',
+          'ipo-prep': 'lenny',
+        }
+        return altByScenario[ch.scenario] ?? 'doshi'
+      }
+      return ch.opponentId
+    })
+
+    flashCounter++
+    const firstChapter = STORY_PROGRESSION[0]
+    set({
+      mode: 'story',
+      arcadeStep: 0,
+      selectedA: fighterId,
+      arcadeOpponentQueue: queue,
+      storyState: { playerFighterId: fighterId, arcMode },
+      phase: 'story-cutscene',
+      storyCutscene: {
+        beat: 'chapter-intro',
+        chapter: 1,
+        text: firstChapter.chapterIntro,
+        speakerId: 'lenny',
+        opponentId: queue[0],
+        id: flashCounter,
+      },
+    })
+  },
+
+  advanceStoryBeat: () => {
+    const state = get()
+    if (state.mode !== 'story' || !state.storyCutscene || !state.storyState) return
+    const cs = state.storyCutscene
+    const chapterIdx = cs.chapter - 1
+    const chapter = STORY_PROGRESSION[chapterIdx]
+    if (!chapter) return
+    const playerId = state.storyState.playerFighterId
+    const opponentId = state.arcadeOpponentQueue[chapterIdx] ?? chapter.opponentId
+    const playerDef = getFighter(playerId)
+
+    flashCounter++
+
+    switch (cs.beat) {
+      case 'chapter-intro': {
+        // Move to pre-fight dialogue: opponent challenges, then player's
+        // matchStart line is the response (rendered as a second bubble).
+        set({
+          storyCutscene: {
+            beat: 'pre-fight-dialogue',
+            chapter: cs.chapter,
+            text: chapter.opponentChallenge,
+            speakerId: opponentId,
+            opponentId,
+            id: flashCounter,
+          },
+        })
+        return
+      }
+      case 'pre-fight-dialogue': {
+        // Hand off to the existing arcade fight machinery. Clear cutscene;
+        // route through nextArcadeFight using the story scenario+opponent.
+        set({
+          storyCutscene: undefined,
+          phase: 'pre-fight',
+          fighterA: initialRuntime(playerId),
+          fighterB: initialRuntime(opponentId),
+          scenario: chapter.scenario,
+          round: 1,
+          roundsWon: { a: 0, b: 0 },
+          turn: 1,
+          activeSide: 'a',
+          log: [],
+          damagePulses: [],
+          selectedB: opponentId,
+        })
+        setTimeout(() => {
+          set({ phase: 'fight' })
+          const defA = getFighter(playerId); const defB = getFighter(opponentId)
+          if (defA) Voice.say(defA.voiceLines.matchStart, playerId, 'matchStart')
+          if (defB) setTimeout(() => Voice.say(defB.voiceLines.matchStart, opponentId, 'matchStart'), 1800)
+        }, 4200)
+        return
+      }
+      case 'post-fight-reaction': {
+        // After the fight resolved, advance to the chapter outro (Lenny's
+        // reflective wrap-up before next chapter / ending).
+        set({
+          storyCutscene: {
+            beat: 'chapter-outro',
+            chapter: cs.chapter,
+            text: chapter.chapterOutro,
+            speakerId: 'lenny',
+            opponentId,
+            id: flashCounter,
+          },
+        })
+        return
+      }
+      case 'chapter-outro': {
+        // Move to next chapter (or ending if this was chapter 8).
+        const nextChapterIdx = chapterIdx + 1
+        if (nextChapterIdx >= STORY_PROGRESSION.length) {
+          // Reached the end — show ending splash.
+          const epitaph = playerDef
+            ? PROCEDURAL_ENDING_EPITAPH(playerDef.shortName)
+            : "That's the operator who went the distance."
+          set({
+            arcadeStep: nextChapterIdx,
+            storyCutscene: {
+              beat: 'ending-splash',
+              chapter: 8,
+              text: epitaph,
+              speakerId: 'lenny',
+              id: flashCounter,
+            },
+          })
+          return
+        }
+        // Next chapter intro.
+        const next = STORY_PROGRESSION[nextChapterIdx]
+        const nextOpponent = state.arcadeOpponentQueue[nextChapterIdx] ?? next.opponentId
+        set({
+          arcadeStep: nextChapterIdx,
+          storyCutscene: {
+            beat: 'chapter-intro',
+            chapter: next.chapter,
+            text: next.chapterIntro,
+            speakerId: 'lenny',
+            opponentId: nextOpponent,
+            id: flashCounter,
+          },
+        })
+        return
+      }
+      case 'ending-splash': {
+        // Final beat — record completion stats, route to the story-ending
+        // screen which has the share/retry/menu buttons.
+        const ks = loadStats()
+        ks.arcadeRunsCompleted += 1
+        saveStats(ks)
+        checkAndUnlock(ks)
+        set({ phase: 'story-ending', storyCutscene: undefined })
+        return
+      }
+    }
+  },
+
   startMatch: (a, b, scenario) => {
     set({
       phase: 'pre-fight',
@@ -485,6 +664,32 @@ export const useGame = create<GameState & Actions>((set, get) => ({
             signatureCinematic: undefined,
             koCinematic: { winner: attackerSide, loser: defenderSide, comboTitle: tagline, id: koId },
           })
+          // STORY MODE: after the K.O. cinematic, route to the post-fight
+          // story cutscene instead of match-end (player wins only).
+          const storyWin = matchWinner === 'a' && state.mode === 'story' && state.storyState
+          if (storyWin) {
+            setTimeout(() => {
+              flashCounter++
+              const chapterIdx = state.arcadeStep
+              const chapter = STORY_PROGRESSION[chapterIdx]
+              const opponentDef = getFighter(state.selectedB ?? '')
+              const reaction = opponentDef ? opponentDef.voiceLines.lose : 'A new pattern.'
+              set({
+                roundsWon: newRoundsWon,
+                koCinematic: undefined,
+                phase: 'story-cutscene',
+                storyCutscene: {
+                  beat: 'post-fight-reaction',
+                  chapter: (chapter?.chapter ?? 1) as 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8,
+                  text: reaction,
+                  speakerId: state.selectedB ?? undefined,
+                  opponentId: state.selectedB ?? undefined,
+                  id: flashCounter,
+                },
+              })
+            }, 2000)
+            return
+          }
           setTimeout(() => {
             set({
               phase: matchWinner ? 'match-end' : 'round-end',
@@ -575,6 +780,36 @@ export const useGame = create<GameState & Actions>((set, get) => ({
       }
 
       setTimeout(() => {
+        // STORY MODE — when the player wins a chapter, route through the
+        // post-fight cutscene instead of the regular match-end screen. The
+        // chapter outro + next chapter handoff lives in advanceStoryBeat.
+        // Player loss still falls through to match-end (back to menu).
+        const storyWin = matchWinner === 'a' && state.mode === 'story' && state.storyState
+        if (storyWin) {
+          flashCounter++
+          const chapterIdx = state.arcadeStep
+          const chapter = STORY_PROGRESSION[chapterIdx]
+          const opponentDef = getFighter(state.selectedB ?? '')
+          // Post-fight reaction: opponent concedes (their `lose` voice line),
+          // displayed in opponent's portrait. Fallback if def missing.
+          const reaction = opponentDef
+            ? opponentDef.voiceLines.lose
+            : 'A new pattern.'
+          set({
+            roundsWon: newRoundsWon,
+            koCinematic: undefined,
+            phase: 'story-cutscene',
+            storyCutscene: {
+              beat: 'post-fight-reaction',
+              chapter: (chapter?.chapter ?? 1) as 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8,
+              text: reaction,
+              speakerId: state.selectedB ?? undefined,
+              opponentId: state.selectedB ?? undefined,
+              id: flashCounter,
+            },
+          })
+          return
+        }
         set({
           phase: matchWinner ? 'match-end' : 'round-end',
           roundsWon: newRoundsWon,

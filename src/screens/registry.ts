@@ -30,6 +30,7 @@ export const SCREENS = {
   'round-end': make('RoundEnd', () => import('./RoundEnd')),
   'match-end': make('MatchEnd', () => import('./MatchEnd')),
   'arcade-victory': make('ArcadeVictory', () => import('./ArcadeVictory')),
+  'story-ending': make('StoryEnding', () => import('./StoryEnding')),
   'quote-bank': make('QuoteBank', () => import('./QuoteBank')),
   'how-to-play': make('HowToPlay', () => import('./HowToPlay')),
   'framework-encyclopedia': make('FrameworkEncyclopedia', () => import('./FrameworkEncyclopedia')),

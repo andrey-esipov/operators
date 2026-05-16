@@ -52,7 +52,7 @@ export const STORY_PROGRESSION: StoryChapter[] = [
     chapterIntro:
       "Welcome back to the show. Today, we go to the beginning. The year you had three slides, " +
       "no traction, and one belief that everyone in your life politely doubted. " +
-      "Your first guest tonight built the most-laughed-at company of his era. He shipped cereal " +
+      "Your first opponent tonight built the most-laughed-at company of his era. He shipped cereal " +
       "boxes to keep the lights on. Then he shipped a planet. Brian — let's talk Pre-PMF.",
     opponentChallenge: "If you're not embarrassed by your first version, you launched too late.",
     chapterOutro:

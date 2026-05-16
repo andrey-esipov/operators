@@ -4,12 +4,12 @@ import type { Side } from '../types'
 interface Spark {
   id: number
   side: Side
-  kind: 'light' | 'heavy' | 'crit' | 'combo' | 'ult'
+  kind: 'light' | 'heavy' | 'crit' | 'combo' | 'ult' | 'ex'
 }
 
 interface Props {
   /** Latest hit event — bumped per damaging move */
-  trigger: { id: number; side: Side; kind: 'light' | 'heavy' | 'crit' | 'combo' | 'ult' } | null
+  trigger: { id: number; side: Side; kind: 'light' | 'heavy' | 'crit' | 'combo' | 'ult' | 'ex' } | null
 }
 
 /**
@@ -62,6 +62,7 @@ function SingleBurst({ id, side, kind }: Spark) {
     crit:   { count: 42, colors: ['#FFFFFF', '#FFFFFF', '#FFD60A'],            speed: 28, ring: true  },
     combo:  { count: 34, colors: ['#FFD60A', '#F72585', '#FFFFFF'],            speed: 24, ring: true  },
     ult:    { count: 60, colors: ['#F72585', '#7209B7', '#FFD60A', '#FFFFFF'], speed: 32, ring: true  },
+    ex:     { count: 28, colors: ['#00E5FF', '#90E0EF', '#FFFFFF', '#00B4D8'], speed: 26, ring: true  },
   }
   const c = config[kind]
 

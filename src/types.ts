@@ -180,6 +180,16 @@ export interface FighterRuntime {
   cooldowns: Record<string, number>
   /** Permanent buff stacking (e.g. Gokul's Org Design ult) */
   permanentBuff?: number
+  /** Conviction (0-100). Chipped by every hit; regens +5/turn. When it
+   *  hits zero, the fighter is SHATTERED — they skip their next turn and
+   *  the attacker's follow-up hit deals +75% damage. The mechanical
+   *  parallel to a fighter losing their cool under operator pressure. */
+  conviction: number
+  /** Max conviction (always 100; surfaced so the bar can compute fill %). */
+  maxConviction: number
+  /** Shattered: this fighter is stunned. On their turn-start they auto-pass.
+   *  Cleared by the attacker's next damage hit (which gets the +75% bonus). */
+  shattered: boolean
 }
 
 export type Phase =
@@ -215,7 +225,13 @@ export interface BattleLogEntry {
   episode: string
   timestamp: string
   comboTitle?: string
-  flash?: 'crit' | 'combo' | 'ult'
+  flash?: 'crit' | 'combo' | 'ult' | 'ex' | 'signature'
+  /** EX-cast: true if this move was Shift-cast for +50 super / +50% damage. */
+  ex?: boolean
+  /** Set when this hit broke the defender's conviction (CONVICTION SHATTERED). */
+  shattered?: boolean
+  /** Set when this ult landed on a shattered defender — Signature Sequence. */
+  signature?: boolean
   appliedStatuses: StatusKey[]
 }
 
@@ -235,9 +251,26 @@ export interface GameState {
   activeSide: Side
   log: BattleLogEntry[]
   /** Last entry id (UUID) for animations */
-  lastFlash?: { kind: 'crit' | 'combo' | 'ult'; side: Side; id: number }
+  lastFlash?: { kind: 'crit' | 'combo' | 'ult' | 'ex' | 'signature'; side: Side; id: number }
   /** When the final hit of a round lands, this carries the K.O. cinematic state. */
   koCinematic?: { winner: Side; loser: Side; comboTitle?: string; id: number }
+  /** When a hit breaks a fighter's conviction, this carries the cinematic.
+   *  The shattered fighter's turn is consumed by the cinematic (~2.4s) and
+   *  the attacker gets a follow-up turn with a +75% damage bonus on their
+   *  next damaging hit. */
+  shatterCinematic?: { shatteredSide: Side; id: number }
+  /** SIGNATURE SEQUENCE — the climactic moment when an ult lands on a
+   *  shattered opponent. 4s cinematic with echo hits, voice line, and
+   *  the operator's iconic combo title. The buildathon money shot. */
+  signatureCinematic?: {
+    attackerSide: Side
+    defenderSide: Side
+    tagline: string
+    fighterId: string
+    id: number
+    /** Whether the signature K.O.'d the defender. */
+    ko: boolean
+  }
   /** Sound cue queue for the audio system to consume */
   soundCue?: { kind: string; id: number }
   /** Selected fighters for next match */

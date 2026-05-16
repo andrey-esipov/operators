@@ -76,6 +76,38 @@ export const Sfx = {
     tone({ freq: 110, duration: 0.5, type: 'sawtooth', vol: 0.18, pitchEnd: 880 })
     setTimeout(() => noise(0.4, 0.08), 200)
   },
+  ex() {
+    // Cyan-coded EX sting: clean square stab + rising arpeggio. Layers
+    // additively over light/heavy/combo/crit cues — short and punchy so
+    // it doesn't muddy the underlying move's signature sound.
+    tone({ freq: 1100, duration: 0.04, type: 'square', vol: 0.14 })
+    setTimeout(() => tone({ freq: 1480, duration: 0.04, type: 'square', vol: 0.14 }), 40)
+    setTimeout(() => tone({ freq: 1860, duration: 0.08, type: 'square', vol: 0.16, pitchEnd: 2200 }), 80)
+  },
+  signature() {
+    // SIGNATURE SEQUENCE — the demo money shot. A 1.5s arrangement: deep
+    // bass impact + chiptune fanfare + sparkle tail. Distinct from ult
+    // (which is the routine impact) — this is the *climax*.
+    tone({ freq: 55, duration: 0.6, type: 'sawtooth', vol: 0.22, pitchEnd: 220 })
+    setTimeout(() => noise(0.3, 0.14), 80)
+    // Triumphant arpeggio
+    const fanfare = [523, 659, 784, 988, 1175]
+    fanfare.forEach((f, i) => setTimeout(() => tone({ freq: f, duration: 0.18, type: 'square', vol: 0.18 }), 240 + i * 110))
+    // Sparkle tail
+    setTimeout(() => tone({ freq: 1976, duration: 0.32, type: 'square', vol: 0.12, pitchEnd: 2640 }), 900)
+    setTimeout(() => tone({ freq: 2640, duration: 0.20, type: 'square', vol: 0.10, pitchEnd: 3520 }), 1100)
+  },
+  shatter() {
+    // CONVICTION SHATTERED — glass-break sting: descending sawtooth body
+    // + crystalline high partials + noise tail. Plays once when the
+    // defender's conviction hits zero. Distinct from crit (rising) and ult
+    // (saw bass) so it reads as its own moment.
+    tone({ freq: 660, duration: 0.12, type: 'sawtooth', vol: 0.2, pitchEnd: 110 })
+    setTimeout(() => tone({ freq: 1980, duration: 0.08, type: 'square', vol: 0.14 }), 30)
+    setTimeout(() => tone({ freq: 2640, duration: 0.06, type: 'square', vol: 0.12 }), 60)
+    setTimeout(() => tone({ freq: 1320, duration: 0.18, type: 'square', vol: 0.14, pitchEnd: 220 }), 110)
+    setTimeout(() => noise(0.5, 0.12), 80)
+  },
   ko() {
     noise(0.6, 0.15)
     tone({ freq: 220, duration: 0.6, type: 'sawtooth', vol: 0.2, pitchEnd: 55 })

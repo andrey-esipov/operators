@@ -4,6 +4,7 @@ import { Music } from './lib/music'
 import { MainMenu } from './screens/MainMenu'
 import { SCREENS, prefetchScreen } from './screens/registry'
 import { ScreenSkeleton } from './components/ScreenSkeleton'
+import { StoryCutscene } from './components/StoryCutscene'
 import { attachQuoteBankSync, loadQuoteBank } from './lib/persist'
 
 export function App() {
@@ -37,8 +38,11 @@ export function App() {
       // hold current track
     } else if (phase === 'match-end') {
       Music.play('victory')
-    } else if (phase === 'arcade-victory') {
+    } else if (phase === 'arcade-victory' || phase === 'story-ending') {
       Music.play('victory')
+    } else if (phase === 'story-cutscene') {
+      // Hold the menu track during cutscenes — fades into fight on handoff.
+      Music.play('menu')
     }
   }, [phase, selectedB, musicEnabled])
 
@@ -76,6 +80,8 @@ export function App() {
     <div className="w-full h-full" style={{ background: '#0F0A1A' }}>
       {phase === 'menu' ? (
         <MainMenu />
+      ) : phase === 'story-cutscene' ? (
+        <StoryCutscene />
       ) : ActiveScreen ? (
         <Suspense fallback={<ScreenSkeleton phase={phase} />}>
           <ActiveScreen />

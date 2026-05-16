@@ -794,7 +794,7 @@ function ActiveMoves({
   fighterA: NonNullable<ReturnType<typeof useGame.getState>['fighterA']>
   fighterB: NonNullable<ReturnType<typeof useGame.getState>['fighterB']>
   onCast: (m: Move, opts?: { ex?: boolean }) => void
-  mode: 'vs' | 'arcade' | 'practice' | 'daily'
+  mode: 'vs' | 'arcade' | 'practice' | 'daily' | 'story'
   aSuperReady: boolean
   bSuperReady: boolean
 }) {

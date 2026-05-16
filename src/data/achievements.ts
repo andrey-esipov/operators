@@ -33,6 +33,10 @@ export interface PlayerStats {
   totalSignatures: number
   /** EX-cast moves landed. */
   totalEx: number
+  /** Story Mode runs completed (cleared chapter 8). */
+  totalStoryRuns: number
+  /** Set of fighter IDs the player has completed Story Mode with. */
+  storyOperatorsCleared: string[]
 }
 
 export const ACHIEVEMENTS: Achievement[] = [
@@ -189,6 +193,30 @@ export const ACHIEVEMENTS: Achievement[] = [
     check: (s) => s.totalSignatures >= 10,
   },
   {
+    id: 'first-story',
+    name: 'WELCOME TO THE SHOW',
+    description: 'Complete your first Story Mode chapter.',
+    icon: '◇',
+    tier: 'bronze',
+    check: (s) => s.totalStoryRuns >= 1 || s.storyOperatorsCleared.length >= 1,
+  },
+  {
+    id: 'tournament-champion',
+    name: 'TOURNAMENT CHAMPION',
+    description: 'Finish all 8 chapters with any operator.',
+    icon: '♛',
+    tier: 'gold',
+    check: (s) => s.totalStoryRuns >= 1,
+  },
+  {
+    id: 'operators-champion',
+    name: 'PATTERN MATCHED',
+    description: 'Finish Story Mode with 5 different operators.',
+    icon: '★',
+    tier: 'gold',
+    check: (s) => (s.storyOperatorsCleared?.length ?? 0) >= 5,
+  },
+  {
     id: 'match-veteran',
     name: 'VETERAN',
     description: 'Play 100 total matches.',
@@ -216,6 +244,8 @@ export function emptyStats(): PlayerStats {
     totalShatters: 0,
     totalSignatures: 0,
     totalEx: 0,
+    totalStoryRuns: 0,
+    storyOperatorsCleared: [],
   }
 }
 

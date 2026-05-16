@@ -153,6 +153,9 @@ export interface FighterDef {
     lose?: string
     ult?: string
   }
+  /** Voice ID for Azure 4o TTS (gpt-4o-mini-tts) in Story Mode pre-rendered
+   *  narration. Default fallback if unset: 'alloy'. Lenny narrator uses 'onyx'. */
+  ttsVoice?: TtsVoice
 }
 
 export interface Scenario {
@@ -201,6 +204,8 @@ export type Phase =
   | 'round-end'
   | 'match-end'
   | 'arcade-victory'
+  | 'story-cutscene'
+  | 'story-ending'
   | 'quote-bank'
   | 'how-to-play'
   | 'framework-encyclopedia'
@@ -209,6 +214,19 @@ export type Phase =
   | 'generate-fighter'
   | 'marquee-matchups'
   | 'credits'
+
+/** Beat within a Story Mode cutscene. Drives StoryCutscene's render +
+ *  the state machine's "what's next" decision in advanceStoryBeat. */
+export type StoryBeat =
+  | 'chapter-intro'        // Lenny narrates the year/setting, sets up the chapter
+  | 'pre-fight-dialogue'   // Player + opponent exchange 2-3 lines before FIGHT
+  | 'post-fight-reaction'  // Winner reacts; opponent concedes or taunts
+  | 'chapter-outro'        // Pull-quote freeze frame with episode citation
+  | 'ending-splash'        // Final career-ending screen after chapter 8
+
+/** Voice IDs supported by Azure 4o TTS (gpt-4o-mini-tts). Used for the
+ *  pre-rendered Story Mode VO. Per-fighter mapping in fighters.ts. */
+export type TtsVoice = 'alloy' | 'echo' | 'fable' | 'onyx' | 'nova' | 'shimmer'
 
 export interface BattleLogEntry {
   turn: number
@@ -284,6 +302,32 @@ export interface GameState {
    *  to avoid the structural difficulty spike of always facing the
    *  opponent who has +30-50% bonus damage on that stage. */
   arcadeOpponentQueue: string[]
+  /** Story Mode — set when mode === 'story'. Reuses arcadeStep/arcadeOpponentQueue
+   *  for fight progression; this holds story-specific data (which arc to use). */
+  storyState?: {
+    /** The player's chosen operator (sticky across all 8 chapters). */
+    playerFighterId: string
+    /** Which arc to use: 'career' = marquee 8 bespoke, 'tournament' = procedural shared. */
+    arcMode: 'tournament' | 'career'
+  }
+  /** Active Story Mode cutscene. When set, phase is 'story-cutscene' and
+   *  StoryCutscene renders. Cleared when the player advances or the timer fires. */
+  storyCutscene?: {
+    /** Which beat of the chapter we're playing (drives the layout). */
+    beat: StoryBeat
+    /** 1-indexed chapter number (1..8). Chapter 8 = Lenny boss. */
+    chapter: number
+    /** The body text for this beat. May be multi-line. */
+    text: string
+    /** Speaker for dialogue beats. For chapter-intro/outro/ending, falls back to Lenny. */
+    speakerId?: string
+    /** Opponent at this chapter — used by pre-fight-dialogue to render the second portrait. */
+    opponentId?: string
+    /** Optional accent override (e.g. scenario.accent). */
+    accent?: string
+    /** Rerender key — bump on every new cutscene so animations restart. */
+    id: number
+  }
   /** Quote bank entries unlocked */
   quoteBank: Array<{ fighterId: string; moveId: string; ts: number }>
   /** CRT overlay enabled */

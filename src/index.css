@@ -263,6 +263,16 @@ button {
 }
 .lock-in-pulse { animation: lockInPulse 0.4s cubic-bezier(0.2, 0.9, 0.3, 1); }
 
+/* Marquee character cells in Story Mode get a slow, subtle gold pulse so
+   the eight hand-crafted operators (Amjad, Chesky, Boris, Altman, Benioff,
+   Fei-Fei, Elena, Reid) stand out without overwhelming the grid. The gold
+   rim + ★ badge ride along statically; only the box-shadow modulates. */
+@keyframes marqueePulse {
+  0%, 100% { box-shadow: 0 0 14px #FFD60A88, inset -2px -2px 0 rgba(0,0,0,0.4) }
+  50%      { box-shadow: 0 0 24px #FFD60ACC, 0 0 36px #FFD60A55, inset -2px -2px 0 rgba(0,0,0,0.4) }
+}
+.marquee-pulse:not(:hover) { animation: marqueePulse 2.4s ease-in-out infinite; }
+
 /* PERFECT banner — bursts in then pulses while the rest of the
    round-end overlay holds. Reuses the SF II "PERFECT" energy where a
    no-damage round earns a distinct cheer beyond the standard K.O. */

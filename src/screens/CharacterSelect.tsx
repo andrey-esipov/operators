@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useGame } from '../state/game'
 import { STARTING_ROSTER, getFighter, UNLOCKABLES, FIGHTERS } from '../data/fighters'
+import { isMarquee } from '../data/story-career-arcs'
 import {
   getDiscipline,
   getEra,
@@ -26,6 +27,7 @@ const ERA_FILTER_ORDER: EraFilter[] = ['all', 'early', 'mid', 'recent']
 export function CharacterSelect() {
   const mode = useGame((s) => s.mode)
   const startArcade = useGame((s) => s.startArcade)
+  const startStory = useGame((s) => s.startStory)
   const setPhase = useGame((s) => s.setPhase)
   const [side, setSide] = useState<'a' | 'b'>('a')
   const [selectedA, setSelectedA] = useState<string | null>(null)
@@ -44,6 +46,8 @@ export function CharacterSelect() {
 
   const hoveredFighter = getFighter(hovered)
   const arcadeMode = mode === 'arcade'
+  const storyMode = mode === 'story'
+  const singlePickerMode = arcadeMode || storyMode
 
   const startPractice = useGame((s) => s.startPractice)
 
@@ -92,6 +96,11 @@ export function CharacterSelect() {
 
   function pickFighter(id: string) {
     Sfx.menuSelect()
+    if (storyMode) {
+      setSelectedA(id)
+      setTimeout(() => startStory(id), 400)
+      return
+    }
     if (arcadeMode) {
       setSelectedA(id)
       setTimeout(() => startArcade(id), 400)
@@ -188,15 +197,19 @@ export function CharacterSelect() {
             textShadow: '4px 4px 0 rgba(0,0,0,0.6)',
           }}
         >
-          {arcadeMode ? 'ARCADE MODE · PICK YOUR FIGHTER' : 'SELECT YOUR OPERATOR'}
+          {storyMode
+            ? "STORY MODE · WHO'S TONIGHT'S GUEST?"
+            : arcadeMode
+              ? 'ARCADE MODE · PICK YOUR FIGHTER'
+              : 'SELECT YOUR OPERATOR'}
         </h1>
         <div className="font-display text-[10px] tracking-widest text-white/70">
-          {arcadeMode ? 'PLAYER 1' : `P${side === 'a' ? '1' : '2'} PICKING`}
+          {singlePickerMode ? 'PLAYER 1' : `P${side === 'a' ? '1' : '2'} PICKING`}
         </div>
       </div>
 
       {/* Selected sides (VS mode only) */}
-      {!arcadeMode && (
+      {!singlePickerMode && (
         <div className="relative z-10 grid grid-cols-3 gap-3 items-end flex-shrink-0">
           <SideCard side="a" id={selectedA} active={side === 'a'} />
           <NextStepHint hasA={!!selectedA} hasB={!!selectedB} />
@@ -207,6 +220,12 @@ export function CharacterSelect() {
       {arcadeMode && (
         <div className="relative z-10 px-4 py-2 text-center font-display text-base tracking-widest text-white/80 flex-shrink-0">
           Beat 8 stages. Final boss: Lenny himself.
+        </div>
+      )}
+
+      {storyMode && (
+        <div className="relative z-10 px-4 py-2 text-center font-display text-base tracking-widest flex-shrink-0" style={{ color: '#F72585', textShadow: '2px 2px 0 black' }}>
+          8 chapters on the podcast. Lenny in the final segment.
         </div>
       )}
 
@@ -305,6 +324,11 @@ export function CharacterSelect() {
               const isSelected = selectedA === id || selectedB === id
               const isHovered = hovered === id
               const discColor = DISCIPLINE_COLOR[getDiscipline(f)]
+              // In Story Mode, the marquee 8 get a visible gold rim + star
+              // badge so players know which fighters have a hand-written
+              // career arc waiting for them. Non-marquee fighters still play
+              // Story Mode but get the universal tournament dialogue.
+              const marquee = storyMode && isMarquee(id)
               return (
                 <button
                   key={id}
@@ -314,13 +338,24 @@ export function CharacterSelect() {
                   }}
                   onClick={() => !isLocked && pickFighter(id)}
                   disabled={isLocked}
-                  aria-label={`${f.name} — ${f.archetype}${isLocked ? ', locked' : ''}`}
-                  className={`relative aspect-square flex flex-col items-center justify-center transition-transform hover:scale-105 overflow-hidden ${isSelected ? 'lock-in-pulse' : ''}`}
+                  aria-label={`${f.name} — ${f.archetype}${isLocked ? ', locked' : ''}${marquee ? ', ★ marquee story arc' : ''}`}
+                  className={`relative aspect-square flex flex-col items-center justify-center transition-transform hover:scale-105 overflow-hidden ${isSelected ? 'lock-in-pulse' : ''} ${marquee ? 'marquee-pulse' : ''}`}
                   style={{
-                    background: `linear-gradient(180deg, ${f.accent}33, ${f.accent}11)`,
-                    border: `2px solid ${isSelected ? 'white' : isHovered ? f.accent : f.accent + '88'}`,
+                    background: marquee
+                      ? `linear-gradient(180deg, #FFD60A33, ${f.accent}22, #FFD60A11)`
+                      : `linear-gradient(180deg, ${f.accent}33, ${f.accent}11)`,
+                    border: `2px solid ${
+                      isSelected ? 'white'
+                      : marquee ? '#FFD60A'
+                      : isHovered ? f.accent
+                      : f.accent + '88'
+                    }`,
                     boxShadow: isSelected
                       ? `0 0 24px white, 0 0 48px ${f.accent}, inset -2px -2px 0 rgba(0,0,0,0.4)`
+                      : marquee && isHovered
+                      ? `0 0 22px #FFD60A, 0 0 36px ${f.accent}, inset -2px -2px 0 rgba(0,0,0,0.4)`
+                      : marquee
+                      ? `0 0 14px #FFD60A88, inset -2px -2px 0 rgba(0,0,0,0.4)`
                       : isHovered
                       ? `0 0 16px ${f.accent}, inset -2px -2px 0 rgba(0,0,0,0.4)`
                       : 'inset -2px -2px 0 rgba(0,0,0,0.4), inset 2px 2px 0 rgba(255,255,255,0.15)',
@@ -364,6 +399,24 @@ export function CharacterSelect() {
                       style={{ background: 'rgba(0,0,0,0.6)' }}
                     >
                       ?
+                    </div>
+                  )}
+                  {marquee && !isLocked && (
+                    <div
+                      className="absolute font-display"
+                      style={{
+                        top: 3,
+                        right: 3,
+                        fontSize: 9,
+                        lineHeight: 1,
+                        color: '#FFD60A',
+                        textShadow: '1px 1px 0 black, 0 0 6px #FFD60A',
+                        letterSpacing: '0.05em',
+                      }}
+                      title="Marquee operator — bespoke 8-chapter story arc"
+                      aria-hidden
+                    >
+                      ★
                     </div>
                   )}
                 </button>

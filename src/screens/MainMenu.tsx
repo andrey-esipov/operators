@@ -123,7 +123,7 @@ export function MainMenu() {
     return () => clearInterval(id)
   }, [])
 
-  function go(mode: 'vs' | 'arcade' | 'practice') {
+  function go(mode: 'vs' | 'arcade' | 'practice' | 'story') {
     Sfx.menuSelect()
     setMode(mode)
     setPhase('character-select')
@@ -238,6 +238,13 @@ export function MainMenu() {
             came in for — climb the gauntlet, fight a friend, or jump
             straight into a hand-curated dream matchup. */}
         <div className="flex gap-3 flex-wrap justify-center">
+          <MenuButton
+            label="♛ STORY MODE"
+            subtitle="8 chapters on Lenny's Podcast"
+            onClick={() => go('story')}
+            onHover={() => prefetchScreen('character-select')}
+            accent="#F72585"
+          />
           <MenuButton
             label="▶ ARCADE MODE"
             subtitle="8-stage gauntlet · boss Lenny"

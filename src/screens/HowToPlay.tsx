@@ -223,6 +223,7 @@ export function HowToPlay() {
         {/* TIPS */}
         <Section title="TIPS" color="#06D6A0">
           <div className="col-span-full font-body text-xl text-white/85 space-y-2">
+            <p>• <span className="font-display text-base text-white">Story Mode</span> is the campaign — pick any of the 64 operators and play their 8-chapter run hosted by Lenny. Eight marquee fighters (Amjad, Chesky, Boris, Altman, Benioff, Fei-Fei, Elena, Reid) have hand-written career arcs; look for the gold ★ in Character Select.</p>
             <p>• Hover any fighter on the select screen to see their archetype + signature ult.</p>
             <p>• Stack a SETUP before unleashing your Ultimate — the +50% signature multiplier applies when your buff is active.</p>
             <p>• Pay attention to the scenario at the top of the fight screen — that&apos;s where you do bonus damage.</p>

@@ -463,6 +463,11 @@ export const useGame = create<GameState & Actions>((set, get) => ({
         // screen which has the share/retry/menu buttons.
         const ks = loadStats()
         ks.arcadeRunsCompleted += 1
+        ks.totalStoryRuns = (ks.totalStoryRuns ?? 0) + 1
+        if (!ks.storyOperatorsCleared) ks.storyOperatorsCleared = []
+        if (!ks.storyOperatorsCleared.includes(playerId)) {
+          ks.storyOperatorsCleared.push(playerId)
+        }
         saveStats(ks)
         checkAndUnlock(ks)
         set({ phase: 'story-ending', storyCutscene: undefined })

@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useGame } from '../state/game'
 import { getFighter } from '../data/fighters'
@@ -94,7 +94,22 @@ export function StoryCutscene() {
   const chapter = STORY_PROGRESSION[cs.chapter - 1]
   const scenario = chapter ? SCENARIOS[chapter.scenario] : null
   const accent = cs.accent ?? scenario?.accent ?? '#FFD60A'
+
+  // Prefer the bespoke chapter title-card backdrop generated in Tier 3
+  // (/public/story/chapters/{scenario}.png). Falls back to the stage
+  // background if the chapter card doesn't exist on disk yet.
+  const chapterCardSrc = chapter ? `/story/chapters/${chapter.scenario}.png` : null
   const stageBg = chapter ? `/stages/${chapter.scenario}.png` : null
+  const [bgUrl, setBgUrl] = useState<string | null>(stageBg)
+  useEffect(() => {
+    if (!chapterCardSrc) { setBgUrl(stageBg); return }
+    let cancelled = false
+    const img = new Image()
+    img.onload = () => { if (!cancelled) setBgUrl(chapterCardSrc) }
+    img.onerror = () => { if (!cancelled) setBgUrl(stageBg) }
+    img.src = chapterCardSrc
+    return () => { cancelled = true }
+  }, [chapterCardSrc, stageBg])
 
   const playerDef = playerFighterId ? getFighter(playerFighterId) : null
   const opponentDef = cs.opponentId ? getFighter(cs.opponentId) : null
@@ -124,16 +139,16 @@ export function StoryCutscene() {
       style={{ background: '#0F0A1A' }}
       onClick={() => { Sfx.menuSelect(); advance() }}
     >
-      {/* Stage background (full-bleed with darken overlay for legibility) */}
-      {stageBg && (
+      {/* Background — chapter title-card if it exists, else stage. */}
+      {bgUrl && (
         <div
           className="absolute inset-0 pointer-events-none"
           style={{
-            backgroundImage: `url(${stageBg})`,
+            backgroundImage: `url(${bgUrl})`,
             backgroundSize: 'cover',
             backgroundPosition: 'center',
             imageRendering: 'pixelated' as const,
-            opacity: cs.beat === 'ending-splash' ? 0.25 : 0.45,
+            opacity: cs.beat === 'ending-splash' ? 0.25 : 0.5,
           }}
         />
       )}

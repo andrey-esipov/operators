@@ -72,9 +72,17 @@ export function AttractMode({ onExit }: Props) {
   const [sceneIdx, setSceneIdx] = useState(0)
   const scene = scenes[sceneIdx % scenes.length]
 
-  // Advance scenes
+  // Advance scenes. Stats + quote scenes are intentionally long so the
+  // viewer can actually read them — they were 4.5s before, which left
+  // ~0.6s per stat after the stagger animation finished. Bumped to 8s
+  // for stats and 6.5s for quotes.
   useEffect(() => {
-    const duration = scene.kind === 'ko' ? 3000 : scene.kind === 'title' ? 3500 : 4500
+    const duration =
+      scene.kind === 'ko' ? 3000
+      : scene.kind === 'title' ? 3500
+      : scene.kind === 'stats' ? 8000
+      : scene.kind === 'quote' ? 6500
+      : 4500
     const id = setTimeout(() => setSceneIdx((i) => i + 1), duration)
     return () => clearTimeout(id)
   }, [sceneIdx, scene.kind])
@@ -368,14 +376,17 @@ function QuoteScene({ fighterId, quote, episode }: { fighterId: string; quote: s
         </div>
       </div>
 
-      {/* Quote card */}
+      {/* Quote card. Note: we deliberately do NOT use a CSS keyframe
+       *  animation here — in React 18 dev (StrictMode), the component
+       *  mounts → unmounts → remounts on first render, which re-fires
+       *  the keyframe and causes a visible flash/disappear/reappear. A
+       *  static element renders consistently in both dev and prod. */}
       <div
         className="relative z-10 max-w-3xl px-8 py-6"
         style={{
           background: 'rgba(15,10,26,0.85)',
           border: `3px solid ${f.accent}`,
           boxShadow: `0 0 36px ${f.accent}77, inset -2px -2px 0 rgba(0,0,0,0.5), inset 2px 2px 0 rgba(255,255,255,0.1)`,
-          animation: 'banner-in 0.6s ease-out',
         }}
       >
         <div
@@ -402,28 +413,28 @@ function QuoteScene({ fighterId, quote, episode }: { fighterId: string; quote: s
 }
 
 function StatsScene() {
-  // Derive counts from the canonical data so this never drifts as the roster
-  // grows. Frameworks = every move + every ult across all fighters. Voice
-  // lines = 6 fixed slots (matchStart/win/lose/ko/crit/ult) + the trash-talk
-  // array length per fighter. Game modes are the user-facing menu entries
-  // (Arcade, VS, Marquee, Daily, Practice, Random).
+  // Derive counts from the canonical data so this never drifts as the
+  // roster grows. Frameworks = every move + every ult across all fighters.
+  // Voice lines = 6 fixed slots per fighter + the trash-talk array length.
+  // Cut from 6 stats to 4 — the previous "GAME MODES: 6" was stale after
+  // the menu consolidation (PR #35), and "PATTERN MATCHES: ∞" was filler
+  // that crowded the readable stats off the screen. Four stats, big and
+  // legible, hold for the full 8s scene duration.
   const frameworks = FIGHTERS.reduce((sum, f) => sum + f.moves.length + 1, 0)
   const voiceLines = FIGHTERS.reduce(
     (sum, f) => sum + 6 + (f.voiceLines.trash?.length ?? 0),
     0
   )
   const stats = [
-    { num: String(FIGHTERS.length), label: 'FIGHTERS' },
+    { num: String(FIGHTERS.length), label: 'OPERATORS' },
     { num: String(frameworks), label: 'FRAMEWORKS' },
     { num: String(SCENARIO_ORDER.length), label: 'STAGES' },
     { num: String(voiceLines), label: 'VOICE LINES' },
-    { num: '6', label: 'GAME MODES' },
-    { num: '∞', label: 'PATTERN MATCHES' },
   ]
   return (
     <div className="relative w-full h-full flex flex-col items-center justify-center px-12">
       <div
-        className="font-display tracking-widest mb-8"
+        className="font-display tracking-widest mb-10"
         style={{
           color: '#FFD60A',
           fontSize: 32,
@@ -433,18 +444,14 @@ function StatsScene() {
       >
         FROM LENNY'S ARCHIVE
       </div>
-      <div className="grid grid-cols-3 gap-x-12 gap-y-8">
-        {stats.map((s, i) => (
-          <div
-            key={i}
-            className="flex flex-col items-center"
-            style={{ animation: `banner-in 0.6s ease-out ${i * 0.15}s both` }}
-          >
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-x-12 gap-y-10">
+        {stats.map((s) => (
+          <div key={s.label} className="flex flex-col items-center">
             <div
               className="font-num tabular-nums"
               style={{
                 color: 'white',
-                fontSize: 84,
+                fontSize: 96,
                 lineHeight: 1,
                 textShadow: '4px 4px 0 black, 0 0 18px #F72585',
               }}
@@ -452,8 +459,8 @@ function StatsScene() {
               {s.num}
             </div>
             <div
-              className="font-display text-[10px] tracking-widest mt-2"
-              style={{ color: '#FCBF49' }}
+              className="font-display text-xs tracking-widest mt-3"
+              style={{ color: '#FCBF49', letterSpacing: '0.3em' }}
             >
               {s.label}
             </div>

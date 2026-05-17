@@ -117,6 +117,14 @@ button {
   100% { transform: translateX(100%); opacity: 0; }
 }
 
+/* Entrance-only pop. Unlike `banner-in` (which exits at 100%), this lands
+   and STAYS — for stats / dialogue cards / anything that should persist
+   after the reveal. Pair with `animation-fill-mode: forwards`. */
+@keyframes attract-pop-in {
+  0%   { transform: translateY(24px); opacity: 0; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+
 /* Hit flash */
 @keyframes flash {
   0%, 100% { opacity: 0; }

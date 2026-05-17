@@ -72,15 +72,15 @@ export function AttractMode({ onExit }: Props) {
   const [sceneIdx, setSceneIdx] = useState(0)
   const scene = scenes[sceneIdx % scenes.length]
 
-  // Advance scenes. Stats + quote scenes are intentionally long so the
-  // viewer can actually read them — they were 4.5s before, which left
-  // ~0.6s per stat after the stagger animation finished. Bumped to 8s
-  // for stats and 6.5s for quotes.
+  // Advance scenes. Stats + quote scenes hold longer than the default so
+  // the viewer can actually read them. Stats keeps its staggered reveal
+  // (~0.8s for four cells at 0.18s stagger), then dwells for ~5.2s of a
+  // 6s scene — readable but not overlong.
   useEffect(() => {
     const duration =
       scene.kind === 'ko' ? 3000
       : scene.kind === 'title' ? 3500
-      : scene.kind === 'stats' ? 8000
+      : scene.kind === 'stats' ? 6000
       : scene.kind === 'quote' ? 6500
       : 4500
     const id = setTimeout(() => setSceneIdx((i) => i + 1), duration)
@@ -445,8 +445,12 @@ function StatsScene() {
         FROM LENNY'S ARCHIVE
       </div>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-x-12 gap-y-10">
-        {stats.map((s) => (
-          <div key={s.label} className="flex flex-col items-center">
+        {stats.map((s, i) => (
+          <div
+            key={s.label}
+            className="flex flex-col items-center"
+            style={{ animation: `banner-in 0.55s ease-out ${i * 0.18}s both` }}
+          >
             <div
               className="font-num tabular-nums"
               style={{

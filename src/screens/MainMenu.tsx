@@ -129,8 +129,6 @@ export function MainMenu() {
     setPhase('character-select')
   }
 
-  const startDaily = useGame((s) => s.startDaily)
-  const startRandom = useGame((s) => s.startRandom)
   const difficulty = useGame((s) => s.difficulty)
   const setDifficulty = useGame((s) => s.setDifficulty)
 
@@ -233,11 +231,8 @@ export function MainMenu() {
           Row 4 (preferences): DIFFICULTY · MUSIC · VOICE · CREDITS
       */}
       <div className="relative z-20 flex flex-col gap-3 mt-4 items-center menu-cta-stack px-4">
-        {/* Row 1: the three headline play modes sit shoulder-to-shoulder
-            so the user can pick the experience that matches what they
-            came in for — climb the gauntlet, fight a friend, or jump
-            straight into a hand-curated dream matchup. */}
-        <div className="flex gap-3 flex-wrap justify-center">
+        {/* Hero row: Story Mode alone, the showcase entry. */}
+        <div className="flex justify-center">
           <MenuButton
             label="♛ STORY MODE"
             subtitle="8 chapters on Lenny's Podcast"
@@ -245,13 +240,13 @@ export function MainMenu() {
             onHover={() => prefetchScreen('character-select')}
             accent="#F72585"
           />
-          <MenuButton
-            label="▶ ARCADE MODE"
-            subtitle="8-stage gauntlet · boss Lenny"
-            onClick={() => go('arcade')}
-            onHover={() => prefetchScreen('character-select')}
-            accent="#E63946"
-          />
+        </div>
+
+        {/* Supporting row: the three other entry points side-by-side.
+            Arcade was consolidated into Story (use the global Difficulty
+            setting for the harder run); Daily/Random/Generate-You removed
+            as mode clutter that didn't pay rent. */}
+        <div className="flex gap-3 flex-wrap justify-center">
           <MenuButton
             label="VS MODE"
             subtitle="local 2-player hot seat"
@@ -266,37 +261,12 @@ export function MainMenu() {
             onHover={() => prefetchScreen('marquee-matchups')}
             accent="#FFD60A"
           />
-        </div>
-
-        {/* Row 2: alt modes in one row */}
-        <div className="flex gap-2 flex-wrap justify-center">
-          <MidButton
-            label="◇ DAILY"
-            subtitle="today's matchup"
-            onClick={() => { Sfx.menuSelect(); startDaily() }}
-            onHover={() => prefetchScreen('pre-fight')}
-            accent="#06D6A0"
-          />
-          <MidButton
+          <MenuButton
             label="◇ PRACTICE"
             subtitle="train freely"
             onClick={() => go('practice')}
             onHover={() => prefetchScreen('character-select')}
             accent="#FCBF49"
-          />
-          <MidButton
-            label="◇ RANDOM"
-            subtitle="dice rolls"
-            onClick={() => { Sfx.menuSelect(); startRandom() }}
-            onHover={() => prefetchScreen('pre-fight')}
-            accent="#F72585"
-          />
-          <MidButton
-            label="★ GENERATE YOU"
-            subtitle="your fighter card"
-            onClick={() => { Sfx.menuSelect(); setPhase('generate-fighter') }}
-            onHover={() => prefetchScreen('generate-fighter')}
-            accent="#7209B7"
           />
         </div>
 
@@ -646,54 +616,6 @@ function MenuButton({
       {label}
       <div
         className="font-body text-base tracking-normal mt-0.5"
-        style={{
-          color: 'white',
-          opacity: 0.7,
-          textShadow: 'none',
-          letterSpacing: 'normal',
-        }}
-      >
-        {subtitle}
-      </div>
-    </button>
-  )
-}
-
-function MidButton({
-  label,
-  subtitle,
-  onClick,
-  onHover,
-  accent,
-}: {
-  label: string
-  subtitle: string
-  onClick: () => void
-  onHover?: () => void
-  accent: string
-}) {
-  return (
-    <button
-      onClick={onClick}
-      onMouseEnter={() => { Sfx.menuMove(); onHover?.() }}
-      onFocus={() => onHover?.()}
-      aria-label={`${label.replace(/[▶★◇\s]+/g, ' ').trim()} — ${subtitle}`}
-      className="relative px-4 py-1.5 font-display text-base tracking-widest hover:translate-y-[-2px] transition-transform"
-      style={{
-        background: `linear-gradient(180deg, ${accent}55, ${accent}22)`,
-        color: 'white',
-        border: `2px solid ${accent}`,
-        boxShadow:
-          `inset -2px -2px 0 rgba(0,0,0,0.6), inset 2px 2px 0 rgba(255,255,255,0.2), 0 0 16px ${accent}55`,
-        cursor: 'pointer',
-        minWidth: 170,
-        letterSpacing: '2px',
-        textShadow: '2px 2px 0 black',
-      }}
-    >
-      {label}
-      <div
-        className="font-body text-sm tracking-normal mt-0.5"
         style={{
           color: 'white',
           opacity: 0.7,

@@ -449,7 +449,7 @@ function StatsScene() {
           <div
             key={s.label}
             className="flex flex-col items-center"
-            style={{ animation: `banner-in 0.55s ease-out ${i * 0.18}s both` }}
+            style={{ animation: `attract-pop-in 0.55s ease-out ${i * 0.18}s both` }}
           >
             <div
               className="font-num tabular-nums"

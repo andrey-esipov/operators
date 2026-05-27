@@ -317,5 +317,31 @@ button {
   .text-2xl { font-size: 1.25rem; }
   .text-5xl { font-size: 2.25rem; }
 }
+
+/* Main menu fit-to-viewport. The menu is designed for a ~1080px-tall canvas
+   (logo + showcase + quote + 4 button rows + roster strip). On shorter
+   viewports — common in browsers with tabs/bookmarks bars, and on Replit
+   where the "Made with Replit" badge eats the bottom-right — scale the
+   whole thing down uniformly instead of letting the logo clip out the top.
+   Pixel art stays crisp because the scale is applied at the CSS transform
+   layer, not the raster layer.
+
+   Absolute-positioned inside the relative parent so it sits at top: 0
+   regardless of flex flow — flex was centering/shrinking the over-tall
+   content and pulling the logo above the viewport. */
+.menu-fit {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transform-origin: top center;
+  /* Designed height: ~1080px. Dividing two lengths yields a unitless ratio,
+     which is what scale() requires. min(1, ratio) clamps so we never enlarge
+     on tall viewports — only shrink on short ones. */
+  transform: scale(min(1, calc((100vh - 16px) / 1080px)));
+}
 /* Phone viewports get the same layout as desktop — the menu and combat
    UI scroll naturally; no nag banner. */

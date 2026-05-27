@@ -141,13 +141,18 @@ export function MainMenu() {
   }
 
   return (
-    <div className="relative w-full h-full flex flex-col items-center overflow-y-auto overflow-x-hidden">
-      {/* BG — 5-layer parallax */}
+    <div className="relative w-full h-full flex flex-col items-center overflow-hidden">
+      {/* BG — 5-layer parallax. Lives outside the .menu-fit transform so the
+          parallax fills the viewport at 1.0 regardless of how much the menu
+          content is scaled down to fit. */}
       <HeroBackground />
       <Starfield />
       <DiamondGrid />
       <SpotLight />
       <SilhouetteCarousel />
+      {/* Menu content wrapper — scales to viewport via CSS transform.
+          Layout (position, flex) lives in .menu-fit in index.css. */}
+      <div className="menu-fit">
 
       {/* Operator-of-the-Day pill — top-left, compact */}
       <div
@@ -347,8 +352,10 @@ export function MainMenu() {
           ))}
         </div>
       </div>
+      </div>{/* /menu-fit */}
 
-      {/* Bottom footer */}
+      {/* Bottom footer — outside .menu-fit so it stays pinned to the viewport
+          edge regardless of the menu scale. */}
       <div className="absolute bottom-1 left-0 right-0 text-center font-display text-[7px] tracking-widest text-white/40 z-20">
         v1.0 · #LENNYSBUILDATHON · JUNE 3 SUBMISSION · OPERATORS.REPLIT.APP
       </div>

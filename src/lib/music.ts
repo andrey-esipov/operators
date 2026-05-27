@@ -32,6 +32,10 @@ let unlockListenerAttached = false
 let currentAudio: HTMLAudioElement | null = null
 let currentMp3Track: TrackId | null = null
 const knownMissing = new Set<TrackId>()
+// Browsers block audio.play() before any user gesture. The promise rejects
+// with NotAllowedError — that's autoplay policy, NOT a missing file. We park
+// the request here and replay it on the first click/keydown.
+let pendingMp3Track: TrackId | null = null
 
 // Only tracks with shipped pre-rendered MP3s belong here — everything else
 // falls through to the procedural chiptune scheduler below. Listing missing
@@ -69,7 +73,17 @@ function playMp3(track: TrackId): boolean {
       Music.play(track)
     }
   })
-  a.play().catch(() => {
+  a.play().catch((err: DOMException | Error) => {
+    // NotAllowedError = autoplay policy block (no user gesture yet). The
+    // file is fine, the browser just won't start it. Park the request and
+    // replay on first gesture. Any other rejection = real failure → fall
+    // back to procedural.
+    const isAutoplayBlock = err && (err.name === 'NotAllowedError' || err.name === 'SecurityError')
+    if (isAutoplayBlock) {
+      pendingMp3Track = track
+      attachUnlockListener()
+      return
+    }
     knownMissing.add(track)
     if (currentMp3Track === track) {
       currentMp3Track = null
@@ -78,6 +92,9 @@ function playMp3(track: TrackId): boolean {
   })
   currentAudio = a
   currentMp3Track = track
+  // Always wire up the unlock listener so a later gesture can also recover
+  // from a silently-suspended state on some browsers.
+  attachUnlockListener()
   return true
 }
 
@@ -120,6 +137,25 @@ function attachUnlockListener() {
   if (unlockListenerAttached || typeof window === 'undefined') return
   unlockListenerAttached = true
   const unlock = () => {
+    // 1) If an MP3 was blocked by autoplay policy, retry it now — we're in
+    //    a user-gesture stack frame, so .play() will resolve.
+    if (pendingMp3Track && currentAudio) {
+      const a = currentAudio
+      a.play().catch(() => {
+        // Real failure this time — fall back to procedural.
+        const t = pendingMp3Track
+        pendingMp3Track = null
+        if (t) {
+          knownMissing.add(t)
+          currentMp3Track = null
+          currentAudio = null
+          Music.play(t)
+        }
+      })
+      pendingMp3Track = null
+    }
+
+    // 2) Resume the procedural AudioContext if it's suspended.
     const c = getCtx()
     if (c.state === 'suspended') {
       c.resume().then(() => {
@@ -136,6 +172,7 @@ function attachUnlockListener() {
     window.removeEventListener('keydown', unlock)
     window.removeEventListener('touchstart', unlock)
     window.removeEventListener('pointerdown', unlock)
+    unlockListenerAttached = false
   }
   window.addEventListener('click', unlock, { once: false })
   window.addEventListener('keydown', unlock, { once: false })

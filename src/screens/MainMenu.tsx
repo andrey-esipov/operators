@@ -186,7 +186,7 @@ export function MainMenu() {
           one operator per FIGHTERS entry, one framework per move+ult, one
           stage per scenario. */}
       <p
-        className="relative z-20 font-display text-[9px] tracking-widest mt-1 text-white/65 subtitle-entry"
+        className="relative z-20 font-display text-sm tracking-widest mt-2 text-white/85 subtitle-entry"
         style={{ textShadow: '2px 2px 0 black' }}
       >
         {FIGHTERS.length} OPERATORS · {FIGHTERS.reduce((s, f) => s + f.moves.length + 1, 0)} FRAMEWORKS · {SCENARIO_ORDER.length} STAGES
@@ -607,9 +607,11 @@ function MenuButton({
       onMouseEnter={() => { Sfx.menuMove(); onHover?.() }}
       onFocus={() => onHover?.()}
       aria-label={`${label.replace(/[▶★◇\s]+/g, ' ').trim()} — ${subtitle}`}
-      className="relative px-6 py-2 font-display text-lg tracking-widest hover:translate-y-[-2px] transition-transform"
+      className="relative px-6 py-3 font-display text-2xl tracking-widest hover:translate-y-[-2px] transition-transform"
       style={{
-        background: `linear-gradient(180deg, ${accent}55, ${accent}22)`,
+        // Dark opaque base so the bright stage background (mic / spotlights /
+        // silhouettes) can't bleed through and wash out the label.
+        background: `linear-gradient(180deg, rgba(0,0,0,0.78), rgba(0,0,0,0.88)), linear-gradient(180deg, ${accent}55, ${accent}22)`,
         color: 'white',
         border: `2px solid ${accent}`,
         boxShadow:
@@ -622,11 +624,11 @@ function MenuButton({
     >
       {label}
       <div
-        className="font-body text-base tracking-normal mt-0.5"
+        className="font-body text-xl tracking-normal mt-1"
         style={{
           color: 'white',
-          opacity: 0.7,
-          textShadow: 'none',
+          opacity: 0.85,
+          textShadow: '1px 1px 0 black',
           letterSpacing: 'normal',
         }}
       >
@@ -640,8 +642,8 @@ function ButtonGroup({ label, children }: { label: string; children: React.React
   return (
     <div className="flex items-center gap-2 flex-wrap justify-center">
       <span
-        className="font-display text-[7px] tracking-widest text-white/40 select-none"
-        style={{ letterSpacing: '0.3em' }}
+        className="font-display text-xs tracking-widest text-white/70 select-none"
+        style={{ letterSpacing: '0.3em', textShadow: '1px 1px 0 black' }}
       >
         {label} ▸
       </span>
@@ -657,13 +659,14 @@ function SmallButton({ label, onClick, title, onHover }: { label: string; onClic
       onMouseEnter={() => { Sfx.menuMove(); onHover?.() }}
       onFocus={() => onHover?.()}
       title={title}
-      className="px-3 py-1.5 font-display text-[9px] tracking-widest hover:translate-y-[-1px] transition-transform"
+      className="px-4 py-2 font-display text-sm tracking-widest hover:translate-y-[-1px] transition-transform"
       style={{
-        background: 'rgba(0,0,0,0.4)',
+        background: 'rgba(0,0,0,0.78)',
         color: '#FCBF49',
         border: '1px solid #FCBF49',
         boxShadow: 'inset -2px -2px 0 rgba(0,0,0,0.4)',
         cursor: 'pointer',
+        textShadow: '1px 1px 0 black',
       }}
     >
       {label}

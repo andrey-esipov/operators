@@ -125,6 +125,30 @@ button {
   100% { transform: translateY(0); opacity: 1; }
 }
 
+/* Pulsating "PRESS START" prompt — smooth breathing scale + glow that stays
+   fully legible at the trough (never blinks out). Reads as a living arcade
+   call-to-action. */
+@keyframes press-start-pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.82;
+    text-shadow: 0 4px 0 rgba(0,0,0,0.6), 0 0 18px rgba(255,214,10,0.35);
+  }
+  50% {
+    transform: scale(1.08);
+    opacity: 1;
+    text-shadow: 0 4px 0 rgba(0,0,0,0.6), 0 0 40px rgba(255,214,10,0.85);
+  }
+}
+.press-start-pulse { animation: press-start-pulse 1.25s ease-in-out infinite; }
+
+/* Slow breathing glow for the start-screen title. */
+@keyframes start-title-glow {
+  0%, 100% { filter: drop-shadow(0 0 18px rgba(247, 127, 0, 0.35)); }
+  50%      { filter: drop-shadow(0 0 34px rgba(247, 127, 0, 0.65)); }
+}
+.start-title-glow { animation: start-title-glow 3.2s ease-in-out infinite; }
+
 /* Hit flash */
 @keyframes flash {
   0%, 100% { opacity: 0; }

@@ -1,6 +1,6 @@
 # OPERATORS
 
-A turn-based tactical fighting game where 8 of the most iconic guests from **Lenny's Podcast** face off in 2D combat. Every fighter has 5 signature moves named after their real frameworks. Every move's flavor text is a verbatim quote with episode + timestamp. Every fight takes place in a business **scenario** — and each fighter does bonus damage in the scenarios where their philosophy actually applies.
+A turn-based tactical fighting game where 64 of the most iconic guests from **Lenny's Podcast** face off in 2D combat. Every fighter has 5 signature moves named after their real frameworks. Every move's flavor text is a verbatim quote with episode + timestamp. Every fight takes place in a business **scenario** — and each fighter does bonus damage in the scenarios where their philosophy actually applies.
 
 Submission for the **[Lenny × Replit Buildathon](https://lennysbuildathon.replit.app/)** (May 6 – May 27, 2026).
 
@@ -22,14 +22,14 @@ Submission for the **[Lenny × Replit Buildathon](https://lennysbuildathon.repli
 
 ## What's in the box
 
-- **27 fighters** with full 5-move kits — every move is a real framework, every flavor quote is verbatim with episode + timestamp
+- **64 fighters** with full 5-move kits — every move is a real framework, every flavor quote is verbatim with episode + timestamp
 - **8 stages** with topical descriptions + per-fighter scenario bonuses (Chesky +50% in Pre-PMF, Madhavan +50% in Pricing, etc.)
 - **5 game modes**: Arcade · VS · Practice (infinite resources + AI dummy) · Daily Challenge (date-seeded matchup) · plus the boss fight against Lenny himself
 - **3 difficulty levels** — easy/normal/hard scales bot AI weight functions
 - **AI personalities** — every fighter's bot plays like the operator's philosophy (Chesky aggressive, Doshi sets up combos defensively, Jason Fried patient, etc.)
 - **Combat juice**: K.O. cinematic with slow-mo flash + particle burst, hit-lag, full-screen combo banners, screen shake, damage floats, sprite attack-pose swap with lunge animation
 - **Quote Bank**: search + 10 theme filters (pricing/distribution/AI-native/...) + Markdown export with YouTube deep-links
-- **Framework Encyclopedia**: all 135 moves indexed by topic, clickable to open the real podcast at the real timestamp
+- **Framework Encyclopedia**: all 320 moves indexed by topic, clickable to open the real podcast at the real timestamp
 - **CRT + procedural chiptune music + SFX** — togglable from menu
 
 ## Local dev

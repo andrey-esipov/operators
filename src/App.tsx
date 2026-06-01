@@ -1,7 +1,8 @@
-import { useEffect, Suspense } from 'react'
+import { useCallback, useEffect, useState, Suspense } from 'react'
 import { useGame } from './state/game'
 import { Music } from './lib/music'
 import { MainMenu } from './screens/MainMenu'
+import { StartScreen } from './screens/StartScreen'
 import { SCREENS, prefetchScreen } from './screens/registry'
 import { ScreenSkeleton } from './components/ScreenSkeleton'
 import { StoryCutscene } from './components/StoryCutscene'
@@ -12,6 +13,17 @@ export function App() {
   const crtEnabled = useGame((s) => s.crtEnabled)
   const selectedB = useGame((s) => s.selectedB)
   const musicEnabled = useGame((s) => s.musicEnabled)
+
+  // Arcade boot gate. Shown once per page load before anything else. The
+  // press is a real user gesture, so it unlocks the soundtrack — the menu's
+  // Attract reel that follows finally plays with music instead of in silence.
+  const [started, setStarted] = useState(false)
+  const handleStart = useCallback(() => {
+    // We're inside a user-gesture stack frame here, so play() resolves
+    // immediately instead of getting parked by the autoplay policy.
+    if (musicEnabled) Music.play('menu')
+    setStarted(true)
+  }, [musicEnabled])
 
   useEffect(() => {
     loadQuoteBank()
@@ -78,7 +90,9 @@ export function App() {
 
   return (
     <div className="w-full h-full" style={{ background: '#0F0A1A' }}>
-      {phase === 'menu' ? (
+      {!started ? (
+        <StartScreen onStart={handleStart} />
+      ) : phase === 'menu' ? (
         <MainMenu />
       ) : phase === 'story-cutscene' ? (
         <StoryCutscene />

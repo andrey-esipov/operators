@@ -25,6 +25,14 @@ let stopFlag = 0  // incremented to cancel pending scheduled callbacks
 let userVolume = 0.35  // 0..1 — kept modest; chiptune is loud
 let unlockListenerAttached = false
 
+// Gesture types that satisfy the browser autoplay policy. The first one to
+// fire unlocks audio and detaches the rest. Movement/scroll events are
+// included so sound starts as the cursor enters the page, not only on click.
+const UNLOCK_EVENTS = [
+  'pointerdown', 'pointermove', 'mousemove', 'click',
+  'keydown', 'wheel', 'scroll', 'touchstart',
+] as const
+
 // ─── Pre-rendered Suno tracks ─────────────────────────────────────────
 // When an MP3 exists for a track, we play it instead of the procedural
 // chiptune. Significantly higher musical quality. Procedural stays as
@@ -168,16 +176,17 @@ function attachUnlockListener() {
       }).catch(() => {})
     }
     // Keep this lightweight; remove ourselves now that we've resumed once.
-    window.removeEventListener('click', unlock)
-    window.removeEventListener('keydown', unlock)
-    window.removeEventListener('touchstart', unlock)
-    window.removeEventListener('pointerdown', unlock)
+    for (const evt of UNLOCK_EVENTS) window.removeEventListener(evt, unlock)
     unlockListenerAttached = false
   }
-  window.addEventListener('click', unlock, { once: false })
-  window.addEventListener('keydown', unlock, { once: false })
-  window.addEventListener('touchstart', unlock, { once: false })
-  window.addEventListener('pointerdown', unlock, { once: false })
+  // The widest reasonable net: any pointer movement, scroll, keypress, or
+  // tap counts as the "first gesture" that satisfies autoplay policy. Adding
+  // pointermove/mousemove/wheel/scroll means audio starts the moment the
+  // cursor crosses the page, instead of waiting for a deliberate click.
+  // passive:true so the movement/scroll listeners never delay rendering.
+  for (const evt of UNLOCK_EVENTS) {
+    window.addEventListener(evt, unlock, { once: false, passive: true })
+  }
 }
 
 /** MIDI-style note name → frequency in Hz (4th octave is the reference). */

@@ -26,11 +26,13 @@ let userVolume = 0.35  // 0..1 — kept modest; chiptune is loud
 let unlockListenerAttached = false
 
 // Gesture types that satisfy the browser autoplay policy. The first one to
-// fire unlocks audio and detaches the rest. Movement/scroll events are
-// included so sound starts as the cursor enters the page, not only on click.
+// fire unlocks audio and detaches the rest. These MUST be limited to events
+// that grant "user activation" — pointerdown/mousedown/touchstart/keydown/
+// click. Movement and scroll events (mousemove/pointermove/wheel/scroll) do
+// NOT grant activation, so calling .play() from them rejects and would
+// wrongly tear down the unlock path, leaving the app silent.
 const UNLOCK_EVENTS = [
-  'pointerdown', 'pointermove', 'mousemove', 'click',
-  'keydown', 'wheel', 'scroll', 'touchstart',
+  'pointerdown', 'mousedown', 'touchstart', 'keydown', 'click',
 ] as const
 
 // ─── Pre-rendered Suno tracks ─────────────────────────────────────────
@@ -149,16 +151,21 @@ function attachUnlockListener() {
     //    a user-gesture stack frame, so .play() will resolve.
     if (pendingMp3Track && currentAudio) {
       const a = currentAudio
-      a.play().catch(() => {
-        // Real failure this time — fall back to procedural.
-        const t = pendingMp3Track
-        pendingMp3Track = null
-        if (t) {
-          knownMissing.add(t)
-          currentMp3Track = null
-          currentAudio = null
-          Music.play(t)
+      const t = pendingMp3Track
+      a.play().catch((err: DOMException | Error) => {
+        // Still blocked? Some gesture didn't count as activation. Re-arm and
+        // wait for the next one instead of giving up — only treat a genuine
+        // non-autoplay error as a real failure that falls back to procedural.
+        const isAutoplayBlock = err && (err.name === 'NotAllowedError' || err.name === 'SecurityError')
+        if (isAutoplayBlock) {
+          pendingMp3Track = t
+          attachUnlockListener()
+          return
         }
+        knownMissing.add(t)
+        currentMp3Track = null
+        currentAudio = null
+        Music.play(t)
       })
       pendingMp3Track = null
     }
@@ -179,11 +186,9 @@ function attachUnlockListener() {
     for (const evt of UNLOCK_EVENTS) window.removeEventListener(evt, unlock)
     unlockListenerAttached = false
   }
-  // The widest reasonable net: any pointer movement, scroll, keypress, or
-  // tap counts as the "first gesture" that satisfies autoplay policy. Adding
-  // pointermove/mousemove/wheel/scroll means audio starts the moment the
-  // cursor crosses the page, instead of waiting for a deliberate click.
-  // passive:true so the movement/scroll listeners never delay rendering.
+  // Attach on every activation-granting gesture. The first press/tap/key
+  // anywhere on the page (not just on a button) unlocks audio. passive:true
+  // since the handler never calls preventDefault.
   for (const evt of UNLOCK_EVENTS) {
     window.addEventListener(evt, unlock, { once: false, passive: true })
   }

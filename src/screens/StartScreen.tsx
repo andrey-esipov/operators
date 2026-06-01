@@ -63,18 +63,20 @@ export function StartScreen({ onStart }: { onStart: () => void }) {
           decoding="async"
           className="absolute inset-0 w-full h-full object-cover pointer-events-none"
           style={{
-            opacity: i === stageIdx ? 0.22 : 0,
+            opacity: i === stageIdx ? 0.5 : 0,
             transition: 'opacity 1.8s ease-in-out',
-            filter: 'blur(2px) saturate(0.9)',
+            filter: 'blur(1px) saturate(1)',
           }}
         />
       ))}
-      {/* Darken + vignette so the title and prompt stay readable over any stage */}
+      {/* Darken + vignette so the title and prompt stay readable over any
+          stage. Kept light at the center so the scene reads through; darker
+          at the edges to frame it and anchor the text. */}
       <div
         className="absolute inset-0 pointer-events-none"
         style={{
           background:
-            'radial-gradient(ellipse at center, rgba(15,10,26,0.55) 0%, rgba(15,10,26,0.85) 70%, rgba(15,10,26,0.95) 100%)',
+            'radial-gradient(ellipse at center, rgba(15,10,26,0.28) 0%, rgba(15,10,26,0.6) 65%, rgba(15,10,26,0.85) 100%)',
         }}
       />
 
@@ -107,7 +109,8 @@ export function StartScreen({ onStart }: { onStart: () => void }) {
             fontFamily: 'Press Start 2P, monospace',
             fontSize: 15,
             letterSpacing: 2,
-            color: '#9D7BD8',
+            color: '#C4ABF0',
+            textShadow: '0 2px 6px rgba(0,0,0,0.9)',
           }}
         >
           CLICK ANYWHERE · OR PRESS ANY KEY
@@ -121,7 +124,8 @@ export function StartScreen({ onStart }: { onStart: () => void }) {
           fontFamily: 'Press Start 2P, monospace',
           fontSize: 12,
           letterSpacing: 2,
-          color: '#7B68A6',
+          color: '#9D86C4',
+          textShadow: '0 2px 6px rgba(0,0,0,0.9)',
         }}
       >
         INSERT COIN · 64 OPERATORS · 320 FRAMEWORKS · #LENNYSBUILDATHON

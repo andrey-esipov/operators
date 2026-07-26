@@ -36,3 +36,15 @@ signature-peak*.png
 story-*.png
 menu-*.png
 .gstack/
+
+# Render/critic harness output — hundreds of MB of PNGs, local only.
+.shots/
+shots/
+shots-cam/
+vfx-shots/
+.hud-agent/shots/
+*.bak
+.*.bak
+
+# Audio agent scratch (offline renders, metrics, PNGs)
+.audio-agent/

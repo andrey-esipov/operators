@@ -6,13 +6,13 @@ interface Props {
 }
 
 const FLAVOR: Record<string, { size: number; c1: string; c2: string }> = {
-  light: { size: 40, c1: '#ffffff', c2: '#c9d4ff' },
-  heavy: { size: 56, c1: '#ffe14a', c2: '#ff9e2c' },
-  crit: { size: 76, c1: '#ffffff', c2: '#ff5a4a' },
-  combo: { size: 60, c1: '#fff2a8', c2: '#ffb020' },
-  ex: { size: 60, c1: '#8affff', c2: '#17b6ff' },
-  ult: { size: 84, c1: '#ffd6ff', c2: '#ff2fae' },
-  signature: { size: 92, c1: '#ffffff', c2: '#ff2fae' },
+  light: { size: 44, c1: '#ffffff', c2: '#c9d4ff' },
+  heavy: { size: 62, c1: '#ffe14a', c2: '#ff9e2c' },
+  crit: { size: 82, c1: '#ffffff', c2: '#ff5a4a' },
+  combo: { size: 64, c1: '#fff2a8', c2: '#ffb020' },
+  ex: { size: 64, c1: '#8affff', c2: '#17b6ff' },
+  ult: { size: 88, c1: '#ffd6ff', c2: '#ff2fae' },
+  signature: { size: 96, c1: '#ffffff', c2: '#ff2fae' },
 }
 
 export function DamageNumbers({ numbers }: Props) {
@@ -33,16 +33,16 @@ export function DamageNumbers({ numbers }: Props) {
               top: `${y}%`,
               fontSize: f.size,
             }}
-            initial={{ opacity: 0, scale: 0.3, y: 10 }}
+            initial={{ opacity: 0, scale: 0.25, y: 12 }}
             animate={{
               opacity: [0, 1, 1, 0],
-              scale: [0.3, 1.25, 1, 0.95],
-              y: [10, -30, -46, -70],
+              scale: [0.25, 1.42, 1, 0.95],
+              y: [12, -32, -48, -74],
               x: [0, drift * 0.4, drift * 0.8, drift],
-              rotate: n.side === 'a' ? [-8, -4, 0, 2] : [8, 4, 0, -2],
+              rotate: n.side === 'a' ? [-9, -4, 0, 2] : [9, 4, 0, -2],
             }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.9, times: [0, 0.18, 0.55, 1], ease: 'easeOut' }}
+            transition={{ duration: 0.9, times: [0, 0.16, 0.55, 1], ease: 'easeOut' }}
           >
             <span
               className="v"
@@ -51,6 +51,7 @@ export function DamageNumbers({ numbers }: Props) {
                 WebkitBackgroundClip: 'text',
                 backgroundClip: 'text',
                 color: 'transparent',
+                filter: `drop-shadow(0 5px 3px rgba(0,0,0,0.6)) drop-shadow(0 0 18px ${f.c2}aa)`,
               }}
             >
               {n.value}

@@ -51,10 +51,20 @@ export function FightHud({
   const nameA = names?.a ?? state.a.id.toUpperCase()
   const nameB = names?.b ?? state.b.id.toUpperCase()
 
+  // Finisher moments own the whole frame: clear the combat HUD so nothing
+  // (super meters, deck) floats orphaned above the letterbox bars.
+  const takeover =
+    !!announce &&
+    (announce.kind === 'ko' ||
+      announce.kind === 'double-ko' ||
+      announce.kind === 'perfect' ||
+      announce.kind === 'win' ||
+      announce.kind === 'time-up')
+
   return (
     <div className="fight-hud" ref={ref} aria-hidden={false}>
-      <div className="fh-topscrim" />
-      {moveDeck && <div className="fh-botscrim" />}
+      <div className="fh-topscrim" style={{ opacity: takeover ? 0 : 1, transition: 'opacity 240ms ease' }} />
+      {moveDeck && <div className="fh-botscrim" style={{ opacity: takeover ? 0 : 1, transition: 'opacity 240ms ease' }} />}
       <div
         style={{
           position: 'absolute',
@@ -64,6 +74,8 @@ export function FightHud({
           width: `${100 / scale}%`,
           height: `${100 / scale}%`,
           left: `${(100 - 100 / scale) / 2}%`,
+          opacity: takeover ? 0 : 1,
+          transition: 'opacity 240ms ease',
         }}
       >
         {/* Top bars: player panels flanking the center column. */}

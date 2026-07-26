@@ -1,37 +1,39 @@
 import * as THREE from 'three'
 import {
   BloomEffect,
-  ChromaticAberrationEffect,
   EffectComposer,
   EffectPass,
   KernelSize,
-  NoiseEffect,
   RenderPass,
   SMAAEffect,
   SMAAPreset,
-  ToneMappingEffect,
-  ToneMappingMode,
-  VignetteEffect,
-  BlendFunction,
-  HueSaturationEffect,
-  BrightnessContrastEffect,
-  ScanlineEffect,
   type Effect,
 } from 'postprocessing'
 import type { EngineContext, FightEvent, FightRenderState, QualityTier, Subsystem } from '../types'
 import { flagsFor } from '../core/QualityManager'
 import type { RenderDriver } from '../core/Engine'
+import { MasterGradeEffect } from './MasterGradeEffect'
+import { LensEffect } from './LensEffect'
+import { LensFinalizeEffect } from './LensFinalizeEffect'
+import { makeLensDirt } from './lensDirt'
+import { gradeFor, mixGrades, NEUTRAL_GRADE, type StageGrade } from './grades'
 
 /**
- * Post-processing pipeline.
+ * Post-processing pipeline — the show's final image authorship.
  *
- * The look we're going for: modern filmic base (ACES, bloom, subtle CA and
- * grain, strong vignette) with a *restrained* arcade CRT flavour on top —
- * enough scanline to remember where the game came from, not so much that it
- * reads as a filter slapped over everything.
+ * Stack (ultra):
+ *   RenderPass → [Bloom (multi-scale, energy-conserving) + Lens dirt/anamorphic
+ *   + MasterGrade (AgX + per-stage colour script + split tone + vignette +
+ *   grain)] → [edge-weighted chromatic aberration + contrast-adaptive sharpen]
+ *   → SMAA.
  *
- * Impact response lives here too: hits punch exposure and chromatic
- * aberration for a few frames, which is most of what makes a hit feel loud.
+ * The design tension is pixel art vs. cinematic post: the grade is fully
+ * pointwise so sprite edges pass through untouched, CA is zero at frame centre
+ * (where the fighters live), and a CAS sharpen re-crisps anything AA softened.
+ *
+ * Everything reacts: hits punch bloom + CA + contrast + saturation; low HP
+ * drains colour and pushes danger red + heavier vignette; supers slam contrast
+ * and saturation; KO desaturates the frame.
  */
 export class PostPipeline implements Subsystem, RenderDriver {
   readonly name = 'post'
@@ -40,27 +42,35 @@ export class PostPipeline implements Subsystem, RenderDriver {
   private composer!: EffectComposer
 
   private bloom!: BloomEffect
-  private ca!: ChromaticAberrationEffect
-  private vignette!: VignetteEffect
-  private noise!: NoiseEffect
-  private tone!: ToneMappingEffect
-  private hue!: HueSaturationEffect
-  private bc!: BrightnessContrastEffect
-  private scanline!: ScanlineEffect
+  private lens!: LensEffect
+  private grade!: MasterGradeEffect
+  private finalize!: LensFinalizeEffect
   private smaa: SMAAEffect | null = null
+  private dirtTexture!: THREE.Texture
 
-  private baseCaOffset = new THREE.Vector2(0.00035, 0.00042)
-  private impact = 0
-  private impactColor = 0
-  private time = 0
   private quality: QualityTier = 'high'
+  private time = 0
 
-  /** Set from outside for the "world stops" moment on a big hit. */
+  // --- dynamic response state -------------------------------------------
+  private impact = 0 // 0..~1.7, decays after hits
+  private impactWarm = 0 // colour bias of the current impact (-1 cool .. +1 warm)
+  private flash = 0 // full-frame flash on the biggest moments
+  private superPunch = 0 // held high while a super meter is maxed / firing
+  private koDrain = 0 // colour drain that ramps up and holds after a KO
+
+  // --- stage grade cross-fade -------------------------------------------
+  private currentGrade: StageGrade = NEUTRAL_GRADE
+  private fromGrade: StageGrade = NEUTRAL_GRADE
+  private targetGrade: StageGrade = NEUTRAL_GRADE
+  private targetScenario: string | null = null
+  private fade = 1 // 0..1 progress of the cross-fade
+
   private freeze = 0
 
   async init(ctx: EngineContext) {
     this.ctx = ctx
     this.quality = ctx.quality
+    this.dirtTexture = makeLensDirt(512)
     this.build()
   }
 
@@ -75,55 +85,51 @@ export class PostPipeline implements Subsystem, RenderDriver {
     })
     this.composer.addPass(new RenderPass(scene, camera))
 
+    // --- bloom: multi-scale mipmap blur, energy-conserving --------------
     this.bloom = new BloomEffect({
-      intensity: 1.15,
-      luminanceThreshold: 0.62,
-      luminanceSmoothing: 0.24,
+      intensity: this.currentGrade.bloomIntensity,
+      luminanceThreshold: this.currentGrade.bloomThreshold,
+      luminanceSmoothing: 0.3,
       mipmapBlur: true,
-      kernelSize: KernelSize.LARGE,
-      radius: 0.72,
+      kernelSize: KernelSize.HUGE,
+      radius: 0.85,
     })
 
-    this.ca = new ChromaticAberrationEffect({
-      offset: this.baseCaOffset.clone(),
-      radialModulation: true,
-      modulationOffset: 0.42,
+    // --- lens dirt + anamorphic (reads the bloom buffer) ----------------
+    this.lens = new LensEffect({
+      bloomTexture: this.bloom.texture,
+      dirtTexture: this.dirtTexture,
     })
 
-    this.vignette = new VignetteEffect({ offset: 0.24, darkness: 0.72 })
+    // --- master grade + AgX display transform ---------------------------
+    this.grade = new MasterGradeEffect()
+    this.grade.applyGrade(this.currentGrade)
 
-    this.noise = new NoiseEffect({ blendFunction: BlendFunction.OVERLAY, premultiply: true })
-    this.noise.blendMode.opacity.value = 0.09
+    // --- chromatic aberration + sharpen (own convolution pass) ----------
+    this.finalize = new LensFinalizeEffect()
 
-    this.scanline = new ScanlineEffect({ density: 1.28 })
-    this.scanline.blendMode.opacity.value = 0.055
+    const gradeEffects: Effect[] = []
+    if (flags.bloom) {
+      gradeEffects.push(this.bloom)
+      gradeEffects.push(this.lens)
+    }
+    gradeEffects.push(this.grade)
+    this.composer.addPass(new EffectPass(camera, ...gradeEffects))
 
-    this.hue = new HueSaturationEffect({ saturation: 0.12 })
-    this.bc = new BrightnessContrastEffect({ brightness: 0.0, contrast: 0.09 })
-
-    this.tone = new ToneMappingEffect({
-      mode: ToneMappingMode.AGX,
-      resolution: 256,
-      whitePoint: 8,
-      middleGrey: 0.6,
-      adaptive: false,
-    })
-
-    const effects: Effect[] = []
-    if (flags.bloom) effects.push(this.bloom)
-    effects.push(this.tone, this.bc, this.hue)
-    if (flags.chromaticAberration) effects.push(this.ca)
-    effects.push(this.vignette)
-    if (flags.filmGrain) effects.push(this.noise, this.scanline)
-
-    this.composer.addPass(new EffectPass(camera, ...effects))
+    // Chromatic aberration is gated by quality; sharpen always runs (it's the
+    // pixel-art crispness guarantee).
+    this.finalize.setCa(flags.chromaticAberration ? 0.0025 : 0, 0)
+    this.finalize.setSharpen(0.32)
+    this.composer.addPass(new EffectPass(camera, this.finalize))
 
     if (flags.aa === 'smaa') {
       this.smaa = new SMAAEffect({ preset: SMAAPreset.HIGH })
       this.composer.addPass(new EffectPass(camera, this.smaa))
+    } else {
+      this.smaa = null
     }
 
-    // The engine's own tone mapping is disabled: the composer owns it now.
+    // The composer owns the final draw + tone map now.
     renderer.toneMapping = THREE.NoToneMapping
   }
 
@@ -131,47 +137,113 @@ export class PostPipeline implements Subsystem, RenderDriver {
     if (e.kind === 'hit') {
       const strength =
         e.flavor === 'signature' ? 1 :
-        e.flavor === 'ult' ? 0.85 :
-        e.flavor === 'crit' ? 0.7 :
-        e.flavor === 'combo' ? 0.55 :
-        e.flavor === 'ex' ? 0.6 :
-        e.flavor === 'heavy' ? 0.42 : 0.22
-      this.impact = Math.min(1.4, this.impact + strength * (0.6 + e.power * 0.7))
-      this.impactColor =
+        e.flavor === 'ult' ? 0.9 :
+        e.flavor === 'crit' ? 0.72 :
+        e.flavor === 'combo' ? 0.56 :
+        e.flavor === 'ex' ? 0.62 :
+        e.flavor === 'heavy' ? 0.44 : 0.24
+      this.impact = Math.min(1.7, this.impact + strength * (0.65 + e.power * 0.7))
+      this.impactWarm =
         e.flavor === 'ult' || e.flavor === 'signature' ? 1 :
-        e.flavor === 'ex' ? -1 : 0
+        e.flavor === 'ex' ? -0.7 : 0.2
+      if (e.flavor === 'signature' || e.flavor === 'ult') this.flash = Math.min(0.5, this.flash + 0.28)
+      if (e.shattered) this.impact = Math.min(1.8, this.impact + 0.4)
     }
-    if (e.kind === 'ko') this.impact = 1.6
-    if (e.kind === 'shatter') this.impact = Math.max(this.impact, 1.1)
+    if (e.kind === 'signature') this.flash = Math.min(0.55, this.flash + 0.3)
+    if (e.kind === 'cast' && (e.flavor === 'ult' || e.flavor === 'signature')) {
+      this.superPunch = Math.min(1, this.superPunch + 0.6)
+      this.flash = Math.min(0.4, this.flash + 0.2)
+    }
+    if (e.kind === 'ko') {
+      this.impact = 1.7
+      this.flash = Math.min(0.6, this.flash + 0.4)
+    }
+    if (e.kind === 'shatter') this.impact = Math.max(this.impact, 1.15)
   }
 
   update(dt: number, state: FightRenderState) {
     this.time += dt
+
+    // --- decays ---------------------------------------------------------
     this.impact = Math.max(0, this.impact - dt * 3.4)
+    this.flash = Math.max(0, this.flash - dt * 2.6)
     const i = this.impact
 
-    // Chromatic aberration spikes on impact then settles.
-    this.ca.offset.set(
-      this.baseCaOffset.x + i * 0.0042,
-      this.baseCaOffset.y + i * 0.0031,
+    // --- stage grade cross-fade ----------------------------------------
+    if (state.scenario !== this.targetScenario) {
+      this.targetScenario = state.scenario
+      this.fromGrade = this.currentGrade
+      this.targetGrade = gradeFor(state.scenario)
+      this.fade = 0
+    }
+    if (this.fade < 1) {
+      this.fade = Math.min(1, this.fade + dt / 0.6)
+      const t = this.fade * this.fade * (3 - 2 * this.fade)
+      this.currentGrade = mixGrades(this.fromGrade, this.targetGrade, t)
+      this.grade.applyGrade(this.currentGrade)
+    }
+    const g = this.currentGrade
+
+    // --- super punch: ramps while either meter is full ------------------
+    const superMax = Math.max(state.a.super01, state.b.super01)
+    const wantSuper = state.a.superReady || state.b.superReady ? 1 : superMax > 0.98 ? 0.8 : 0
+    this.superPunch += (wantSuper - this.superPunch) * Math.min(1, dt * 4)
+
+    // --- KO / defeat colour drain --------------------------------------
+    const someoneDown =
+      state.a.hp01 <= 0.001 ||
+      state.b.hp01 <= 0.001 ||
+      state.a.pose === 'lose' ||
+      state.b.pose === 'lose'
+    this.koDrain += ((someoneDown ? 1 : 0) - this.koDrain) * Math.min(1, dt * 2.5)
+
+    // --- low-HP danger --------------------------------------------------
+    const worst = Math.min(state.a.hp01, state.b.hp01)
+    const danger = Math.max(0, 1 - worst / 0.3)
+    const dangerPulse = danger * (0.6 + 0.4 * Math.sin(this.time * 6.0))
+
+    // --- bloom ----------------------------------------------------------
+    this.bloom.intensity = g.bloomIntensity + i * 1.5 + this.superPunch * 0.5
+    this.bloom.luminanceMaterial.threshold = Math.max(
+      0.24,
+      g.bloomThreshold - i * 0.28 - this.superPunch * 0.12,
     )
 
-    // Bloom blooms harder on impact.
-    this.bloom.intensity = 1.15 + i * 1.5
-    this.bloom.luminanceMaterial.threshold = Math.max(0.28, 0.62 - i * 0.3)
+    // --- lens dirt / anamorphic ----------------------------------------
+    this.lens.setBloomTexture(this.bloom.texture)
+    this.lens.setDirt(g.lensDirt * (1 + i * 0.4))
+    this.lens.setAnamorphic(g.anamorphic * (1 + i * 0.6 + this.superPunch * 0.5), g.anamorphicTint)
 
-    // Contrast/saturation punch.
-    this.bc.contrast = 0.09 + i * 0.22
-    this.hue.saturation = 0.12 + i * 0.3 + (this.impactColor === 1 ? i * 0.12 : 0)
+    // --- grade dynamics -------------------------------------------------
+    const contrast = g.contrast + i * 0.18 + this.superPunch * 0.14
+    this.grade.setContrast(contrast)
 
-    // Low-health desaturation + heavier vignette — a real fighting-game tell.
-    const worst = Math.min(state.a.hp01, state.b.hp01)
-    const danger = Math.max(0, 1 - worst / 0.28)
-    this.vignette.darkness = 0.72 + danger * 0.35 + i * 0.12
-    this.vignette.offset = 0.24 - danger * 0.05
+    this.grade.setSatBoost(
+      i * 0.35 + this.superPunch * 0.25 + (this.impactWarm > 0 ? i * this.impactWarm * 0.15 : 0),
+    )
 
-    // Grain crawls slightly with time so it never looks like a static overlay.
-    this.noise.blendMode.opacity.value = 0.085 + danger * 0.03 + i * 0.05
+    // Danger drains + reddens; KO drains hard.
+    const desat = Math.max(danger * 0.45, this.koDrain * 0.8)
+    const dangerAmt = dangerPulse * 0.32
+    this.grade.setDanger(desat, dangerAmt)
+
+    // Vignette tightens on danger / impact.
+    this.grade.setVignette(
+      g.vigOffset - danger * 0.06 - i * 0.02,
+      Math.min(0.9, g.vigDarkness + danger * 0.28 + i * 0.1 + this.koDrain * 0.15),
+    )
+
+    // Grain lifts a touch under stress so it reads as film, not static.
+    this.grade.setGrain(g.grain + danger * 0.03 + i * 0.03, this.time * 24.0)
+
+    // Warm/cool flash on the biggest hits + supers.
+    this.grade.setFlash(this.flash)
+
+    // --- chromatic aberration spike ------------------------------------
+    this.finalize.setCa(
+      flagsFor(this.quality).chromaticAberration ? 0.0025 : 0,
+      i * 0.01 + this.superPunch * 0.002,
+    )
   }
 
   render(_dt: number) {
@@ -181,6 +253,9 @@ export class PostPipeline implements Subsystem, RenderDriver {
 
   resize(width: number, height: number) {
     this.composer?.setSize(width, height)
+    // Keep lens dirt roughly square regardless of aspect so it doesn't smear.
+    const aspect = width / Math.max(1, height)
+    this.lens?.setDirtScale(aspect >= 1 ? aspect : 1, aspect >= 1 ? 1 : 1 / aspect)
   }
 
   setQuality(q: QualityTier) {
@@ -191,6 +266,7 @@ export class PostPipeline implements Subsystem, RenderDriver {
 
   dispose() {
     this.composer?.dispose()
+    this.dirtTexture?.dispose()
   }
 
   /** Exposed for cinematics that want to drive the look directly. */

@@ -115,12 +115,14 @@ export class StageSubsystem implements Subsystem {
 
         void main() {
           vec2 uv = clamp(vUv, 0.0, 1.0);
-          vec3 col = mix(uSkyBottom, uSkyTop, uv.y);
+          vec3 col = mix(uSkyBottom, uSkyTop, pow(uv.y, 1.15));
           if (uHasMap > 0.5) {
             vec3 t = texture2D(uMap, uv).rgb;
             float lum = dot(t, vec3(0.299, 0.587, 0.114));
-            t = mix(vec3(lum), t, 0.7);
-            col = mix(col, t, 0.86);
+            t = mix(vec3(lum), t, 0.72);
+            // gentle S-curve so the plate keeps some depth instead of muddying
+            t = t*t*(3.0 - 2.0*t);
+            col = mix(col, t, 0.82);
           }
           col *= uExposure;
           // Distance haze — the plate dissolves into fog toward the bottom
@@ -132,6 +134,10 @@ export class StageSubsystem implements Subsystem {
           vec2 d = uv - 0.5;
           float vig = 1.0 - smoothstep(0.24, 0.9, length(d * vec2(1.02, 1.25)));
           col *= mix(1.0, vig, uVignette);
+
+          // Ordered dither to kill visible gradient banding on the sky.
+          float dnoise = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);
+          col += (dnoise - 0.5) * (1.5/255.0);
 
           gl_FragColor = vec4(col, 1.0);
           #include <colorspace_fragment>
@@ -255,6 +261,9 @@ export class StageSubsystem implements Subsystem {
       this.floor.syncLighting(d, cam.position, cfg.lighting.fog.color, cfg.lighting.fog.density)
     }
     this.floor.decay(dt)
+
+    // Live contact shadows / reflection pools under each fighter.
+    this.floor.setContacts(this.ctx.anchors.fighter('a'), this.ctx.anchors.fighter('b'))
 
     // Atmosphere.
     this.dust.update(this.time, dt, cfg.motes.drift + 0.4)

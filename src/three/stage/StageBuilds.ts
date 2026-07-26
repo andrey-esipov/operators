@@ -51,14 +51,18 @@ function overheadRig(b: StageBuild, cfg: StageConfig, flags: QualityFlags, shaft
     can.position.set(x, 9.0, z)
     can.rotation.x = 0.25
     b.add(can)
-    if (SHAFT_ON(flags)) {
-      const shaft = lightShaft(0.6, 3.4, 9.2, shaftColor, cfg.shaftIntensity * 0.5)
-      shaft.position.set(x * 0.7, 4.2, z + 1.5)
+    // Only a subset of cans throw a visible volumetric shaft, at varied width,
+    // so they read as scattered god-rays rather than a solid light curtain.
+    if (SHAFT_ON(flags) && (i === 0 || i === 3 || i === 4)) {
+      const wide = i === 4 ? 1.35 : 1.0
+      const shaft = lightShaft(0.5 * wide, 3.0 * wide, 9.4, shaftColor, cfg.shaftIntensity * 0.32)
+      shaft.position.set(x * 0.72, 4.3, z + 1.4)
+      shaft.rotation.z = (i - 2) * 0.03
       b.add(shaft)
       b.onUpdate((t) => {
         const m = shaft.material as THREE.ShaderMaterial
         m.uniforms.uTime.value = t
-        m.uniforms.uOpacity.value = cfg.shaftIntensity * (0.42 + 0.1 * Math.sin(t * 1.3 + i))
+        m.uniforms.uOpacity.value = cfg.shaftIntensity * (0.3 + 0.06 * Math.sin(t * 1.1 + i * 1.7))
       })
     }
   }
@@ -221,24 +225,46 @@ function buildHypergrowth(b: StageBuild, cfg: StageConfig, flags: QualityFlags) 
       b.add(arm)
     }
   }
-  // rocket body
+  // rocket body — panelled two-tone metal with a dark base and fins
   const rocket = new THREE.Mesh(
-    new THREE.CylinderGeometry(1.6, 1.9, 14, 24),
-    structureMat({ color: 0xd8e4ee, roughness: 0.4, metalness: 0.5 }),
+    new THREE.CylinderGeometry(1.5, 1.75, 13, 28, 4),
+    structureMat({ color: 0xe8eef4, roughness: 0.35, metalness: 0.6 }),
   )
-  rocket.position.set(0, 7, -13.5)
+  rocket.position.set(0, 7.5, -13.5)
   rocket.castShadow = true
   b.add(rocket)
-  const nose = new THREE.Mesh(new THREE.ConeGeometry(1.6, 3.2, 24), structureMat({ color: 0xc0ccd8, roughness: 0.4, metalness: 0.5 }))
-  nose.position.set(0, 15.6, -13.5)
+  // charcoal band + engine skirt
+  const band = new THREE.Mesh(new THREE.CylinderGeometry(1.62, 1.62, 1.6, 28), structureMat({ color: 0x2a3138, roughness: 0.5, metalness: 0.7 }))
+  band.position.set(0, 4.4, -13.5)
+  b.add(band)
+  const skirt = new THREE.Mesh(new THREE.CylinderGeometry(1.75, 2.2, 1.4, 28), structureMat({ color: 0x14181c, roughness: 0.6, metalness: 0.7 }))
+  skirt.position.set(0, 1.4, -13.5)
+  skirt.castShadow = true
+  b.add(skirt)
+  // accent stripe
+  const stripe = new THREE.Mesh(new THREE.CylinderGeometry(1.53, 1.6, 0.5, 28), glowMat(0x66e6ff, 0.5))
+  stripe.position.set(0, 9.5, -13.5)
+  b.add(stripe)
+  // fins
+  for (let k = 0; k < 3; k++) {
+    const ang = (k / 3) * Math.PI * 2
+    const fin = new THREE.Mesh(new THREE.BoxGeometry(0.18, 2.6, 1.7), structureMat({ color: 0xb8c2cc, roughness: 0.4, metalness: 0.6 }))
+    fin.position.set(Math.cos(ang) * 1.55, 2.1, -13.5 + Math.sin(ang) * 1.55)
+    fin.rotation.y = -ang
+    fin.castShadow = true
+    b.add(fin)
+  }
+  const nose = new THREE.Mesh(new THREE.ConeGeometry(1.5, 3.0, 28), structureMat({ color: 0xd0d8e0, roughness: 0.35, metalness: 0.6 }))
+  nose.position.set(0, 15.5, -13.5)
+  nose.castShadow = true
   b.add(nose)
   // engine glow
-  const glow = new THREE.Mesh(new THREE.CircleGeometry(1.7, 24), glowMat(0x66e6ff, 0.8))
+  const glow = new THREE.Mesh(new THREE.CircleGeometry(1.9, 24), glowMat(0x66e6ff, 0.8))
   glow.position.set(0, 0.18, -13.5)
   glow.rotation.x = -Math.PI / 2
   b.add(glow)
-  const shaft = lightShaft(1.1, 2.0, 4.5, 0x66e6ff, 0.28)
-  shaft.position.set(0, 1.9, -13.5)
+  const shaft = lightShaft(1.3, 2.3, 4.2, 0x66e6ff, 0.24)
+  shaft.position.set(0, 1.7, -13.5)
   b.add(shaft)
   b.onUpdate((t) => {
     ;(glow.material as THREE.MeshBasicMaterial).opacity = 0.55 + 0.25 * Math.abs(Math.sin(t * 4))
@@ -317,17 +343,38 @@ function buildAiNative(b: StageBuild, cfg: StageConfig, flags: QualityFlags) {
   board.mesh.position.set(0, 5.5, -14)
   b.add(board.mesh)
   b.onUpdate((t) => (board.mat.uniforms.uTime.value = t))
-  // floating hologram rings above the stage
+  // holographic "model" — a wireframe globe with orbiting rings on a projector
+  // plinth, set behind the play space so it reads as datacenter set-dressing.
+  const holoX = 0, holoY = 4.0, holoZ = -11.5
+  const plinth = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.7, 1.0, 1.2, 20),
+    structureMat({ color: s, roughness: 0.5, metalness: 0.6, emissive: cfg.trim, emissiveIntensity: 0.25 }),
+  )
+  plinth.position.set(holoX, 0.6, holoZ)
+  b.add(plinth)
+  const globe = new THREE.Mesh(
+    new THREE.IcosahedronGeometry(1.5, 2),
+    new THREE.MeshBasicMaterial({ color: 0x00e5ff, wireframe: true, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, depthWrite: false, fog: false, toneMapped: false }),
+  )
+  globe.position.set(holoX, holoY, holoZ)
+  b.add(globe)
+  const projShaft = lightShaft(1.6, 0.5, 3.4, 0x00e5ff, 0.14)
+  projShaft.position.set(holoX, 2.1, holoZ)
+  projShaft.rotation.z = Math.PI
+  b.add(projShaft)
   for (let i = 0; i < 3; i++) {
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(1.4 + i * 0.5, 0.03, 8, 48), glowMat(0x00e5ff, 0.6 - i * 0.12))
-    ring.position.set(0, 3.2 + i * 0.4, -3)
-    ring.rotation.x = Math.PI / 2.2
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(1.9 + i * 0.32, 0.025, 8, 48), glowMat(0x59ffe0, 0.5 - i * 0.1))
+    ring.position.set(holoX, holoY, holoZ)
+    ring.rotation.x = Math.PI / 2.4 + i * 0.3
     b.add(ring)
     b.onUpdate((t) => {
-      ring.rotation.z = t * (0.2 + i * 0.1)
-      ring.position.y = 3.2 + i * 0.4 + Math.sin(t * 0.8 + i) * 0.1
+      ring.rotation.z = t * (0.3 + i * 0.15) * (i % 2 === 0 ? 1 : -1)
     })
   }
+  b.onUpdate((t) => {
+    globe.rotation.y = t * 0.3
+    ;(projShaft.material as THREE.ShaderMaterial).uniforms.uTime.value = t
+  })
   overheadRig(b, cfg, flags, cfg.shaftColor)
   foreground(b)
 }
@@ -368,15 +415,24 @@ function buildCrisis(b: StageBuild, cfg: StageConfig, flags: QualityFlags) {
   // THE WAR ROOM — red-alert command center: a wall of alarm screens, a
   // situation table, rotating warning beacons, harsh red practicals.
   screenWall(b, 4, 3, 2.3, 1.4, new THREE.Vector3(0, 6.0, -14.5), ['alert', 'data', 'ekg', 'grid', 'alert', 'ticker', 'data', 'alert', 'grid', 'alert', 'data', 'ekg'], cfg.screen.hue, cfg.screen.hue2, 3)
-  // situation table (glowing map)
-  const table = new THREE.Mesh(new THREE.CylinderGeometry(2.4, 2.6, 0.4, 24), structureMat({ color: 0x1a0e0e, roughness: 0.6, metalness: 0.5 }))
-  table.position.set(0, 0.6, -6)
+  // situation table (glowing holo-map) — pushed back behind the play space and
+  // brightened so it reads as a raised holo-table, not a hole in the floor.
+  const table = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.5, 0.9, 28), structureMat({ color: 0x1a0e0e, roughness: 0.6, metalness: 0.5 }))
+  table.position.set(0, 0.45, -10)
+  table.castShadow = true
   b.add(table)
-  const map = makeScreen(4.2, 4.2, 'grid', 0xff5a3c, 0xffb03c, 0.8, 9)
-  map.mesh.position.set(0, 0.82, -6)
+  const map = makeScreen(3.9, 3.9, 'grid', 0xff6a4c, 0xffc04c, 1.5, 9)
+  map.mesh.position.set(0, 0.92, -10)
   map.mesh.rotation.x = -Math.PI / 2
   b.add(map.mesh)
-  b.onUpdate((t) => (map.mat.uniforms.uTime.value = t))
+  const mapRing = new THREE.Mesh(new THREE.TorusGeometry(2.0, 0.08, 8, 32), glowMat(0xff5a3c, 0.85))
+  mapRing.position.set(0, 0.92, -10)
+  mapRing.rotation.x = Math.PI / 2
+  b.add(mapRing)
+  b.onUpdate((t) => {
+    map.mat.uniforms.uTime.value = t
+    ;(mapRing.material as THREE.MeshBasicMaterial).opacity = 0.6 + 0.3 * Math.sin(t * 3.0)
+  })
   // rotating warning beacons
   for (const sign of [-1, 1]) {
     const post = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 8, 8), structureMat({ color: cfg.structure, roughness: 0.7, metalness: 0.5 }))
@@ -430,12 +486,27 @@ function buildIpoPrep(b: StageBuild, cfg: StageConfig, flags: QualityFlags) {
       b.add(cap)
     }
   }
-  // bell dais glow
-  const dais = makeScreen(3, 3, 'grid', cfg.trim, cfg.screen.hue2, 0.7, 4)
-  dais.mesh.position.set(0, 0.05, -4)
-  dais.mesh.rotation.x = -Math.PI / 2
-  b.add(dais.mesh)
-  b.onUpdate((t) => (dais.mat.uniforms.uTime.value = t))
+  // opening-bell podium — a raised, glowing dais set BEHIND the play space so
+  // it never reads as a hole punched in the floor.
+  const podium = new THREE.Mesh(
+    new THREE.CylinderGeometry(1.7, 2.1, 1.1, 28),
+    structureMat({ color: 0x1a2436, roughness: 0.4, metalness: 0.6 }),
+  )
+  podium.position.set(0, 0.55, -10.5)
+  podium.castShadow = true
+  b.add(podium)
+  const podiumTop = makeScreen(2.6, 2.6, 'grid', cfg.trim, cfg.screen.hue2, 1.3, 4)
+  podiumTop.mesh.position.set(0, 1.12, -10.5)
+  podiumTop.mesh.rotation.x = -Math.PI / 2
+  b.add(podiumTop.mesh)
+  const podiumRing = new THREE.Mesh(new THREE.TorusGeometry(1.75, 0.09, 8, 32), glowMat(cfg.trim, 0.9))
+  podiumRing.position.set(0, 1.12, -10.5)
+  podiumRing.rotation.x = Math.PI / 2
+  b.add(podiumRing)
+  b.onUpdate((t) => {
+    podiumTop.mat.uniforms.uTime.value = t
+    ;(podiumRing.material as THREE.MeshBasicMaterial).opacity = 0.7 + 0.25 * Math.sin(t * 2.2)
+  })
   overheadRig(b, cfg, flags, cfg.shaftColor)
   foreground(b)
 }

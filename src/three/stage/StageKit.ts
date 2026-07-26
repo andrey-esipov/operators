@@ -289,15 +289,24 @@ export function lightShaft(topR: number, botR: number, height: number, color: nu
       float hash(vec2 p){ p=fract(p*vec2(233.34,851.73)); p+=dot(p,p+23.45); return fract(p.x*p.y); }
       float n(vec2 p){ vec2 i=floor(p),f=fract(p); f=f*f*(3.-2.*f);
         return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x),f.y);}
+      float fbm(vec2 p){ float a=.5,s=0.; for(int i=0;i<4;i++){s+=a*n(p);p*=2.03;a*=.5;} return s; }
       void main(){
-        // brightest at the top (source), fades to the floor
-        float vert = smoothstep(0.0, 0.85, vUv.y);
-        // soft radial edge (cone walls fall off toward the silhouette edge)
-        float edge = sin(vUv.x*3.14159);
-        edge = pow(edge, 1.4);
-        float dust = n(vec2(vUv.x*8.0, vUv.y*3.0 - uTime*0.25));
-        float a = vert * edge * (0.7 + dust*0.5) * uOpacity;
-        gl_FragColor = vec4(uColor * (0.6+dust*0.6), a);
+        // Vertical falloff: bright near the source (top), dissolving before it
+        // reaches the floor so it never reads as a solid cut cylinder.
+        float top = smoothstep(0.0, 0.35, vUv.y);
+        float bottomFade = smoothstep(0.0, 0.4, 1.0 - vUv.y);
+        float vert = top * (0.25 + 0.75*bottomFade);
+        // Soft round core across the cone silhouette (no hard vector edge).
+        float core = sin(vUv.x*3.14159);
+        core = pow(max(core, 0.0), 2.6);
+        // God-ray striations — thin bright/dark slats broken up by noise.
+        float slat = 0.6 + 0.4*sin(vUv.x*46.0 + hash(vec2(floor(vUv.x*8.0),1.0))*6.28);
+        float dust = fbm(vec2(vUv.x*6.0, vUv.y*3.5 - uTime*0.28));
+        float dust2 = fbm(vec2(vUv.x*13.0 + 4.0, vUv.y*6.0 - uTime*0.15));
+        float body = core * slat * (0.45 + 0.75*dust) * (0.7 + 0.5*dust2);
+        float a = vert * body * uOpacity;
+        vec3 c = uColor * (0.55 + 0.7*dust);
+        gl_FragColor = vec4(c, a);
       }
     `,
   })

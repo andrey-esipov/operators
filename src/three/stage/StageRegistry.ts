@@ -96,7 +96,7 @@ export const STAGES: Record<ScenarioId, StageConfig> = {
     structure: 0x211a26,
     screen: { hue: 0xff9d3c, hue2: 0x36e0ff },
     floorRoughness: 0.5,
-    floorTint: 0x9c8f7a,
+    floorTint: 0xcabfa8,
     practicals: [
       { pos: [-5.5, 4.6, -7], color: 0xffb257, intensity: 22, distance: 20 },
       { pos: [5.2, 3.2, -6], color: 0xffd9a0, intensity: 14, distance: 16 },
@@ -125,7 +125,7 @@ export const STAGES: Record<ScenarioId, StageConfig> = {
     structure: 0x14202e,
     screen: { hue: 0x2ffbd0, hue2: 0x59c8ff },
     floorRoughness: 0.16,
-    floorTint: 0x86b4c8,
+    floorTint: 0xbcd8ec,
     practicals: [
       { pos: [-6, 5, -8], color: 0x33e0ff, intensity: 26, distance: 24 },
       { pos: [6, 5, -8], color: 0x2ffbd0, intensity: 26, distance: 24 },
@@ -154,7 +154,7 @@ export const STAGES: Record<ScenarioId, StageConfig> = {
     structure: 0x1c1430,
     screen: { hue: 0xf72585, hue2: 0x9d4edd },
     floorRoughness: 0.32,
-    floorTint: 0xa088b0,
+    floorTint: 0xcbb2dc,
     practicals: [
       { pos: [-5.5, 4, -7], color: 0xf72585, intensity: 20, distance: 20 },
       { pos: [5.5, 4, -7], color: 0x9d4edd, intensity: 20, distance: 20 },
@@ -183,7 +183,7 @@ export const STAGES: Record<ScenarioId, StageConfig> = {
     structure: 0x0a1b24,
     screen: { hue: 0x00e5ff, hue2: 0x59ffb0 },
     floorRoughness: 0.1,
-    floorTint: 0x7fc8d8,
+    floorTint: 0xb8e6f2,
     practicals: [
       { pos: [-6.5, 4.5, -9], color: 0x00e5ff, intensity: 24, distance: 26 },
       { pos: [6.5, 4.5, -9], color: 0x59ffe0, intensity: 24, distance: 26 },
@@ -212,7 +212,7 @@ export const STAGES: Record<ScenarioId, StageConfig> = {
     structure: 0x241528,
     screen: { hue: 0xffd60a, hue2: 0x2fe08a },
     floorRoughness: 0.26,
-    floorTint: 0xb0a878,
+    floorTint: 0xdccca0,
     practicals: [
       { pos: [-5.5, 4.2, -7], color: 0xffd60a, intensity: 22, distance: 20 },
       { pos: [5.5, 4.2, -7], color: 0xffe9a0, intensity: 18, distance: 18 },
@@ -241,7 +241,7 @@ export const STAGES: Record<ScenarioId, StageConfig> = {
     structure: 0x1e1416,
     screen: { hue: 0xef233c, hue2: 0xff7a3c },
     floorRoughness: 0.4,
-    floorTint: 0xa07068,
+    floorTint: 0xcc9a90,
     practicals: [
       { pos: [-5.5, 4, -7], color: 0xef233c, intensity: 22, distance: 20 },
       { pos: [5.5, 4, -7], color: 0xff5a3c, intensity: 18, distance: 18 },
@@ -270,7 +270,7 @@ export const STAGES: Record<ScenarioId, StageConfig> = {
     structure: 0x121d2e,
     screen: { hue: 0xfcbf49, hue2: 0x59c8ff },
     floorRoughness: 0.14,
-    floorTint: 0xb8b088,
+    floorTint: 0xdcd2ac,
     practicals: [
       { pos: [-6, 4.6, -8], color: 0xfcbf49, intensity: 22, distance: 22 },
       { pos: [6, 4.6, -8], color: 0xffe0a0, intensity: 20, distance: 22 },
@@ -299,7 +299,7 @@ export const STAGES: Record<ScenarioId, StageConfig> = {
     structure: 0x241a12,
     screen: { hue: 0xffb03c, hue2: 0x36c8ff },
     floorRoughness: 0.4,
-    floorTint: 0xa89070,
+    floorTint: 0xd4b890,
     practicals: [
       { pos: [-5.8, 4.2, -7], color: 0xffb03c, intensity: 22, distance: 20 },
       { pos: [5.8, 4.2, -7], color: 0xffd08a, intensity: 18, distance: 18 },

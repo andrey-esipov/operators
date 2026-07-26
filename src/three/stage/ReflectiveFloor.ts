@@ -157,6 +157,8 @@ function floorMaterial(): THREE.ShaderMaterial {
       uImpact2: { value: new THREE.Vector4(0, 0, 0, 0) },
       uCamPos: { value: new THREE.Vector3() },
       uArena: { value: new THREE.Vector2(6.2, 4.6) },
+      uContactA: { value: new THREE.Vector2(100, 100) },
+      uContactB: { value: new THREE.Vector2(100, 100) },
     },
     vertexShader: /* glsl */ `
       uniform mat4 textureMatrix;
@@ -192,6 +194,7 @@ function floorMaterial(): THREE.ShaderMaterial {
       uniform vec4 uImpact; uniform vec4 uImpact2;
       uniform vec3 uCamPos;
       uniform vec2 uArena;
+      uniform vec2 uContactA; uniform vec2 uContactB;
 
       float hash(vec2 p){ p=fract(p*vec2(233.34,851.73)); p+=dot(p,p+23.45); return fract(p.x*p.y); }
       float vnoise(vec2 p){
@@ -244,14 +247,29 @@ function floorMaterial(): THREE.ShaderMaterial {
         vec3 refl = vec3(0.0);
         if (uHasRefl > 0.5) {
           vec2 ruv = vReflUv.xy / max(vReflUv.w, 1e-4);
-          vec2 jit = grad * (uRoughness * 0.09) + (wear-0.5) * uRoughness * 0.02;
+          // Vertical smear + micro-jitter = wet-sealed floor, not a hard mirror.
+          vec2 jit = grad * (uRoughness * 0.06) + (wear-0.5) * uRoughness * 0.015;
+          jit.y += uRoughness * 0.012;
           vec3 r0 = texture2D(tDiffuse, ruv + jit).rgb;
-          vec3 r1 = texture2D(tDiffuse, ruv + jit*2.0).rgb;
+          vec3 r1 = texture2D(tDiffuse, ruv + jit*2.2 + vec2(0.0, 0.01)).rgb;
           refl = mix(r0, r1, uRoughness*0.5) * uReflTint;
+          // Lift so dark reflected geometry still separates from the base.
+          refl += refl*refl*0.4;
         }
-        float fres = pow(1.0 - clamp(dot(vec3(0.0,1.0,0.0), V), 0.0, 1.0), 3.5);
-        float reflAmt = uReflectivity * (0.28 + 0.72*fres);
-        reflAmt *= 1.0 - smoothstep(10.0, 30.0, rad);
+        float fres = pow(1.0 - clamp(dot(vec3(0.0,1.0,0.0), V), 0.0, 1.0), 3.0);
+
+        // Contact: soft elliptical darkening + reflection gain directly under
+        // each fighter so the sprites read as planted on a wet surface.
+        float contact = 0.0;
+        vec2 ea = (P - uContactA) / vec2(0.95, 0.72);
+        contact = max(contact, 1.0 - smoothstep(0.0, 1.0, length(ea)));
+        vec2 eb = (P - uContactB) / vec2(0.95, 0.72);
+        contact = max(contact, 1.0 - smoothstep(0.0, 1.0, length(eb)));
+        float contactCore = contact*contact;
+
+        float reflAmt = uReflectivity * (0.5 + 0.5*fres);
+        reflAmt = clamp(reflAmt + contactCore * 0.3, 0.0, 0.96);
+        reflAmt *= 1.0 - smoothstep(14.0, 34.0, rad);
 
         vec3 H = normalize(normalize(uKeyDir) + V);
         float spec = pow(max(dot(N, H), 0.0), mix(80.0, 900.0, 1.0-uRoughness));
@@ -268,6 +286,9 @@ function floorMaterial(): THREE.ShaderMaterial {
         if (uImpact2.w > 0.001){ float d=length(P-uImpact2.xy); ring += smoothstep(0.4,0.0,abs(d-uImpact2.z))*uImpact2.w; }
 
         vec3 col = diff + grid + trim + sheen + flash + uTrimColor*ring*2.0;
+        // Contact shadow: pull the base down under each fighter (kept off the
+        // glowing grid/trim so only the surface darkens).
+        col *= 1.0 - contactCore * 0.5;
         col = mix(col, refl, reflAmt);
         col += sheen*0.35 + trim*0.4;
 
@@ -322,6 +343,12 @@ export class ReflectiveFloor {
 
   setArena(halfX: number, halfZ: number) {
     ;(this.material.uniforms.uArena.value as THREE.Vector2).set(halfX, halfZ)
+  }
+
+  /** Live fighter ground positions → contact shadow + reflection gain. */
+  setContacts(a: THREE.Vector3, b: THREE.Vector3) {
+    ;(this.material.uniforms.uContactA.value as THREE.Vector2).set(a.x, a.z)
+    ;(this.material.uniforms.uContactB.value as THREE.Vector2).set(b.x, b.z)
   }
 
   syncLighting(d: LightingDescription, camPos: THREE.Vector3, fogColor: number, fogDensity: number) {

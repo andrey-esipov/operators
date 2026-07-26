@@ -84,8 +84,37 @@ export function Announcer({ moment }: Props) {
 function Impact({ m }: { m: AnnounceMoment }) {
   const s = resolve(m)
   const hasBurst = m.kind === 'ko' || m.kind === 'perfect' || m.kind === 'fight' || m.kind === 'double-ko'
+  const takeover =
+    m.kind === 'ko' || m.kind === 'double-ko' || m.kind === 'perfect' ||
+    m.kind === 'win' || m.kind === 'time-up'
   return (
     <div style={{ position: 'relative', textAlign: 'center' }}>
+      {/* Full-screen darkening vignette so the moment owns the frame. */}
+      {takeover && (
+        <motion.div
+          className="fh-takeover"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.18, ease: 'easeOut' }}
+        />
+      )}
+      {/* Cinematic letterbox bars snap in from top and bottom. */}
+      {takeover && (
+        <>
+          <motion.div
+            className="fh-letterbox top"
+            initial={{ transform: 'translateY(-100%)' }}
+            animate={{ transform: 'translateY(0%)' }}
+            transition={{ duration: 0.34, ease: [0.16, 1, 0.3, 1] }}
+          />
+          <motion.div
+            className="fh-letterbox bot"
+            initial={{ transform: 'translateY(100%)' }}
+            animate={{ transform: 'translateY(0%)' }}
+            transition={{ duration: 0.34, ease: [0.16, 1, 0.3, 1] }}
+          />
+        </>
+      )}
       {/* Radial speed-line burst for heavy impact moments. */}
       {hasBurst && (
         <motion.div

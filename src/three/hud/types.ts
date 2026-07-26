@@ -98,6 +98,8 @@ export interface MoveCardData {
   cost: number
   hotkey?: string
   disabled?: boolean
+  /** Highlighted as the player's current selection — lifts and glows. */
+  selected?: boolean
   /** For ultimates: super meter is full. */
   ready?: boolean
   onSelect?: () => void

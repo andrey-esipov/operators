@@ -118,7 +118,7 @@ const SCENES: Record<string, Scene> = {
           { id: 'm1', name: 'Use Your Own Product', kind: 'light', damage: 14, cost: 1, hotkey: 'Z' },
           { id: 'm2', name: '6-Week Sprint', kind: 'heavy', damage: 32, cost: 2, hotkey: 'X' },
           { id: 'm3', name: 'Founder Mode', kind: 'setup', damage: 0, cost: 2, hotkey: 'C' },
-          { id: 'm4', name: 'Air-Design', kind: 'combo', damage: 41, cost: 3, hotkey: 'V' },
+          { id: 'm4', name: 'Air-Design', kind: 'combo', damage: 41, cost: 3, hotkey: 'V', selected: true },
           { id: 'm5', name: 'Air Is A City', kind: 'ultimate', damage: 88, cost: 5, hotkey: 'B', ready: true },
         ],
       },

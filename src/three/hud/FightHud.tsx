@@ -106,8 +106,10 @@ export function FightHud({
         {!state.cinematic && <ComboCounter combo={combo} />}
         <DamageNumbers numbers={damageNumbers} />
         <MoveDeck deck={moveDeck} />
-        <Announcer moment={announce} />
       </div>
+      {/* Announcer lives at the true viewport root so its full-screen takeover
+          (vignette + letterbox) is not distorted by the HUD scale transform. */}
+      <Announcer moment={announce} />
     </div>
   )
 }

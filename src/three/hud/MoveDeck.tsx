@@ -32,11 +32,12 @@ export function MoveDeck({ deck }: Props) {
             key={card.id}
             className={`fh-card ${card.disabled ? 'disabled' : ''} ${isUlt ? 'ult' : ''} ${
               isUlt && card.ready ? 'ready' : ''
-            }`}
+            } ${card.selected ? 'selected' : ''}`}
             style={{ ['--ck' as string]: color }}
             initial={{ opacity: 0, y: 40 }}
-            animate={{ opacity: 1, y: 0 }}
+            animate={{ opacity: 1, y: card.selected ? -20 : 0, scale: card.selected ? 1.07 : 1 }}
             transition={{ delay: 0.05 * i, type: 'spring', stiffness: 320, damping: 26 }}
+            whileHover={card.disabled ? undefined : { y: card.selected ? -24 : -10, scale: card.selected ? 1.09 : 1.05 }}
             whileTap={card.disabled ? undefined : { scale: 0.95, y: -4 }}
             onClick={() => !card.disabled && card.onSelect?.()}
             disabled={card.disabled}

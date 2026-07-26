@@ -49,15 +49,26 @@ export interface ImpactOpts {
   seed?: number // deterministic noise (offline)
 }
 
+type NoiseColor = 'white' | 'pink' | 'brown' | 'blue'
+
 interface HitSpec {
   gain: number
-  /** How hard the bypass click punches (multiplier). Lower = more body-forward. */
-  clickPunch?: number
-  transient: { level: number; hp: number; dur: number; color: 'white' | 'blue' | 'pink' }
-  body: { level: number; f0: number; f1: number; dur: number; type: OscillatorType }
+  /**
+   * CONTACT TRANSIENT — a differentiated broadband crack (NOT a universal
+   * needle). `attack` (s) authors the rising edge (0.3–1.8ms) so each flavour
+   * has its own snap; `level*punch` is its amplitude; `hp`/`lp` shape its
+   * timbre. Bypasses the per-hit drive so it stays a sharp spike.
+   */
+  crack: { level: number; punch: number; hp: number; lp?: number; attack: number; dur: number; color: NoiseColor }
+  /** High-passed noise sizzle tail riding the attack (stereo air; goes through drive). */
+  sizzle?: { level: number; hp: number; dur: number; color: NoiseColor; spread?: number }
+  /** Pitch-swept body thump; `partial`/`partialLevel` add an inharmonic mode so it isn't a pure sine. */
+  body: { level: number; f0: number; f1: number; dur: number; type: OscillatorType; partial?: number; partialLevel?: number }
+  /** Lowpassed noise burst co-located with the body — roughens the low end (kills the clean sine rail). */
+  bodyGrit?: { level: number; lp: number; dur: number }
   sub?: { level: number; f0: number; f1: number; dur: number }
-  texture: { level: number; bp: number; q: number; dur: number; color: 'white' | 'pink' | 'brown' | 'blue'; decayPow: number }
-  ring?: { level: number; partials: number[]; dur: number; type?: OscillatorType }
+  texture: { level: number; bp: number; q: number; dur: number; color: NoiseColor; spread?: number; haas?: number }
+  ring?: { level: number; partials: number[]; dur: number; type?: OscillatorType; spread?: number }
   drive: number // 0..1 waveshaper aggression
   reverbSend: number
 }
@@ -102,45 +113,53 @@ function oneHit(
 
   let end = when
 
-  // 1) TRANSIENT — the snap. A dominant full-band CLICK (this is the peak, ~1ms)
-  //    plus a high-passed SIZZLE tail. The click bypasses the per-hit drive/
-  //    saturation so it stays a sharp spike and reads as a <2ms attack.
+  // 1) CONTACT TRANSIENT — the crack. A differentiated broadband spike that
+  //    OWNS the peak, with an AUTHORED rising edge (0.3–1.8ms, per flavour) so
+  //    it doesn't read as the same universal needle. Bypasses the per-hit drive
+  //    so saturation can't flatten it, and carries a high-passed sizzle tail.
   {
-    const t = spec.transient
-    // (a) CLICK — very short broadband spike straight to the dry output.
-    const cb = noiseBuffer(ctx, 0.01, { color: 'white', seed: seed + 5 })
-    const click = bufferVoice(ctx, cb)
-    const chp = ctx.createBiquadFilter(); chp.type = 'highpass'; chp.frequency.value = 350; chp.Q.value = 0.5
+    const c = spec.crack
+    const cb = noiseBuffer(ctx, Math.max(0.012, c.dur * 2), { color: c.color, seed: seed + 5 })
+    const crack = bufferVoice(ctx, cb)
+    const chp = ctx.createBiquadFilter(); chp.type = 'highpass'; chp.frequency.value = c.hp; chp.Q.value = 0.5
     const cpan = ctx.createStereoPanner(); cpan.pan.value = clamp(pan, -1, 1)
-    click.gain.disconnect(); click.src.connect(click.gain); click.gain.connect(chp); chp.connect(cpan); cpan.connect(routing.out)
+    crack.gain.disconnect(); crack.src.connect(crack.gain); crack.gain.connect(chp)
+    let ctail: AudioNode = chp
+    if (c.lp) { const clp = ctx.createBiquadFilter(); clp.type = 'lowpass'; clp.frequency.value = c.lp; chp.connect(clp); ctail = clp }
+    ctail.connect(cpan); cpan.connect(routing.out)
     if (routing.reverb && spec.reverbSend > 0) {
-      const cs = ctx.createGain(); cs.gain.value = spec.reverbSend * 0.5
+      const cs = ctx.createGain(); cs.gain.value = spec.reverbSend * 0.45
       cpan.connect(cs); cs.connect(routing.reverb)
     }
-    click.gain.gain.setValueAtTime(t.level * spec.gain * (spec.clickPunch ?? 3.2), when)
-    click.gain.gain.exponentialRampToValueAtTime(0.0001, when + 0.0025)
-    click.src.start(when); click.src.stop(when + 0.012)
-    // (b) SIZZLE — high-passed noise for texture on the attack.
-    const nb = noiseBuffer(ctx, Math.max(0.02, t.dur * 2), { color: t.color, seed })
-    const { src, gain } = bufferVoice(ctx, nb)
-    const hp = ctx.createBiquadFilter()
-    hp.type = 'highpass'
-    hp.frequency.value = t.hp
-    hp.Q.value = 0.6
-    src.connect(gain)
-    gain.disconnect()
-    gain.connect(hp)
-    hp.connect(g)
-    gain.gain.setValueAtTime(0.0001, when)
-    gain.gain.linearRampToValueAtTime(t.level * 0.7, when + 0.0006)
-    gain.gain.exponentialRampToValueAtTime(0.0001, when + t.dur)
-    src.start(when)
-    src.stop(when + t.dur + 0.01)
-    end = Math.max(end, when + t.dur)
+    const peak = c.level * spec.gain * c.punch
+    crack.gain.gain.setValueAtTime(0.0001, when)
+    crack.gain.gain.linearRampToValueAtTime(peak, when + c.attack) // authored rise
+    crack.gain.gain.exponentialRampToValueAtTime(0.0001, when + c.attack + c.dur)
+    crack.src.start(when); crack.src.stop(when + c.attack + c.dur + 0.01)
+
+    if (spec.sizzle) {
+      const s = spec.sizzle
+      // Two decorrelated HP-noise voices panned L/R — adds stereo air to every
+      // hit without touching the mono low-end punch.
+      const sp = s.spread ?? 0.8
+      for (const side of [-sp, sp]) {
+        const nb = noiseBuffer(ctx, Math.max(0.02, s.dur * 2), { color: s.color, seed: seed + (side < 0 ? 0 : 128) })
+        const { src, gain } = bufferVoice(ctx, nb)
+        const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = s.hp; hp.Q.value = 0.6
+        const spn = ctx.createStereoPanner(); spn.pan.value = clamp(pan + side, -1, 1)
+        src.connect(gain); gain.disconnect(); gain.connect(hp); hp.connect(spn); spn.connect(g)
+        gain.gain.setValueAtTime(0.0001, when)
+        gain.gain.linearRampToValueAtTime(s.level * 0.5, when + 0.0006)
+        gain.gain.exponentialRampToValueAtTime(0.0001, when + s.dur)
+        src.start(when); src.stop(when + s.dur + 0.01)
+        end = Math.max(end, when + s.dur)
+      }
+    }
   }
 
-  // 2) BODY — pitch-swept sine thump, the weight. Delayed ~1.6ms so the click
-  //    owns the very first transient sample (defined <2ms attack), then blooms.
+  // 2) BODY — pitch-swept thump. Delayed ~1.6ms so the crack owns the first
+  //    sample. Carries an optional INHARMONIC partial + a lowpassed noise GRIT
+  //    burst so the low end is a physical thwack, not a clean sine rail.
   {
     const b = spec.body
     const bWhen = when + 0.0016
@@ -151,12 +170,34 @@ function oneHit(
     gain.gain.setValueAtTime(0.0001, bWhen)
     gain.gain.linearRampToValueAtTime(b.level, bWhen + 0.004)
     gain.gain.exponentialRampToValueAtTime(0.0001, bWhen + b.dur)
-    osc.start(bWhen)
-    osc.stop(bWhen + b.dur + 0.02)
+    osc.start(bWhen); osc.stop(bWhen + b.dur + 0.02)
     end = Math.max(end, bWhen + b.dur)
+
+    if (b.partial && b.partialLevel) {
+      const p2 = oscVoice(ctx, 'sine', b.f0 * b.partial)
+      p2.osc.frequency.setValueAtTime(b.f0 * b.partial, bWhen)
+      p2.osc.frequency.exponentialRampToValueAtTime(Math.max(30, b.f1 * b.partial), bWhen + b.dur * 0.7)
+      p2.gain.connect(g)
+      p2.gain.gain.setValueAtTime(0.0001, bWhen)
+      p2.gain.gain.linearRampToValueAtTime(b.partialLevel, bWhen + 0.004)
+      p2.gain.gain.exponentialRampToValueAtTime(0.0001, bWhen + b.dur * 0.7)
+      p2.osc.start(bWhen); p2.osc.stop(bWhen + b.dur * 0.7 + 0.02)
+    }
+
+    if (spec.bodyGrit) {
+      const bg = spec.bodyGrit
+      const nb = noiseBuffer(ctx, Math.max(0.03, bg.dur * 1.5), { color: 'brown', seed: seed + 71 })
+      const { src, gain: gg } = bufferVoice(ctx, nb)
+      const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = bg.lp; lp.Q.value = 0.7
+      src.connect(gg); gg.disconnect(); gg.connect(lp); lp.connect(g)
+      gg.gain.setValueAtTime(0.0001, bWhen)
+      gg.gain.linearRampToValueAtTime(bg.level, bWhen + 0.002)
+      gg.gain.exponentialRampToValueAtTime(0.0001, bWhen + bg.dur)
+      src.start(bWhen); src.stop(bWhen + bg.dur + 0.02)
+    }
   }
 
-  // 3) SUB — chest-punch, big hits only. Blooms just after the click.
+  // 3) SUB — chest-punch, big hits only. Mono (kept centre for a solid low end).
   if (spec.sub) {
     const s = spec.sub
     const sWhen = when + 0.0025
@@ -167,57 +208,60 @@ function oneHit(
     gain.gain.setValueAtTime(0.0001, sWhen)
     gain.gain.linearRampToValueAtTime(s.level, sWhen + 0.008)
     gain.gain.exponentialRampToValueAtTime(0.0001, sWhen + s.dur)
-    osc.start(sWhen)
-    osc.stop(sWhen + s.dur + 0.02)
+    osc.start(sWhen); osc.stop(sWhen + s.dur + 0.02)
     end = Math.max(end, sWhen + s.dur)
   }
 
-  // 4) TEXTURE — broadband noise crunch, rendered as TWO decorrelated voices
-  //    panned L/R (different centres + seeds) for width and spectral spread.
+  // 4) TEXTURE — broadband noise crunch as TWO decorrelated voices panned L/R
+  //    (different centres + seeds), with an optional Haas delay on one side to
+  //    widen the stereo image. Sub/body stay mono; the "air" spreads.
   {
     const x = spec.texture
-    const spread = 0.6
-    const voices: Array<{ mult: number; pan: number; seed: number }> = [
-      { mult: 0.55, pan: -spread, seed: seed + 31 },
-      { mult: 1.7, pan: spread, seed: seed + 61 },
+    const spread = x.spread ?? 0.7
+    const haas = x.haas ?? 0
+    const voices: Array<{ mult: number; pan: number; seed: number; delay: number }> = [
+      { mult: 0.55, pan: -spread, seed: seed + 31, delay: 0 },
+      { mult: 1.7, pan: spread, seed: seed + 61, delay: haas },
     ]
     for (const v of voices) {
       const nb = noiseBuffer(ctx, Math.max(0.05, x.dur * 1.3), { color: x.color, seed: v.seed })
       const { src, gain } = bufferVoice(ctx, nb)
-      const bp = ctx.createBiquadFilter()
-      bp.type = 'bandpass'
-      bp.frequency.value = x.bp * v.mult
-      bp.Q.value = x.q * 0.7
+      const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = x.bp * v.mult; bp.Q.value = x.q * 0.7
       const vp = ctx.createStereoPanner(); vp.pan.value = clamp(pan + v.pan, -1, 1)
-      gain.disconnect()
-      src.connect(gain)
-      gain.connect(bp)
-      bp.connect(vp)
-      vp.connect(g)
+      gain.disconnect(); src.connect(gain); gain.connect(bp)
+      let vtail: AudioNode = bp
+      if (v.delay > 0) { const d = ctx.createDelay(0.05); d.delayTime.value = v.delay; bp.connect(d); vtail = d }
+      vtail.connect(vp); vp.connect(g)
       bp.frequency.setValueAtTime(x.bp * v.mult * 1.4, when)
       bp.frequency.exponentialRampToValueAtTime(Math.max(120, x.bp * v.mult * 0.7), when + x.dur)
       gain.gain.setValueAtTime(0.0001, when)
       gain.gain.linearRampToValueAtTime(x.level * 0.72, when + 0.0016)
       gain.gain.exponentialRampToValueAtTime(0.0001, when + x.dur)
-      src.start(when)
-      src.stop(when + x.dur + 0.02)
+      src.start(when); src.stop(when + x.dur + 0.02)
       end = Math.max(end, when + x.dur)
     }
   }
 
-  // 5) RING — inharmonic partials (metal/glass/energy).
+  // 5) RING — inharmonic partials (metal/glass/energy), optionally spread across
+  //    the stereo field for width.
   if (spec.ring) {
     const r = spec.ring
+    const spread = r.spread ?? 0
     r.partials.forEach((f, i) => {
       const { osc, gain } = oscVoice(ctx, r.type ?? 'sine', f)
-      gain.connect(g)
       const lvl = r.level * (1 - i / (r.partials.length + 1))
       const dur = r.dur * (0.6 + 0.4 * (1 - i / r.partials.length))
+      if (spread > 0) {
+        const rp = ctx.createStereoPanner()
+        rp.pan.value = clamp(pan + (i % 2 === 0 ? -spread : spread) * (0.6 + 0.4 * (i / r.partials.length)), -1, 1)
+        gain.disconnect(); gain.connect(rp); rp.connect(g)
+      } else {
+        gain.connect(g)
+      }
       gain.gain.setValueAtTime(0.0001, when + 0.001)
       gain.gain.linearRampToValueAtTime(lvl, when + 0.004)
       gain.gain.exponentialRampToValueAtTime(0.0001, when + dur)
-      osc.start(when + 0.001)
-      osc.stop(when + dur + 0.02)
+      osc.start(when + 0.001); osc.stop(when + dur + 0.02)
       end = Math.max(end, when + dur)
     })
   }
@@ -234,53 +278,61 @@ function scale(spec: HitSpec, k: number): HitSpec {
 
 function lightSpec(p: number): HitSpec {
   return {
-    gain: 0.9 * (0.8 + 0.4 * p),
-    clickPunch: 1.7,
-    transient: { level: 0.85, hp: 3200, dur: 0.006, color: 'blue' },
-    body: { level: 1.05, f0: 190, f1: 72, dur: 0.11, type: 'sine' },
-    texture: { level: 0.42, bp: 2000, q: 0.9, dur: 0.06, color: 'white', decayPow: 3 },
+    gain: 1.75 * (0.8 + 0.4 * p),
+    // crisp but with real contact: a snappy crack over a present, darker thump.
+    crack: { level: 0.7, punch: 1.4, hp: 2200, lp: 9000, attack: 0.0004, dur: 0.0035, color: 'white' },
+    sizzle: { level: 0.32, hp: 3400, dur: 0.035, color: 'blue', spread: 0.7 },
+    body: { level: 1.6, f0: 165, f1: 62, dur: 0.16, type: 'sine', partial: 2.4, partialLevel: 0.24 },
+    bodyGrit: { level: 0.5, lp: 850, dur: 0.06 },
+    texture: { level: 0.4, bp: 1700, q: 0.9, dur: 0.07, color: 'white', spread: 0.8, haas: 0.006 },
     drive: 0.12,
-    reverbSend: 0.12,
+    reverbSend: 0.14,
   }
 }
 
 function heavySpec(p: number): HitSpec {
   return {
     gain: 1.05 * (0.85 + 0.3 * p),
-    clickPunch: 3.0,
-    transient: { level: 1.15, hp: 2000, dur: 0.009, color: 'white' },
-    body: { level: 0.82, f0: 140, f1: 46, dur: 0.24, type: 'sine' },
+    crack: { level: 1.15, punch: 3.0, hp: 1500, lp: 9000, attack: 0.0009, dur: 0.010, color: 'white' },
+    sizzle: { level: 0.55, hp: 2000, dur: 0.09, color: 'pink' },
+    body: { level: 0.9, f0: 140, f1: 46, dur: 0.24, type: 'sine', partial: 2.7, partialLevel: 0.28 },
+    bodyGrit: { level: 0.7, lp: 700, dur: 0.09 },
     sub: { level: 0.6, f0: 58, f1: 30, dur: 0.3 },
-    texture: { level: 0.55, bp: 1500, q: 0.85, dur: 0.15, color: 'pink', decayPow: 2.5 },
+    texture: { level: 0.74, bp: 1500, q: 0.85, dur: 0.15, color: 'pink', spread: 1.0, haas: 0.009 },
+    ring: { level: 0.16, partials: [178, 267, 401, 590], dur: 0.22, type: 'sine', spread: 0.5 },
     drive: 0.28,
-    reverbSend: 0.22,
+    reverbSend: 0.28,
   }
 }
 
 function critSpec(p: number): HitSpec {
   return {
-    gain: 0.98 * (0.85 + 0.35 * p),
-    clickPunch: 3.1,
-    transient: { level: 1.05, hp: 4000, dur: 0.007, color: 'blue' },
-    body: { level: 0.9, f0: 170, f1: 62, dur: 0.18, type: 'triangle' },
-    sub: { level: 0.62, f0: 62, f1: 32, dur: 0.22 },
-    texture: { level: 0.62, bp: 3000, q: 0.65, dur: 0.16, color: 'blue', decayPow: 2 },
-    ring: { level: 0.32, partials: [1860, 3120, 4700, 6400], dur: 0.34, type: 'sine' },
+    gain: 1.02 * (0.85 + 0.35 * p),
+    crack: { level: 1.05, punch: 3.1, hp: 3000, attack: 0.0006, dur: 0.007, color: 'blue' },
+    sizzle: { level: 0.6, hp: 4000, dur: 0.08, color: 'blue' },
+    body: { level: 1.05, f0: 150, f1: 55, dur: 0.19, type: 'triangle', partial: 2.5, partialLevel: 0.3 },
+    bodyGrit: { level: 0.72, lp: 800, dur: 0.09 },
+    sub: { level: 0.85, f0: 68, f1: 33, dur: 0.24 },
+    texture: { level: 0.75, bp: 3000, q: 0.65, dur: 0.16, color: 'blue', spread: 1.0, haas: 0.008 },
+    ring: { level: 0.3, partials: [1860, 3120, 4700, 6400], dur: 0.34, type: 'sine', spread: 0.7 },
     drive: 0.42,
-    reverbSend: 0.3,
+    reverbSend: 0.32,
   }
 }
 
 function exSpec(p: number): HitSpec {
   return {
-    gain: 0.78 * (0.85 + 0.3 * p),
-    clickPunch: 2.3,
-    transient: { level: 0.95, hp: 5000, dur: 0.006, color: 'blue' },
-    body: { level: 0.7, f0: 220, f1: 90, dur: 0.14, type: 'sawtooth' },
-    texture: { level: 0.55, bp: 4200, q: 3.5, dur: 0.18, color: 'blue', decayPow: 1.6 },
-    ring: { level: 0.4, partials: [1200, 1800, 2700, 4050], dur: 0.28, type: 'sawtooth' },
+    gain: 1.12 * (0.85 + 0.3 * p),
+    crack: { level: 0.98, punch: 2.6, hp: 3500, attack: 0.0005, dur: 0.006, color: 'blue' },
+    sizzle: { level: 0.55, hp: 4200, dur: 0.09, color: 'blue' },
+    // electric hit still needs a body so it doesn't disconnect from the others.
+    body: { level: 0.85, f0: 170, f1: 78, dur: 0.16, type: 'sawtooth', partial: 2.0, partialLevel: 0.24 },
+    bodyGrit: { level: 0.42, lp: 1000, dur: 0.06 },
+    sub: { level: 0.62, f0: 74, f1: 40, dur: 0.2 },
+    texture: { level: 0.58, bp: 4200, q: 3.5, dur: 0.18, color: 'blue', spread: 0.95, haas: 0.009 },
+    ring: { level: 0.42, partials: [1200, 1800, 2700, 4050], dur: 0.28, type: 'sawtooth', spread: 0.9 },
     drive: 0.5,
-    reverbSend: 0.26,
+    reverbSend: 0.28,
   }
 }
 
@@ -321,7 +373,7 @@ export function renderImpact(
         const s = lightSpec(0.7)
         s.gain *= 0.85 + i * 0.12
         s.body.f0 *= 1 + i * 0.12
-        s.transient.hp *= 1 + i * 0.1
+        s.crack.hp *= 1 + i * 0.1
         s.reverbSend = 0.16
         end = Math.max(end, oneHit(ctx, routing, when + gp, s, pan + (i - 1) * 0.15, seed + i * 17))
       })
@@ -348,14 +400,15 @@ export function renderImpact(
         const send = ctx.createGain(); send.gain.value = 0.4
         g.connect(send); send.connect(routing.reverb)
       }
-      for (let i = 0; i < 14; i++) {
+      for (let i = 0; i < 18; i++) {
         const f = 1400 + rnd() * 6000
         const osc = ctx.createOscillator()
         osc.type = 'sine'
         osc.frequency.value = f
         const gg = ctx.createGain()
-        osc.connect(gg); gg.connect(g)
-        const t0 = when + 0.01 + rnd() * 0.09
+        const gp = ctx.createStereoPanner(); gp.pan.value = clamp(pan + (rnd() * 2 - 1) * 0.95, -1, 1)
+        osc.connect(gg); gg.connect(gp); gp.connect(g)
+        const t0 = when + 0.01 + rnd() * 0.12
         const dur = 0.12 + rnd() * 0.5
         gg.gain.setValueAtTime(0.0001, t0)
         gg.gain.linearRampToValueAtTime(0.12 + rnd() * 0.12, t0 + 0.003)
@@ -395,12 +448,14 @@ export function renderImpact(
       src.start(when); src.stop(hitAt + 0.1)
       // (b) the impact
       const big: HitSpec = {
-        gain: 1.05, clickPunch: 3.3,
-        transient: { level: 1.0, hp: 1800, dur: 0.012, color: 'white' },
-        body: { level: 1.0, f0: 140, f1: 48, dur: 0.5, type: 'sine' },
+        gain: 1.05, 
+        crack: { level: 1.0, punch: 3.2, hp: 1400, lp: 11000, attack: 0.0016, dur: 0.014, color: 'white' },
+        sizzle: { level: 0.6, hp: 1800, dur: 0.14, color: 'white' },
+        body: { level: 1.0, f0: 140, f1: 48, dur: 0.5, type: 'sine', partial: 2.6, partialLevel: 0.3 },
+        bodyGrit: { level: 0.85, lp: 600, dur: 0.18 },
         sub: { level: 0.95, f0: 70, f1: 26, dur: 0.9 },
-        texture: { level: 0.6, bp: 1400, q: 0.8, dur: 0.4, color: 'brown', decayPow: 2 },
-        ring: { level: 0.28, partials: [90, 150, 210, 320], dur: 0.6, type: 'sine' },
+        texture: { level: 0.62, bp: 1400, q: 0.8, dur: 0.4, color: 'brown', spread: 0.9, haas: 0.011 },
+        ring: { level: 0.26, partials: [96, 151, 233, 337], dur: 0.6, type: 'sine', spread: 0.5 },
         drive: 0.45,
         reverbSend: 0.5,
       }
@@ -420,38 +475,65 @@ export function renderImpact(
     }
 
     case 'signature': {
-      // The climax: a massive ult-class impact fused with a tonal power chord
-      // swell + a bright sparkle tail. Distinct from ult by its musical body.
-      let end = renderImpact(ctx, routing, when, 'ult', { ...opts, power: 1 })
-      const hitAt = when + 0.35
-      // power-chord swell (root + fifth + octave), sawtooth through a lowpass
-      const chord = [55, 82.4, 110, 164.8]
+      // The CLIMAX — its own architecture, NOT the ult template. A rising tonal
+      // "charge" (detuned power chord that swells UP), then a DOUBLE impact
+      // (grab-slam: a mid crack, then 90ms later the full body drop), capped by
+      // a bright ascending sparkle arp. Distinct rhythm + spectral core vs ult.
+      let end = when
+      const chargeDur = 0.42
+      const hit1 = when + chargeDur           // first (mid) impact
+      const hit2 = hit1 + 0.11                 // second (full) impact — the drop
+
+      // (a) rising charge: detuned saw power chord sweeping up under a resonant LP
+      const chord = [55, 82.4, 110, 138.6, 164.8]
       const swell = ctx.createGain(); swell.gain.value = 0.0001
-      const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'
-      lp.frequency.setValueAtTime(400, hitAt)
-      lp.frequency.exponentialRampToValueAtTime(3500, hitAt + 0.6)
-      swell.connect(lp); lp.connect(routing.out)
-      if (routing.reverb) { const s = ctx.createGain(); s.gain.value = 0.4; lp.connect(s); s.connect(routing.reverb) }
-      swell.gain.setValueAtTime(0.0001, hitAt)
-      swell.gain.linearRampToValueAtTime(0.22, hitAt + 0.05)
-      swell.gain.exponentialRampToValueAtTime(0.0001, hitAt + 0.9)
-      chord.forEach((f) => {
-        const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = f
-        o.connect(swell); o.start(hitAt); o.stop(hitAt + 0.95)
+      const clp = ctx.createBiquadFilter(); clp.type = 'lowpass'; clp.Q.value = 6
+      clp.frequency.setValueAtTime(180, when)
+      clp.frequency.exponentialRampToValueAtTime(2600, hit1)
+      swell.connect(clp)
+      const cpan = ctx.createStereoPanner(); cpan.pan.value = pan; clp.connect(cpan); cpan.connect(routing.out)
+      if (routing.reverb) { const s = ctx.createGain(); s.gain.value = 0.35; cpan.connect(s); s.connect(routing.reverb) }
+      swell.gain.setValueAtTime(0.0001, when)
+      swell.gain.exponentialRampToValueAtTime(0.3, hit1)
+      swell.gain.exponentialRampToValueAtTime(0.0001, hit1 + 0.12)
+      chord.forEach((f, i) => {
+        const o = ctx.createOscillator(); o.type = 'sawtooth'
+        o.frequency.value = f * (1 + (i - 2) * 0.004) // slight detune spread
+        o.connect(swell); o.start(when); o.stop(hit1 + 0.14)
       })
-      // sparkle
-      const spk = [1976, 2640, 3520]
+
+      // (b) DOUBLE impact
+      const s1 = critSpec(0.9); s1.gain *= 0.85; s1.reverbSend = 0.4
+      end = Math.max(end, oneHit(ctx, routing, hit1, s1, pan - 0.12, seed + 3))
+      const s2: HitSpec = {
+        gain: 1.08,
+        crack: { level: 1.0, punch: 3.3, hp: 1600, lp: 12000, attack: 0.0013, dur: 0.014, color: 'white' },
+        sizzle: { level: 0.62, hp: 2200, dur: 0.14, color: 'white' },
+        body: { level: 1.0, f0: 150, f1: 46, dur: 0.55, type: 'sine', partial: 2.5, partialLevel: 0.3 },
+        bodyGrit: { level: 0.85, lp: 620, dur: 0.2 },
+        sub: { level: 0.98, f0: 72, f1: 24, dur: 1.0 },
+        texture: { level: 0.66, bp: 2200, q: 0.7, dur: 0.45, color: 'white', spread: 0.95, haas: 0.012 },
+        ring: { level: 0.3, partials: [110, 176, 262, 392], dur: 0.7, type: 'sine', spread: 0.6 },
+        drive: 0.46,
+        reverbSend: 0.55,
+      }
+      end = Math.max(end, oneHit(ctx, routing, hit2, s2, pan, seed + 11))
+
+      // (c) ascending sparkle arp (bright, resolves upward)
+      const spk = [1568, 1976, 2637, 3520, 4699]
       spk.forEach((f, i) => {
         const o = ctx.createOscillator(); o.type = 'triangle'; o.frequency.value = f
-        const gg = ctx.createGain(); o.connect(gg); gg.connect(routing.out)
-        const t0 = hitAt + 0.5 + i * 0.09
+        const gg = ctx.createGain()
+        const sp = ctx.createStereoPanner(); sp.pan.value = clamp(pan + (i % 2 ? 0.5 : -0.5), -1, 1)
+        o.connect(gg); gg.connect(sp); sp.connect(routing.out)
+        const t0 = hit2 + 0.18 + i * 0.07
         gg.gain.setValueAtTime(0.0001, t0)
-        gg.gain.linearRampToValueAtTime(0.1, t0 + 0.01)
-        gg.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.4)
-        o.start(t0); o.stop(t0 + 0.45)
-        end = Math.max(end, t0 + 0.4)
+        gg.gain.linearRampToValueAtTime(0.09, t0 + 0.008)
+        gg.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.45)
+        o.start(t0); o.stop(t0 + 0.5)
+        end = Math.max(end, t0 + 0.45)
       })
-      return end
+      return end + IMPACT_END_PAD
     }
 
     case 'ko': {
@@ -459,16 +541,21 @@ export function renderImpact(
       // downward pitch-bent tonal "collapse".
       let end = when
       const big: HitSpec = {
-        gain: 1.1, clickPunch: 3.3,
-        transient: { level: 1.0, hp: 1500, dur: 0.014, color: 'white' },
-        body: { level: 1.0, f0: 130, f1: 40, dur: 0.6, type: 'sine' },
+        gain: 1.1, 
+        // KO needs a BROADBAND CRACK, not just rumble — bright, wide, violent.
+        crack: { level: 1.05, punch: 3.4, hp: 2000, attack: 0.0014, dur: 0.016, color: 'white' },
+        sizzle: { level: 0.7, hp: 2600, dur: 0.16, color: 'white' },
+        body: { level: 1.0, f0: 130, f1: 40, dur: 0.6, type: 'sine', partial: 2.7, partialLevel: 0.32 },
+        bodyGrit: { level: 0.9, lp: 650, dur: 0.2 },
         sub: { level: 1.0, f0: 62, f1: 22, dur: 1.1 },
-        texture: { level: 0.55, bp: 900, q: 0.7, dur: 0.5, color: 'brown', decayPow: 1.8 },
+        texture: { level: 0.9, bp: 2600, q: 0.55, dur: 0.6, color: 'white', spread: 1.0, haas: 0.014 },
+        ring: { level: 0.34, partials: [2100, 3300, 4700, 6100], dur: 0.4, type: 'sine', spread: 0.95 },
         drive: 0.4,
         reverbSend: 0.6,
       }
       end = Math.max(end, oneHit(ctx, routing, when, big, pan, seed))
-      // collapse: descending sawtooth
+      // collapse: descending sawtooth (kept modest so it doesn't collapse the
+      // stereo image — the bright wide texture/ring carry the width).
       const o = ctx.createOscillator(); o.type = 'sawtooth'
       o.frequency.setValueAtTime(220, when + 0.05)
       o.frequency.exponentialRampToValueAtTime(30, when + 0.9)
@@ -477,7 +564,7 @@ export function renderImpact(
       gg.connect(lp); lp.connect(routing.out)
       if (routing.reverb) { const s = ctx.createGain(); s.gain.value = 0.6; lp.connect(s); s.connect(routing.reverb) }
       gg.gain.setValueAtTime(0.0001, when + 0.05)
-      gg.gain.linearRampToValueAtTime(0.4, when + 0.1)
+      gg.gain.linearRampToValueAtTime(0.3, when + 0.1)
       gg.gain.exponentialRampToValueAtTime(0.0001, when + 1.0)
       o.start(when + 0.05); o.stop(when + 1.05)
       return Math.max(end, when + 1.0) + IMPACT_END_PAD

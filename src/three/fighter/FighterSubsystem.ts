@@ -162,10 +162,11 @@ class FighterRig {
         void main() {
           vec2 d = (vUv - 0.5) * vec2(2.0, 2.0);
           float r = length(d * vec2(1.0, 1.45));
-          // Dense AO core directly under the feet + soft falloff penumbra.
-          float core = 1.0 - smoothstep(0.0, 0.55, pow(r, uTight));
-          float soft = 1.0 - smoothstep(0.0, 1.0, r);
-          float a = clamp(core * 0.85 + soft * 0.35, 0.0, 1.0);
+          // Dense AO core directly under the feet + a wide soft penumbra so the
+          // footprint reads as ground occlusion, not a hard cutout disc.
+          float core = 1.0 - smoothstep(0.0, 0.62, pow(r, uTight));
+          float soft = 1.0 - smoothstep(0.0, 1.1, r);
+          float a = clamp(core * 0.7 + soft * 0.5, 0.0, 1.0);
           gl_FragColor = vec4(uColor, a * uOpacity);
         }
       `,
@@ -257,6 +258,16 @@ class FighterRig {
       this.set = set
       this.currentPose = pose
       this.poseBlend = this.prevSet ? 0 : 1
+      // Force NEAREST magnification on the albedo so the pixel art stays razor
+      // crisp under the quad's stretch/skew deformation, while the derived
+      // normal/height stay LINEAR so the *lighting* is smooth. This is the
+      // hybrid that resolves "crisp pixels vs smooth light".
+      for (const tex of [set.albedo, this.prevSet?.albedo]) {
+        if (tex && tex.magFilter !== THREE.NearestFilter) {
+          tex.magFilter = THREE.NearestFilter
+          tex.needsUpdate = true
+        }
+      }
       this.uniforms.uPrevAlbedo.value = this.prevSet?.albedo ?? set.albedo
       this.uniforms.uAlbedo.value = set.albedo
       this.uniforms.uNormal.value = set.normal
@@ -290,7 +301,7 @@ class FighterRig {
     // Recentre horizontally on the content.
     this.mesh.position.x = -((x0 + x1) * 0.5 - 0.5) * quadW
 
-    const footW = Math.max(1.2, this.aspect * WORLD.FIGHTER_HEIGHT * 0.9)
+    const footW = Math.max(1.5, this.aspect * WORLD.FIGHTER_HEIGHT * 1.05)
     this.shadow.scale.set(footW / 2.6, footW / 2.6, 1)
 
     // The projected cast shadow shares the body's exact quad transform so its

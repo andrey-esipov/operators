@@ -288,8 +288,13 @@ export const FIGHTER_FRAGMENT = /* glsl */ `
     float hR = texture2D(uHeight, uvP + vec2( t, 0.0)).r;
     float hD = texture2D(uHeight, uvP + vec2(0.0, -t)).r;
     float hU = texture2D(uHeight, uvP + vec2(0.0,  t)).r;
-    vec3 nDetail = normalize(vec3((hL - hR) * 3.2 * uFacing, (hD - hU) * 3.2, 1.0));
-    vec3 N = normalize(vec3(nTex.xy + nDetail.xy * 0.7, max(nTex.z, 0.18)));
+    vec3 nDetail = normalize(vec3((hL - hR) * 2.6 * uFacing, (hD - hU) * 2.6, 1.0));
+    // Broad normal: mostly the smooth baked normal, only a touch of detail —
+    // drives the low-frequency diffuse form so the body reads as a rounded
+    // torso, not a bubbly embossed "pillow-shaded" UI button.
+    vec3 Nbroad = normalize(vec3(nTex.xy + nDetail.xy * 0.30, max(nTex.z, 0.34)));
+    // Detailed normal: full crease/fold detail for specular, cavity, self-shadow.
+    vec3 N = normalize(vec3(nTex.xy + nDetail.xy * 0.72, max(nTex.z, 0.18)));
 
     vec3 V = normalize(vViewDir);
     vec3 albedo = base.rgb;
@@ -336,7 +341,7 @@ export const FIGHTER_FRAGMENT = /* glsl */ `
     wide += texture2D(uHeight, uvP + vec2(0.0,  6.0 * t)).r;
     wide += texture2D(uHeight, uvP + vec2(0.0, -6.0 * t)).r;
     wide *= 0.125;
-    float cavity = clamp((hC - wide) * 4.2 + 0.5, 0.0, 1.0);
+    float cavity = clamp((hC - wide) * 3.4 + 0.56, 0.0, 1.0);
     float ao = mix(1.0, cavity, uAO * 0.85);
     // Grounding: the lower body sits in floor contact occlusion.
     float footAO = mix(0.55, 1.0, smoothstep(0.0, 0.16, vHeightNorm));
@@ -355,12 +360,12 @@ export const FIGHTER_FRAGMENT = /* glsl */ `
         float hs = texture2D(uHeight, uvP + ldir * (5.0 * t) * fi).r;
         occ = max(occ, (hs - hC) - 0.045 * fi);
       }
-      selfShadow = 1.0 - clamp(occ * 6.0, 0.0, 0.72) * uSelfShadow;
+      selfShadow = 1.0 - clamp(occ * 6.0, 0.0, 0.5) * uSelfShadow;
     }
 
     // ---- Direct lighting --------------------------------------------------
     vec3 Lkey = normalize(uKeyDir);
-    float ndlKey = dot(N, Lkey);
+    float ndlKey = dot(Nbroad, Lkey);
     // Skin scatters light so its terminator is soft & warm; cloth/metal keep a
     // crisper terminator that actually reads as a lit form.
     float wrapAmt = mix(0.32, 0.62, skin);
@@ -372,11 +377,11 @@ export const FIGHTER_FRAGMENT = /* glsl */ `
     float sss = pow(clamp(1.0 - abs(ndlKey), 0.0, 1.0), 2.0) * (1.0 - wrapKey);
     vec3 subsurface = uKeyColor * vec3(1.0, 0.42, 0.32) * sss * skin * uKeyIntensity * 0.5;
 
-    float ndlFill = dot(N, normalize(uFillDir));
+    float ndlFill = dot(Nbroad, normalize(uFillDir));
     diffuse += uFillColor * uFillIntensity * (ndlFill * 0.5 + 0.5);
 
     // Floor bounce: soft up-from-below light on the lower body, stage-tinted.
-    float bounce = clamp(-N.y * 0.5 + 0.5, 0.0, 1.0) * (1.0 - smoothstep(0.0, 0.5, vHeightNorm));
+    float bounce = clamp(-Nbroad.y * 0.5 + 0.5, 0.0, 1.0) * (1.0 - smoothstep(0.0, 0.5, vHeightNorm));
     diffuse += uBounceColor * uBounceIntensity * bounce;
     // Denim reads cooler & darker than skin/cotton — subtle desaturation toward
     // the fill/bounce hue sells it as heavy cotton twill, not plastic.
@@ -385,22 +390,28 @@ export const FIGHTER_FRAGMENT = /* glsl */ `
     // ---- Specular (material-aware) ---------------------------------------
     vec3 H = normalize(Lkey + V);
     float ndh = max(dot(N, H), 0.0);
-    // Skin: broad soft sheen. Cotton: faint. Denim: dead matte. Metal/hair: tight.
-    float specSkin  = pow(ndh, 18.0) * 0.30 * skin;
-    float specCloth = pow(ndh, 30.0) * 0.08 * cloth * (1.0 - denim);
-    float specMetal = pow(ndh, 90.0) * 1.15 * (metal + dark * 0.5);
+    // Skin: broad soft sheen. Cotton: almost none. Denim: dead matte.
+    // Metal/hair: tight bright glint. Kept far apart so materials never read as
+    // one uniform "wet plastic" surface.
+    float specSkin  = pow(ndh, 22.0) * 0.20 * skin;
+    float specCloth = pow(ndh, 44.0) * 0.025 * cloth * (1.0 - denim);
+    float specMetal = pow(ndh, 95.0) * 1.25 * (metal + dark * 0.4);
     vec3 specular = uKeyColor * (specSkin + specCloth + specMetal) * uKeyIntensity * 0.3 * selfShadow;
-    // Sweat sheen at low HP / exertion: extra broad wet highlight on skin.
+    // Sweat sheen at low HP / exertion: extra broad wet highlight, skin only.
     specular += uKeyColor * pow(ndh, 40.0) * skin * uSweat * 0.6 * uKeyIntensity * 0.3;
+    specular *= base.a;
 
     // ---- Rim / back light -------------------------------------------------
     float fres = pow(1.0 - clamp(dot(N, V), 0.0, 1.0), 2.1);
     float rimTerm = clamp(dot(N, normalize(uRimDir)) * 0.5 + 0.5, 0.0, 1.0);
-    vec3 rim = uRimColor * uRimIntensity * fres * rimTerm;
+    // Matte fabrics barely catch a rim; skin / hair / metal do.
+    float matte = clamp(denim + cloth * 0.6, 0.0, 1.0);
+    vec3 rim = uRimColor * uRimIntensity * fres * rimTerm * mix(1.0, 0.4, matte);
     // Accent rim: the fighter's identity colour, mostly reserved for super state
-    // so neutral frames don't halo. Gated by interior mask to stay off outline.
-    rim += uAccent * fres * (0.14 + uSuperGlow * 2.2);
-    rim *= mix(0.15, 1.0, interior);
+    // so neutral frames don't halo. Gated by interior mask + alpha so it never
+    // bleeds past the silhouette into the bounding box.
+    rim += uAccent * fres * (0.10 + uSuperGlow * 2.0);
+    rim *= mix(0.12, 1.0, interior) * base.a;
 
     // ---- Impact point light ----------------------------------------------
     vec3 toFlash = uFlashPos.xyz - vWorldPos;
@@ -410,19 +421,30 @@ export const FIGHTER_FRAGMENT = /* glsl */ `
 
     vec3 ambient = uAmbientColor * uAmbientIntensity;
 
-    vec3 lit = albedo * (diffuse + ambient + flashL) * ao + subsurface * ao
+    // Direct terms are fully occluded by cavity + contact AO; ambient is only
+    // partly occluded so shadow cores keep the material's local colour (a purple
+    // jacket stays purple in shadow) instead of crushing to muddy black.
+    vec3 lit = albedo * (diffuse + flashL) * ao
+             + albedo * ambient * mix(0.7, 1.0, ao)
+             + subsurface * ao
              + specular + rim * albedo * 0.5 + rim * 0.2;
     vec3 color = lit;
 
-    // ---- Damage state: desaturate + bruise toward the accent's complement --
-    float lum = dot(color, vec3(0.299, 0.587, 0.114));
-    color = mix(color, mix(vec3(lum), vec3(lum) * vec3(1.15, 0.72, 0.72), 0.65), uDamage * 0.45);
+    // ---- Damage state: grime + bruise that KEEPS volume -------------------
+    // Multiply toward a darker warm-grey (dirt/bruising) rather than pushing to
+    // flat luminance, so the lit form survives at low HP. A light desaturation
+    // adds the "beaten up" read without pancaking the shading.
+    color *= mix(vec3(1.0), vec3(1.02, 0.80, 0.75), uDamage * 0.5);
+    float dlum = dot(color, vec3(0.299, 0.587, 0.114));
+    color = mix(color, vec3(dlum), uDamage * 0.12);
 
     // ---- Super charge: energy scanline crawl over the body ----------------
     if (uSuperGlow > 0.001) {
-      float band = sin((vUv.y * 34.0) - uTime * 5.0) * 0.5 + 0.5;
+      float band = sin((vUv.y * 30.0) - uTime * 5.0) * 0.5 + 0.5;
       band = pow(band, 6.0);
-      color += uAccent * band * uSuperGlow * 1.5;
+      // Wrap the glow around the lit form and keep it strictly inside the
+      // silhouette (interior * alpha) so it never blows out into a halo.
+      color += uAccent * band * uSuperGlow * 1.1 * interior * base.a * (0.45 + 0.55 * wrapKey);
     }
 
     // ---- Shattered: cracked-glass chroma split ---------------------------

@@ -127,6 +127,23 @@ const WAVE_FRAG = /* glsl */ `
   uniform float uSeed;
 
   float hash(float x){ return fract(sin(x*127.1)*43758.5453); }
+  float hash2(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
+
+  // Smooth value noise + fbm for turbulent, non-circular edges.
+  float vnoise(vec2 p){
+    vec2 i = floor(p); vec2 f = fract(p);
+    vec2 u = f*f*(3.0-2.0*f);
+    float a = hash2(i);
+    float b = hash2(i+vec2(1.0,0.0));
+    float c = hash2(i+vec2(0.0,1.0));
+    float d = hash2(i+vec2(1.0,1.0));
+    return mix(mix(a,b,u.x), mix(c,d,u.x), u.y);
+  }
+  float fbm(vec2 p){
+    float s=0.0, a=0.5;
+    for(int i=0;i<4;i++){ s+=a*vnoise(p); p*=2.02; a*=0.5; }
+    return s;
+  }
 
   // A thin, bright ring at radius 'rad' with half-width 'w'.
   float ring(float r, float rad, float w){
@@ -139,50 +156,70 @@ const WAVE_FRAG = /* glsl */ `
     float ang = atan(d.y, d.x);
 
     if (uMode < 0.5) {
-      // SHOCK: a violent compression front — a bright white leading rim with a
-      // subtle chromatic fringe trailing behind it (refraction, not neon rings).
+      // SHOCK: a violent, turbulent compression front. The radius is warped
+      // per-angle by fbm so it reads as a ragged blast wave, never a clean ring.
       float ease = 1.0 - pow(1.0 - uAge, 2.2);   // fast then settle
-      float base = ease;                          // ring radius 0..1
-      float sep  = 0.015 + ease * 0.045;          // tight chromatic fringe
-      float w = mix(0.12, 0.022, uAge);
-      // bright achromatic leading edge (the pressure front)
+      // angular turbulence — wobble the front hard so it is asymmetric & torn
+      float turb = fbm(vec2(cos(ang), sin(ang)) * 2.6 + uSeed * 3.0);
+      float turb2 = fbm(vec2(cos(ang)*4.3, sin(ang)*4.3) + uSeed);
+      float turb3 = fbm(vec2(cos(ang)*8.1, sin(ang)*8.1) - uSeed * 2.0);
+      float base = ease * (0.86 + 0.30 * turb - 0.08 * turb3);   // strongly warped radius
+      float sep  = 0.02 + ease * 0.055;
+      float w = mix(0.15, 0.02, uAge) * (0.55 + 0.9 * turb2);
+      // leading pressure front
       float lead = ring(r, base, w);
-      // thin chromatic fringe just inside the front
+      // chromatic fringe just inside the front (R/G/B pulled apart = air bending)
       float rr = ring(r, base + sep, w * 0.7);
       float gg = ring(r, base,       w * 0.7);
       float bb = ring(r, base - sep, w * 0.7);
-      // ragged, energetic edge
-      float ragged = 0.75 + 0.25 * hash(floor(ang * 7.0) + uSeed);
+      // radial tendrils shooting past the front (energy licking outward)
+      float tend = pow(0.5 + 0.5 * sin(ang * 9.0 + turb * 6.0 + uSeed * 5.0), 6.0);
+      tend *= smoothstep(base + 0.20, base - 0.02, r) * smoothstep(base - 0.28, base, r);
+      // erode the whole thing with noise so it tears rather than fades cleanly
+      float erode = 0.5 + 0.7 * fbm(vec2(ang * 3.0, r * 6.0 - ease * 4.0) + uSeed * 2.0);
       float fade = (1.0 - smoothstep(0.35, 1.0, uAge));
-      vec3 fringe = vec3(rr, gg, bb) * 0.5;
-      vec3 tint = (uColor + uColor2) * 0.5;
-      // white-hot front + flavour-tinted body + faint chromatic edge
-      vec3 col = (vec3(lead) * 1.4 + tint * lead * 0.8 + fringe) * ragged;
-      float a = max(lead, max(max(rr, gg), bb)) * fade;
-      col *= uIntensity * (1.6 + fade);
+      float front = (lead + tend * 0.75) * erode;
+      // FLAVOUR COLOUR OWNS THE RING. Only a razor-thin hot core on the very
+      // crest reads white; everything else is saturated identity colour so
+      // violet/cyan/gold survive the bloom + colour grade instead of washing out.
+      float crest = ring(r, base, w * 0.28);          // thin white-hot crest
+      vec3 chroma = vec3(uColor2.r * rr, uColor2.g * gg, uColor2.b * bb); // tinted chromatic fringe
+      vec3 col = uColor2 * front * 2.6 + vec3(crest) * (0.7 + 0.5 * turb2) + chroma * 1.1;
+      float a = clamp(max(front, max(max(rr, gg), bb)) * fade, 0.0, 1.0);
+      col *= uIntensity * (1.3 + fade * 0.8);
       if (a < 0.005) discard;
       gl_FragColor = vec4(col, a);
     } else if (uMode < 1.5) {
-      // RADIAL: super burst — sharp light rays from the centre.
-      float rays = 0.0;
-      float aa = ang * 24.0;
-      rays = pow(0.5 + 0.5 * sin(aa + uSeed * 6.0), 8.0);
+      // RADIAL: super burst — sharp, uneven light rays from the centre.
+      float aa = ang * 22.0;
+      // irregular ray lengths so it doesn't read as a perfect gear
+      float raylen = 0.5 + 0.5 * hash(floor(ang * 22.0 / 6.2831 * 22.0) + uSeed);
+      float rays = pow(0.5 + 0.5 * sin(aa + uSeed * 6.0), 8.0) * raylen;
       rays += pow(0.5 + 0.5 * sin(aa * 0.5 + 1.7), 12.0) * 0.7;
-      float radial = smoothstep(1.0, 0.15, r);
-      float grow = smoothstep(0.0, 0.12, uAge);
+      // flicker/erode the rays with noise
+      rays *= 0.6 + 0.7 * fbm(vec2(ang * 5.0, r * 3.0 - uAge * 3.0) + uSeed);
+      float radial = smoothstep(1.0, 0.12, r);
+      float grow = smoothstep(0.0, 0.1, uAge);
       float fade = 1.0 - smoothstep(0.3, 1.0, uAge);
-      float core = smoothstep(0.35, 0.0, r);
-      float a = (rays * radial * 0.9 + core) * grow * fade;
-      vec3 col = mix(uColor2, uColor, radial) * uIntensity * (1.5 + core * 3.0);
+      float core = smoothstep(0.28, 0.0, r);
+      float a = clamp((rays * radial * 0.95 + core) * grow * fade, 0.0, 1.0);
+      // energy colour owns the rays; white only at the pinpoint core so the
+      // super reads as a coloured star-burst, not a featureless whiteout.
+      vec3 col = uColor2 * (rays * radial * 2.4 + 0.3) + vec3(1.0) * core * 2.6;
+      col *= uIntensity;
       if (a < 0.005) discard;
       gl_FragColor = vec4(col, a);
     } else {
-      // HALO: soft energy disc bloom.
+      // HALO: turbulent energy bloom — flavour-tinted, eroded so it churns.
       float grow = smoothstep(0.0, 0.1, uAge);
       float fade = 1.0 - smoothstep(0.15, 1.0, uAge);
       float body = smoothstep(1.0, 0.0, r);
-      float a = pow(body, 1.6) * grow * fade;
-      vec3 col = mix(uColor2, uColor, body) * uIntensity * (1.0 + body * 2.0);
+      float churn = 0.55 + 0.7 * fbm(vec2(cos(ang), sin(ang)) * 3.0 + vec2(uSeed, -uAge * 2.0));
+      float a = pow(body, 1.7) * grow * fade * churn;
+      // hot white only at the very core; the disc body is saturated identity colour
+      float hotcore = smoothstep(0.35, 0.0, r);
+      vec3 col = uColor2 * (0.8 + body * 2.2) + vec3(1.0) * hotcore * 1.4;
+      col *= uIntensity;
       if (a < 0.005) discard;
       gl_FragColor = vec4(col, a * 0.9);
     }

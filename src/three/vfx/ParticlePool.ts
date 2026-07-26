@@ -469,8 +469,9 @@ const PARTICLE_FRAG = /* glsl */ `
     if (a < 0.004) discard;
 
     vec3 col = vColor * uIntensity;
-    // Incandescent hot centre so it reads as burning under bloom.
-    col += vec3(1.0) * pow(max(0.0, 1.0 - r * 2.4), 3.0) * (1.0 - vAge) * coreBoost;
+    // Incandescent hot centre so it reads as burning under bloom. Tinted 35%
+    // toward the particle's own colour so flavour identity survives the bloom.
+    col += mix(vec3(1.0), vColor * 1.5, 0.35) * pow(max(0.0, 1.0 - r * 2.4), 3.0) * (1.0 - vAge) * coreBoost;
 
     gl_FragColor = vec4(col, a);
   }

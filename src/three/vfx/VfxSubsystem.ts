@@ -86,7 +86,7 @@ const RECIPES: Record<HitFlavor, Recipe> = {
     radial: false,
   },
   heavy: {
-    core: 0xfff2cf, energy: 0xff9433, ember: 0xff5a1a, scale: 1.05,
+    core: 0xfff0cf, energy: 0xff6a1e, ember: 0xd81e0a, scale: 1.05,
     flashSize: 3.4, flashDecay: 0.62, flashSpikes: 1.2, streak: 1.4,
     flareSize: 1.7,
     sparkCount: 70, sparkSpeed: 13.5, sparkLife: 0.66,
@@ -112,7 +112,7 @@ const RECIPES: Record<HitFlavor, Recipe> = {
     radial: false,
   },
   combo: {
-    core: 0xffffff, energy: 0xffc24d, ember: 0xf77f00, scale: 1.0,
+    core: 0xffffff, energy: 0xc77dff, ember: 0x8a2be2, scale: 1.0,
     flashSize: 2.9, flashDecay: 0.5, flashSpikes: 1.0, streak: 1.2,
     flareSize: 1.5,
     sparkCount: 60, sparkSpeed: 14, sparkLife: 0.6,
@@ -138,7 +138,7 @@ const RECIPES: Record<HitFlavor, Recipe> = {
     radial: false,
   },
   ult: {
-    core: 0xffffff, energy: 0xf72585, ember: 0xb5179e, scale: 1.5,
+    core: 0xffffff, energy: 0xffcf4d, ember: 0xff6a00, scale: 1.5,
     flashSize: 5.8, flashDecay: 0.95, flashSpikes: 1.8, streak: 2.6,
     flareSize: 3.2,
     sparkCount: 190, sparkSpeed: 19, sparkLife: 0.85,
@@ -253,7 +253,7 @@ export class VfxSubsystem implements Subsystem {
           float a = (core * 1.7 + hot * 2.2 + star * 1.1 + streak * 1.3) * uAlpha;
           if (a < 0.003) discard;
           vec3 col = mix(uColor2, uColor, clamp(core + hot, 0.0, 1.0));
-          col += vec3(1.0) * hot * 1.5;
+          col += uColor2 * hot * 1.0 + vec3(1.0) * hot * 0.55;
           gl_FragColor = vec4(col * (1.0 + core), a);
         }
       `,
@@ -368,20 +368,29 @@ export class VfxSubsystem implements Subsystem {
       })
     }
 
-    // 3. radial spark tracers
+    // 3. radial spark tracers — stretched, high-velocity
     this.additive.emit({
       position: p, count: Math.round(r.sparkCount * scale), speed: r.sparkSpeed,
-      speedVariance: 0.65, color: core, color2: energy, size: 0.085, sizeVariance: 0.7,
-      life: r.sparkLife, gravity: -13, drag: 2.2, shape: 'spark', stretch: 3.2,
-      intensity: 3.0, jitter: 0.16, spin: 5,
+      speedVariance: 0.65, color: core, color2: energy, size: 0.11, sizeVariance: 0.75,
+      life: r.sparkLife, gravity: -13, drag: 2.2, shape: 'spark', stretch: 4.2,
+      intensity: 3.2, jitter: 0.16, spin: 5,
+    })
+
+    // 3b. directional impact slash — a few very fast, hard-stretched tracers
+    // fired along the punch vector so the hit reads as a violent shear, not a ring.
+    this.additive.emit({
+      position: p, count: Math.round((6 + r.shardCount * 0.4) * scale), speed: r.sparkSpeed * 1.7,
+      speedVariance: 0.4, direction: away, spread: 0.28, color: C(0xffffff), color2: energy,
+      size: 0.14, sizeVariance: 0.6, life: r.sparkLife * 0.7, gravity: -4, drag: 1.4,
+      shape: 'spark', stretch: 7.5, intensity: 3.6, jitter: 0.05, spin: 0,
     })
 
     // 4. directional shard spray along the hit vector
     this.additive.emit({
       position: p, count: Math.round(r.shardCount * scale), speed: r.sparkSpeed * 1.35,
       speedVariance: 0.5, direction: away, spread: 0.8, color: core, color2: energy,
-      size: 0.14, sizeVariance: 0.7, life: r.sparkLife * 1.25, gravity: -9, drag: 1.4,
-      shape: 'shard', intensity: 2.4, jitter: 0.12, spin: 12,
+      size: 0.17, sizeVariance: 0.7, life: r.sparkLife * 1.25, gravity: -9, drag: 1.4,
+      shape: 'shard', intensity: 2.6, jitter: 0.12, spin: 12,
     })
 
     // 5. bouncing debris chunks

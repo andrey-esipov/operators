@@ -67,22 +67,25 @@ interface Recipe {
 
   // super energy
   radial: boolean
+
+  // crit-only hard geometric impact star
+  starBurst?: boolean
 }
 
 const C = (hex: number) => new THREE.Color(hex)
 
 const RECIPES: Record<HitFlavor, Recipe> = {
   light: {
-    core: 0xffffff, energy: 0xffe6a6, ember: 0xff9b3d, scale: 0.7,
-    flashSize: 2.2, flashDecay: 0.42, flashSpikes: 0.5, streak: 0.6,
-    flareSize: 0.9,
-    sparkCount: 30, sparkSpeed: 9.5, sparkLife: 0.5,
-    shardCount: 6,
+    core: 0xffffff, energy: 0xffd27a, ember: 0xff9b3d, scale: 0.72,
+    flashSize: 2.4, flashDecay: 0.6, flashSpikes: 0.6, streak: 0.7,
+    flareSize: 1.2,
+    sparkCount: 34, sparkSpeed: 10.5, sparkLife: 0.72,
+    shardCount: 8,
     debrisCount: 0, debrisSpeed: 0,
     shock: false, shockSize: 0,
-    groundRing: 0, scorch: 0, dust: 0,
-    smokeCount: 3, emberCount: 5,
-    lightPeak: 5, lightDecay: 0.14, lightRange: 7,
+    groundRing: 0.9, scorch: 0, dust: 6,
+    smokeCount: 4, emberCount: 8,
+    lightPeak: 6, lightDecay: 0.18, lightRange: 7,
     radial: false,
   },
   heavy: {
@@ -104,12 +107,12 @@ const RECIPES: Record<HitFlavor, Recipe> = {
     flareSize: 2.9,
     sparkCount: 140, sparkSpeed: 18.5, sparkLife: 0.8,
     shardCount: 30,
-    debrisCount: 22, debrisSpeed: 9.5,
+    debrisCount: 26, debrisSpeed: 9.5,
     shock: true, shockSize: 5.4,
     groundRing: 2.6, scorch: 1.4, dust: 22,
     smokeCount: 16, emberCount: 26,
     lightPeak: 16, lightDecay: 0.26, lightRange: 13,
-    radial: false,
+    radial: false, starBurst: true,
   },
   combo: {
     core: 0xffffff, energy: 0xc77dff, ember: 0x8a2be2, scale: 1.0,
@@ -412,10 +415,20 @@ export class VfxSubsystem implements Subsystem {
       })
     }
 
-    // 6. screen shock ring (chromatic)
+    // 6. screen shock ring (chromatic) — directionally biased so the blast
+    // reads as force punching THROUGH the victim, not a centred soap bubble.
     if (r.shock) {
-      this.waves.spawn('shock', p, r.shockSize * scale, 0.78, core, energy, 1.6 * mult)
-      this.waves.spawn('halo', p, r.shockSize * 0.42 * scale, 0.45, core, energy, 1.8 * mult)
+      const shockPos = p.clone().add(away.clone().multiplyScalar(0.35 * scale))
+      this.waves.spawn('shock', shockPos, r.shockSize * scale, 0.78, core, energy, 1.6 * mult, 1.18)
+      // filled hot core behind the ring so the centre has mass (kills the donut)
+      this.waves.spawn('halo', p, r.shockSize * 0.62 * scale, 0.5, core, energy, 2.0 * mult)
+    } else {
+      // light hits still get a compact energy bloom so the hit reads on capture
+      this.waves.spawn('halo', p, 1.6 * scale, 0.5, core, energy, 1.6 * mult)
+    }
+    // crit's unmistakable hard geometric impact star
+    if (r.starBurst) {
+      this.waves.spawn('star', p, r.shockSize * 1.35 * scale, 0.52, C(0xffffff), energy, 2.2 * mult)
     }
     if (r.radial) {
       this.waves.spawn('radial', p, r.shockSize * 1.5 * scale, 0.72, C(0xffffff), energy, 1.8)
@@ -517,31 +530,33 @@ export class VfxSubsystem implements Subsystem {
     this.flashMax = 0.7
     this.flashLife = 0.7
 
-    // glass star
+    // glass star — hot white flash core
     this.additive.emit({
       position: p, count: 1, speed: 0, color: C(0xffffff), color2: ice,
       size: 4.0, life: 0.55, gravity: 0, drag: 0.001, shape: 'flare', intensity: 3.8,
     })
-    // radial crystalline burst — cold snap
-    this.waves.spawn('radial', p, 6.5, 0.6, C(0xffffff), ice, 1.5)
-    // sharp icy shards exploding, bouncing on the floor
+    // CRYSTAL shell — the faceted, brittle ice silhouette (shatter's identity)
+    this.waves.spawn('crystal', p, 6.8, 0.68, ice, ice, 1.9)
+    // a second, tighter crimson crystal for the two-tone armour-rupture read
+    this.waves.spawn('crystal', p, 4.6, 0.6, red, C(0xff5a72), 1.7)
+    this.waves.spawn('halo', p, 2.6, 0.42, C(0xffffff), ice, 1.8)
+    // sharp icy shards exploding as hard darts, bouncing on the floor
     this.additive.emit({
-      position: p, count: 70, speed: 11, speedVariance: 0.7, color: C(0xffffff), color2: ice,
-      size: 0.2, sizeVariance: 0.8, life: 1.0, gravity: -16, drag: 0.6, shape: 'shard',
-      intensity: 2.8, jitter: 0.5, spin: 16, stretch: 1.5,
+      position: p, count: 90, speed: 13, speedVariance: 0.75, color: C(0xffffff), color2: ice,
+      size: 0.24, sizeVariance: 0.85, life: 1.0, gravity: -16, drag: 0.6, shape: 'shard',
+      intensity: 3.0, jitter: 0.5, spin: 16, stretch: 2.6,
     })
     this.alpha.emit({
-      position: p, count: 40, speed: 8, speedVariance: 0.7, color: C(0xbfe6ff), color2: C(0x6aa8d8),
-      size: 0.14, sizeVariance: 0.8, life: 1.4, lifeVariance: 0.4, gravity: -17, drag: 0.4,
-      shape: 'debris', bounce: true, restitution: 0.5, intensity: 0.8, spin: 14,
+      position: p, count: 52, speed: 8.5, speedVariance: 0.7, color: C(0xbfe6ff), color2: C(0x6aa8d8),
+      size: 0.16, sizeVariance: 0.8, life: 1.5, lifeVariance: 0.4, gravity: -17, drag: 0.4,
+      shape: 'debris', bounce: true, restitution: 0.5, intensity: 0.85, spin: 14,
     })
-    // red conviction rupture underneath
+    // red conviction rupture — hot crimson shard cores snapping through the ice
     this.additive.emit({
-      position: p, count: 40, speed: 6, speedVariance: 0.8, color: red, color2: C(0x7a0d16),
-      size: 0.1, sizeVariance: 0.7, life: 0.7, gravity: -8, drag: 1.4, shape: 'spark',
-      stretch: 2.5, intensity: 2.6, jitter: 0.3, spin: 8,
+      position: p, count: 54, speed: 7, speedVariance: 0.8, color: red, color2: C(0x7a0d16),
+      size: 0.13, sizeVariance: 0.7, life: 0.75, gravity: -8, drag: 1.4, shape: 'shard',
+      stretch: 2.8, intensity: 2.8, jitter: 0.3, spin: 8,
     })
-    this.waves.spawn('shock', p, 5.5, 0.72, ice, C(0x6aa8d8), 1.7)
     this.decals.spawn('ring', feet, 2.4, 0.5, ice, red, 1.4)
     this.decals.spawn('scorch', feet, 1.2, 1.4, red, C(0x3a0810), 0.8)
   }
@@ -554,48 +569,59 @@ export class VfxSubsystem implements Subsystem {
     const white = C(0xffffff)
     const gold = C(0xffd166)
     const orange = C(0xff5a1f)
+    // the KO'd fighter is launched backward — bias the whole blast that way
+    const launch = new THREE.Vector3(loser === 'a' ? -1 : 1, 0.35, 0.2).normalize()
 
-    // Beat 1 (0ms): blinding contact — huge flash + massive light + star.
+    // Beat 1 (0ms): blinding contact — flash + massive light + gold star.
     this.lights.pop(p, white, 30, 0.5, 0.04, 22)
     this.flashMat.uniforms.uColor.value.copy(white)
     this.flashMat.uniforms.uColor2.value.copy(gold)
     this.flashMat.uniforms.uSpikes.value = 2.2
     this.flashMat.uniforms.uStreak.value = 3.4
     this.flash.position.copy(p)
-    this.flash.scale.setScalar(6.5)
+    this.flash.scale.setScalar(5.0)
     this.flash.visible = true
-    this.flashMax = 0.4
-    this.flashLife = 0.4
+    this.flashMax = 0.34
+    this.flashLife = 0.34
     this.additive.emit({
       position: p, count: 1, speed: 0, color: white, color2: gold,
       size: 6.0, life: 0.5, gravity: 0, drag: 0.001, shape: 'flare', intensity: 4.5,
     })
     this.waves.spawn('radial', p, 13, 0.95, white, gold, 2.2)
-    this.waves.spawn('shock', p, 9, 0.82, white, orange, 1.9)
-    this.waves.spawn('halo', p, 6, 0.7, gold, orange, 1.3)
+    this.waves.spawn('star', p, 11, 0.6, white, gold, 2.4)
+    this.waves.spawn('shock', p.clone().add(launch.clone().multiplyScalar(0.6)), 9, 0.82, white, orange, 1.9, 1.2)
+    this.waves.spawn('halo', p, 5.5, 0.7, gold, orange, 1.6)
 
-    // Beat 2 (60ms): the blast — spark storm + debris + ground rupture.
+    // Beat 2 (60ms): the blast — spark storm + debris + ground rupture, all
+    // sheared along the launch vector so the force reads as directional.
     this.schedule(0.06, () => {
       this.lights.pop(p, gold, 20, 0.4, 0.08, 18)
       this.additive.emit({
-        position: p, count: 300, speed: 20, speedVariance: 0.85, color: white, color2: orange,
-        size: 0.12, sizeVariance: 0.9, life: 1.1, lifeVariance: 0.4, gravity: -14, drag: 1.1,
-        shape: 'spark', stretch: 3.6, intensity: 3.2, jitter: 0.4, spin: 9,
+        position: p, count: 240, speed: 21, speedVariance: 0.85, direction: launch, spread: 1.15,
+        color: white, color2: orange, size: 0.13, sizeVariance: 0.9, life: 1.1, lifeVariance: 0.4,
+        gravity: -14, drag: 1.1, shape: 'spark', stretch: 4.2, intensity: 3.2, jitter: 0.4, spin: 9,
+      })
+      // a radial minority so it still bursts in all directions
+      this.additive.emit({
+        position: p, count: 90, speed: 17, speedVariance: 0.85, color: white, color2: orange,
+        size: 0.12, sizeVariance: 0.9, life: 1.0, lifeVariance: 0.4, gravity: -14, drag: 1.2,
+        shape: 'spark', stretch: 3.4, intensity: 3.0, jitter: 0.4, spin: 9,
       })
       this.additive.emit({
-        position: p, count: 60, speed: 15, speedVariance: 0.7, direction: new THREE.Vector3(0, 1, 0),
-        spread: 1.4, color: gold, color2: orange, size: 0.16, sizeVariance: 0.8, life: 1.4,
-        shape: 'shard', intensity: 2.6, jitter: 0.4, spin: 12, stretch: 1.4,
+        position: p, count: 70, speed: 16, speedVariance: 0.7, direction: launch,
+        spread: 1.0, color: gold, color2: orange, size: 0.18, sizeVariance: 0.8, life: 1.4,
+        shape: 'shard', intensity: 2.6, jitter: 0.4, spin: 12, stretch: 1.6,
       })
+      // heavy ballistic debris flung along the launch, bouncing on the floor
       this.alpha.emit({
-        position: p, count: 40, speed: 11, speedVariance: 0.8, flatten: 0.35,
-        color: C(0x3a2a30), color2: C(0x140d16), size: 0.18, sizeVariance: 0.8, life: 1.8,
-        lifeVariance: 0.4, gravity: -18, drag: 0.35, shape: 'debris', bounce: true,
-        restitution: 0.42, intensity: 0.5, spin: 16,
+        position: p, count: 64, speed: 13, speedVariance: 0.8, direction: launch, spread: 0.9,
+        flatten: 0.3, color: C(0x3a2a30), color2: C(0x140d16), size: 0.2, sizeVariance: 0.85,
+        life: 1.9, lifeVariance: 0.4, gravity: -18, drag: 0.32, shape: 'debris', bounce: true,
+        restitution: 0.44, intensity: 0.5, spin: 16, stretch: 0,
       })
       this.decals.spawn('ring', feet, 4.5, 0.55, gold, orange, 1.6)
       this.decals.spawn('scorch', feet, 2.6, 2.2, orange, C(0x2a0805), 1.0)
-      // flat dust blast along the floor
+      // flat dust blast racing along the floor
       this.alpha.emit({
         position: feet.clone().add(new THREE.Vector3(0, 0.03, 0)), count: 44, speed: 8,
         speedVariance: 0.7, flatten: 0.95, color: C(0x40323c), color2: C(0x120b14),

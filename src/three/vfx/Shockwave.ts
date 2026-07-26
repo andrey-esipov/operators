@@ -15,7 +15,7 @@ import type { EngineContext, QualityTier } from '../types'
  *   halo   — soft energy disc that flashes and fades (contact bloom)
  */
 
-type WaveMode = 'shock' | 'radial' | 'halo'
+type WaveMode = 'shock' | 'radial' | 'halo' | 'star' | 'crystal'
 
 interface Wave {
   mesh: THREE.Mesh
@@ -78,6 +78,7 @@ export class Shockwave {
     color: THREE.Color,
     color2: THREE.Color,
     intensity = 1,
+    stretchX = 1,
   ) {
     if (!this.enabled) return
     const w = this.pool[this.cursor]
@@ -85,10 +86,11 @@ export class Shockwave {
     w.life = duration
     w.max = duration
     w.mesh.position.copy(pos)
-    w.mesh.scale.setScalar(size)
+    w.mesh.scale.set(size * stretchX, size, 1)
     w.mat.uniforms.uColor.value.copy(color)
     w.mat.uniforms.uColor2.value.copy(color2)
-    w.mat.uniforms.uMode.value = mode === 'shock' ? 0 : mode === 'radial' ? 1 : 2
+    w.mat.uniforms.uMode.value =
+      mode === 'shock' ? 0 : mode === 'radial' ? 1 : mode === 'halo' ? 2 : mode === 'star' ? 3 : 4
     w.mat.uniforms.uIntensity.value = intensity
     w.mat.uniforms.uSeed.value = Math.random() * 10
     w.mat.uniforms.uAge.value = 0
@@ -209,7 +211,7 @@ const WAVE_FRAG = /* glsl */ `
       col *= uIntensity;
       if (a < 0.005) discard;
       gl_FragColor = vec4(col, a);
-    } else {
+    } else if (uMode < 2.5) {
       // HALO: turbulent energy bloom — flavour-tinted, eroded so it churns.
       float grow = smoothstep(0.0, 0.1, uAge);
       float fade = 1.0 - smoothstep(0.15, 1.0, uAge);
@@ -222,6 +224,49 @@ const WAVE_FRAG = /* glsl */ `
       col *= uIntensity;
       if (a < 0.005) discard;
       gl_FragColor = vec4(col, a * 0.9);
+    } else if (uMode < 3.5) {
+      // STAR: a hard, angular impact star (CRIT signature) — sharp geometric
+      // points, nothing like the soft radial super rays. Reads as a struck-metal
+      // spark cross, giving crit its own unmistakable silhouette.
+      float grow = smoothstep(0.0, 0.06, uAge);
+      float fade = 1.0 - smoothstep(0.22, 1.0, uAge);
+      float ease = 1.0 - pow(1.0 - uAge, 2.4);
+      float lobes = pow(abs(cos(ang * 3.0)), 7.0);              // 6 hard points
+      float lobesB = pow(abs(cos(ang * 2.0 + 0.7)), 12.0) * 0.7; // 4 sub-points
+      float lobe = max(lobes, lobesB);
+      float reach = (0.28 + 0.68 * lobe) * ease;
+      float spike = smoothstep(reach, reach - 0.42, r) * (0.35 + lobe);
+      // thin bright edge running down each spike
+      float edge = smoothstep(0.06, 0.0, abs(r - reach)) * lobe;
+      float core = smoothstep(0.24, 0.0, r);
+      float a = clamp((spike * 0.85 + edge * 0.9 + core) * grow * fade, 0.0, 1.0);
+      vec3 col = uColor2 * (spike * 2.0 + edge * 2.4 + 0.35) + vec3(1.0) * core * 2.4;
+      col *= uIntensity;
+      if (a < 0.005) discard;
+      gl_FragColor = vec4(col, a);
+    } else {
+      // CRYSTAL: a faceted, brittle ice shell (SHATTER signature). The radius is
+      // quantised into hard flat facets so the silhouette is angular and glassy,
+      // with radial fracture lines lancing inward — never a soft round ring.
+      float grow = smoothstep(0.0, 0.05, uAge);
+      float fade = 1.0 - smoothstep(0.3, 1.0, uAge);
+      float ease = 1.0 - pow(1.0 - uAge, 2.0);
+      float facets = 9.0;
+      float seg = floor((ang + 3.14159) / (6.28318 / facets));
+      float fr = hash(seg + uSeed * 2.0);
+      float rad = ease * (0.66 + 0.4 * fr);
+      float w = mix(0.11, 0.015, uAge);
+      float shell = ring(r, rad, w);
+      // bevel highlight just inside each facet
+      float bevel = smoothstep(0.05, 0.0, abs(r - rad + 0.05)) * 0.6;
+      // radial fracture cracks
+      float crack = pow(0.5 + 0.5 * sin(ang * facets + uSeed * 4.0), 22.0) * smoothstep(rad, 0.0, r);
+      float core = smoothstep(0.26, 0.0, r);
+      float a = clamp((shell + bevel + crack * 0.7 + core) * grow * fade, 0.0, 1.0);
+      vec3 col = uColor2 * (shell * 2.4 + crack * 1.6 + 0.3) + vec3(1.0) * (core * 2.0 + bevel * 1.5);
+      col *= uIntensity;
+      if (a < 0.005) discard;
+      gl_FragColor = vec4(col, a);
     }
   }
 `

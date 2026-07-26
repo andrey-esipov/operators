@@ -202,6 +202,11 @@
   content: ''; position: absolute; inset: 0;
   background: linear-gradient(180deg, rgba(255,255,255,0.6), transparent 52%);
 }
+.fh-sm .sm-fill::after {
+  content: ''; position: absolute; inset: 0;
+  background: repeating-linear-gradient(114deg, rgba(255,255,255,0.22) 0 2px, transparent 2px 12px);
+  mix-blend-mode: overlay; opacity: 0.9;
+}
 .fh-sm .sm-notch {
   position: absolute; top: -2px; bottom: -2px; width: 3px;
   background: var(--ink); box-shadow: 1px 0 0 rgba(255,255,255,0.1), -1px 0 0 rgba(255,255,255,0.06);
@@ -248,10 +253,10 @@
 .fh-status-row { display: flex; gap: 6px; margin-top: 8px; }
 .fh-status-row.mirror { flex-direction: row-reverse; }
 .fh-chip {
-  display: flex; align-items: center; gap: 6px;
-  height: 27px; padding: 0 12px 0 9px;
-  background: linear-gradient(180deg, rgba(24,28,42,0.97), rgba(6,8,14,0.97));
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.14), inset 0 0 0 1.5px var(--chip), 0 0 12px -3px var(--chip);
+  display: flex; align-items: center; gap: 7px;
+  height: 30px; padding: 0 13px 0 10px;
+  background: linear-gradient(180deg, rgba(24,28,42,0.98), rgba(6,8,14,0.98));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.16), inset 0 0 0 1.5px var(--chip), 0 0 14px -3px var(--chip);
   clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
   transform: skewX(-9deg);
 }
@@ -259,12 +264,12 @@
 .fh-chip > * { transform: skewX(9deg); }
 .fh-status-row.mirror .fh-chip > * { transform: skewX(-9deg); }
 .fh-chip .icdot {
-  width: 16px; height: 16px; flex: none; display: grid; place-items: center;
+  width: 18px; height: 18px; flex: none; display: grid; place-items: center;
   background: var(--chip); color: var(--ink);
   clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
-  font-size: 10px; font-weight: 900; font-family: var(--hud-tech);
+  font-size: 11px; font-weight: 900; font-family: var(--hud-tech);
 }
-.fh-chip .lb { font-family: var(--hud-tech); font-weight: 800; font-size: 11px; letter-spacing: 0.09em; color: #fff; text-shadow: 0 1px 0 rgba(0,0,0,0.55); }
+.fh-chip .lb { font-family: var(--hud-tech); font-weight: 800; font-size: 12px; letter-spacing: 0.08em; color: #fff; text-shadow: 0 1px 0 rgba(0,0,0,0.6); }
 
 /* ============================ CENTER / TIMER ============================= */
 .fh-center {
@@ -321,10 +326,10 @@
 .fh-combo .word { font-family: var(--hud-tech); font-weight: 700; font-size: 12px; letter-spacing: 0.42em; color: #ffd23c; text-shadow: 0 2px 0 #000; margin-top: 1px; }
 .fh-combo .dmgchip {
   align-self: flex-start; margin-top: 6px;
-  font-family: var(--hud-tech); font-weight: 700; font-size: 13px; letter-spacing: 0.14em;
+  font-family: var(--hud-tech); font-weight: 800; font-size: 16px; letter-spacing: 0.1em;
   font-variant-numeric: tabular-nums; color: #05060c;
   background: linear-gradient(180deg, #ffe14a, #ff9420);
-  padding: 2px 9px 1px; box-shadow: 0 3px 0 rgba(0,0,0,0.5), 0 0 14px rgba(255,170,50,0.6);
+  padding: 3px 11px 2px; box-shadow: 0 3px 0 rgba(0,0,0,0.5), 0 0 16px rgba(255,170,50,0.65);
   clip-path: polygon(6px 0, 100% 0, calc(100% - 6px) 100%, 0 100%);
 }
 
@@ -339,7 +344,7 @@
   background: radial-gradient(120% 90% at 50% 45%, rgba(0,0,0,0) 30%, rgba(0,0,0,0.55) 78%, rgba(0,0,0,0.82) 100%);
 }
 .fh-letterbox {
-  position: fixed; left: 0; right: 0; height: 11vh; pointer-events: none;
+  position: fixed; left: 0; right: 0; height: 8vh; pointer-events: none;
   background: linear-gradient(180deg, #000, #05070d);
   box-shadow: 0 0 22px rgba(0,0,0,0.9);
 }
@@ -369,7 +374,7 @@
 .fh-card:nth-child(2) { transform: rotate(-1deg) translateY(1px); }
 .fh-card:nth-child(4) { transform: rotate(1deg) translateY(1px); }
 .fh-card:nth-child(5) { transform: rotate(2.5deg) translateY(6px); }
-.fh-card .kind { font-family: var(--hud-tech); font-weight: 800; font-size: 10px; letter-spacing: 0.24em; color: var(--ck); }
+.fh-card .kind { font-family: var(--hud-tech); font-weight: 900; font-size: 11px; letter-spacing: 0.22em; color: var(--ck); text-shadow: 0 0 10px var(--ck); }
 .fh-card .title { font-family: var(--hud-display); font-weight: 800; font-style: italic; font-size: 19px; line-height: 0.96; text-transform: uppercase; margin-top: 8px; color: #fff; text-shadow: 0 2px 0 rgba(0,0,0,0.6); }
 .fh-card .spacer { flex: 1; }
 .fh-card .stat-row { display: flex; justify-content: space-between; align-items: flex-end; }

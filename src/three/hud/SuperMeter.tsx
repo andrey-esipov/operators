@@ -13,13 +13,13 @@ export function SuperMeter({ super01, ready, segments = 4 }: Props) {
 
   return (
     <div className="fh-sm-wrap">
+      <div className={`fh-sm-tag ${ready ? 'ready' : ''}`}>{ready ? 'MAX' : 'SUPER'}</div>
       <div className={`fh-sm ${ready ? 'ready' : ''}`}>
         <div className="sm-fill" style={{ transform: `scaleX(${fillScale})` }} />
         {notches.map((left, i) => (
           <div key={i} className="sm-notch" style={{ left: `${left}%` }} />
         ))}
       </div>
-      <div className={`fh-sm-tag ${ready ? 'ready' : ''}`}>{ready ? 'MAX' : 'SUPER'}</div>
     </div>
   )
 }

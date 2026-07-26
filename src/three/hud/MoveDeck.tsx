@@ -22,23 +22,28 @@ interface Props {
 
 export function MoveDeck({ deck }: Props) {
   if (!deck) return null
+  const n = deck.cards.length
+  const center = (n - 1) / 2
   return (
     <div className="fh-deck fh-pe">
       {deck.cards.map((card, i) => {
         const color = KIND_COLOR[card.kind]
         const isUlt = card.kind === 'ultimate'
+        const offset = i - center
+        const fan = card.selected ? 0 : offset * 3.6
+        const arcY = card.selected ? -22 : Math.abs(offset) * 7
         return (
           <motion.button
             key={card.id}
             className={`fh-card ${card.disabled ? 'disabled' : ''} ${isUlt ? 'ult' : ''} ${
               isUlt && card.ready ? 'ready' : ''
             } ${card.selected ? 'selected' : ''}`}
-            style={{ ['--ck' as string]: color }}
-            initial={{ opacity: 0, y: 40 }}
-            animate={{ opacity: 1, y: card.selected ? -20 : 0, scale: card.selected ? 1.07 : 1 }}
+            style={{ ['--ck' as string]: color, transformOrigin: 'bottom center' }}
+            initial={{ opacity: 0, y: 46 }}
+            animate={{ opacity: 1, y: arcY, rotate: fan, scale: card.selected ? 1.08 : 1 }}
             transition={{ delay: 0.05 * i, type: 'spring', stiffness: 320, damping: 26 }}
-            whileHover={card.disabled ? undefined : { y: card.selected ? -24 : -10, scale: card.selected ? 1.09 : 1.05 }}
-            whileTap={card.disabled ? undefined : { scale: 0.95, y: -4 }}
+            whileHover={card.disabled ? undefined : { y: card.selected ? -30 : -16, rotate: 0, scale: card.selected ? 1.11 : 1.07 }}
+            whileTap={card.disabled ? undefined : { scale: 0.96, y: -6 }}
             onClick={() => !card.disabled && card.onSelect?.()}
             disabled={card.disabled}
           >

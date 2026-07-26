@@ -138,7 +138,7 @@ class FighterRig {
       uniforms: {
         uOpacity: { value: 0.55 },
         uTight: { value: 1.0 },
-        uColor: { value: new THREE.Color(0x06040c) },
+        uColor: { value: new THREE.Color(0x04030a) },
       },
       vertexShader: `
         varying vec2 vUv;
@@ -149,8 +149,11 @@ class FighterRig {
         uniform float uOpacity; uniform float uTight; uniform vec3 uColor;
         void main() {
           vec2 d = (vUv - 0.5) * vec2(2.0, 2.0);
-          float r = length(d * vec2(1.0, 1.35));
-          float a = 1.0 - smoothstep(0.0, 1.0, pow(r, uTight));
+          float r = length(d * vec2(1.0, 1.45));
+          // Dense AO core directly under the feet + soft falloff penumbra.
+          float core = 1.0 - smoothstep(0.0, 0.55, pow(r, uTight));
+          float soft = 1.0 - smoothstep(0.0, 1.0, r);
+          float a = clamp(core * 0.85 + soft * 0.35, 0.0, 1.0);
           gl_FragColor = vec4(uColor, a * uOpacity);
         }
       `,
@@ -305,7 +308,13 @@ class FighterRig {
     this.uniforms.uWobble.value = c.wobble
     this.uniforms.uHitFlash.value = c.flash
     this.uniforms.uTime.value = time
-    this.uniforms.uDamage.value = THREE.MathUtils.clamp(1 - vs.hp01, 0, 1)
+    const damage = THREE.MathUtils.clamp(1 - vs.hp01, 0, 1)
+    this.uniforms.uDamage.value = damage
+    // Sweat sheen + exertion breathing build with damage; a fresh hit spikes it.
+    const targetSweat = damage * 0.7 + Math.min(0.3, c.flash * 0.3)
+    this.uniforms.uSweat.value += (targetSweat - this.uniforms.uSweat.value) * Math.min(1, dt * 4)
+    this.uniforms.uExertion.value = lowHp
+    if (this.set) this.uniforms.uTexel.value = 1 / this.set.width
     this.uniforms.uCameraPos.value.copy(camera.position)
 
     // Super charge glow ramps in when the meter fills.
@@ -322,8 +331,8 @@ class FighterRig {
 
     // Contact shadow tracks vertical offset + squash.
     const lift = Math.max(0, this.group.position.y - WORLD.GROUND_Y)
-    this.shadowMat.uniforms.uOpacity.value = 0.6 * Math.exp(-lift * 2.6) * (1 - this.dissolve)
-    this.shadowMat.uniforms.uTight.value = 1 + lift * 2.2
+    this.shadowMat.uniforms.uOpacity.value = 0.82 * Math.exp(-lift * 2.4) * (1 - this.dissolve)
+    this.shadowMat.uniforms.uTight.value = 1 + lift * 2.4
     this.shadow.position.y = 0.012 - (this.group.position.y - WORLD.GROUND_Y)
 
     // Pull the shared lighting description into the material.
@@ -344,6 +353,9 @@ class FighterRig {
       u.uFlashPos.value.copy(d.flashPos)
       u.uFlashColor.value.copy(d.flashColor)
       u.uFlashIntensity.value = d.flashIntensity
+      // Floor bounce: warm-ish average of ambient + fill, so the lower body
+      // catches colour reflected up from the stage instead of going dead.
+      u.uBounceColor.value.copy(d.ambientColor).lerp(d.fillColor, 0.5)
     }
 
     // Publish the chest anchor for VFX/camera.
@@ -362,7 +374,11 @@ class FighterRig {
   }
 
   setQuality(q: QualityTier) {
-    this.mesh.castShadow = flagsFor(q).shadows
+    const flags = flagsFor(q)
+    this.mesh.castShadow = flags.shadows
+    const rank = q === 'ultra' ? 3 : q === 'high' ? 2 : q === 'medium' ? 1 : 0
+    this.uniforms.uQuality.value = rank
+    this.uniforms.uSelfShadow.value = rank >= 2 ? 1 : 0
   }
 
   dispose() {

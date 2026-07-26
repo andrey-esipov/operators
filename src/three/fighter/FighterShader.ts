@@ -61,6 +61,24 @@ export interface FighterUniforms {
   uSilhouette: { value: number }
   uFogColor: { value: THREE.Color }
   uFogDensity: { value: number }
+
+  // --- form / material / grounding (2.5D upgrade) ---
+  /** 0..3 render tier; gates expensive loops (self-shadow taps). */
+  uQuality: { value: number }
+  /** Cavity/AO strength derived from the height field. */
+  uAO: { value: number }
+  /** Height-march self-shadow strength (arm-on-torso etc). */
+  uSelfShadow: { value: number }
+  /** Warm bounce colour reflected up from the stage floor. */
+  uBounceColor: { value: THREE.Color }
+  uBounceIntensity: { value: number }
+  /** Texel size of the sprite (1/width) for edge/AO taps. */
+  uTexel: { value: number }
+  /** Sweat / sheen amount, ramps with damage + exertion. */
+  uSweat: { value: number }
+  /** Breathing exertion 0..1 (drives subtle warmth + sheen at low HP). */
+  uExertion: { value: number }
+
   [key: string]: THREE.IUniform
 }
 
@@ -106,6 +124,15 @@ export function createFighterUniforms(): FighterUniforms {
     uSilhouette: { value: 0 },
     uFogColor: { value: new THREE.Color(0x0a0716) },
     uFogDensity: { value: 0.02 },
+
+    uQuality: { value: 3 },
+    uAO: { value: 1 },
+    uSelfShadow: { value: 1 },
+    uBounceColor: { value: new THREE.Color(0x25324a) },
+    uBounceIntensity: { value: 0.35 },
+    uTexel: { value: 1 / 1024 },
+    uSweat: { value: 0 },
+    uExertion: { value: 0 },
   }
 }
 
@@ -187,6 +214,15 @@ export const FIGHTER_FRAGMENT = /* glsl */ `
   uniform vec3  uFogColor;
   uniform float uFogDensity;
 
+  uniform float uQuality;
+  uniform float uAO;
+  uniform float uSelfShadow;
+  uniform vec3  uBounceColor;
+  uniform float uBounceIntensity;
+  uniform float uTexel;
+  uniform float uSweat;
+  uniform float uExertion;
+
   varying vec2  vUv;
   varying vec3  vWorldPos;
   varying vec3  vViewDir;
@@ -203,6 +239,22 @@ export const FIGHTER_FRAGMENT = /* glsl */ `
     f = f * f * (3.0 - 2.0 * f);
     return mix(mix(hash(i), hash(i + vec2(1,0)), f.x),
                mix(hash(i + vec2(0,1)), hash(i + vec2(1,1)), f.x), f.y);
+  }
+
+  float luma(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
+
+  // Classify skin from albedo: warm, ordered r>=g>=b, mid-bright, moderate sat.
+  // Returns 0..1 mask. Robust enough to separate faces/hands/arms from denim,
+  // cotton and hair so each can take a different material response.
+  float skinMask(vec3 c) {
+    float mx = max(c.r, max(c.g, c.b));
+    float mn = min(c.r, min(c.g, c.b));
+    float sat = (mx - mn) / max(mx, 1e-4);
+    float warm = clamp((c.r - c.b) * 3.0, 0.0, 1.0);
+    float ordered = smoothstep(-0.02, 0.02, c.r - c.g) * smoothstep(-0.04, 0.03, c.g - c.b);
+    float bright = smoothstep(0.14, 0.4, mx) * (1.0 - smoothstep(0.94, 1.0, mx));
+    float satOk = smoothstep(0.10, 0.22, sat) * (1.0 - smoothstep(0.62, 0.9, sat));
+    return clamp(warm * ordered * bright * satOk, 0.0, 1.0);
   }
 
   void main() {
@@ -226,35 +278,109 @@ export const FIGHTER_FRAGMENT = /* glsl */ `
     vec3 nTex = texture2D(uNormal, uvP).xyz * 2.0 - 1.0;
     // Mirror X for the right-hand fighter so lighting stays physically sane.
     nTex.x *= uFacing;
-    vec3 N = normalize(vec3(nTex.x, nTex.y, max(nTex.z, 0.08)));
+
+    // Sharpen form with a fresh derivative of the height field. The baked
+    // normal is smooth (distance transform); this re-injects crisp fold/muscle
+    // detail so the body reads as sculpted volume rather than a soft balloon.
+    float t = uTexel;
+    float hC = texture2D(uHeight, uvP).r;
+    float hL = texture2D(uHeight, uvP + vec2(-t, 0.0)).r;
+    float hR = texture2D(uHeight, uvP + vec2( t, 0.0)).r;
+    float hD = texture2D(uHeight, uvP + vec2(0.0, -t)).r;
+    float hU = texture2D(uHeight, uvP + vec2(0.0,  t)).r;
+    vec3 nDetail = normalize(vec3((hL - hR) * 3.2 * uFacing, (hD - hU) * 3.2, 1.0));
+    vec3 N = normalize(vec3(nTex.xy + nDetail.xy * 0.7, max(nTex.z, 0.18)));
 
     vec3 V = normalize(vViewDir);
     vec3 albedo = base.rgb;
+    float lumA = luma(albedo);
+
+    // ---- Material segmentation -------------------------------------------
+    float skin = skinMask(albedo);
+    float mn = min(albedo.r, min(albedo.g, albedo.b));
+    float mx = max(albedo.r, max(albedo.g, albedo.b));
+    float sat = (mx - mn) / max(mx, 1e-4);
+    // Metal / bright hardware & sneaker rubber: desaturated + bright.
+    float metal = smoothstep(0.5, 0.85, lumA) * (1.0 - smoothstep(0.16, 0.32, sat));
+    // Dark hair / leather: low luma, low-mid sat — takes a tight anisotropic-ish
+    // sheen. Cloth is everything else: matte.
+    float dark = (1.0 - smoothstep(0.06, 0.28, lumA));
+    float cloth = clamp(1.0 - skin - metal, 0.0, 1.0);
+
+    // ---- Cavity / ambient occlusion from the height field -----------------
+    // Compare the local height to a wider low-frequency average; recessed
+    // pixels (folds, between limbs, under jaw) darken. This is the single
+    // biggest thing that turns a flat fill into sculpted form.
+    float wide = 0.0;
+    wide += texture2D(uHeight, uvP + vec2( 3.0 * t,  3.0 * t)).r;
+    wide += texture2D(uHeight, uvP + vec2(-3.0 * t,  3.0 * t)).r;
+    wide += texture2D(uHeight, uvP + vec2( 3.0 * t, -3.0 * t)).r;
+    wide += texture2D(uHeight, uvP + vec2(-3.0 * t, -3.0 * t)).r;
+    wide += texture2D(uHeight, uvP + vec2( 6.0 * t, 0.0)).r;
+    wide += texture2D(uHeight, uvP + vec2(-6.0 * t, 0.0)).r;
+    wide += texture2D(uHeight, uvP + vec2(0.0,  6.0 * t)).r;
+    wide += texture2D(uHeight, uvP + vec2(0.0, -6.0 * t)).r;
+    wide *= 0.125;
+    float cavity = clamp((hC - wide) * 3.4 + 0.5, 0.0, 1.0);
+    float ao = mix(1.0, cavity, uAO * 0.7);
+    // Grounding: the lower body sits in floor contact occlusion.
+    float footAO = mix(0.55, 1.0, smoothstep(0.0, 0.16, vHeightNorm));
+    ao *= mix(1.0, footAO, uAO);
+
+    // ---- Height-march self-shadow ----------------------------------------
+    // Walk a few texels toward the key light along the surface; if the terrain
+    // rises above us we're occluded. Gives real arm-over-torso shadows.
+    float selfShadow = 1.0;
+    if (uSelfShadow > 0.001 && uQuality > 1.5) {
+      vec3 Lk = normalize(uKeyDir); Lk.x *= uFacing;
+      vec2 ldir = normalize(vec2(Lk.x, Lk.y) + 1e-4);
+      float occ = 0.0;
+      for (int i = 1; i <= 6; i++) {
+        float fi = float(i);
+        float hs = texture2D(uHeight, uvP + ldir * (5.0 * t) * fi).r;
+        occ = max(occ, (hs - hC) - 0.045 * fi);
+      }
+      selfShadow = 1.0 - clamp(occ * 6.0, 0.0, 0.72) * uSelfShadow;
+    }
 
     // ---- Direct lighting --------------------------------------------------
-    // Half-Lambert wrap: keeps the shadow side readable and coloured rather
-    // than crushed to black.
-    float ndlKey = dot(N, normalize(uKeyDir));
-    float wrapKey = pow(ndlKey * 0.5 + 0.5, 1.55);
-    vec3 diffuse = uKeyColor * uKeyIntensity * wrapKey;
+    vec3 Lkey = normalize(uKeyDir);
+    float ndlKey = dot(N, Lkey);
+    // Skin scatters light so its terminator is soft & warm; cloth/metal keep a
+    // crisper terminator that actually reads as a lit form.
+    float wrapAmt = mix(0.32, 0.62, skin);
+    float wrapKey = clamp((ndlKey + wrapAmt) / (1.0 + wrapAmt), 0.0, 1.0);
+    wrapKey = pow(wrapKey, mix(1.25, 1.0, skin));
+    vec3 diffuse = uKeyColor * uKeyIntensity * wrapKey * selfShadow;
+
+    // Subsurface: on skin, the shadowed side glows warm (translucency).
+    float sss = pow(clamp(1.0 - abs(ndlKey), 0.0, 1.0), 2.0) * (1.0 - wrapKey);
+    vec3 subsurface = uKeyColor * vec3(1.0, 0.42, 0.32) * sss * skin * uKeyIntensity * 0.5;
 
     float ndlFill = dot(N, normalize(uFillDir));
     diffuse += uFillColor * uFillIntensity * (ndlFill * 0.5 + 0.5);
 
-    // ---- Specular (Blinn-Phong, tight) ------------------------------------
-    vec3 H = normalize(normalize(uKeyDir) + V);
-    float spec = pow(max(dot(N, H), 0.0), 42.0);
-    // Only the brighter parts of the art get a highlight — stops skin and
-    // dark fabric from looking equally glossy.
-    float gloss = smoothstep(0.35, 0.9, dot(albedo, vec3(0.299, 0.587, 0.114)));
-    vec3 specular = uKeyColor * spec * gloss * 0.55 * uKeyIntensity * 0.3;
+    // Floor bounce: soft up-from-below light on the lower body, stage-tinted.
+    float bounce = clamp(-N.y * 0.5 + 0.5, 0.0, 1.0) * (1.0 - smoothstep(0.0, 0.5, vHeightNorm));
+    diffuse += uBounceColor * uBounceIntensity * bounce;
+
+    // ---- Specular (material-aware) ---------------------------------------
+    vec3 H = normalize(Lkey + V);
+    float ndh = max(dot(N, H), 0.0);
+    // Skin: broad soft sheen. Cloth: almost none. Metal/hair: tight & bright.
+    float specSkin  = pow(ndh, 18.0) * 0.30 * skin;
+    float specCloth = pow(ndh, 30.0) * 0.08 * cloth;
+    float specMetal = pow(ndh, 90.0) * 1.15 * (metal + dark * 0.5);
+    vec3 specular = uKeyColor * (specSkin + specCloth + specMetal) * uKeyIntensity * 0.3 * selfShadow;
+    // Sweat sheen at low HP / exertion: extra broad wet highlight on skin.
+    specular += uKeyColor * pow(ndh, 40.0) * skin * uSweat * 0.6 * uKeyIntensity * 0.3;
 
     // ---- Rim / back light -------------------------------------------------
     float fres = pow(1.0 - clamp(dot(N, V), 0.0, 1.0), 2.6);
     float rimTerm = clamp(dot(N, normalize(uRimDir)) * 0.5 + 0.5, 0.0, 1.0);
     vec3 rim = uRimColor * uRimIntensity * fres * rimTerm;
     // Accent rim: the fighter's identity colour, strongest at the silhouette.
-    rim += uAccent * fres * (0.55 + uSuperGlow * 2.4);
+    rim += uAccent * fres * (0.5 + uSuperGlow * 2.4);
 
     // ---- Impact point light ----------------------------------------------
     vec3 toFlash = uFlashPos.xyz - vWorldPos;
@@ -264,7 +390,9 @@ export const FIGHTER_FRAGMENT = /* glsl */ `
 
     vec3 ambient = uAmbientColor * uAmbientIntensity;
 
-    vec3 color = albedo * (diffuse + ambient + flashL) + specular + rim * albedo * 0.6 + rim * 0.35;
+    vec3 lit = albedo * (diffuse + ambient + flashL) * ao + subsurface * ao
+             + specular + rim * albedo * 0.55 + rim * 0.32;
+    vec3 color = lit;
 
     // ---- Damage state: desaturate + bruise toward the accent's complement --
     float lum = dot(color, vec3(0.299, 0.587, 0.114));

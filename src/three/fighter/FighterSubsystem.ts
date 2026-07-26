@@ -76,6 +76,8 @@ class FighterRig {
 
   private shadow!: THREE.Mesh
   private shadowMat!: THREE.ShaderMaterial
+  private castShadowMesh!: THREE.Mesh
+  private castShadowMat!: THREE.ShaderMaterial
   private ch = newChannels()
   private set: SpriteTextureSet | null = null
   private prevSet: SpriteTextureSet | null = null
@@ -161,8 +163,77 @@ class FighterRig {
     this.shadow = new THREE.Mesh(geo, this.shadowMat)
     this.shadow.rotation.x = -Math.PI / 2
     this.shadow.position.set(0, 0.012, 0.05)
-    this.shadow.renderOrder = -1
+    this.shadow.renderOrder = -2
     this.group.add(this.shadow)
+
+    this.buildCastShadow()
+  }
+
+  /**
+   * Pose-accurate projected shadow. We take the fighter's own quad (same
+   * subdivision + squash/lean deformation) and, in the vertex shader, project
+   * every vertex onto the floor along the key-light direction. The result is a
+   * real silhouette shadow anchored at the feet — the single biggest thing that
+   * gives a billboard fighter physical mass, instead of a disconnected blob.
+   */
+  private buildCastShadow() {
+    const geo = new THREE.PlaneGeometry(1, 1, 12, 24)
+    this.castShadowMat = new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      depthTest: true,
+      uniforms: {
+        uAlbedo: this.uniforms.uAlbedo,
+        uSquash: this.uniforms.uSquash,
+        uLean: this.uniforms.uLean,
+        uWobble: this.uniforms.uWobble,
+        uTime: this.uniforms.uTime,
+        uDissolve: this.uniforms.uDissolve,
+        uKeyDir: this.uniforms.uKeyDir,
+        uGroundY: { value: WORLD.GROUND_Y },
+        uOpacity: { value: 0.5 },
+        uColor: { value: new THREE.Color(0x02020a) },
+        uProject: { value: 0.6 },
+      },
+      vertexShader: /* glsl */ `
+        uniform vec2 uSquash; uniform float uLean; uniform float uWobble; uniform float uTime;
+        uniform vec3 uKeyDir; uniform float uGroundY; uniform float uProject;
+        varying vec2 vUv; varying float vFade;
+        void main() {
+          vUv = uv;
+          vec3 p = position;
+          float h = uv.y;
+          p.x *= uSquash.x;
+          p.y = (p.y + 0.5) * uSquash.y - 0.5;
+          p.x += uLean * h * h;
+          p.x += uWobble * sin(h * 9.0 - uTime * 26.0) * (1.0 - h * 0.35) * 0.09;
+          vec4 world = modelMatrix * vec4(p, 1.0);
+          float hgt = max(0.0, world.y - uGroundY);
+          vec3 L = normalize(uKeyDir);
+          vec2 disp = -(L.xy / max(L.y, 0.4)) * hgt * uProject;
+          world.x += disp.x;
+          world.z += disp.y;
+          world.y = uGroundY + 0.02;
+          // Fade the far (head) end of the shadow into a soft penumbra.
+          vFade = 1.0 - smoothstep(0.15, 1.0, hgt / 3.4);
+          gl_Position = projectionMatrix * viewMatrix * world;
+        }
+      `,
+      fragmentShader: /* glsl */ `
+        uniform sampler2D uAlbedo; uniform float uOpacity; uniform vec3 uColor;
+        uniform float uDissolve;
+        varying vec2 vUv; varying float vFade;
+        void main() {
+          float a = texture2D(uAlbedo, vUv).a;
+          if (a < 0.4 || uDissolve > 0.4) discard;
+          gl_FragColor = vec4(uColor, a * uOpacity * vFade);
+        }
+      `,
+    })
+    this.castShadowMesh = new THREE.Mesh(geo, this.castShadowMat)
+    this.castShadowMesh.frustumCulled = false
+    this.castShadowMesh.renderOrder = -1
+    this.group.add(this.castShadowMesh)
   }
 
   async setPose(pose: FighterPose, fighterId: string) {
@@ -211,6 +282,11 @@ class FighterRig {
 
     const footW = Math.max(1.2, this.aspect * WORLD.FIGHTER_HEIGHT * 0.9)
     this.shadow.scale.set(footW / 2.6, footW / 2.6, 1)
+
+    // The projected cast shadow shares the body's exact quad transform so its
+    // silhouette matches the pose 1:1.
+    this.castShadowMesh.scale.copy(this.mesh.scale)
+    this.castShadowMesh.position.copy(this.mesh.position)
   }
 
   setAccent(hex: string) {
@@ -331,9 +407,11 @@ class FighterRig {
 
     // Contact shadow tracks vertical offset + squash.
     const lift = Math.max(0, this.group.position.y - WORLD.GROUND_Y)
-    this.shadowMat.uniforms.uOpacity.value = 0.82 * Math.exp(-lift * 2.4) * (1 - this.dissolve)
+    this.shadowMat.uniforms.uOpacity.value = 0.7 * Math.exp(-lift * 2.4) * (1 - this.dissolve)
     this.shadowMat.uniforms.uTight.value = 1 + lift * 2.4
     this.shadow.position.y = 0.012 - (this.group.position.y - WORLD.GROUND_Y)
+    // Projected cast shadow: fade a touch when airborne (it detaches).
+    this.castShadowMat.uniforms.uOpacity.value = 0.5 * Math.exp(-lift * 1.6) * (1 - this.dissolve)
 
     // Pull the shared lighting description into the material.
     if (light) {
@@ -387,6 +465,8 @@ class FighterRig {
     this.material.dispose()
     this.shadow.geometry.dispose()
     this.shadowMat.dispose()
+    this.castShadowMesh.geometry.dispose()
+    this.castShadowMat.dispose()
   }
 }
 

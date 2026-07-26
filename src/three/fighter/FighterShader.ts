@@ -120,7 +120,7 @@ export function createFighterUniforms(): FighterUniforms {
     uLean: { value: 0 },
     uWobble: { value: 0 },
     uCameraPos: { value: new THREE.Vector3() },
-    uParallax: { value: 0.028 },
+    uParallax: { value: 0.014 },
     uSilhouette: { value: 0 },
     uFogColor: { value: new THREE.Color(0x0a0716) },
     uFogDensity: { value: 0.02 },
@@ -305,7 +305,22 @@ export const FIGHTER_FRAGMENT = /* glsl */ `
     // Dark hair / leather: low luma, low-mid sat — takes a tight anisotropic-ish
     // sheen. Cloth is everything else: matte.
     float dark = (1.0 - smoothstep(0.06, 0.28, lumA));
+    // Denim: blue-dominant, mid luma. Dead matte + slightly cool so it never
+    // reads like the same plastic as skin or a cotton shirt.
+    float denim = smoothstep(0.0, 0.05, albedo.b - albedo.r) * smoothstep(0.07, 0.2, sat)
+                  * smoothstep(0.05, 0.2, lumA) * (1.0 - smoothstep(0.7, 0.9, lumA));
     float cloth = clamp(1.0 - skin - metal, 0.0, 1.0);
+
+    // Interior mask: ~1 deep inside the silhouette, →0 within a few px of the
+    // edge. Keeps the rim glow off the ink outline so the pixel silhouette
+    // stays razor-crisp instead of blooming into a halo.
+    float aR = 4.0 * t;
+    float aWide =
+        texture2D(uAlbedo, uvP + vec2( aR, 0.0)).a +
+        texture2D(uAlbedo, uvP + vec2(-aR, 0.0)).a +
+        texture2D(uAlbedo, uvP + vec2(0.0,  aR)).a +
+        texture2D(uAlbedo, uvP + vec2(0.0, -aR)).a;
+    float interior = smoothstep(2.2, 3.9, aWide);
 
     // ---- Cavity / ambient occlusion from the height field -----------------
     // Compare the local height to a wider low-frequency average; recessed
@@ -321,8 +336,8 @@ export const FIGHTER_FRAGMENT = /* glsl */ `
     wide += texture2D(uHeight, uvP + vec2(0.0,  6.0 * t)).r;
     wide += texture2D(uHeight, uvP + vec2(0.0, -6.0 * t)).r;
     wide *= 0.125;
-    float cavity = clamp((hC - wide) * 3.4 + 0.5, 0.0, 1.0);
-    float ao = mix(1.0, cavity, uAO * 0.7);
+    float cavity = clamp((hC - wide) * 4.2 + 0.5, 0.0, 1.0);
+    float ao = mix(1.0, cavity, uAO * 0.85);
     // Grounding: the lower body sits in floor contact occlusion.
     float footAO = mix(0.55, 1.0, smoothstep(0.0, 0.16, vHeightNorm));
     ao *= mix(1.0, footAO, uAO);
@@ -363,24 +378,29 @@ export const FIGHTER_FRAGMENT = /* glsl */ `
     // Floor bounce: soft up-from-below light on the lower body, stage-tinted.
     float bounce = clamp(-N.y * 0.5 + 0.5, 0.0, 1.0) * (1.0 - smoothstep(0.0, 0.5, vHeightNorm));
     diffuse += uBounceColor * uBounceIntensity * bounce;
+    // Denim reads cooler & darker than skin/cotton — subtle desaturation toward
+    // the fill/bounce hue sells it as heavy cotton twill, not plastic.
+    diffuse *= mix(1.0, 0.9, denim);
 
     // ---- Specular (material-aware) ---------------------------------------
     vec3 H = normalize(Lkey + V);
     float ndh = max(dot(N, H), 0.0);
-    // Skin: broad soft sheen. Cloth: almost none. Metal/hair: tight & bright.
+    // Skin: broad soft sheen. Cotton: faint. Denim: dead matte. Metal/hair: tight.
     float specSkin  = pow(ndh, 18.0) * 0.30 * skin;
-    float specCloth = pow(ndh, 30.0) * 0.08 * cloth;
+    float specCloth = pow(ndh, 30.0) * 0.08 * cloth * (1.0 - denim);
     float specMetal = pow(ndh, 90.0) * 1.15 * (metal + dark * 0.5);
     vec3 specular = uKeyColor * (specSkin + specCloth + specMetal) * uKeyIntensity * 0.3 * selfShadow;
     // Sweat sheen at low HP / exertion: extra broad wet highlight on skin.
     specular += uKeyColor * pow(ndh, 40.0) * skin * uSweat * 0.6 * uKeyIntensity * 0.3;
 
     // ---- Rim / back light -------------------------------------------------
-    float fres = pow(1.0 - clamp(dot(N, V), 0.0, 1.0), 2.6);
+    float fres = pow(1.0 - clamp(dot(N, V), 0.0, 1.0), 2.1);
     float rimTerm = clamp(dot(N, normalize(uRimDir)) * 0.5 + 0.5, 0.0, 1.0);
     vec3 rim = uRimColor * uRimIntensity * fres * rimTerm;
-    // Accent rim: the fighter's identity colour, strongest at the silhouette.
-    rim += uAccent * fres * (0.5 + uSuperGlow * 2.4);
+    // Accent rim: the fighter's identity colour, mostly reserved for super state
+    // so neutral frames don't halo. Gated by interior mask to stay off outline.
+    rim += uAccent * fres * (0.14 + uSuperGlow * 2.2);
+    rim *= mix(0.15, 1.0, interior);
 
     // ---- Impact point light ----------------------------------------------
     vec3 toFlash = uFlashPos.xyz - vWorldPos;
@@ -391,7 +411,7 @@ export const FIGHTER_FRAGMENT = /* glsl */ `
     vec3 ambient = uAmbientColor * uAmbientIntensity;
 
     vec3 lit = albedo * (diffuse + ambient + flashL) * ao + subsurface * ao
-             + specular + rim * albedo * 0.55 + rim * 0.32;
+             + specular + rim * albedo * 0.5 + rim * 0.2;
     vec3 color = lit;
 
     // ---- Damage state: desaturate + bruise toward the accent's complement --
@@ -419,7 +439,7 @@ export const FIGHTER_FRAGMENT = /* glsl */ `
     // Sample the alpha ring around the fragment; where the sprite is about to
     // end, darken. Preserves the Street-Fighter linework read at any zoom.
     if (uOutline > 0.001) {
-      float texel = 1.6 / 1024.0;
+      float texel = uTexel * 1.4;
       float aSum = 0.0;
       aSum += texture2D(uAlbedo, uvP + vec2( texel, 0.0)).a;
       aSum += texture2D(uAlbedo, uvP + vec2(-texel, 0.0)).a;
@@ -427,7 +447,10 @@ export const FIGHTER_FRAGMENT = /* glsl */ `
       aSum += texture2D(uAlbedo, uvP + vec2(0.0, -texel)).a;
       float edge = clamp(1.0 - aSum * 0.25, 0.0, 1.0);
       edge = smoothstep(0.25, 0.85, edge);
-      color = mix(color, uOutlineColor, edge * uOutline * base.a);
+      // Tint the ink line slightly with the scene ambient so it sits in the
+      // world instead of reading as a pure-black cutout sticker border.
+      vec3 inkCol = mix(uOutlineColor, uAmbientColor * 0.5, 0.35);
+      color = mix(color, inkCol, edge * uOutline * base.a);
     }
 
     float alpha = base.a;

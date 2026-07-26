@@ -430,13 +430,41 @@ export const FIGHTER_FRAGMENT = /* glsl */ `
              + specular + rim * albedo * 0.5 + rim * 0.2;
     vec3 color = lit;
 
-    // ---- Damage state: grime + bruise that KEEPS volume -------------------
-    // Multiply toward a darker warm-grey (dirt/bruising) rather than pushing to
-    // flat luminance, so the lit form survives at low HP. A light desaturation
-    // adds the "beaten up" read without pancaking the shading.
-    color *= mix(vec3(1.0), vec3(1.02, 0.80, 0.75), uDamage * 0.5);
-    float dlum = dot(color, vec3(0.299, 0.587, 0.114));
-    color = mix(color, vec3(dlum), uDamage * 0.12);
+    // ---- Damage state: grime, fatigue, flush, bruising & sweat ------------
+    // All terms are multiplies or warm additives (never a mix to flat grey), so
+    // the sculpted form survives at low HP while the fighter clearly reads as
+    // beaten up. Grime/bruise noise is kept low-frequency so it never fights
+    // the crisp pixel albedo.
+    if (uDamage > 0.001) {
+      float dmg = uDamage;
+      // Slow, heavy breathing pulse — drives the flush + sheen throb.
+      float breathP = 0.5 + 0.5 * sin(uTime * 2.4);
+
+      // (1) Grime / scuffs: dirt that settles into cavities and the lower body.
+      float grime = noise(uvP * 6.0) * 0.6 + noise(uvP * 13.0) * 0.4;
+      float lowBody = smoothstep(0.68, 0.12, vUv.y);
+      float grimeMask = clamp(grime * (0.30 + 0.70 * (1.0 - cavity)) * (0.4 + 0.6 * lowBody) * dmg, 0.0, 1.0);
+      color *= mix(vec3(1.0), vec3(0.52, 0.45, 0.40), grimeMask * 0.72);
+
+      // (2) Overall fatigue: gentle warm-biased darken + light desaturation.
+      color *= mix(vec3(1.0), vec3(0.90, 0.80, 0.76), dmg * 0.45);
+      float dlum = dot(color, vec3(0.299, 0.587, 0.114));
+      color = mix(color, vec3(dlum), dmg * 0.12);
+
+      // (3) Skin flush: exertion floods the face/arms with warm blood; throbs
+      //     with the breathing pulse. Additive so it reads as heat, not paint.
+      color += vec3(0.12, 0.015, 0.0) * skin * uExertion * (0.45 + 0.55 * breathP);
+
+      // (4) Bruising: cool blotches on skin at heavy damage.
+      float bruise = smoothstep(0.74, 0.92, noise(uvP * 9.0 + 3.1)) * skin;
+      color = mix(color, color * vec3(0.68, 0.62, 0.86), bruise * smoothstep(0.45, 1.0, dmg) * 0.55);
+
+      // (5) Sweat beads: sparse high-freq glints on upper-body skin, gated by
+      //     the sweat term so a fresh hit visibly spikes them.
+      float upper = smoothstep(0.32, 0.86, vUv.y);
+      float bead = smoothstep(0.92, 0.99, noise(uvP * 48.0));
+      color += uKeyColor * bead * skin * upper * uSweat * 1.1 * uKeyIntensity * 0.3;
+    }
 
     // ---- Super charge: energy scanline crawl over the body ----------------
     if (uSuperGlow > 0.001) {

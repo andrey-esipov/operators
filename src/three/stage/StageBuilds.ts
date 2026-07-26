@@ -7,6 +7,7 @@ import {
   structureMat,
   glowMat,
   makeScreen,
+  radialGlow,
   trussBeam,
   spotCan,
   lightShaft,
@@ -152,58 +153,93 @@ function foreground(b: StageBuild) {
 // -- individual stages -------------------------------------------------------
 
 function buildPrePmf(b: StageBuild, cfg: StageConfig, flags: QualityFlags) {
-  // THE GARAGE — cluttered startup garage: shelving, hanging bulbs, workbench,
-  // a roll-up door glowing with dawn light, whiteboards.
-  const s = cfg.structure
-  // back wall
-  const wall = new THREE.Mesh(new THREE.PlaneGeometry(40, 20), structureMat({ color: 0x1a1520, roughness: 0.95, metalness: 0.05 }))
-  wall.position.set(0, 6, -16)
+  // THE GARAGE — a scrappy startup garage backlit by dawn through a roll-up
+  // door: pegboard, shelving with boxes, a whiteboard covered in scribbles,
+  // hanging work-lamps. Warm, cluttered, human.
+  // back + side walls (brighter so the room reads, not a black void)
+  const wall = new THREE.Mesh(new THREE.PlaneGeometry(44, 22), structureMat({ color: 0x33262c, roughness: 0.95, metalness: 0.04 }))
+  wall.position.set(0, 7, -16)
   wall.receiveShadow = true
   b.add(wall)
-  // roll-up door with dawn glow behind
-  const door = new THREE.Mesh(new THREE.PlaneGeometry(9, 8), structureMat({ color: 0x0e0b12, roughness: 1 }))
-  door.position.set(-9, 4.2, -15.7)
-  b.add(door)
-  const dawn = makeScreen(8.4, 7.4, 'grid', 0xffb257, 0xff7a2c, 0.5, 4)
-  dawn.mesh.position.set(-9, 4.2, -15.9)
+  const sideL = new THREE.Mesh(new THREE.PlaneGeometry(20, 22), structureMat({ color: 0x2a1f26, roughness: 0.95 }))
+  sideL.position.set(-13, 7, -8); sideL.rotation.y = Math.PI / 2.4
+  b.add(sideL)
+  const sideR = sideL.clone(); sideR.position.set(13, 7, -8); sideR.rotation.y = -Math.PI / 2.4
+  b.add(sideR)
+
+  // roll-up door with a big warm dawn glow blasting in (motivates the key)
+  const doorFrame = new THREE.Mesh(new THREE.BoxGeometry(9.4, 8.4, 0.4), structureMat({ color: 0x141016, roughness: 0.8, metalness: 0.3 }))
+  doorFrame.position.set(-8.5, 4.4, -15.4)
+  b.add(doorFrame)
+  // solid blinding dawn light pouring through the opening (radial, not a black grid)
+  const dawn = radialGlow(9.2, 8.2, 0xfff2d0, 0xff8f3a, 1.35)
+  dawn.mesh.position.set(-8.5, 4.4, -15.55)
   b.add(dawn.mesh)
-  b.onUpdate((t) => (dawn.mat.uniforms.uTime.value = t))
-  // shelving racks (right)
-  for (let i = 0; i < 3; i++) {
-    const rack = new THREE.Mesh(new THREE.BoxGeometry(4.5, 0.25, 1.6), structureMat({ color: s, roughness: 0.8, metalness: 0.3 }))
-    rack.position.set(8, 1.6 + i * 2.1, -13)
-    rack.castShadow = true
+  // wide soft halo bleeding past the frame into the room
+  const dawnGlow = radialGlow(20, 17, 0xffcf90, 0xff7a2e, 0.5)
+  dawnGlow.mesh.position.set(-8.5, 4.6, -15.2)
+  b.add(dawnGlow.mesh)
+  b.onUpdate((t) => { dawn.mat.uniforms.uTime.value = t; dawnGlow.mat.uniforms.uTime.value = t })
+  // roll-up door slats (partly open)
+  for (let i = 0; i < 4; i++) {
+    const slat = new THREE.Mesh(new THREE.BoxGeometry(9, 0.5, 0.15), structureMat({ color: 0x2a2028, roughness: 0.7, metalness: 0.5 }))
+    slat.position.set(-8.5, 7.4 + i * 0.55, -15.2)
+    b.add(slat)
+  }
+
+  // shelving racks (right) with warm edge-lit uprights + boxes
+  for (let i = 0; i < 4; i++) {
+    const rack = new THREE.Mesh(new THREE.BoxGeometry(5.2, 0.22, 1.7), structureMat({ color: 0x4a3a2a, roughness: 0.8, metalness: 0.3 }))
+    rack.position.set(8.5, 1.3 + i * 2.0, -12.5)
+    rack.castShadow = true; rack.receiveShadow = true
     b.add(rack)
-    // boxes on shelves
     for (let j = 0; j < 3; j++) {
-      const box = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.8, 0.9), structureMat({ color: 0x6a4a2a, roughness: 0.95 }))
-      box.position.set(6.6 + j * 1.0, 2.0 + i * 2.1, -13)
+      const shade = 0x6a4a2a + j * 0x040804
+      const box = new THREE.Mesh(new THREE.BoxGeometry(1.1, 1.0, 1.0), structureMat({ color: shade, roughness: 0.95 }))
+      box.position.set(6.9 + j * 1.15, 1.9 + i * 2.0, -12.5)
       box.castShadow = true
       b.add(box)
     }
   }
-  // whiteboard with scribbles
-  const wb = makeScreen(5, 3, 'neural', 0x9ad6ff, 0xff9d3c, 0.7, 8)
-  wb.mesh.position.set(4.5, 4.5, -15.6)
+  // vertical rack uprights with warm accent strips
+  for (const ux of [6.4, 10.6]) {
+    const up = new THREE.Mesh(new THREE.BoxGeometry(0.18, 8.4, 0.18), structureMat({ color: 0x2a2028, roughness: 0.7, metalness: 0.6 }))
+    up.position.set(ux, 4.4, -12.5)
+    b.add(up)
+  }
+
+  // whiteboard with scribbles (a real framed board)
+  const wbFrame = new THREE.Mesh(new THREE.BoxGeometry(5.4, 3.4, 0.16), structureMat({ color: 0xb8b0a0, roughness: 0.5, metalness: 0.2 }))
+  wbFrame.position.set(3.6, 4.7, -15.4)
+  b.add(wbFrame)
+  const wb = makeScreen(5, 3, 'neural', 0x2b6cff, 0xff5a3c, 0.85, 8)
+  wb.mesh.position.set(3.6, 4.7, -15.3)
   b.add(wb.mesh)
   b.onUpdate((t) => (wb.mat.uniforms.uTime.value = t))
-  // hanging bulbs (practical glow + swing)
+
+  // hanging work-lamps (bright emissive bulb + conical shade) that swing
   for (let i = 0; i < 3; i++) {
     const x = -3 + i * 3
-    const wire = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 3, 6), structureMat({ color: 0x111, roughness: 1 }))
+    const wire = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 3, 6), structureMat({ color: 0x0a0a0a, roughness: 1 }))
     wire.position.set(x, 8, -6)
     b.add(wire)
-    const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 10), glowMat(0xffd9a0, 1))
+    const shade = new THREE.Mesh(new THREE.ConeGeometry(0.4, 0.4, 14, 1, true), structureMat({ color: 0x2a2020, roughness: 0.6, metalness: 0.6 }))
+    shade.position.set(x, 6.7, -6)
+    b.add(shade)
+    const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.2, 12, 10), glowMat(0xffe6b0, 1))
     bulb.position.set(x, 6.5, -6)
     b.add(bulb)
+    const halo = new THREE.Mesh(new THREE.SphereGeometry(0.5, 12, 10), glowMat(0xffcf82, 0.25))
+    halo.position.copy(bulb.position)
+    b.add(halo)
     b.onUpdate((t) => {
       const sw = Math.sin(t * 0.8 + i * 1.3) * 0.25
-      bulb.position.x = x + sw
-      wire.position.x = x + sw * 0.5
-      wire.rotation.z = -sw * 0.06
+      bulb.position.x = x + sw; halo.position.x = x + sw
+      shade.position.x = x + sw; wire.position.x = x + sw * 0.5
+      wire.rotation.z = -sw * 0.06; shade.rotation.z = -sw * 0.04
     })
   }
-  flankPillars(b, cfg, 6.4, -9, cfg.trim)
+  flankPillars(b, cfg, 6.6, -9.5, cfg.trim)
   overheadRig(b, cfg, flags, cfg.shaftColor)
   foreground(b)
 }
@@ -286,30 +322,64 @@ function buildHypergrowth(b: StageBuild, cfg: StageConfig, flags: QualityFlags) 
 }
 
 function buildPlateau(b: StageBuild, cfg: StageConfig, flags: QualityFlags) {
-  // THE FLATLINE — a stalled, sombre plateau: a giant flatlining EKG board,
-  // sparse monolith slabs receding to a dead-flat horizon.
-  const board = makeScreen(14, 4, 'ekg', cfg.screen.hue, cfg.screen.hue2, 1.1, 3)
-  board.mesh.position.set(0, 5.5, -15)
+  // THE FLATLINE — a stalled growth plateau: a giant flatlining chart board on
+  // a stand, stepped terraces that climb then die flat, receding monolith
+  // slabs. Sombre magenta, but with real depth and readable silhouettes.
+  // framed chart board on a stand
+  const boardFrame = new THREE.Mesh(new THREE.BoxGeometry(14.8, 4.8, 0.4), structureMat({ color: 0x140b22, roughness: 0.5, metalness: 0.5 }))
+  boardFrame.position.set(0, 6.2, -15)
+  b.add(boardFrame)
+  const board = makeScreen(14, 4, 'ekg', cfg.screen.hue, cfg.screen.hue2, 1.2, 3)
+  board.mesh.position.set(0, 6.2, -14.8)
   b.add(board.mesh)
-  const bez = new THREE.Mesh(new THREE.PlaneGeometry(14.6, 4.6), structureMat({ color: 0x0a0714, roughness: 0.6, metalness: 0.4 }))
-  bez.position.set(0, 5.5, -15.1)
-  b.add(bez)
+  const boardTrim = new THREE.Mesh(new THREE.BoxGeometry(15.2, 0.12, 0.12), glowMat(cfg.trim, 0.7))
+  boardTrim.position.set(0, 3.7, -14.7)
+  b.add(boardTrim)
+  for (const lx of [-6.6, 6.6]) {
+    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.4, 4.4, 0.4), structureMat({ color: cfg.structure, roughness: 0.7, metalness: 0.5 }))
+    leg.position.set(lx, 1.8, -14.8)
+    leg.castShadow = true
+    b.add(leg)
+  }
   b.onUpdate((t) => (board.mat.uniforms.uTime.value = t))
-  // receding monolith slabs
+
+  // stepped terraces — a bar-graph that climbs then flatlines into the plateau,
+  // built as glowing-edged slabs receding on both sides for real depth.
+  const heights = [2.2, 3.4, 4.4, 5.0, 5.2, 5.2, 5.2, 5.2]
+  for (const sign of [-1, 1]) {
+    for (let i = 0; i < heights.length; i++) {
+      const h = heights[i]
+      const x = sign * (4.2 + i * 1.35)
+      const z = -9.5 - i * 0.5
+      const step = new THREE.Mesh(
+        new THREE.BoxGeometry(1.2, h, 1.2),
+        structureMat({ color: cfg.structure, roughness: 0.8, metalness: 0.35 }),
+      )
+      step.position.set(x, h / 2, z)
+      step.castShadow = true; step.receiveShadow = true
+      b.add(step)
+      // glowing top edge — brighter toward the flat plateau to emphasise stall
+      const capBright = 0.4 + 0.5 * (i / heights.length)
+      const cap = new THREE.Mesh(new THREE.BoxGeometry(1.24, 0.09, 1.24), glowMat(cfg.trim, capBright))
+      cap.position.set(x, h + 0.02, z)
+      b.add(cap)
+    }
+  }
+
+  // receding tall monolith slabs behind for the far silhouette
   const rnd = mulberry(21)
-  for (let i = 0; i < 8; i++) {
+  for (let i = 0; i < 6; i++) {
     const side = i % 2 === 0 ? -1 : 1
-    const depth = -8 - i * 1.6
-    const h = 5 + rnd() * 4
-    const slab = new THREE.Mesh(new THREE.BoxGeometry(1.4, h, 1.0), structureMat({ color: cfg.structure, roughness: 0.85, metalness: 0.3 }))
-    slab.position.set(side * (5 + rnd() * 3), h / 2, depth)
+    const depth = -13 - i * 1.4
+    const h = 8 + rnd() * 4
+    const slab = new THREE.Mesh(new THREE.BoxGeometry(1.6, h, 1.0), structureMat({ color: cfg.structure, roughness: 0.85, metalness: 0.3 }))
+    slab.position.set(side * (7 + rnd() * 2), h / 2, depth)
     slab.castShadow = true
     b.add(slab)
-    const strip = new THREE.Mesh(new THREE.BoxGeometry(0.1, h * 0.8, 0.1), glowMat(cfg.trim, 0.5))
-    strip.position.set(side * (5 + rnd() * 3) - side * 0.75, h / 2, depth + 0.55)
+    const strip = new THREE.Mesh(new THREE.BoxGeometry(0.12, h * 0.85, 0.12), glowMat(cfg.trim, 0.55))
+    strip.position.set(side * (7 + rnd() * 2) - side * 0.86, h / 2, depth + 0.55)
     b.add(strip)
   }
-  flankPillars(b, cfg, 6.8, -9, cfg.trim)
   overheadRig(b, cfg, flags, cfg.shaftColor)
   foreground(b)
 }
@@ -329,6 +399,13 @@ function buildAiNative(b: StageBuild, cfg: StageConfig, flags: QualityFlags) {
         tower.position.set(x, h / 2, z)
         tower.castShadow = true
         b.add(tower)
+        // near-edge accent strip so the silhouette reads against the dark room
+        const edge = new THREE.Mesh(new THREE.BoxGeometry(0.1, h * 0.92, 0.1), glowMat(cfg.trim, 0.55))
+        edge.position.set(x - sign * 0.9, h / 2, z + 0.72)
+        b.add(edge)
+        const edge2 = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 1.44), glowMat(0x59ffe0, 0.4))
+        edge2.position.set(x - sign * 0.9, h - 0.3, z)
+        b.add(edge2)
         // face of blinking lights
         const face = makeScreen(1.5, h - 0.6, 'data', cfg.screen.hue, cfg.screen.hue2, 0.8, i * 10 + sign * 3 + row)
         face.mesh.position.set(x - sign * 0.92, h / 2, z)

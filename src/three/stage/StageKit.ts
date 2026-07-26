@@ -87,6 +87,65 @@ export function glowMat(color: number, opacity = 1): THREE.MeshBasicMaterial {
 }
 
 // ---------------------------------------------------------------------------
+// Radial light glow — a soft blooming disc of light (dawn through a door,
+// a blown-out practical, a projector cone hitting fog). Additive, animated
+// with a slow breathing shimmer + faint vertical light bars so it reads as
+// real light pouring through, not a flat sticker.
+// ---------------------------------------------------------------------------
+
+export function radialGlow(
+  w: number,
+  h: number,
+  inner: number,
+  outer: number,
+  bright = 1,
+): { mesh: THREE.Mesh; mat: THREE.ShaderMaterial } {
+  const mat = new THREE.ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    fog: false,
+    toneMapped: false,
+    uniforms: {
+      uTime: { value: 0 },
+      uInner: { value: new THREE.Color(inner) },
+      uOuter: { value: new THREE.Color(outer) },
+      uBright: { value: bright },
+    },
+    vertexShader: /* glsl */ `
+      varying vec2 vUv;
+      void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }
+    `,
+    fragmentShader: /* glsl */ `
+      precision highp float;
+      varying vec2 vUv;
+      uniform float uTime; uniform vec3 uInner; uniform vec3 uOuter; uniform float uBright;
+      float hash(vec2 p){ p=fract(p*vec2(233.34,851.73)); p+=dot(p,p+23.45); return fract(p.x*p.y); }
+      void main(){
+        vec2 p = (vUv - 0.5) * vec2(1.7, 2.0);
+        float d = length(p);
+        // soft blooming core -> falloff
+        float core = smoothstep(1.05, 0.0, d);
+        core = pow(core, 1.7);
+        float hot = smoothstep(0.42, 0.0, d);
+        // faint vertical light bars (god-ray suggestion through the opening)
+        float bars = 0.0;
+        bars += 0.10 * smoothstep(0.5, 1.0, sin(vUv.x*11.0 + uTime*0.15));
+        bars *= smoothstep(1.0, 0.15, d);
+        // gentle breathing + dust flicker
+        float breathe = 0.9 + 0.1 * sin(uTime*0.6);
+        float dust = 0.96 + 0.04 * hash(floor(vUv*80.0) + floor(uTime*3.0));
+        vec3 col = mix(uOuter, uInner, clamp(hot + core*0.6, 0.0, 1.0));
+        float a = (core + hot*0.8 + bars) * uBright * breathe * dust;
+        gl_FragColor = vec4(col * (0.6 + a), clamp(a, 0.0, 1.0));
+      }
+    `,
+  })
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat)
+  return { mesh, mat }
+}
+
+// ---------------------------------------------------------------------------
 // Animated screen panel
 // ---------------------------------------------------------------------------
 

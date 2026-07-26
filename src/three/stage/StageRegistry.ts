@@ -32,6 +32,9 @@ export interface StageConfig {
     /** Emissive grid lines. */
     gridColor: number
     gridIntensity: number
+    /** Surface pattern id: 0 plate/grid, 1 concrete, 2 hazard, 3 hex-lattice,
+     *  4 marble, 5 painted-lane. */
+    pattern: number
   }
   /** Colour of the light shafts / god rays. */
   shaftColor: number
@@ -87,7 +90,7 @@ export const STAGES: Record<ScenarioId, StageConfig> = {
       0x0d0718,
       1.02,
     ),
-    floor: { color: 0x1c1330, roughness: 0.42, metalness: 0.1, reflectivity: 0.5, gridColor: 0xf77f00, gridIntensity: 0.55 },
+    floor: { color: 0x1c1330, roughness: 0.42, metalness: 0.1, reflectivity: 0.5, gridColor: 0xf77f00, gridIntensity: 0.55, pattern: 1 },
     shaftColor: 0xffb05a,
     shaftIntensity: 0.5,
     motes: { color: 0xffca7a, density: 0.7, drift: 0.35 },
@@ -116,7 +119,7 @@ export const STAGES: Record<ScenarioId, StageConfig> = {
       0x04101c,
       1.05,
     ),
-    floor: { color: 0x0d2038, roughness: 0.24, metalness: 0.45, reflectivity: 0.78, gridColor: 0x06d6a0, gridIntensity: 0.8 },
+    floor: { color: 0x0d2038, roughness: 0.24, metalness: 0.45, reflectivity: 0.78, gridColor: 0x06d6a0, gridIntensity: 0.8, pattern: 2 },
     shaftColor: 0x66e6ff,
     shaftIntensity: 0.72,
     motes: { color: 0x9ff0ff, density: 1.0, drift: 0.7 },
@@ -145,7 +148,7 @@ export const STAGES: Record<ScenarioId, StageConfig> = {
       0x0f0620,
       1.0,
     ),
-    floor: { color: 0x1d1136, roughness: 0.3, metalness: 0.3, reflectivity: 0.68, gridColor: 0xf72585, gridIntensity: 0.7 },
+    floor: { color: 0x1d1136, roughness: 0.3, metalness: 0.3, reflectivity: 0.68, gridColor: 0xf72585, gridIntensity: 0.7, pattern: 0 },
     shaftColor: 0xc766ff,
     shaftIntensity: 0.62,
     motes: { color: 0xe0a0ff, density: 0.8, drift: 0.28 },
@@ -174,7 +177,7 @@ export const STAGES: Record<ScenarioId, StageConfig> = {
       0x02101a,
       1.06,
     ),
-    floor: { color: 0x07202e, roughness: 0.18, metalness: 0.6, reflectivity: 0.88, gridColor: 0x00e5ff, gridIntensity: 0.95 },
+    floor: { color: 0x07202e, roughness: 0.18, metalness: 0.6, reflectivity: 0.88, gridColor: 0x00e5ff, gridIntensity: 0.95, pattern: 3 },
     shaftColor: 0x59ffe0,
     shaftIntensity: 0.8,
     motes: { color: 0x8cffe8, density: 1.2, drift: 0.9 },
@@ -203,7 +206,7 @@ export const STAGES: Record<ScenarioId, StageConfig> = {
       0x140718,
       1.02,
     ),
-    floor: { color: 0x24122c, roughness: 0.26, metalness: 0.42, reflectivity: 0.74, gridColor: 0xffd60a, gridIntensity: 0.72 },
+    floor: { color: 0x24122c, roughness: 0.26, metalness: 0.42, reflectivity: 0.74, gridColor: 0xffd60a, gridIntensity: 0.72, pattern: 4 },
     shaftColor: 0xffd97a,
     shaftIntensity: 0.66,
     motes: { color: 0xffe08a, density: 0.9, drift: 0.4 },
@@ -232,7 +235,7 @@ export const STAGES: Record<ScenarioId, StageConfig> = {
       0x150505,
       0.98,
     ),
-    floor: { color: 0x241010, roughness: 0.36, metalness: 0.2, reflectivity: 0.56, gridColor: 0xef233c, gridIntensity: 0.85 },
+    floor: { color: 0x241010, roughness: 0.36, metalness: 0.2, reflectivity: 0.56, gridColor: 0xef233c, gridIntensity: 0.85, pattern: 2 },
     shaftColor: 0xff6a5a,
     shaftIntensity: 0.85,
     motes: { color: 0xff9a72, density: 1.4, drift: 0.5 },
@@ -261,7 +264,7 @@ export const STAGES: Record<ScenarioId, StageConfig> = {
       0x070d18,
       1.04,
     ),
-    floor: { color: 0x101d33, roughness: 0.2, metalness: 0.55, reflectivity: 0.85, gridColor: 0xfcbf49, gridIntensity: 0.6 },
+    floor: { color: 0x101d33, roughness: 0.2, metalness: 0.55, reflectivity: 0.85, gridColor: 0xfcbf49, gridIntensity: 0.6, pattern: 4 },
     shaftColor: 0xffe0a0,
     shaftIntensity: 0.7,
     motes: { color: 0xffeec2, density: 0.6, drift: 0.25 },
@@ -290,7 +293,7 @@ export const STAGES: Record<ScenarioId, StageConfig> = {
       0x160c05,
       1.03,
     ),
-    floor: { color: 0x2a1709, roughness: 0.34, metalness: 0.28, reflectivity: 0.6, gridColor: 0xffd60a, gridIntensity: 0.7 },
+    floor: { color: 0x2a1709, roughness: 0.34, metalness: 0.28, reflectivity: 0.6, gridColor: 0xffd60a, gridIntensity: 0.7, pattern: 5 },
     shaftColor: 0xffc36a,
     shaftIntensity: 0.75,
     motes: { color: 0xffd89a, density: 1.0, drift: 0.55 },

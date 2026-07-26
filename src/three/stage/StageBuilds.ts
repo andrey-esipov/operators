@@ -323,19 +323,41 @@ function buildPrePmf(b: StageBuild, cfg: StageConfig, flags: QualityFlags) {
   const doorFrame = new THREE.Mesh(new THREE.BoxGeometry(12.2, 10.4, 0.5), structureMat({ color: 0x1a1512, roughness: 0.8, metalness: 0.35 }))
   doorFrame.position.set(0, 5.1, -15.9)
   b.add(doorFrame)
-  // inner blinding dawn light (radial, warm core -> orange edge)
-  const dawn = radialGlow(11.4, 9.6, 0xfff4d6, 0xff8f36, 1.5)
-  dawn.mesh.position.set(0, 4.9, -15.7)
+  // inner dawn light behind the door — warm, but dialled back so it reads as a
+  // glow behind a segmented door rather than a blinding spotlight cone
+  const dawn = radialGlow(10.2, 9.2, 0xffe9c2, 0xff8f36, 0.8)
+  dawn.mesh.position.set(0, 4.9, -15.72)
   b.add(dawn.mesh)
-  // wide soft halo spilling into the room
-  const dawnGlow = radialGlow(24, 20, 0xffcf90, 0xff7a2e, 0.55)
-  dawnGlow.mesh.position.set(0, 5.4, -15.4)
+  // wide soft halo spilling into the room (sits BEHIND the door slats)
+  const dawnGlow = radialGlow(22, 18, 0xffcf90, 0xff7a2e, 0.3)
+  dawnGlow.mesh.position.set(0, 5.2, -15.86)
   b.add(dawnGlow.mesh)
   // partly-raised door slats bunched at the top of the opening
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < 4; i++) {
     const slat = new THREE.Mesh(new THREE.BoxGeometry(11.6, 0.42, 0.16), structureMat({ color: 0x241c18, roughness: 0.65, metalness: 0.55 }))
-    slat.position.set(0, 9.1 + i * 0.5, -15.55)
+    slat.position.set(0, 9.3 + i * 0.5, -15.55)
     b.add(slat)
+  }
+  // segmented roll-up door: dark metal slats across the opening with thin warm
+  // seams of light leaking between them, so it clearly reads as a back-lit door
+  for (let i = 0; i < 12; i++) {
+    const y = 0.5 + i * 0.72
+    const slat = new THREE.Mesh(
+      new THREE.BoxGeometry(10.6 - Math.abs(i - 5.5) * 0.12, 0.6, 0.1),
+      structureMat({ color: 0x201712, roughness: 0.55, metalness: 0.6 }),
+    )
+    slat.position.set(0, y, -15.6)
+    b.add(slat)
+    // warm light seam leaking under each slat
+    const seam = new THREE.Mesh(new THREE.PlaneGeometry(10.4 - Math.abs(i - 5.5) * 0.12, 0.12), glowMat(0xffb968, 0.9))
+    seam.position.set(0, y - 0.36, -15.64)
+    b.add(seam)
+  }
+  // vertical guide rails framing the door opening
+  for (const gx of [-5.5, 5.5]) {
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(0.26, 9.4, 0.2), structureMat({ color: 0x181310, roughness: 0.6, metalness: 0.55 }))
+    rail.position.set(gx, 4.9, -15.58)
+    b.add(rail)
   }
   // diagonal sunrise god-ray shafts pouring forward past the fighters
   if (SHAFT_ON(flags)) {
@@ -850,11 +872,50 @@ function buildIpoPrep(b: StageBuild, cfg: StageConfig, flags: QualityFlags) {
   foreground(b, 'atrium')
 }
 
+// A corrugated shipping container: base box + vertical rib detail on the long
+// faces, top/bottom rails, a central door seam and a small painted stencil so it
+// reads as real freight instead of a plain primitive box.
+function shippingContainer(color: number, stencil: number): THREE.Group {
+  const g = new THREE.Group()
+  const w = 3.2, h = 1.4, d = 1.6
+  const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), structureMat({ color, roughness: 0.82, metalness: 0.28 }))
+  body.castShadow = true; body.receiveShadow = true
+  g.add(body)
+  const dark = new THREE.Color(color).multiplyScalar(0.6).getHex()
+  const light = new THREE.Color(color).multiplyScalar(1.25).getHex()
+  // vertical corrugation ribs on the two long (±z) faces
+  const ribMat = structureMat({ color: dark, roughness: 0.85, metalness: 0.3 })
+  for (let i = 0; i < 13; i++) {
+    const rx = -w / 2 + 0.18 + i * ((w - 0.36) / 12)
+    for (const fz of [d / 2 + 0.015, -d / 2 - 0.015]) {
+      const rib = new THREE.Mesh(new THREE.BoxGeometry(0.07, h - 0.16, 0.03), ribMat)
+      rib.position.set(rx, 0, fz)
+      g.add(rib)
+    }
+  }
+  // top & bottom rails + corner posts
+  const railMat = structureMat({ color: light, roughness: 0.6, metalness: 0.4 })
+  for (const ry of [h / 2 - 0.06, -h / 2 + 0.06]) {
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(w + 0.03, 0.12, d + 0.03), railMat)
+    rail.position.set(0, ry, 0)
+    g.add(rail)
+  }
+  // door seam down the middle of one end + a painted stencil block
+  const seam = new THREE.Mesh(new THREE.BoxGeometry(0.05, h - 0.12, 0.02), ribMat)
+  seam.position.set(0, 0, d / 2 + 0.02)
+  g.add(seam)
+  const badge = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 0.32), glowMat(stencil, 0.5))
+  badge.position.set(-w / 2 + 0.7, 0.15, d / 2 + 0.03)
+  g.add(badge)
+  return g
+}
+
 function buildDistribution(b: StageBuild, cfg: StageConfig, flags: QualityFlags) {
   // THE CHANNEL — logistics megahub: stacked shipping containers, gantry crane,
   // conveyor with moving crates, channel/status screens.
   const s = cfg.structure
   const containerColors = [0xc0562c, 0x2c6ac0, 0x2ca05a, 0xc0a02c, 0x8a3ca0]
+  const stencils = [0xffd27a, 0xdfeaff, 0xbfffd0, 0xfff0a8, 0xe6c8ff]
   const rnd = mulberry(31)
   // container stacks (back)
   for (let i = 0; i < 10; i++) {
@@ -863,13 +924,10 @@ function buildDistribution(b: StageBuild, cfg: StageConfig, flags: QualityFlags)
     const bx = side * (4 + rnd() * 8)
     const bz = -11 - rnd() * 6
     for (let j = 0; j < stack; j++) {
-      const c = new THREE.Mesh(
-        new THREE.BoxGeometry(3.2, 1.4, 1.6),
-        structureMat({ color: containerColors[Math.floor(rnd() * containerColors.length)], roughness: 0.85, metalness: 0.25 }),
-      )
+      const ci = Math.floor(rnd() * containerColors.length)
+      const c = shippingContainer(containerColors[ci], stencils[ci])
       c.position.set(bx, 0.7 + j * 1.45, bz)
-      c.castShadow = true
-      c.receiveShadow = true
+      c.rotation.y = (rnd() - 0.5) * 0.14
       b.add(c)
     }
   }
@@ -884,7 +942,7 @@ function buildDistribution(b: StageBuild, cfg: StageConfig, flags: QualityFlags)
     b.add(leg)
   }
   // hanging container from crane
-  const hung = new THREE.Mesh(new THREE.BoxGeometry(3.2, 1.4, 1.6), structureMat({ color: 0xc0562c, roughness: 0.85 }))
+  const hung = shippingContainer(0xc0562c, 0xffd27a)
   hung.position.set(-2, 5.5, -8)
   b.add(hung)
   for (const dx of [-1.4, 1.4]) {

@@ -30,6 +30,9 @@ export interface FloorLook {
   tint: number
   /** Trim ring accent colour (the glowing stage boundary). */
   trim: number
+  /** Surface pattern: 0 plate/grid, 1 concrete, 2 hazard, 3 hex-lattice,
+   *  4 marble, 5 painted-lane. Gives each arena its own floor identity. */
+  pattern: number
 }
 
 // ---------------------------------------------------------------------------
@@ -135,6 +138,7 @@ function floorMaterial(): THREE.ShaderMaterial {
       uBase: { value: new THREE.Color(0x12101d) },
       uGridColor: { value: new THREE.Color(0xf77f00) },
       uGridIntensity: { value: 0.6 },
+      uPattern: { value: 0 },
       uTrimColor: { value: new THREE.Color(0xf77f00) },
       uReflectivity: { value: 0.6 },
       uRoughness: { value: 0.25 },
@@ -179,6 +183,7 @@ function floorMaterial(): THREE.ShaderMaterial {
       uniform vec3 uBase;
       uniform vec3 uGridColor;
       uniform float uGridIntensity;
+      uniform float uPattern;
       uniform vec3 uTrimColor;
       uniform float uReflectivity;
       uniform float uRoughness;
@@ -233,10 +238,48 @@ function floorMaterial(): THREE.ShaderMaterial {
         float pool = 1.0 - smoothstep(1.0, 9.5, length(P - vec2(0.0, 0.4)));
         diff += base * uKeyColor * uKeyIntensity * 0.05 * pool;
 
-        float fine = max(gridLine(P.x*0.5, 1.1), gridLine(P.y*0.5, 1.1));
-        float bold = max(gridLine(P.x*0.125,1.5), gridLine(P.y*0.125,1.5));
+        // --- per-stage floor surface pattern --------------------------------
         float gridFade = 1.0 - smoothstep(5.0, 26.0, rad);
-        vec3 grid = uGridColor * (fine*0.14 + bold*0.5) * uGridIntensity * gridFade;
+        vec3 detail = vec3(0.0);
+        float pm = uPattern;
+        if (pm < 0.5) {
+          // 0 plate: twin-frequency data grid
+          float fine = max(gridLine(P.x*0.5, 1.1), gridLine(P.y*0.5, 1.1));
+          float bold = max(gridLine(P.x*0.125,1.5), gridLine(P.y*0.125,1.5));
+          detail = uGridColor * (fine*0.14 + bold*0.5);
+        } else if (pm < 1.5) {
+          // 1 concrete: sparse expansion joints, barely emissive (oil + wear)
+          float joints = max(gridLine(P.x*0.1, 1.7), gridLine(P.y*0.1, 1.7));
+          detail = uGridColor * joints * 0.14;
+        } else if (pm < 2.5) {
+          // 2 hazard: diagonal caution hatch painted as a ring around the combat
+          // zone (not full-floor candy stripes) + a faint perimeter grid
+          float diag = (P.x - P.y);
+          float stripe = gridLine(diag*0.6 - uTime*0.05, 2.4);
+          float ring = smoothstep(2.6, 3.6, rad) - smoothstep(6.0, 7.8, rad);
+          float edge2 = max(gridLine(P.x*0.16,1.4), gridLine(P.y*0.16,1.4));
+          detail = uGridColor * (stripe*ring*0.55 + edge2*0.1);
+        } else if (pm < 3.5) {
+          // 3 hex/data lattice: triangular mesh of thin emissive lines, pulsing
+          float a = gridLine(P.x*0.5, 1.2);
+          float bl = gridLine((P.x*0.5 + P.y*0.866)*0.5, 1.2);
+          float cl = gridLine((P.x*0.5 - P.y*0.866)*0.5, 1.2);
+          float lat = max(max(a,bl),cl);
+          float pulse = 0.6 + 0.4*sin(rad*0.8 - uTime*1.5);
+          detail = uGridColor * lat * 0.3 * pulse;
+        } else if (pm < 4.5) {
+          // 4 marble: bright thin veins + large inlaid tile seams, no cell grid
+          float veins = smoothstep(0.56, 0.62, fbm(P*0.85 + 9.0));
+          float seams = max(gridLine(P.x*0.085, 1.9), gridLine(P.y*0.085, 1.9));
+          detail = uGridColor * (veins*0.14 + seams*0.4);
+        } else {
+          // 5 lane: painted loading-bay lane lines + a hatched perimeter
+          float lanes = gridLine(P.x*0.18, 2.4);
+          float atEdge = step(6.0, max(abs(P.x), abs(P.y))) * (1.0 - smoothstep(8.0, 9.6, max(abs(P.x), abs(P.y))));
+          float hatch = step(0.5, fract((P.x - P.y)*0.6)) * atEdge;
+          detail = uGridColor * (lanes*0.4 + hatch*0.14);
+        }
+        vec3 grid = detail * uGridIntensity * gridFade;
 
         float sd = rrect(P, uArena, 0.9);
         float edge = smoothstep(0.16, 0.0, abs(sd));
@@ -345,6 +388,7 @@ export class ReflectiveFloor {
     u.uBase.value.setHex(look.base)
     u.uGridColor.value.setHex(look.grid)
     u.uGridIntensity.value = look.gridIntensity
+    u.uPattern.value = look.pattern
     u.uTrimColor.value.setHex(look.trim)
     u.uReflectivity.value = look.reflectivity
     u.uRoughness.value = look.roughness

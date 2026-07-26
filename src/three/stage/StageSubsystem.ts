@@ -205,6 +205,7 @@ export class StageSubsystem implements Subsystem {
       roughness: cfg.floorRoughness,
       tint: cfg.floorTint,
       trim: cfg.trim,
+      pattern: cfg.floor.pattern,
     }
     this.floor.applyLook(look)
 

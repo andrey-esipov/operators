@@ -7,37 +7,40 @@
 import { type Ctx, noiseBuffer, bufferVoice, clamp } from './dsp'
 import type { ImpactRouting } from './impacts'
 
-/** A swishing air whiff — filtered noise with a fast bandpass sweep, moderate width. */
+/** A swishing air whiff — a mono-dominant bandpass sweep with a light stereo shimmer. */
 export function renderWhiff(ctx: Ctx, r: ImpactRouting, when: number, opts: { power?: number; pan?: number; seed?: number } = {}): number {
   const p = clamp(opts.power ?? 0.6, 0, 1)
   const dur = 0.14 + p * 0.1
   const basePan = opts.pan ?? 0
   const bus = ctx.createGain(); bus.gain.value = 1; bus.connect(r.out)
-  if (r.reverb) { const s = ctx.createGain(); s.gain.value = 0.06; bus.connect(s); s.connect(r.reverb) }
-  // Two moderately-decorrelated voices (±0.5) → controlled width ~0.6-0.8, not 0.95.
-  for (const side of [-0.5, 0.5]) {
-    const nb = noiseBuffer(ctx, dur * 1.4, { color: 'white', seed: (opts.seed ?? 51) + (side < 0 ? 0 : 200) })
+  // no reverb send: the decorrelated IR tail would dominate this short quiet sound's stereo image.
+  // main swish — a single centred voice so the image stays anchored (~mono).
+  {
+    const nb = noiseBuffer(ctx, dur * 1.4, { color: 'white', stereo: false, seed: opts.seed ?? 51 })
     const { src, gain } = bufferVoice(ctx, nb)
     const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 1.6
     bp.frequency.setValueAtTime(600, when)
     bp.frequency.exponentialRampToValueAtTime(3200, when + dur * 0.6)
     bp.frequency.exponentialRampToValueAtTime(900, when + dur)
-    const pan = ctx.createStereoPanner(); pan.pan.value = clamp(basePan + side, -1, 1)
+    const pan = ctx.createStereoPanner(); pan.pan.value = clamp(basePan, -1, 1)
     gain.disconnect(); src.connect(gain); gain.connect(bp); bp.connect(pan); pan.connect(bus)
     gain.gain.setValueAtTime(0.0001, when)
-    gain.gain.linearRampToValueAtTime(0.26 * (0.7 + p * 0.6), when + dur * 0.35)
+    gain.gain.linearRampToValueAtTime(0.42 * (0.7 + p * 0.6), when + dur * 0.35)
     gain.gain.exponentialRampToValueAtTime(0.0001, when + dur)
     src.start(when); src.stop(when + dur + 0.02)
   }
-  // centred low-mid "wff" body — anchors the image so it isn't phasey/detached.
-  const nb2 = noiseBuffer(ctx, dur * 1.4, { color: 'pink', seed: (opts.seed ?? 51) + 400 })
-  const bv = bufferVoice(ctx, nb2)
-  const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1400
-  bv.gain.disconnect(); bv.src.connect(bv.gain); bv.gain.connect(lp); lp.connect(bus)
-  bv.gain.gain.setValueAtTime(0.0001, when)
-  bv.gain.gain.linearRampToValueAtTime(0.2 * (0.7 + p * 0.6), when + dur * 0.35)
-  bv.gain.gain.exponentialRampToValueAtTime(0.0001, when + dur)
-  bv.src.start(when); bv.src.stop(when + dur + 0.02)
+  // subtle stereo shimmer — very low level so it adds a touch of air only.
+  for (const side of [-0.35, 0.35]) {
+    const nb = noiseBuffer(ctx, dur * 1.4, { color: 'white', stereo: false, seed: (opts.seed ?? 51) + (side < 0 ? 300 : 500) })
+    const { src, gain } = bufferVoice(ctx, nb)
+    const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 2400; bp.Q.value = 1.2
+    const pan = ctx.createStereoPanner(); pan.pan.value = clamp(basePan + side, -1, 1)
+    gain.disconnect(); src.connect(gain); gain.connect(bp); bp.connect(pan); pan.connect(bus)
+    gain.gain.setValueAtTime(0.0001, when)
+    gain.gain.linearRampToValueAtTime(0.34 * (0.7 + p * 0.6), when + dur * 0.4)
+    gain.gain.exponentialRampToValueAtTime(0.0001, when + dur)
+    src.start(when); src.stop(when + dur + 0.02)
+  }
   return when + dur + 0.03
 }
 
@@ -46,33 +49,33 @@ export function renderFootstep(ctx: Ctx, r: ImpactRouting, when: number, opts: {
   const pan = ctx.createStereoPanner(); pan.pan.value = opts.pan ?? 0
   pan.connect(r.out)
   if (r.reverb) { const s = ctx.createGain(); s.gain.value = 0.14; pan.connect(s); s.connect(r.reverb) }
-  // thud (louder, with a snap)
+  // thud (louder, with a snap) — dominant low plant so centroid stays low
   const o = ctx.createOscillator(); o.type = 'sine'
-  o.frequency.setValueAtTime(135, when)
-  o.frequency.exponentialRampToValueAtTime(52, when + 0.09)
+  o.frequency.setValueAtTime(140, when)
+  o.frequency.exponentialRampToValueAtTime(50, when + 0.09)
   const g = ctx.createGain(); o.connect(g); g.connect(pan)
   g.gain.setValueAtTime(0.0001, when)
-  g.gain.linearRampToValueAtTime(0.55, when + 0.003)
-  g.gain.exponentialRampToValueAtTime(0.0001, when + 0.11)
-  o.start(when); o.stop(when + 0.13)
+  g.gain.linearRampToValueAtTime(0.9, when + 0.003)
+  g.gain.exponentialRampToValueAtTime(0.0001, when + 0.12)
+  o.start(when); o.stop(when + 0.14)
   // surface scuff — broadband grit with a little decay (dirt/mat texture)
   const nb = noiseBuffer(ctx, 0.12, { color: 'brown', seed: opts.seed ?? 88 })
   const nv = bufferVoice(ctx, nb)
-  const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 900; bp.Q.value = 0.7
+  const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 750; bp.Q.value = 0.7
   nv.gain.disconnect(); nv.src.connect(nv.gain); nv.gain.connect(bp); bp.connect(pan)
   nv.gain.gain.setValueAtTime(0.0001, when)
-  nv.gain.gain.linearRampToValueAtTime(0.32, when + 0.003)
+  nv.gain.gain.linearRampToValueAtTime(0.34, when + 0.003)
   nv.gain.gain.exponentialRampToValueAtTime(0.0001, when + 0.09)
   nv.src.start(when); nv.src.stop(when + 0.11)
-  // high scuff tick
+  // high scuff tick (subtle — kept low so the plant reads as a foot, not a click)
   const nb2 = noiseBuffer(ctx, 0.05, { color: 'white', seed: (opts.seed ?? 88) + 3 })
   const nv2 = bufferVoice(ctx, nb2)
-  const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 3500
+  const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 2800
   nv2.gain.disconnect(); nv2.src.connect(nv2.gain); nv2.gain.connect(hp); hp.connect(pan)
-  nv2.gain.gain.setValueAtTime(0.18, when)
-  nv2.gain.gain.exponentialRampToValueAtTime(0.0001, when + 0.04)
-  nv2.src.start(when); nv2.src.stop(when + 0.06)
-  return when + 0.13
+  nv2.gain.gain.setValueAtTime(0.08, when)
+  nv2.gain.gain.exponentialRampToValueAtTime(0.0001, when + 0.03)
+  nv2.src.start(when); nv2.src.stop(when + 0.05)
+  return when + 0.14
 }
 
 /** Cloth/gi movement — soft high-passed noise swish, audible but subtle. */
@@ -92,7 +95,7 @@ export function renderCloth(ctx: Ctx, r: ImpactRouting, when: number, opts: { pa
     const pan = ctx.createStereoPanner(); pan.pan.value = clamp(basePan + side, -1, 1)
     gain.disconnect(); src.connect(gain); gain.connect(bp); bp.connect(pan); pan.connect(bus)
     gain.gain.setValueAtTime(0.0001, when)
-    gain.gain.linearRampToValueAtTime(0.5, when + 0.012)
+    gain.gain.linearRampToValueAtTime(0.95, when + 0.012)
     gain.gain.exponentialRampToValueAtTime(0.0001, when + dur)
     src.start(when); src.stop(when + dur + 0.02)
   }
@@ -129,7 +132,7 @@ export function renderMeterCharge(ctx: Ctx, r: ImpactRouting, when: number, dur 
 
 /** Super activation stinger — a bright, aggressive rising power chord hit. */
 export function renderSuperStinger(ctx: Ctx, r: ImpactRouting, when: number): number {
-  const bus = ctx.createGain(); bus.gain.value = 0.9; bus.connect(r.out)
+  const bus = ctx.createGain(); bus.gain.value = 0.68; bus.connect(r.out)
   if (r.reverb) { const s = ctx.createGain(); s.gain.value = 0.35; bus.connect(s); s.connect(r.reverb) }
   // impact stab
   const o = ctx.createOscillator(); o.type = 'sawtooth'
@@ -183,7 +186,7 @@ export function renderSuperStinger(ctx: Ctx, r: ImpactRouting, when: number): nu
 
 /** Victory sting — bright ascending major fanfare with octave depth + a pad swell. */
 export function renderVictory(ctx: Ctx, r: ImpactRouting, when: number): number {
-  const bus = ctx.createGain(); bus.gain.value = 0.72; bus.connect(r.out)
+  const bus = ctx.createGain(); bus.gain.value = 0.58; bus.connect(r.out)
   if (r.reverb) { const s = ctx.createGain(); s.gain.value = 0.34; bus.connect(s); s.connect(r.reverb) }
   const notes = [523.25, 659.25, 783.99, 1046.5]
   notes.forEach((f, i) => {

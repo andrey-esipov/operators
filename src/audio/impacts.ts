@@ -158,14 +158,20 @@ function oneHit(
   }
 
   // 2) BODY — pitch-swept thump. Delayed ~1.6ms so the crack owns the first
-  //    sample. Carries an optional INHARMONIC partial + a lowpassed noise GRIT
-  //    burst so the low end is a physical thwack, not a clean sine rail.
+  //    sample. Built as a MODAL body (fundamental + inharmonic partner that
+  //    beats) with a slow vibrato + a broadband noise bed that rides the FULL
+  //    decay, so the tail is a physical thwack, not a clean damped sine rail.
   {
     const b = spec.body
     const bWhen = when + 0.0016
     const { osc, gain } = oscVoice(ctx, b.type, b.f0)
     osc.frequency.setValueAtTime(b.f0, bWhen)
     osc.frequency.exponentialRampToValueAtTime(Math.max(20, b.f1), bWhen + b.dur)
+    // vibrato — a few cents of wobble so the tone isn't a static rail
+    const vib = ctx.createOscillator(); vib.type = 'sine'; vib.frequency.value = 7 + (seed % 5)
+    const vibG = ctx.createGain(); vibG.gain.value = b.f0 * 0.012
+    vib.connect(vibG); vibG.connect(osc.frequency)
+    vib.start(bWhen); vib.stop(bWhen + b.dur + 0.02)
     gain.connect(g)
     gain.gain.setValueAtTime(0.0001, bWhen)
     gain.gain.linearRampToValueAtTime(b.level, bWhen + 0.004)
@@ -174,26 +180,35 @@ function oneHit(
     end = Math.max(end, bWhen + b.dur)
 
     if (b.partial && b.partialLevel) {
-      const p2 = oscVoice(ctx, 'sine', b.f0 * b.partial)
-      p2.osc.frequency.setValueAtTime(b.f0 * b.partial, bWhen)
-      p2.osc.frequency.exponentialRampToValueAtTime(Math.max(30, b.f1 * b.partial), bWhen + b.dur * 0.7)
+      // inharmonic ratio (non-integer) → beating against the fundamental.
+      const ratio = b.partial * 0.987
+      const p2 = oscVoice(ctx, 'sine', b.f0 * ratio)
+      p2.osc.frequency.setValueAtTime(b.f0 * ratio, bWhen)
+      p2.osc.frequency.exponentialRampToValueAtTime(Math.max(30, b.f1 * ratio), bWhen + b.dur * 0.85)
       p2.gain.connect(g)
       p2.gain.gain.setValueAtTime(0.0001, bWhen)
       p2.gain.gain.linearRampToValueAtTime(b.partialLevel, bWhen + 0.004)
-      p2.gain.gain.exponentialRampToValueAtTime(0.0001, bWhen + b.dur * 0.7)
-      p2.osc.start(bWhen); p2.osc.stop(bWhen + b.dur * 0.7 + 0.02)
+      p2.gain.gain.exponentialRampToValueAtTime(0.0001, bWhen + b.dur * 0.85)
+      p2.osc.start(bWhen); p2.osc.stop(bWhen + b.dur * 0.85 + 0.02)
     }
 
     if (spec.bodyGrit) {
+      // Broadband noise bed that tracks the WHOLE body decay (not a short
+      // burst) so late-tail energy stays noisy, killing the pure-sine tail.
       const bg = spec.bodyGrit
-      const nb = noiseBuffer(ctx, Math.max(0.03, bg.dur * 1.5), { color: 'brown', seed: seed + 71 })
+      const bedDur = Math.max(bg.dur, b.dur * 0.9)
+      const nb = noiseBuffer(ctx, bedDur * 1.4, { color: 'brown', seed: seed + 71 })
       const { src, gain: gg } = bufferVoice(ctx, nb)
-      const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = bg.lp; lp.Q.value = 0.7
+      const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = bg.lp; lp.Q.value = 0.9
+      lp.frequency.setValueAtTime(bg.lp, bWhen)
+      lp.frequency.exponentialRampToValueAtTime(Math.max(120, bg.lp * 0.55), bWhen + bedDur)
       src.connect(gg); gg.disconnect(); gg.connect(lp); lp.connect(g)
       gg.gain.setValueAtTime(0.0001, bWhen)
       gg.gain.linearRampToValueAtTime(bg.level, bWhen + 0.002)
-      gg.gain.exponentialRampToValueAtTime(0.0001, bWhen + bg.dur)
-      src.start(bWhen); src.stop(bWhen + bg.dur + 0.02)
+      gg.gain.exponentialRampToValueAtTime(bg.level * 0.28, bWhen + bedDur * 0.4)
+      gg.gain.exponentialRampToValueAtTime(0.0001, bWhen + bedDur)
+      src.start(bWhen); src.stop(bWhen + bedDur + 0.02)
+      end = Math.max(end, bWhen + bedDur)
     }
   }
 
@@ -307,12 +322,12 @@ function heavySpec(p: number): HitSpec {
 
 function critSpec(p: number): HitSpec {
   return {
-    gain: 1.02 * (0.85 + 0.35 * p),
+    gain: 1.05 * (0.85 + 0.35 * p),
     crack: { level: 1.05, punch: 3.1, hp: 3000, attack: 0.0006, dur: 0.007, color: 'blue' },
-    sizzle: { level: 0.6, hp: 4000, dur: 0.08, color: 'blue' },
-    body: { level: 1.05, f0: 150, f1: 55, dur: 0.19, type: 'triangle', partial: 2.5, partialLevel: 0.3 },
-    bodyGrit: { level: 0.72, lp: 800, dur: 0.09 },
-    sub: { level: 0.85, f0: 68, f1: 33, dur: 0.24 },
+    sizzle: { level: 0.6, hp: 4000, dur: 0.08, color: 'blue', spread: 0.85 },
+    body: { level: 1.2, f0: 148, f1: 54, dur: 0.2, type: 'triangle', partial: 2.5, partialLevel: 0.34 },
+    bodyGrit: { level: 0.8, lp: 800, dur: 0.14 },
+    sub: { level: 1.05, f0: 66, f1: 32, dur: 0.26 },
     texture: { level: 0.75, bp: 3000, q: 0.65, dur: 0.16, color: 'blue', spread: 1.0, haas: 0.008 },
     ring: { level: 0.3, partials: [1860, 3120, 4700, 6400], dur: 0.34, type: 'sine', spread: 0.7 },
     drive: 0.42,
@@ -322,13 +337,13 @@ function critSpec(p: number): HitSpec {
 
 function exSpec(p: number): HitSpec {
   return {
-    gain: 1.12 * (0.85 + 0.3 * p),
+    gain: 1.45 * (0.85 + 0.3 * p),
     crack: { level: 0.98, punch: 2.6, hp: 3500, attack: 0.0005, dur: 0.006, color: 'blue' },
-    sizzle: { level: 0.55, hp: 4200, dur: 0.09, color: 'blue' },
-    // electric hit still needs a body so it doesn't disconnect from the others.
-    body: { level: 0.85, f0: 170, f1: 78, dur: 0.16, type: 'sawtooth', partial: 2.0, partialLevel: 0.24 },
-    bodyGrit: { level: 0.42, lp: 1000, dur: 0.06 },
-    sub: { level: 0.62, f0: 74, f1: 40, dur: 0.2 },
+    sizzle: { level: 0.55, hp: 4200, dur: 0.09, color: 'blue', spread: 0.9 },
+    // electric hit still needs real body so it doesn't disconnect from the others.
+    body: { level: 1.0, f0: 158, f1: 72, dur: 0.17, type: 'sawtooth', partial: 2.0, partialLevel: 0.28 },
+    bodyGrit: { level: 0.55, lp: 900, dur: 0.12 },
+    sub: { level: 0.9, f0: 70, f1: 38, dur: 0.22 },
     texture: { level: 0.58, bp: 4200, q: 3.5, dur: 0.18, color: 'blue', spread: 0.95, haas: 0.009 },
     ring: { level: 0.42, partials: [1200, 1800, 2700, 4050], dur: 0.28, type: 'sawtooth', spread: 0.9 },
     drive: 0.5,
@@ -373,12 +388,16 @@ export function renderImpact(
         const s = lightSpec(0.7)
         s.gain *= 0.85 + i * 0.12
         s.body.f0 *= 1 + i * 0.12
+        s.body.dur *= 0.8
         s.crack.hp *= 1 + i * 0.1
-        s.reverbSend = 0.16
+        s.reverbSend = 0.1
         end = Math.max(end, oneHit(ctx, routing, when + gp, s, pan + (i - 1) * 0.15, seed + i * 17))
       })
       const cap = heavySpec(0.85)
       cap.gain *= 0.95
+      cap.body.dur *= 0.7
+      cap.sub!.dur *= 0.5
+      cap.reverbSend = 0.09
       end = Math.max(end, oneHit(ctx, routing, when + 0.24, cap, pan, seed + 91))
       return end + IMPACT_END_PAD
     }
@@ -506,29 +525,31 @@ export function renderImpact(
       const s1 = critSpec(0.9); s1.gain *= 0.85; s1.reverbSend = 0.4
       end = Math.max(end, oneHit(ctx, routing, hit1, s1, pan - 0.12, seed + 3))
       const s2: HitSpec = {
-        gain: 1.08,
+        gain: 0.98,
         crack: { level: 1.0, punch: 3.3, hp: 1600, lp: 12000, attack: 0.0013, dur: 0.014, color: 'white' },
-        sizzle: { level: 0.62, hp: 2200, dur: 0.14, color: 'white' },
-        body: { level: 1.0, f0: 150, f1: 46, dur: 0.55, type: 'sine', partial: 2.5, partialLevel: 0.3 },
-        bodyGrit: { level: 0.85, lp: 620, dur: 0.2 },
+        sizzle: { level: 0.62, hp: 2200, dur: 0.14, color: 'white', spread: 1.0 },
+        // bell-like INHARMONIC body (partial 1.53) → a metallic bloom that reads
+        // clearly different from ult's clean low boom on the spectrogram.
+        body: { level: 1.0, f0: 150, f1: 46, dur: 0.55, type: 'sine', partial: 1.53, partialLevel: 0.42 },
+        bodyGrit: { level: 0.85, lp: 700, dur: 0.3 },
         sub: { level: 0.98, f0: 72, f1: 24, dur: 1.0 },
-        texture: { level: 0.66, bp: 2200, q: 0.7, dur: 0.45, color: 'white', spread: 0.95, haas: 0.012 },
-        ring: { level: 0.3, partials: [110, 176, 262, 392], dur: 0.7, type: 'sine', spread: 0.6 },
+        texture: { level: 0.9, bp: 2400, q: 0.7, dur: 0.5, color: 'white', spread: 1.0, haas: 0.013 },
+        ring: { level: 0.4, partials: [231, 349, 523, 785, 1176], dur: 0.8, type: 'sine', spread: 1.0 },
         drive: 0.46,
         reverbSend: 0.55,
       }
       end = Math.max(end, oneHit(ctx, routing, hit2, s2, pan, seed + 11))
 
-      // (c) ascending sparkle arp (bright, resolves upward)
+      // (c) ascending sparkle arp (bright, resolves upward), hard-panned wide
       const spk = [1568, 1976, 2637, 3520, 4699]
       spk.forEach((f, i) => {
         const o = ctx.createOscillator(); o.type = 'triangle'; o.frequency.value = f
         const gg = ctx.createGain()
-        const sp = ctx.createStereoPanner(); sp.pan.value = clamp(pan + (i % 2 ? 0.5 : -0.5), -1, 1)
+        const sp = ctx.createStereoPanner(); sp.pan.value = clamp(pan + (i % 2 ? 0.8 : -0.8), -1, 1)
         o.connect(gg); gg.connect(sp); sp.connect(routing.out)
         const t0 = hit2 + 0.18 + i * 0.07
         gg.gain.setValueAtTime(0.0001, t0)
-        gg.gain.linearRampToValueAtTime(0.09, t0 + 0.008)
+        gg.gain.linearRampToValueAtTime(0.12, t0 + 0.008)
         gg.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.45)
         o.start(t0); o.stop(t0 + 0.5)
         end = Math.max(end, t0 + 0.45)
@@ -541,15 +562,15 @@ export function renderImpact(
       // downward pitch-bent tonal "collapse".
       let end = when
       const big: HitSpec = {
-        gain: 1.1, 
+        gain: 1.65, 
         // KO needs a BROADBAND CRACK, not just rumble — bright, wide, violent.
         crack: { level: 1.05, punch: 3.4, hp: 2000, attack: 0.0014, dur: 0.016, color: 'white' },
-        sizzle: { level: 0.7, hp: 2600, dur: 0.16, color: 'white' },
+        sizzle: { level: 0.7, hp: 2600, dur: 0.16, color: 'white', spread: 0.95 },
         body: { level: 1.0, f0: 130, f1: 40, dur: 0.6, type: 'sine', partial: 2.7, partialLevel: 0.32 },
-        bodyGrit: { level: 0.9, lp: 650, dur: 0.2 },
-        sub: { level: 1.0, f0: 62, f1: 22, dur: 1.1 },
-        texture: { level: 0.9, bp: 2600, q: 0.55, dur: 0.6, color: 'white', spread: 1.0, haas: 0.014 },
-        ring: { level: 0.34, partials: [2100, 3300, 4700, 6100], dur: 0.4, type: 'sine', spread: 0.95 },
+        bodyGrit: { level: 0.9, lp: 850, dur: 0.95 },
+        sub: { level: 1.0, f0: 62, f1: 22, dur: 0.9 },
+        texture: { level: 1.15, bp: 2600, q: 0.55, dur: 0.6, color: 'white', spread: 1.0, haas: 0.014 },
+        ring: { level: 0.44, partials: [2100, 3300, 4700, 6100], dur: 0.45, type: 'sine', spread: 1.0 },
         drive: 0.4,
         reverbSend: 0.6,
       }

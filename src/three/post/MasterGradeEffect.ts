@@ -29,6 +29,7 @@ uniform vec3  lookOffset;
 uniform vec3  lookPower;
 uniform float lookSat;
 uniform float contrast;
+uniform float black;
 uniform vec3  shadowTint;
 uniform vec3  highlightTint;
 uniform float splitBalance;
@@ -116,6 +117,10 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor)
   c = agx(c);
 
   // --- display-referred finishing ----------------------------------------
+  // Filmic black-point crush for density: deepen the toe without clipping
+  // the whole image to black, then renormalise so highlights are unaffected.
+  c = max(c - black, 0.0) / (1.0 - black);
+
   // S-curve contrast around mid grey.
   c = clamp(0.5 + (c - 0.5) * contrast, 0.0, 1.0);
 
@@ -170,6 +175,7 @@ export class MasterGradeEffect extends Effect {
       ['lookPower', new THREE.Uniform(new THREE.Vector3(1, 1, 1))],
       ['lookSat', new THREE.Uniform(1)],
       ['contrast', new THREE.Uniform(1)],
+      ['black', new THREE.Uniform(0.025)],
       ['shadowTint', new THREE.Uniform(new THREE.Vector3(0.5, 0.55, 0.7))],
       ['highlightTint', new THREE.Uniform(new THREE.Vector3(1, 0.95, 0.85))],
       ['splitBalance', new THREE.Uniform(0.5)],
@@ -208,6 +214,7 @@ export class MasterGradeEffect extends Effect {
     ;(this.u('highlightTint').value as THREE.Vector3).set(...g.highlightTint)
     this.u('splitBalance').value = g.splitBalance
     this.u('splitStrength').value = g.splitStrength
+    this.u('black').value = g.black
     ;(this.u('vigColor').value as THREE.Vector3).set(...g.vigColor)
   }
 

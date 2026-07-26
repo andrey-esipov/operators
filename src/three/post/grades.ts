@@ -32,6 +32,8 @@ export interface StageGrade {
   lookSat: number
   /** Display-referred S-curve contrast around 0.5. 1 = neutral. */
   contrast: number
+  /** Post-tonemap black-point crush for filmic density. 0 = none. */
+  black: number
   /** Split toning: shadow + highlight tint colours, balance pivot, strength. */
   shadowTint: [number, number, number]
   highlightTint: [number, number, number]
@@ -66,6 +68,7 @@ const base: StageGrade = {
   lookPower: [1, 1, 1],
   lookSat: 1.0,
   contrast: 1.0,
+  black: 0.025,
   shadowTint: [0.5, 0.55, 0.7],
   highlightTint: [1.0, 0.95, 0.85],
   splitBalance: 0.5,
@@ -131,6 +134,7 @@ export const STAGE_GRADES: Record<ScenarioId, StageGrade> = {
     lookSlope: [1.04, 1.0, 0.97],
     lookSat: 1.16,
     contrast: 1.14,
+    black: 0.03,
     shadowTint: [0.22, 0.44, 0.66],
     highlightTint: [1.0, 0.86, 0.6],
     splitBalance: 0.48,
@@ -187,6 +191,7 @@ export const STAGE_GRADES: Record<ScenarioId, StageGrade> = {
     lookSlope: [1.0, 0.99, 1.05],
     lookSat: 1.14,
     contrast: 1.16,
+    black: 0.034,
     shadowTint: [0.18, 0.3, 0.6],
     highlightTint: [0.85, 0.75, 1.0],
     splitBalance: 0.46,
@@ -245,6 +250,7 @@ export const STAGE_GRADES: Record<ScenarioId, StageGrade> = {
     lookSlope: [1.06, 0.98, 0.94],
     lookSat: 1.06,
     contrast: 1.2,
+    black: 0.04,
     shadowTint: [0.4, 0.16, 0.14],
     highlightTint: [1.0, 0.72, 0.4],
     splitBalance: 0.52,
@@ -302,6 +308,7 @@ export const STAGE_GRADES: Record<ScenarioId, StageGrade> = {
     lookSlope: [1.05, 1.0, 0.95],
     lookSat: 1.14,
     contrast: 1.14,
+    black: 0.03,
     shadowTint: [0.2, 0.42, 0.6],
     highlightTint: [1.0, 0.82, 0.55],
     splitBalance: 0.48,
@@ -341,6 +348,7 @@ export function mixGrades(a: StageGrade, b: StageGrade, t: number): StageGrade {
     lookPower: lerp3(a.lookPower, b.lookPower, t),
     lookSat: lerp(a.lookSat, b.lookSat, t),
     contrast: lerp(a.contrast, b.contrast, t),
+    black: lerp(a.black, b.black, t),
     shadowTint: lerp3(a.shadowTint, b.shadowTint, t),
     highlightTint: lerp3(a.highlightTint, b.highlightTint, t),
     splitBalance: lerp(a.splitBalance, b.splitBalance, t),

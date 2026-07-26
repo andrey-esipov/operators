@@ -407,11 +407,16 @@ export const FIGHTER_FRAGMENT = /* glsl */ `
     // Matte fabrics barely catch a rim; skin / hair / metal do.
     float matte = clamp(denim + cloth * 0.6, 0.0, 1.0);
     vec3 rim = uRimColor * uRimIntensity * fres * rimTerm * mix(1.0, 0.4, matte);
-    // Accent rim: the fighter's identity colour, mostly reserved for super state
-    // so neutral frames don't halo. Gated by interior mask + alpha so it never
-    // bleeds past the silhouette into the bounding box.
-    rim += uAccent * fres * (0.10 + uSuperGlow * 2.0);
-    rim *= mix(0.12, 1.0, interior) * base.a;
+    // Neutral rim is held off the ink outline so flat frames never halo.
+    rim *= mix(0.12, 1.0, interior);
+    // Accent corona: the fighter's identity colour, reserved for super state.
+    // It is ALLOWED to ride the silhouette edge (that reading IS the charged
+    // energy corona), only lightly eased in from the outline, then masked by
+    // alpha so it still can't spill past the sprite bounds.
+    vec3 accentRim = uAccent * fres * (0.10 + uSuperGlow * 2.4);
+    rim += accentRim * mix(0.55, 1.0, interior);
+    rim *= base.a;
+
 
     // ---- Impact point light ----------------------------------------------
     vec3 toFlash = uFlashPos.xyz - vWorldPos;
@@ -466,13 +471,20 @@ export const FIGHTER_FRAGMENT = /* glsl */ `
       color += uKeyColor * bead * skin * upper * uSweat * 1.1 * uKeyIntensity * 0.3;
     }
 
-    // ---- Super charge: energy scanline crawl over the body ----------------
+    // ---- Super charge: rising energy that visibly builds over the body ----
     if (uSuperGlow > 0.001) {
-      float band = sin((vUv.y * 30.0) - uTime * 5.0) * 0.5 + 0.5;
-      band = pow(band, 6.0);
-      // Wrap the glow around the lit form and keep it strictly inside the
-      // silhouette (interior * alpha) so it never blows out into a halo.
-      color += uAccent * band * uSuperGlow * 1.1 * interior * base.a * (0.45 + 0.55 * wrapKey);
+      float g = uSuperGlow;
+      // Global charge pulse — the whole interior brightens and breathes so the
+      // build-up reads at a glance, wrapped to the lit form (not a flat wash).
+      float pulse = 0.5 + 0.5 * sin(uTime * 7.0);
+      color += uAccent * g * (0.14 + 0.10 * pulse) * interior * base.a * (0.5 + 0.5 * wrapKey);
+      // Rising energy bands crawling UP the body (charging read), brighter and
+      // less sparse than before so they're clearly visible.
+      float band = sin((vUv.y * 22.0) - uTime * 9.0) * 0.5 + 0.5;
+      band = pow(band, 3.0);
+      color += uAccent * band * g * 1.5 * interior * base.a * (0.45 + 0.55 * wrapKey);
+      // Hot inner core where the energy is densest.
+      color += vec3(1.0) * band * g * 0.30 * interior * base.a * wrapKey;
     }
 
     // ---- Shattered: cracked-glass chroma split ---------------------------

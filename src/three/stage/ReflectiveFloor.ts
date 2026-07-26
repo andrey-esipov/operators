@@ -247,28 +247,38 @@ function floorMaterial(): THREE.ShaderMaterial {
         vec3 refl = vec3(0.0);
         if (uHasRefl > 0.5) {
           vec2 ruv = vReflUv.xy / max(vReflUv.w, 1e-4);
-          // Vertical smear + micro-jitter = wet-sealed floor, not a hard mirror.
-          vec2 jit = grad * (uRoughness * 0.06) + (wear-0.5) * uRoughness * 0.015;
-          jit.y += uRoughness * 0.012;
+          // Tight normal-driven ripple = a wet-sealed floor that still mirrors
+          // geometry crisply (no vertical smear double-image).
+          vec2 jit = grad * (uRoughness * 0.03);
+          jit.y += uRoughness * 0.004;
           vec3 r0 = texture2D(tDiffuse, ruv + jit).rgb;
-          vec3 r1 = texture2D(tDiffuse, ruv + jit*2.2 + vec2(0.0, 0.01)).rgb;
-          refl = mix(r0, r1, uRoughness*0.5) * uReflTint;
+          vec3 r1 = texture2D(tDiffuse, ruv + jit*1.5).rgb;
+          refl = mix(r0, r1, uRoughness*0.3) * uReflTint;
           // Lift so dark reflected geometry still separates from the base.
           refl += refl*refl*0.4;
         }
         float fres = pow(1.0 - clamp(dot(vec3(0.0,1.0,0.0), V), 0.0, 1.0), 3.0);
 
-        // Contact: soft elliptical darkening + reflection gain directly under
-        // each fighter so the sprites read as planted on a wet surface.
-        float contact = 0.0;
+        // Contact: a wide soft skirt + a tight dark AO core directly under each
+        // fighter so the sprites read as physically planted, not floating on glow.
+        float skirt = 0.0;
         vec2 ea = (P - uContactA) / vec2(0.95, 0.72);
-        contact = max(contact, 1.0 - smoothstep(0.0, 1.0, length(ea)));
+        skirt = max(skirt, 1.0 - smoothstep(0.0, 1.0, length(ea)));
         vec2 eb = (P - uContactB) / vec2(0.95, 0.72);
-        contact = max(contact, 1.0 - smoothstep(0.0, 1.0, length(eb)));
-        float contactCore = contact*contact;
+        skirt = max(skirt, 1.0 - smoothstep(0.0, 1.0, length(eb)));
+        // tight core (darker, smaller footprint at the feet)
+        float core = 0.0;
+        vec2 ca = (P - uContactA) / vec2(0.6, 0.42);
+        core = max(core, 1.0 - smoothstep(0.0, 1.0, length(ca)));
+        vec2 cb = (P - uContactB) / vec2(0.6, 0.42);
+        core = max(core, 1.0 - smoothstep(0.0, 1.0, length(cb)));
+        core = core*core;
+        float contactCore = max(skirt*skirt*0.5, core);
 
         float reflAmt = uReflectivity * (0.5 + 0.5*fres);
-        reflAmt = clamp(reflAmt + contactCore * 0.3, 0.0, 0.96);
+        // reflection gains only in the wet skirt, NOT in the dark AO core
+        reflAmt = clamp(reflAmt + skirt*skirt*0.25*(1.0-core), 0.0, 0.96);
+        reflAmt *= 1.0 - core*0.85;
         reflAmt *= 1.0 - smoothstep(14.0, 34.0, rad);
 
         vec3 H = normalize(normalize(uKeyDir) + V);
@@ -286,9 +296,9 @@ function floorMaterial(): THREE.ShaderMaterial {
         if (uImpact2.w > 0.001){ float d=length(P-uImpact2.xy); ring += smoothstep(0.4,0.0,abs(d-uImpact2.z))*uImpact2.w; }
 
         vec3 col = diff + grid + trim + sheen + flash + uTrimColor*ring*2.0;
-        // Contact shadow: pull the base down under each fighter (kept off the
-        // glowing grid/trim so only the surface darkens).
-        col *= 1.0 - contactCore * 0.5;
+        // Contact shadow: darken the surface (and grid) under each fighter, with
+        // a strong tight AO core at the feet so they read as grounded, not lit.
+        col *= 1.0 - core*0.72 - skirt*skirt*0.22;
         col = mix(col, refl, reflAmt);
         col += sheen*0.35 + trim*0.4;
 

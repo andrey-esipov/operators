@@ -9,7 +9,6 @@ import {
   makeScreen,
   radialGlow,
   trussBeam,
-  spotCan,
   lightShaft,
   crowdBand,
   fgBar,
@@ -29,42 +28,122 @@ import {
 
 const SHAFT_ON = (f: QualityFlags) => f.volumetricLight
 
+type OverheadStyle =
+  | 'garage' | 'gantry' | 'plateau' | 'server'
+  | 'gold' | 'alarm' | 'atrium' | 'yard'
+
 // -- shared sub-assemblies ---------------------------------------------------
 
-/** Overhead lighting truss with hung spot-cans and volumetric shafts. */
-function overheadRig(b: StageBuild, cfg: StageConfig, flags: QualityFlags, shaftColor: number) {
-  const truss = trussBeam(28, 0.7, cfg.structure)
-  truss.position.set(0, 9.4, -6)
-  b.add(truss)
-  const truss2 = trussBeam(18, 0.55, cfg.structure)
-  truss2.rotation.y = Math.PI / 2
-  truss2.position.set(-9, 9.0, -6)
-  b.add(truss2)
-  const truss3 = trussBeam(18, 0.55, cfg.structure)
-  truss3.rotation.y = Math.PI / 2
-  truss3.position.set(9, 9.0, -6)
-  b.add(truss3)
+/** Volumetric downlight shafts. `tilt(x)` splays them per-stage so no two
+ *  arenas share the identical "converging cone" god-ray signature. */
+function ceilingShafts(
+  b: StageBuild, flags: QualityFlags, color: number,
+  xs: number[], y: number, z: number, w: number, h: number, intensity: number,
+  tilt: (x: number) => number,
+) {
+  if (!SHAFT_ON(flags)) return
+  xs.forEach((x, i) => {
+    const shaft = lightShaft(w * 0.42, w, h, color, intensity)
+    shaft.position.set(x, y, z)
+    shaft.rotation.z = tilt(x)
+    b.add(shaft)
+    b.onUpdate((t) => {
+      const m = shaft.material as THREE.ShaderMaterial
+      m.uniforms.uTime.value = t
+      m.uniforms.uOpacity.value = intensity * (0.82 + 0.18 * Math.sin(t * 1.1 + i * 1.7))
+    })
+  })
+}
 
-  const cans: [number, number][] = [[-6, -4], [-2, -6], [2, -6], [6, -4], [0, -8]]
-  for (let i = 0; i < cans.length; i++) {
-    const [x, z] = cans[i]
-    const can = spotCan(shaftColor, 0.6)
-    can.position.set(x, 9.0, z)
-    can.rotation.x = 0.25
-    b.add(can)
-    // Only a subset of cans throw a visible volumetric shaft, at varied width,
-    // so they read as scattered god-rays rather than a solid light curtain.
-    if (SHAFT_ON(flags) && (i === 0 || i === 3 || i === 4)) {
-      const wide = i === 4 ? 1.35 : 1.0
-      const shaft = lightShaft(0.5 * wide, 3.0 * wide, 9.4, shaftColor, cfg.shaftIntensity * 0.32)
-      shaft.position.set(x * 0.72, 4.3, z + 1.4)
-      shaft.rotation.z = (i - 2) * 0.03
-      b.add(shaft)
-      b.onUpdate((t) => {
-        const m = shaft.material as THREE.ShaderMaterial
-        m.uniforms.uTime.value = t
-        m.uniforms.uOpacity.value = cfg.shaftIntensity * (0.3 + 0.06 * Math.sin(t * 1.1 + i * 1.7))
-      })
+/**
+ * Per-stage overhead treatment. Each arena gets a *motivated*, distinct ceiling
+ * (timber rafters, launch catwalk, dead soffit, cable trays, gilded coffers,
+ * alarm strips, glazed atrium, flood masts) plus its own shaft pattern, so the
+ * eight stages never read as one recoloured room.
+ */
+function overhead(b: StageBuild, cfg: StageConfig, flags: QualityFlags, style: OverheadStyle) {
+  const s = cfg.structure
+  switch (style) {
+    case 'garage': {
+      // exposed timber rafters running front-to-back; the dawn door owns the light
+      for (let i = -2; i <= 2; i++) {
+        const beam = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.52, 20), structureMat({ color: 0x5a3f28, roughness: 0.96, metalness: 0.02 }))
+        beam.position.set(i * 3.0, 9.3, -7)
+        b.add(beam)
+      }
+      const ridge = new THREE.Mesh(new THREE.BoxGeometry(15.4, 0.4, 0.4), structureMat({ color: 0x4a3320, roughness: 0.95 }))
+      ridge.position.set(0, 9.75, -7)
+      b.add(ridge)
+      break
+    }
+    case 'gantry': {
+      // launch service catwalk + glowing rail; a pair of cool floods vent light
+      const cat = trussBeam(20, 0.6, s); cat.position.set(0, 9.6, -9); b.add(cat)
+      const rail = new THREE.Mesh(new THREE.BoxGeometry(20, 0.08, 0.08), glowMat(0x66e6ff, 0.5)); rail.position.set(0, 10.0, -8.7); b.add(rail)
+      ceilingShafts(b, flags, 0xbfe8ff, [-3.6, 3.6], 5.2, -9, 1.05, 9.2, cfg.shaftIntensity * 0.26, (x) => -x * 0.02)
+      break
+    }
+    case 'plateau': {
+      // a flat dead soffit and a single wan grey shaft — the stall made ceiling
+      const soffit = new THREE.Mesh(new THREE.PlaneGeometry(30, 12), structureMat({ color: 0x1a1226, roughness: 0.92 }))
+      soffit.rotation.x = Math.PI / 2; soffit.position.set(0, 9.6, -8); b.add(soffit)
+      ceilingShafts(b, flags, 0x6a5a8a, [0], 4.6, -8, 1.6, 9.4, cfg.shaftIntensity * 0.16, () => 0)
+      break
+    }
+    case 'server': {
+      // cable trays + a dead-even row of PARALLEL vertical downlight shafts
+      for (const zt of [-8, -12]) {
+        const tray = new THREE.Mesh(new THREE.BoxGeometry(22, 0.2, 0.6), structureMat({ color: s, roughness: 0.5, metalness: 0.7 }))
+        tray.position.set(0, 9.4, zt); b.add(tray)
+      }
+      ceilingShafts(b, flags, 0x59d8ff, [-6, -2, 2, 6], 5.0, -9, 0.68, 9.0, cfg.shaftIntensity * 0.19, () => 0)
+      break
+    }
+    case 'gold': {
+      // coffered gold ribs + hanging pendant globes; warm wide shafts
+      for (let i = -2; i <= 2; i++) {
+        const rib = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 16), structureMat({ color: 0x6a4c12, roughness: 0.3, metalness: 0.9, emissive: 0x2a1c04, emissiveIntensity: 0.5 }))
+        rib.position.set(i * 3.2, 9.6, -8); b.add(rib)
+      }
+      for (const px of [-4, 0, 4]) {
+        const wire = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 1.4, 6), structureMat({ color: 0x2a2010, roughness: 1 })); wire.position.set(px, 9.3, -6); b.add(wire)
+        const pend = new THREE.Mesh(new THREE.SphereGeometry(0.4, 14, 12), glowMat(0xffd479, 0.9)); pend.position.set(px, 8.4, -6); b.add(pend)
+        const halo = new THREE.Mesh(new THREE.SphereGeometry(0.9, 14, 12), glowMat(0xffbf5a, 0.22)); halo.position.set(px, 8.4, -6); b.add(halo)
+      }
+      ceilingShafts(b, flags, 0xffcf6a, [-4.2, 0, 4.2], 5.0, -8, 1.35, 9.0, cfg.shaftIntensity * 0.24, (x) => x * 0.01)
+      break
+    }
+    case 'alarm': {
+      // pulsing red strip lights + an exposed conduit; harsh angular red shafts
+      for (const zt of [-7, -11]) {
+        const strip = new THREE.Mesh(new THREE.BoxGeometry(20, 0.12, 0.12), glowMat(0xef233c, 0.7)); strip.position.set(0, 9.5, zt); b.add(strip)
+        b.onUpdate((t) => { (strip.material as THREE.MeshBasicMaterial).opacity = 0.35 + 0.4 * Math.abs(Math.sin(t * 3.0)) })
+      }
+      const conduit = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 20, 8), structureMat({ color: s, roughness: 0.6, metalness: 0.6 })); conduit.rotation.z = Math.PI / 2; conduit.position.set(0, 9.85, -9); b.add(conduit)
+      ceilingShafts(b, flags, 0xff3a3a, [-4.6, 4.6], 5.0, -8, 0.9, 9.2, cfg.shaftIntensity * 0.3, (x) => x * 0.05)
+      break
+    }
+    case 'atrium': {
+      // glazed skylight coffers — broad bright PARALLEL daylight shafts, grand
+      for (let i = -2; i <= 2; i++) {
+        const mull = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 16), structureMat({ color: 0x3a4658, roughness: 0.4, metalness: 0.5 }))
+        mull.position.set(i * 3.0, 10.2, -8); b.add(mull)
+        const glo = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.06, 15), glowMat(0xfff2d0, 0.26)); glo.position.set(i * 3.0 - 1.5, 10.0, -8); b.add(glo)
+      }
+      ceilingShafts(b, flags, 0xfff0cf, [-5, -1.6, 1.6, 5], 5.4, -8, 1.45, 9.6, cfg.shaftIntensity * 0.28, () => 0)
+      break
+    }
+    case 'yard': {
+      // floodlight mast heads throwing cool sodium light, wide and angled
+      for (const sign of [-1, 1]) {
+        const head = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.5, 0.8), structureMat({ color: 0x14181c, roughness: 0.6, metalness: 0.6 }))
+        head.position.set(sign * 8, 9.6, -6); head.rotation.z = -sign * 0.2; b.add(head)
+        for (let k = -1; k <= 1; k++) {
+          const lamp = new THREE.Mesh(new THREE.CircleGeometry(0.28, 12), glowMat(0xdfeaff, 0.9)); lamp.position.set(sign * 8 + k * 0.7, 9.28, -5.55); lamp.rotation.x = Math.PI / 2.4; b.add(lamp)
+        }
+      }
+      ceilingShafts(b, flags, 0xbcd0ff, [-7, 7], 5.0, -6.5, 1.5, 9.0, cfg.shaftIntensity * 0.24, (x) => -x * 0.03)
+      break
     }
   }
 }
@@ -129,25 +208,56 @@ function flankPillars(b: StageBuild, cfg: StageConfig, x: number, z: number, tri
   }
 }
 
-/** Foreground occluders — dark rails/cables close to camera for DOF bokeh. */
-function foreground(b: StageBuild) {
-  const railL = fgBar(0.5, 9, 0.5, 0x05060a)
-  railL.position.set(-7.2, 2.5, 7.2)
-  b.add(railL)
-  const railR = fgBar(0.5, 9, 0.5, 0x05060a)
-  railR.position.set(7.2, 2.5, 7.2)
-  b.add(railR)
-  // a slack cable arcing across the top foreground
-  const cableGeo = new THREE.TubeGeometry(
-    new THREE.CatmullRomCurve3([
-      new THREE.Vector3(-8, 6.4, 7),
-      new THREE.Vector3(0, 5.2, 7.4),
-      new THREE.Vector3(8, 6.4, 7),
-    ]),
-    24, 0.06, 6, false,
-  )
-  const cable = new THREE.Mesh(cableGeo, structureMat({ color: 0x04050a, roughness: 1, metalness: 0 }))
-  b.add(cable)
+/** Foreground occluders — dark shapes close to camera, blurred into bokeh by
+ *  DOF. Distinct per stage (kept to the frame edges/top so they frame rather
+ *  than block the fighters) so the foreground stops being the same rail+cable. */
+function foreground(b: StageBuild, style: OverheadStyle) {
+  const D = 0x05060a
+  const bar = (w: number, h: number, d: number, x: number, y: number, z: number, rz = 0) => {
+    const m = fgBar(w, h, d, D); m.position.set(x, y, z); m.rotation.z = rz; b.add(m); return m
+  }
+  const arc = (pts: [number, number, number][], r: number) => {
+    const geo = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts.map((p) => new THREE.Vector3(p[0], p[1], p[2]))), 24, r, 6, false)
+    b.add(new THREE.Mesh(geo, structureMat({ color: D, roughness: 1, metalness: 0 })))
+  }
+  switch (style) {
+    case 'garage': // a hanging cord loop + a workshop stool silhouette
+      bar(0.42, 6, 0.42, -7.6, 2.2, 7.2)
+      arc([[-8.4, 6.4, 7], [-6.8, 4.2, 7.4], [-8.6, 2.6, 7]], 0.06)
+      bar(1.3, 0.24, 1.3, 7.5, 1.0, 7.4); bar(0.12, 2.0, 0.12, 7.0, 0.0, 7.4); bar(0.12, 2.0, 0.12, 8.0, 0.0, 7.4)
+      break
+    case 'gantry': // launch railing across the top with posts
+      bar(15, 0.36, 0.36, 0, 6.6, 7.2)
+      for (const x of [-6, -2, 2, 6]) bar(0.18, 2.6, 0.18, x, 5.3, 7.1)
+      bar(15, 0.13, 0.13, 0, 4.0, 7.1)
+      break
+    case 'plateau': // a low abandoned desk edge + a drooping banner cord
+      bar(9, 0.3, 0.5, -3, 1.3, 7.3, 0.05)
+      arc([[-2, 3.4, 7.2], [1.5, 2.9, 7.4], [4.5, 3.2, 7.2]], 0.05)
+      break
+    case 'server': // rack uprights + cable drops at the frame edges
+      for (const x of [-7.4, 7.4]) bar(0.5, 9, 0.5, x, 2.5, 7.2)
+      arc([[-7.2, 6.2, 7], [-4, 4.6, 7.3], [-1.2, 5.0, 7]], 0.05)
+      arc([[7.2, 6.2, 7], [4, 4.4, 7.3], [1.2, 4.9, 7]], 0.05)
+      break
+    case 'gold': // stanchion posts + a velvet-rope swag
+      bar(0.3, 7, 0.3, -7.0, 3.0, 7.2); bar(0.3, 7, 0.3, 7.0, 3.0, 7.2)
+      arc([[-7, 4.6, 7.2], [0, 5.4, 7.6], [7, 4.6, 7.2]], 0.07)
+      break
+    case 'alarm': // angular console blocks low at the edges
+      bar(5.4, 1.3, 0.6, -6.0, 1.3, 7.2); bar(5.4, 1.3, 0.6, 6.0, 1.3, 7.2)
+      bar(0.4, 1.2, 0.4, -7.2, 2.6, 7.4); bar(0.4, 1.2, 0.4, 7.2, 2.6, 7.4)
+      break
+    case 'atrium': // a grand balustrade — balusters framing the edges + handrail
+      for (const x of [-7, -5.2, -4.2, 4.2, 5.2, 7]) bar(0.16, 3.0, 0.16, x, 1.4, 7.3)
+      bar(15, 0.26, 0.5, 0, 3.05, 7.3)
+      break
+    case 'yard': // chain-link fence edge + a dock bollard
+      for (const x of [-7.6, -6.8, -6.0]) bar(0.1, 7, 0.1, x, 2.5, 7.2)
+      arc([[-8, 6, 7], [8, 6, 7]], 0.04)
+      bar(0.6, 1.4, 0.6, 6.9, 0.7, 7.4)
+      break
+  }
 }
 
 /** A glowing polyline chart drawn as emissive segments + vertex nodes on the
@@ -328,8 +438,8 @@ function buildPrePmf(b: StageBuild, cfg: StageConfig, flags: QualityFlags) {
       wire.rotation.z = -sw * 0.06; shade.rotation.z = -sw * 0.04
     })
   }
-  overheadRig(b, cfg, flags, cfg.shaftColor)
-  foreground(b)
+  overhead(b, cfg, flags, 'garage')
+  foreground(b, 'garage')
 }
 
 function buildHypergrowth(b: StageBuild, cfg: StageConfig, flags: QualityFlags) {
@@ -405,8 +515,8 @@ function buildHypergrowth(b: StageBuild, cfg: StageConfig, flags: QualityFlags) 
     b.add(mesh)
     b.onUpdate(update)
   }
-  overheadRig(b, cfg, flags, cfg.shaftColor)
-  foreground(b)
+  overhead(b, cfg, flags, 'gantry')
+  foreground(b, 'gantry')
 }
 
 function buildPlateau(b: StageBuild, cfg: StageConfig, flags: QualityFlags) {
@@ -503,8 +613,8 @@ function buildPlateau(b: StageBuild, cfg: StageConfig, flags: QualityFlags) {
     strip.position.set(sx - side * 0.86, h / 2, depth + 0.55)
     b.add(strip)
   }
-  overheadRig(b, cfg, flags, cfg.shaftColor)
-  foreground(b)
+  overhead(b, cfg, flags, 'plateau')
+  foreground(b, 'plateau')
 }
 
 function buildAiNative(b: StageBuild, cfg: StageConfig, flags: QualityFlags) {
@@ -575,8 +685,8 @@ function buildAiNative(b: StageBuild, cfg: StageConfig, flags: QualityFlags) {
     globe.rotation.y = t * 0.3
     ;(projShaft.material as THREE.ShaderMaterial).uniforms.uTime.value = t
   })
-  overheadRig(b, cfg, flags, cfg.shaftColor)
-  foreground(b)
+  overhead(b, cfg, flags, 'server')
+  foreground(b, 'server')
 }
 
 function buildMonetization(b: StageBuild, cfg: StageConfig, flags: QualityFlags) {
@@ -607,32 +717,51 @@ function buildMonetization(b: StageBuild, cfg: StageConfig, flags: QualityFlags)
     }
   }
   flankPillars(b, cfg, 7.2, -9, cfg.trim)
-  overheadRig(b, cfg, flags, cfg.shaftColor)
-  foreground(b)
+  overhead(b, cfg, flags, 'gold')
+  foreground(b, 'gold')
 }
 
 function buildCrisis(b: StageBuild, cfg: StageConfig, flags: QualityFlags) {
   // THE WAR ROOM — red-alert command center: a wall of alarm screens, a
   // situation table, rotating warning beacons, harsh red practicals.
   screenWall(b, 4, 3, 2.3, 1.4, new THREE.Vector3(0, 6.0, -14.5), ['alert', 'data', 'ekg', 'grid', 'alert', 'ticker', 'data', 'alert', 'grid', 'alert', 'data', 'ekg'], cfg.screen.hue, cfg.screen.hue2, 3)
-  // situation table (glowing holo-map) — pushed back behind the play space and
-  // brightened so it reads as a raised holo-table, not a hole in the floor.
-  const table = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.5, 0.9, 28), structureMat({ color: 0x1a0e0e, roughness: 0.6, metalness: 0.5 }))
-  table.position.set(0, 0.45, -10)
-  table.castShadow = true
-  b.add(table)
-  const map = makeScreen(3.9, 3.9, 'grid', 0xff6a4c, 0xffc04c, 1.5, 9)
-  map.mesh.position.set(0, 0.92, -10)
+  // ANGULAR COMMAND CONSOLE — a hexagonal war table with a flat rectangular
+  // holo readout and a scatter of operator stations around it. Deliberately
+  // angular + low + wide so it never reads as the same round dais as ipo-prep.
+  const consoleBase = new THREE.Mesh(new THREE.CylinderGeometry(2.5, 2.8, 0.8, 6), structureMat({ color: 0x1a0e0e, roughness: 0.6, metalness: 0.5 }))
+  consoleBase.rotation.y = Math.PI / 6
+  consoleBase.position.set(0, 0.4, -10)
+  consoleBase.castShadow = true
+  b.add(consoleBase)
+  // hex rim strip
+  const rimHex = new THREE.Mesh(new THREE.TorusGeometry(2.55, 0.06, 6, 6), glowMat(0xff5a3c, 0.85))
+  rimHex.rotation.x = Math.PI / 2; rimHex.rotation.z = Math.PI / 6
+  rimHex.position.set(0, 0.82, -10)
+  b.add(rimHex)
+  // flat rectangular tactical readout laid on the console top
+  const map = makeScreen(3.7, 2.9, 'grid', 0xff6a4c, 0xffc04c, 1.5, 9)
+  map.mesh.position.set(0, 0.86, -10)
   map.mesh.rotation.x = -Math.PI / 2
   b.add(map.mesh)
-  const mapRing = new THREE.Mesh(new THREE.TorusGeometry(2.0, 0.08, 8, 32), glowMat(0xff5a3c, 0.85))
-  mapRing.position.set(0, 0.92, -10)
-  mapRing.rotation.x = Math.PI / 2
-  b.add(mapRing)
   b.onUpdate((t) => {
     map.mat.uniforms.uTime.value = t
-    ;(mapRing.material as THREE.MeshBasicMaterial).opacity = 0.6 + 0.3 * Math.sin(t * 3.0)
+    ;(rimHex.material as THREE.MeshBasicMaterial).opacity = 0.55 + 0.3 * Math.sin(t * 3.0)
   })
+  // operator stations: angular desks + tilted alert monitors flanking the console
+  for (let k = 0; k < 3; k++) {
+    const ang = -0.85 + k * 0.85
+    const dx = Math.sin(ang) * 3.9
+    const dz = -9.6 + Math.cos(ang) * 1.0
+    const desk = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.14, 0.85), structureMat({ color: 0x241414, roughness: 0.7, metalness: 0.4 }))
+    desk.position.set(dx, 0.82, dz); desk.rotation.y = -ang
+    desk.castShadow = true
+    b.add(desk)
+    const scr = makeScreen(1.5, 0.85, 'alert', 0xff5a3c, 0xffb04c, 1.15, 20 + k)
+    scr.mesh.position.set(dx, 1.42, dz - 0.08)
+    scr.mesh.rotation.y = -ang; scr.mesh.rotation.x = -0.32
+    b.add(scr.mesh)
+    b.onUpdate((t) => (scr.mat.uniforms.uTime.value = t))
+  }
   // rotating warning beacons
   for (const sign of [-1, 1]) {
     const post = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 8, 8), structureMat({ color: cfg.structure, roughness: 0.7, metalness: 0.5 }))
@@ -653,8 +782,8 @@ function buildCrisis(b: StageBuild, cfg: StageConfig, flags: QualityFlags) {
       beam.rotation.y = t * 2
     })
   }
-  overheadRig(b, cfg, flags, cfg.shaftColor)
-  foreground(b)
+  overhead(b, cfg, flags, 'alarm')
+  foreground(b, 'alarm')
 }
 
 function buildIpoPrep(b: StageBuild, cfg: StageConfig, flags: QualityFlags) {
@@ -686,29 +815,39 @@ function buildIpoPrep(b: StageBuild, cfg: StageConfig, flags: QualityFlags) {
       b.add(cap)
     }
   }
-  // opening-bell podium — a raised, glowing dais set BEHIND the play space so
-  // it never reads as a hole punched in the floor.
-  const podium = new THREE.Mesh(
-    new THREE.CylinderGeometry(1.7, 2.1, 1.1, 28),
-    structureMat({ color: 0x1a2436, roughness: 0.4, metalness: 0.6 }),
+  // OPENING-BELL ROSTRUM — three shrinking SQUARE tiers topped by a lit brass
+  // bell on a post. Tall + gold + rectilinear so it reads as a totally
+  // different silhouette from crisis's low hexagonal console.
+  for (let i = 0; i < 3; i++) {
+    const w = 3.6 - i * 0.95
+    const tier = new THREE.Mesh(
+      new THREE.BoxGeometry(w, 0.5, w),
+      structureMat({ color: 0x1a2436, roughness: 0.4, metalness: 0.6, emissive: 0x0a1220, emissiveIntensity: 0.4 }),
+    )
+    tier.position.set(0, 0.25 + i * 0.5, -10.5)
+    tier.castShadow = true
+    b.add(tier)
+    const edge = new THREE.Mesh(new THREE.BoxGeometry(w + 0.06, 0.06, w + 0.06), glowMat(cfg.trim, 0.7))
+    edge.position.set(0, 0.5 + i * 0.5, -10.5)
+    b.add(edge)
+  }
+  const bellPost = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 1.3, 8), structureMat({ color: 0x2a3648, roughness: 0.4, metalness: 0.7 }))
+  bellPost.position.set(0, 2.25, -10.5)
+  b.add(bellPost)
+  const bell = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.5, 0.64, 0.72, 20, 1, true),
+    structureMat({ color: 0x8a6a1c, roughness: 0.25, metalness: 0.95, emissive: 0x3a2a06, emissiveIntensity: 0.85 }),
   )
-  podium.position.set(0, 0.55, -10.5)
-  podium.castShadow = true
-  b.add(podium)
-  const podiumTop = makeScreen(2.6, 2.6, 'grid', cfg.trim, cfg.screen.hue2, 1.3, 4)
-  podiumTop.mesh.position.set(0, 1.12, -10.5)
-  podiumTop.mesh.rotation.x = -Math.PI / 2
-  b.add(podiumTop.mesh)
-  const podiumRing = new THREE.Mesh(new THREE.TorusGeometry(1.75, 0.09, 8, 32), glowMat(cfg.trim, 0.9))
-  podiumRing.position.set(0, 1.12, -10.5)
-  podiumRing.rotation.x = Math.PI / 2
-  b.add(podiumRing)
+  bell.position.set(0, 3.05, -10.5)
+  b.add(bell)
+  const bellGlow = new THREE.Mesh(new THREE.SphereGeometry(0.72, 14, 12), glowMat(cfg.trim, 0.4))
+  bellGlow.position.set(0, 3.05, -10.5)
+  b.add(bellGlow)
   b.onUpdate((t) => {
-    podiumTop.mat.uniforms.uTime.value = t
-    ;(podiumRing.material as THREE.MeshBasicMaterial).opacity = 0.7 + 0.25 * Math.sin(t * 2.2)
+    ;(bellGlow.material as THREE.MeshBasicMaterial).opacity = 0.28 + 0.22 * Math.abs(Math.sin(t * 2.2))
   })
-  overheadRig(b, cfg, flags, cfg.shaftColor)
-  foreground(b)
+  overhead(b, cfg, flags, 'atrium')
+  foreground(b, 'atrium')
 }
 
 function buildDistribution(b: StageBuild, cfg: StageConfig, flags: QualityFlags) {
@@ -758,9 +897,25 @@ function buildDistribution(b: StageBuild, cfg: StageConfig, flags: QualityFlags)
   })
   // status screens
   screenWall(b, 3, 2, 2.2, 1.3, new THREE.Vector3(0, 5.2, -6.2), ['ticker', 'data', 'grid', 'equalizer', 'data', 'ticker'], cfg.screen.hue, cfg.screen.hue2, 4)
-  flankPillars(b, cfg, 7.4, -7, cfg.trim)
-  overheadRig(b, cfg, flags, cfg.shaftColor)
-  foreground(b)
+  // dockside light masts — tall thin poles with a lamp head (logistics yard),
+  // instead of the shared flankPillars so distribution keeps its own silhouette
+  for (const sign of [-1, 1]) {
+    const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.22, 15, 10), structureMat({ color: s, roughness: 0.6, metalness: 0.6 }))
+    mast.position.set(sign * 8.2, 7.5, -7)
+    mast.castShadow = true
+    b.add(mast)
+    const arm = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.16, 0.16), structureMat({ color: s, roughness: 0.6, metalness: 0.6 }))
+    arm.position.set(sign * 7.4, 14.4, -7)
+    b.add(arm)
+    const lamp = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.4, 0.7), structureMat({ color: 0x14181c, roughness: 0.6, metalness: 0.6 }))
+    lamp.position.set(sign * 6.7, 14.1, -7)
+    b.add(lamp)
+    const glow = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 0.6), glowMat(0xdfeaff, 0.85))
+    glow.position.set(sign * 6.7, 13.85, -6.6); glow.rotation.x = 0.5
+    b.add(glow)
+  }
+  overhead(b, cfg, flags, 'yard')
+  foreground(b, 'yard')
 }
 
 const BUILDERS: Record<ScenarioId, (b: StageBuild, cfg: StageConfig, flags: QualityFlags) => void> = {

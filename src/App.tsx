@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, Suspense } from 'react'
+import { useCallback, useEffect, useState, Suspense, lazy } from 'react'
 import { useGame } from './state/game'
 import { Music } from './lib/music'
 import { MainMenu } from './screens/MainMenu'
@@ -8,11 +8,22 @@ import { ScreenSkeleton } from './components/ScreenSkeleton'
 import { StoryCutscene } from './components/StoryCutscene'
 import { attachQuoteBankSync, loadQuoteBank } from './lib/persist'
 
+/** Renderer sandbox at `?lab=1`. Lazy so it never ships in the main chunk. */
+const ThreeLab = lazy(() =>
+  import('./three/dev/ThreeLab').then((m) => ({ default: m.ThreeLab })),
+)
+
+function isLabRoute(): boolean {
+  if (typeof window === 'undefined') return false
+  return new URLSearchParams(window.location.search).get('lab') === '1'
+}
+
 export function App() {
   const phase = useGame((s) => s.phase)
   const crtEnabled = useGame((s) => s.crtEnabled)
   const selectedB = useGame((s) => s.selectedB)
   const musicEnabled = useGame((s) => s.musicEnabled)
+  const [lab] = useState(isLabRoute)
 
   // Arcade boot gate. Shown once per page load before anything else. The
   // press is a real user gesture, so it unlocks the soundtrack — the menu's
@@ -87,6 +98,14 @@ export function App() {
   const ActiveScreen = phase !== 'menu' && phase in SCREENS
     ? SCREENS[phase as keyof typeof SCREENS].Component
     : null
+
+  if (lab) {
+    return (
+      <Suspense fallback={<div style={{ color: '#fff', padding: 24 }}>loading lab…</div>}>
+        <ThreeLab />
+      </Suspense>
+    )
+  }
 
   return (
     <div className="w-full h-full" style={{ background: '#0F0A1A' }}>

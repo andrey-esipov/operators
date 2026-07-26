@@ -31,7 +31,6 @@ export function ComboCounter({ combo }: Props) {
           </motion.span>
           <div className="stack">
             <span className="hits">HITS</span>
-            <span className="word">COMBO</span>
             {combo.damage != null && (
               <span className="dmgchip">{Math.round(combo.damage)} DMG</span>
             )}

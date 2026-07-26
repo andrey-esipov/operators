@@ -118,7 +118,7 @@ export class PostPipeline implements Subsystem, RenderDriver {
 
     // Chromatic aberration is gated by quality; sharpen always runs (it's the
     // pixel-art crispness guarantee).
-    this.finalize.setCa(flags.chromaticAberration ? 0.0025 : 0, 0)
+    this.finalize.setCa(flags.chromaticAberration ? 0.0011 : 0, 0)
     this.finalize.setSharpen(0.32)
     this.composer.addPass(new EffectPass(camera, this.finalize))
 
@@ -250,8 +250,10 @@ export class PostPipeline implements Subsystem, RenderDriver {
     this.grade.setFlash(this.flash)
 
     // --- chromatic aberration spike ------------------------------------
+    // Static base kept low so even the extreme corners only lens-fringe
+    // gently on high-contrast vertical edges; impacts/supers still spike it.
     this.finalize.setCa(
-      flagsFor(this.quality).chromaticAberration ? 0.0025 : 0,
+      flagsFor(this.quality).chromaticAberration ? 0.0011 : 0,
       i * 0.01 + this.superPunch * 0.002,
     )
   }

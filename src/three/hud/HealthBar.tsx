@@ -30,6 +30,7 @@ export function HealthBar({ hp01, mirror = false, accent }: Props) {
         <div className="fh-hp-lead" style={{ color: accent, [mirror ? 'right' : 'left']: pct }} />
         <div className="fh-hp-ticks" />
       </div>
+      {danger && <span className="fh-hp-danger-badge">DANGER</span>}
     </div>
   )
 }

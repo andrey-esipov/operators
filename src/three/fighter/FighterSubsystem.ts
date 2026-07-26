@@ -87,6 +87,15 @@ class FighterRig {
   private idlePhase: number
   private facing: number
   private baseX: number
+  // Scripted attack timeline (anticipation → contact → follow-through).
+  private atkT = -1
+  private atkPow = 0
+  // KO tumble timeline.
+  private koT = -1
+  // Secondary motion: the upper body / hair lags behind fast horizontal moves.
+  private prevX: number
+  private hairLag = 0
+  private hairLagVel = 0
   private accent = new THREE.Color('#FFD60A')
   private superGlow = 0
   private shattered = 0
@@ -104,6 +113,7 @@ class FighterRig {
     this.facing = side === 'a' ? 1 : -1
     this.baseX = side === 'a' ? -WORLD.FIGHTER_SEPARATION : WORLD.FIGHTER_SEPARATION
     this.idlePhase = idleOffset
+    this.prevX = this.baseX
 
     this.uniforms = createFighterUniforms()
     this.uniforms.uFacing.value = this.facing
@@ -297,22 +307,25 @@ class FighterRig {
   // ---- impulses ----------------------------------------------------------
 
   attack(power: number) {
-    // Anticipation first (pull back), then the spring drives the thrust.
-    this.ch.lungeVel += 6.5 + power * 7
-    this.ch.leanVel += 4.0 + power * 3.5
-    this.ch.squashVelX += 2.2
-    this.ch.squashVelY -= 1.4
-    this.ch.yawVel += 2.2
+    // Kick off the scripted attack timeline. The timeline owns the big forward
+    // reach + anticipation; the springs just add a little organic overshoot and
+    // a yaw twist so it never looks perfectly mechanical.
+    this.atkT = 0
+    this.atkPow = Math.min(1, power)
+    this.ch.yawVel += 1.4 + power * 1.8
+    this.ch.wobble = Math.min(1.2, this.ch.wobble + 0.35 * power)
   }
 
   takeHit(power: number, flavor: string) {
+    // Cancel any attack in progress — getting hit interrupts you.
+    this.atkT = -1
     const p = Math.min(1.6, 0.35 + power * 1.5)
     this.ch.knockVel += 5.5 * p
     this.ch.leanVel -= 7 * p
     this.ch.hopVel += (flavor === 'ult' || flavor === 'signature' ? 5.5 : 2.2) * p
     this.ch.squashVelX -= 3.2 * p
     this.ch.squashVelY += 2.4 * p
-    this.ch.wobble = Math.min(1.4, this.ch.wobble + p * 0.9)
+    this.ch.wobble = Math.min(1.6, this.ch.wobble + p * 1.05)
     this.ch.flash = 1
     this.ch.yawVel -= 3.4 * p
     const hitColor =
@@ -323,9 +336,12 @@ class FighterRig {
   }
 
   ko() {
-    this.targetDissolve = 0
-    this.ch.knockVel += 7
-    this.ch.hopVel += 4
+    // A real knockout: launch up-and-back, then tumble to the floor.
+    this.atkT = -1
+    this.koT = 0
+    this.ch.knockVel += 6
+    this.ch.hopVel += 5
+    this.ch.wobble = Math.min(1.8, this.ch.wobble + 1.2)
   }
 
   burnAway(on: boolean) {
@@ -338,26 +354,79 @@ class FighterRig {
 
   // ---- frame -------------------------------------------------------------
 
-  update(dt: number, vs: FighterVisualState, time: number, light: LightRig | undefined, camera: THREE.PerspectiveCamera) {
+  update(dt: number, vs: FighterVisualState, time: number, light: LightRig | undefined, camera: THREE.PerspectiveCamera, animScale = 1) {
     if (!this.ready) return
     const c = this.ch
+    // Hitstop: freeze the procedural animation (springs, timelines, idle) for a
+    // few frames on impact so the hit reads with a hard, frame-perfect snap.
+    // Lighting/anchors below still update every frame.
+    const adt = dt * animScale
 
     // Pose cross-fade
     if (this.poseBlend < 1) {
-      this.poseBlend = Math.min(1, this.poseBlend + dt * 11)
+      this.poseBlend = Math.min(1, this.poseBlend + adt * 11)
       this.uniforms.uPoseBlend.value = this.poseBlend
     }
 
     // Springs
-    ;[c.lunge, c.lungeVel] = spring(c.lunge, c.lungeVel, 0, 210, 19, dt)
-    ;[c.knock, c.knockVel] = spring(c.knock, c.knockVel, 0, 120, 13, dt)
-    ;[c.hop, c.hopVel] = spring(c.hop, c.hopVel, 0, 150, 14, dt)
-    ;[c.lean, c.leanVel] = spring(c.lean, c.leanVel, 0, 180, 17, dt)
-    ;[c.squashX, c.squashVelX] = spring(c.squashX, c.squashVelX, 1, 260, 22, dt)
-    ;[c.squashY, c.squashVelY] = spring(c.squashY, c.squashVelY, 1, 260, 22, dt)
-    ;[c.yaw, c.yawVel] = spring(c.yaw, c.yawVel, 0, 150, 16, dt)
-    c.wobble *= Math.exp(-dt * 7.5)
-    c.flash *= Math.exp(-dt * 13)
+    ;[c.lunge, c.lungeVel] = spring(c.lunge, c.lungeVel, 0, 210, 19, adt)
+    ;[c.knock, c.knockVel] = spring(c.knock, c.knockVel, 0, 120, 13, adt)
+    ;[c.hop, c.hopVel] = spring(c.hop, c.hopVel, 0, 150, 14, adt)
+    ;[c.lean, c.leanVel] = spring(c.lean, c.leanVel, 0, 180, 17, adt)
+    ;[c.squashX, c.squashVelX] = spring(c.squashX, c.squashVelX, 1, 260, 22, adt)
+    ;[c.squashY, c.squashVelY] = spring(c.squashY, c.squashVelY, 1, 260, 22, adt)
+    ;[c.yaw, c.yawVel] = spring(c.yaw, c.yawVel, 0, 150, 16, adt)
+    c.wobble *= Math.exp(-adt * 7.5)
+    c.flash *= Math.exp(-adt * 13)
+
+    // --- Scripted attack: anticipation → contact → follow-through ----------
+    // A pure spring can't do a proper wind-up (pull back before you punch), so
+    // the strike runs on an explicit clock. Outputs are in world/uniform units.
+    let scReach = 0, scLean = 0, scSquashX = 1, scSquashY = 1
+    if (this.atkT >= 0) {
+      this.atkT += adt
+      const p = this.atkPow
+      const t = this.atkT
+      const wind = 0.11, strike = 0.08, rec = 0.30
+      if (t < wind) {
+        // Anticipation: coil back and drop the weight.
+        const k = t / wind
+        const e = k * k
+        scReach = -0.14 * p * e
+        scLean = -0.45 * p * e
+        scSquashY = 1 - 0.05 * p * e
+        scSquashX = 1 + 0.05 * p * e
+      } else if (t < wind + strike) {
+        // Contact: explode forward. Ease-out so the peak is the impact frame.
+        const k = (t - wind) / strike
+        const e = 1 - (1 - k) * (1 - k)
+        scReach = THREE.MathUtils.lerp(-0.14 * p, 0.6 * p, e)
+        scLean = THREE.MathUtils.lerp(-0.45 * p, 2.6 * p, e)
+        scSquashX = 1 + 0.13 * p * e
+        scSquashY = 1 - 0.07 * p * e
+      } else if (t < wind + strike + rec) {
+        // Follow-through: settle back with a soft ease.
+        const k = (t - wind - strike) / rec
+        const e = k * k * (3 - 2 * k)
+        scReach = THREE.MathUtils.lerp(0.6 * p, 0, e)
+        scLean = THREE.MathUtils.lerp(2.6 * p, 0, e)
+      } else {
+        this.atkT = -1
+      }
+    }
+
+    // --- KO tumble ---------------------------------------------------------
+    let koTilt = 0, koReach = 0, koDrop = 0, koSquash = 1
+    if (this.koT >= 0) {
+      this.koT += adt
+      const T = 0.85
+      const k = Math.min(1, this.koT / T)
+      const e = 1 - (1 - k) * (1 - k)
+      koTilt = e * 1.25                         // rotate backward, away from foe
+      koReach = e * 0.55                         // slide back
+      koDrop = Math.sin(Math.min(1, k) * Math.PI) * 0.22 // launch up, then fall
+      koSquash = 1 + Math.max(0, Math.sin((k - 0.7) * 3.0)) * 0.08 * (k > 0.7 ? 1 : 0)
+    }
 
     // Idle breathing — two out-of-phase sines so it never looks metronomic.
     const breath = Math.sin(time * 2.05 + this.idlePhase) * 0.5 + Math.sin(time * 3.31 + this.idlePhase * 1.7) * 0.22
@@ -366,22 +435,40 @@ class FighterRig {
     const breathAmp = 0.022 + lowHp * 0.03
     const sag = lowHp * 0.05
 
+    // Idle weight-shift: the body sways gently foot-to-foot when at rest, and
+    // that sway fades out while a strike/knockback is playing.
+    const restMix = THREE.MathUtils.clamp(1 - Math.abs(c.lunge) - Math.abs(c.knock) - Math.abs(scReach) * 2, 0, 1)
+    const sway = Math.sin(time * 0.85 + this.idlePhase * 1.3) * restMix
+    const swayAmt = 0.03 + lowHp * 0.012
+
     // Turn readiness: the active fighter squares up slightly.
     const readyPush = vs.active ? 0.08 : 0
 
     const dir = 1 // group is already mirrored via scale.x
-    this.group.position.x =
-      this.baseX + this.facing * (c.lunge * 0.34 - c.knock * 0.5 + readyPush * 0.4)
-    this.group.position.y = WORLD.GROUND_Y + Math.max(0, c.hop * 0.16) + breath * breathAmp - sag
+    const newX =
+      this.baseX +
+      this.facing * (c.lunge * 0.34 - c.knock * 0.5 + readyPush * 0.4 + scReach - koReach) +
+      sway * swayAmt
+    // Secondary motion: derive horizontal velocity and let the upper body / hair
+    // trail behind it (critically-damped), so fast moves get organic lag.
+    const vx = (newX - this.prevX) / Math.max(1e-4, dt)
+    this.prevX = newX
+    const lagTarget = THREE.MathUtils.clamp(-vx * this.facing * 0.05, -0.5, 0.5)
+    ;[this.hairLag, this.hairLagVel] = spring(this.hairLag, this.hairLagVel, lagTarget, 130, 14, adt)
+
+    this.group.position.x = newX
+    this.group.position.y =
+      WORLD.GROUND_Y + Math.max(0, c.hop * 0.16) + koDrop + breath * breathAmp - sag
     this.group.rotation.y = c.yaw * 0.09 * this.facing
-    this.group.rotation.z = -c.lean * 0.012 * this.facing
+    this.group.rotation.z = (-c.lean * 0.012 - koTilt) * this.facing
 
     this.uniforms.uSquash.value.set(
-      c.squashX * (1 + breath * 0.006),
-      c.squashY * (1 - breath * 0.008 - sag * 0.12),
+      c.squashX * scSquashX * (1 + breath * 0.006),
+      c.squashY * scSquashY * koSquash * (1 - breath * 0.008 - sag * 0.12),
     )
-    this.uniforms.uLean.value = (c.lean * 0.032 + breath * 0.004) * dir
-    this.uniforms.uWobble.value = c.wobble
+    this.uniforms.uLean.value =
+      (c.lean * 0.032 + scLean * 0.032 + this.hairLag + breath * 0.004 + sway * 0.01) * dir
+    this.uniforms.uWobble.value = c.wobble + Math.abs(this.hairLagVel) * 0.04
     this.uniforms.uHitFlash.value = c.flash
     this.uniforms.uTime.value = time
     const damage = THREE.MathUtils.clamp(1 - vs.hp01, 0, 1)
@@ -482,6 +569,9 @@ export class FighterSubsystem implements Subsystem {
   private lastPoses: Record<Side, FighterPose> = { a: 'stance', b: 'stance' }
   private light: LightRig | undefined
   private getLightRig: () => LightRig | undefined
+  // Frame-perfect hitstop: freezes both fighters for a beat on impact.
+  private hitstop = 0
+  private timeScale = 1
 
   constructor(getLightRig: () => LightRig | undefined) {
     this.getLightRig = getLightRig
@@ -500,6 +590,13 @@ export class FighterSubsystem implements Subsystem {
     this.time += dt
     this.light ??= this.getLightRig()
 
+    // Hitstop drives a global animation freeze that eases back to full speed,
+    // giving impacts a crisp, weighty snap instead of a smooth slide.
+    if (this.hitstop > 0) this.hitstop = Math.max(0, this.hitstop - dt)
+    const targetScale = this.hitstop > 0 ? 0.0 : 1
+    // Ease out of the freeze over ~2 frames so it releases with a little punch.
+    this.timeScale += (targetScale - this.timeScale) * Math.min(1, dt * (this.hitstop > 0 ? 60 : 22))
+
     for (const side of ['a', 'b'] as Side[]) {
       const vs = side === 'a' ? state.a : state.b
       const rig = this.rigs[side]
@@ -513,7 +610,7 @@ export class FighterSubsystem implements Subsystem {
         void rig.setPose(vs.pose, vs.id)
       }
       rig.setShattered(vs.shattered)
-      rig.update(dt, vs, this.time, this.light, this.ctx.camera)
+      rig.update(dt, vs, this.time, this.light, this.ctx.camera, this.timeScale)
     }
   }
 
@@ -526,9 +623,19 @@ export class FighterSubsystem implements Subsystem {
           e.flavor === 'heavy' || e.flavor === 'crit' ? 0.6 : 0.3,
         )
         break
-      case 'hit':
+      case 'hit': {
         this.rigs[e.target].takeHit(e.power, e.flavor)
+        // Freeze on impact — heavier hits hold longer.
+        const hs =
+          e.flavor === 'ult' || e.flavor === 'signature' ? 0.11 :
+          e.flavor === 'crit' ? 0.085 :
+          e.flavor === 'ex' ? 0.075 :
+          e.flavor === 'heavy' ? 0.065 :
+          e.flavor === 'combo' ? 0.05 : 0.035
+        this.hitstop = Math.max(this.hitstop, hs)
+        this.timeScale = 0
         break
+      }
       case 'shatter':
         this.rigs[e.side].setShattered(true)
         break

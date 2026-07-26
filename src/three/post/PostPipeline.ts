@@ -222,15 +222,25 @@ export class PostPipeline implements Subsystem, RenderDriver {
       i * 0.35 + this.superPunch * 0.25 + (this.impactWarm > 0 ? i * this.impactWarm * 0.15 : 0),
     )
 
-    // Danger drains + reddens; KO drains hard.
-    const desat = Math.max(danger * 0.45, this.koDrain * 0.8)
-    const dangerAmt = dangerPulse * 0.32
+    // Danger drains + reddens; KO drains hard. Kept off the fighters via the
+    // edge-weighted envW in the shader so gameplay stays readable.
+    const desat = Math.max(danger * 0.5, this.koDrain * 0.85)
+    const dangerAmt = dangerPulse * 0.55
     this.grade.setDanger(desat, dangerAmt)
 
     // Vignette tightens on danger / impact.
     this.grade.setVignette(
       g.vigOffset - danger * 0.06 - i * 0.02,
       Math.min(0.9, g.vigDarkness + danger * 0.28 + i * 0.1 + this.koDrain * 0.15),
+    )
+
+    // Under danger the vignette glow reddens at the frame edges — a strong,
+    // readable "critical HP" tell that never touches the centred fighters.
+    const dr = Math.max(danger, this.koDrain * 0.5)
+    this.grade.setVigColor(
+      g.vigColor[0] + dr * 0.28,
+      g.vigColor[1] * (1 - dr * 0.7),
+      g.vigColor[2] * (1 - dr * 0.7),
     )
 
     // Grain lifts a touch under stress so it reads as film, not static.

@@ -117,9 +117,12 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor)
   c = agx(c);
 
   // --- display-referred finishing ----------------------------------------
-  // Filmic black-point crush for density: deepen the toe without clipping
-  // the whole image to black, then renormalise so highlights are unaffected.
-  c = max(c - black, 0.0) / (1.0 - black);
+  // Filmic shadow toe for density: raise the darks to a higher power so
+  // shadows gain weight, while highlights (c->1) stay untouched. Unlike a
+  // subtract-and-clip this never flattens detail to a hard black floor, so
+  // dark clothing keeps its internal shading and shadow gradients don't band.
+  vec3 toeP = vec3(1.0) + black * 3.0 * (1.0 - clamp(c, 0.0, 1.0));
+  c = pow(max(c, 0.0), toeP);
 
   // S-curve contrast around mid grey.
   c = clamp(0.5 + (c - 0.5) * contrast, 0.0, 1.0);
@@ -134,9 +137,12 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor)
   c *= mix(vec3(1.0), hiN, hiW);
 
   // Dynamic response: colour drain + danger cast (low HP / KO).
+  // Bias the danger grade toward the frame edges so the centred fighters
+  // stay readable — the environment reddens hard, the sprites stay clear.
+  float envW = mix(0.32, 1.25, smoothstep(0.1, 0.62, distance(uv, vec2(0.5))));
   L = luma(c);
-  c = mix(c, vec3(L), desat);
-  c = mix(c, c * dangerTint, dangerAmt);
+  c = mix(c, vec3(L), desat * envW);
+  c = mix(c, c * dangerTint, dangerAmt * envW);
 
   // Super / impact full-frame flash (kept subtle, warm).
   c += flash * vec3(0.9, 0.85, 0.7);
@@ -154,6 +160,13 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor)
   float n = hash21(uv * 2048.0 + grainTime) - 0.5;
   float midW = 1.0 - pow(abs(L * 2.0 - 1.0), 1.5);
   c += n * grainAmount * midW;
+
+  // Triangular-PDF ordered dither: two independent hashes give a TPDF noise
+  // of ~+/-1 LSB that breaks 8-bit quantisation banding in smooth gradients
+  // (spotlight haze, sky falloff) without any visible texture.
+  float d1 = hash21(uv * vec2(1234.5, 6789.1) + grainTime);
+  float d2 = hash21(uv * vec2(4321.9, 9876.3) + grainTime * 1.37 + 7.0);
+  c += (d1 + d2 - 1.0) * (1.6 / 255.0);
 
   outputColor = vec4(clamp(c, 0.0, 1.0), inputColor.a);
 }
@@ -225,6 +238,9 @@ export class MasterGradeEffect extends Effect {
   setVignette(offset: number, darkness: number) {
     this.u('vigOffset').value = offset
     this.u('vigDarkness').value = darkness
+  }
+  setVigColor(r: number, g: number, b: number) {
+    ;(this.u('vigColor').value as THREE.Vector3).set(r, g, b)
   }
   setGrain(amount: number, time: number) {
     this.u('grainAmount').value = amount

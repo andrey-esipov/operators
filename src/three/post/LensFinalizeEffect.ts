@@ -28,7 +28,9 @@ float luma(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
 void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor) {
   vec2 center = uv - 0.5;
   float r = length(center) * 2.0;         // 0 centre → ~1.4 corner
-  float edge = r * r;                      // fringe grows quadratically off-axis
+  float edge = r * r * r;                   // fringe grows cubically: near-zero
+                                            // across the mid-frame, only the
+                                            // extreme corners actually split
 
   // --- chromatic aberration ----------------------------------------------
   float amt = (caStrength + caImpact) * edge;

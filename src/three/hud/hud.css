@@ -105,13 +105,29 @@
 
 /* ============================ HEALTH BAR ================================= */
 .fh-hp {
-  position: relative; height: 34px;
+  position: relative; height: 38px;
   background: linear-gradient(180deg, #0f1219, #05070d);
   border: 2px solid var(--ink);
-  box-shadow: inset 0 2px 0 rgba(255,255,255,0.16), inset 0 -6px 12px rgba(0,0,0,0.72), 0 4px 14px rgba(0,0,0,0.5);
-  clip-path: polygon(0 0, 100% 0, 100% 100%, 16px 100%, 0 62%);
+  box-shadow:
+    inset 0 2px 0 rgba(255,255,255,0.16),
+    inset 0 -6px 12px rgba(0,0,0,0.72),
+    0 0 0 3px color-mix(in srgb, var(--acc) 60%, #04050b),
+    0 0 16px color-mix(in srgb, var(--acc) 34%, transparent),
+    0 5px 16px rgba(0,0,0,0.55);
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 26px 100%, 0 52%);
 }
-.fh-side.mirror .fh-hp { clip-path: polygon(0 0, 100% 0, 100% 62%, calc(100% - 16px) 100%, 0 100%); }
+.fh-side.mirror .fh-hp { clip-path: polygon(0 0, 100% 0, 100% 52%, calc(100% - 26px) 100%, 0 100%); }
+/* accent identity blade on the center-facing edge — the bar "points" at the foe */
+.fh-hp::after {
+  content: ''; position: absolute; z-index: 5; top: -2px; bottom: -2px; right: -2px; width: 9px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--acc) 88%, #fff), var(--acc));
+  box-shadow: 0 0 12px color-mix(in srgb, var(--acc) 80%, transparent);
+  clip-path: polygon(100% 0, 100% 100%, 0 100%, 100% 48%);
+}
+.fh-hp.mirror::after {
+  right: auto; left: -2px;
+  clip-path: polygon(0 0, 0 100%, 100% 100%, 0 48%);
+}
 .fh-hp-track {
   position: absolute; inset: 3px; overflow: hidden;
   background:

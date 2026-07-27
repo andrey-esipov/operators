@@ -178,10 +178,16 @@ export function StageSelect() {
                     className="absolute inset-0"
                     style={{ background: `linear-gradient(180deg, transparent 30%, rgba(6,4,12,0.9) 100%)` }}
                   />
-                  {/* Tag chip */}
+                  {/* Era stamp — stencilled plate, not a web pill */}
                   <span
                     className="absolute top-1.5 left-1.5 font-display text-[7px] tracking-widest px-1.5 py-0.5"
-                    style={{ color: '#fff', background: `${s.accent}cc`, boxShadow: '0 1px 3px rgba(0,0,0,0.6)' }}
+                    style={{
+                      color: '#fff',
+                      background: `linear-gradient(180deg, ${s.accent}, ${s.accent}bb)`,
+                      boxShadow: `inset 1px 1px 0 rgba(255,255,255,0.4), inset -1px -1px 0 rgba(0,0,0,0.5), 0 1px 3px rgba(0,0,0,0.7)`,
+                      clipPath: 'polygon(3px 0, 100% 0, 100% calc(100% - 3px), calc(100% - 3px) 100%, 0 100%, 0 3px)',
+                      textShadow: '1px 1px 0 rgba(0,0,0,0.6)',
+                    }}
                   >
                     {s.tag}
                   </span>

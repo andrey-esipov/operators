@@ -384,7 +384,7 @@ export function CharacterSelect() {
             <div className="flex flex-wrap items-center gap-1.5">
               <span
                 className="font-display text-[8px] tracking-widest px-1.5 py-1 mr-0.5"
-                style={{ color: 'rgba(255,255,255,0.5)', background: 'rgba(0,0,0,0.5)', boxShadow: 'inset 1px 1px 0 rgba(0,0,0,0.6)', letterSpacing: '0.15em' }}
+                style={{ color: 'rgba(255,220,150,0.7)', background: 'linear-gradient(180deg, #2a2036, #16101f)', boxShadow: 'inset 1px 1px 0 rgba(255,255,255,0.12), inset -1px -1px 0 rgba(0,0,0,0.7)', letterSpacing: '0.18em', clipPath: 'polygon(3px 0, 100% 0, 100% calc(100% - 3px), calc(100% - 3px) 100%, 0 100%, 0 3px)' }}
               >DISCIPLINE</span>
               {DISCIPLINE_FILTER_ORDER.map((d) => (
             <FilterChip
@@ -400,12 +400,12 @@ export function CharacterSelect() {
         <div className="flex flex-wrap items-center gap-1.5">
           <span
             className="font-display text-[8px] tracking-widest px-1.5 py-1 mr-0.5"
-            style={{ color: 'rgba(255,255,255,0.5)', background: 'rgba(0,0,0,0.5)', boxShadow: 'inset 1px 1px 0 rgba(0,0,0,0.6)', letterSpacing: '0.15em' }}
+            style={{ color: 'rgba(255,220,150,0.7)', background: 'linear-gradient(180deg, #2a2036, #16101f)', boxShadow: 'inset 1px 1px 0 rgba(255,255,255,0.12), inset -1px -1px 0 rgba(0,0,0,0.7)', letterSpacing: '0.18em', clipPath: 'polygon(3px 0, 100% 0, 100% calc(100% - 3px), calc(100% - 3px) 100%, 0 100%, 0 3px)' }}
           >ERA</span>
           {ERA_FILTER_ORDER.map((e) => (
             <FilterChip
               key={e}
-              label={e === 'all' ? 'ALL' : ERA_LABEL[e]}
+              label={e === 'all' ? 'ALL' : ERA_LABEL[e].split(' · ')[0]}
               count={e === 'all' ? totalRoster : (eraCounts[e] ?? 0)}
               color="#FCBF49"
               active={eraFilter === e}
@@ -413,28 +413,36 @@ export function CharacterSelect() {
             />
           ))}
           <div className="flex-1" />
+          <div className="flex items-stretch">
+          <span
+            className="font-display text-[8px] tracking-widest px-1.5 flex items-center"
+            style={{ color: 'rgba(255,220,150,0.7)', background: 'linear-gradient(180deg, #2a2036, #16101f)', boxShadow: 'inset 1px 1px 0 rgba(255,255,255,0.12), inset -1px -1px 0 rgba(0,0,0,0.7)', letterSpacing: '0.18em', clipPath: 'polygon(3px 0, 100% 0, 100% 100%, 0 100%, 0 3px)' }}
+          >FIND</span>
           <div
-            className="flex items-center gap-1.5 px-2 py-1"
+            className="flex items-center gap-1.5 px-2 py-1 relative overflow-hidden"
             style={{
               background: 'linear-gradient(180deg, rgba(0,0,0,0.7), rgba(0,0,0,0.5))',
               border: `1px solid ${query ? sideColor : 'rgba(255,255,255,0.18)'}`,
               boxShadow: query
                 ? `inset 2px 2px 4px rgba(0,0,0,0.75), inset -1px -1px 0 rgba(255,255,255,0.12), 0 0 10px ${sideColor}44`
                 : 'inset 2px 2px 4px rgba(0,0,0,0.75), inset -1px -1px 0 rgba(255,255,255,0.12)',
-              clipPath: 'polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%, 0 5px)',
-              minWidth: 150,
-              maxWidth: 220,
+              clipPath: 'polygon(0 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%)',
+              minWidth: 140,
+              maxWidth: 210,
             }}
           >
-            <span aria-hidden className="font-display text-[11px] leading-none" style={{ color: query ? sideColor : 'rgba(255,255,255,0.5)', textShadow: query ? `0 0 6px ${sideColor}` : 'none' }}>⌕</span>
+            {/* CRT scanline overlay so the field reads as a lit cabinet screen */}
+            <span aria-hidden className="absolute inset-0 pointer-events-none" style={{ background: 'repeating-linear-gradient(0deg, rgba(255,255,255,0.05) 0, rgba(255,255,255,0.05) 1px, transparent 1px, transparent 3px)', opacity: 0.5 }} />
+            <span aria-hidden className="font-display text-[11px] leading-none relative" style={{ color: query ? sideColor : 'rgba(255,255,255,0.5)', textShadow: query ? `0 0 6px ${sideColor}` : 'none' }}>⌕</span>
             <input
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="search…"
-              className="flex-1 min-w-0 bg-transparent font-body text-base text-white placeholder:text-white/30"
+              placeholder="name…"
+              className="flex-1 min-w-0 bg-transparent font-body text-base text-white placeholder:text-white/30 relative"
               style={{ outline: 'none', border: 'none' }}
             />
+          </div>
           </div>
           {anyFilterActive && (
             <button
@@ -455,10 +463,10 @@ export function CharacterSelect() {
 
       {/* ROSTER — dense, subordinate to the hero */}
       <div className="relative flex flex-col flex-1 min-w-0 min-h-0">
-        <div className="font-display text-[9px] tracking-widest text-white/55 mb-1.5 flex-shrink-0" style={{ textShadow: '1px 1px 0 #000' }}>
+        <div className="font-display text-[8px] tracking-widest text-white/40 mb-1.5 flex-shrink-0" style={{ textShadow: '1px 1px 0 #000' }}>
           {filteredRoster.length === totalRoster
-            ? '▸ CHOOSE YOUR OPERATOR'
-            : `▸ ${filteredRoster.length} MATCH`}
+            ? `${totalRoster} OPERATORS`
+            : `${filteredRoster.length} / ${totalRoster} MATCH`}
         </div>
         <div
           ref={gridRef}
@@ -526,7 +534,7 @@ export function CharacterSelect() {
                   style={{
                     background: marquee
                       ? 'linear-gradient(180deg, rgba(255,240,200,0.1) 0%, rgba(60,48,20,0.78) 14%, rgba(12,8,20,0.94) 100%)'
-                      : 'linear-gradient(180deg, rgba(255,255,255,0.09) 0%, rgba(46,33,66,0.78) 14%, rgba(11,7,18,0.95) 100%)',
+                      : `linear-gradient(180deg, rgba(255,255,255,0.09) 0%, ${discColor}26 11%, rgba(40,29,58,0.72) 42%, rgba(11,7,18,0.95) 100%)`,
                     border: `${(selByA || selByB || isCursor) ? '2px' : '1px'} solid ${borderCol}`,
                     boxShadow: (selByA || selByB)
                       ? `0 0 0 2px ${pickGlow}, 0 0 22px ${pickGlow}, inset 0 -14px 18px -12px ${f.accent}`
@@ -534,7 +542,7 @@ export function CharacterSelect() {
                       ? `0 0 18px ${sideColor}cc, inset 0 -16px 20px -12px ${f.accent}, inset 0 1px 0 rgba(255,255,255,0.16)`
                       : marquee
                       ? `0 0 12px #FFD60A55, inset -2px -2px 0 rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.08)`
-                      : 'inset 0 2px 0 rgba(255,255,255,0.12), inset -2px -3px 0 rgba(0,0,0,0.55), 0 4px 9px rgba(0,0,0,0.5)',
+                      : `inset 0 2px 0 rgba(255,255,255,0.12), inset -2px -3px 0 rgba(0,0,0,0.55), inset 0 -11px 15px -12px ${discColor}, 0 4px 9px rgba(0,0,0,0.5)`,
                     cursor: isLocked ? 'not-allowed' : 'pointer',
                     opacity: isLocked ? 0.4 : (isCursor || selByA || selByB || marquee) ? 1 : 0.7,
                     filter: isLocked
@@ -650,13 +658,13 @@ function FilterChip({
       className="sel-chip font-display text-[8px] tracking-widest px-2 py-1"
       style={{
         background: active
-          ? `linear-gradient(180deg, ${color}44, ${color}18)`
-          : 'linear-gradient(180deg, rgba(255,255,255,0.05), rgba(0,0,0,0.4))',
-        color: active ? '#fff' : 'rgba(255,255,255,0.7)',
-        border: `1px solid ${active ? color : 'rgba(255,255,255,0.12)'}`,
+          ? `linear-gradient(180deg, ${color}55, ${color}22)`
+          : 'linear-gradient(180deg, #241a33, #140d1f)',
+        color: active ? '#fff' : 'rgba(255,255,255,0.68)',
+        border: `1px solid ${active ? color : 'rgba(0,0,0,0.6)'}`,
         boxShadow: active
-          ? `0 0 12px ${color}66, inset 0 1px 0 rgba(255,255,255,0.2), inset -1px -1px 0 rgba(0,0,0,0.4)`
-          : 'inset 0 1px 0 rgba(255,255,255,0.06), inset -1px -1px 0 rgba(0,0,0,0.4)',
+          ? `inset 2px 2px 3px rgba(0,0,0,0.55), inset -1px -1px 0 ${color}66, 0 0 12px ${color}77`
+          : 'inset 1.5px 1.5px 0 rgba(255,255,255,0.14), inset -2px -2px 0 rgba(0,0,0,0.6), 0 1px 0 rgba(0,0,0,0.5)',
         cursor: 'pointer',
         letterSpacing: '0.15em',
         clipPath: 'polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%, 0 5px)',
@@ -665,7 +673,17 @@ function FilterChip({
       <span
         aria-hidden
         className="inline-block mr-1.5 align-middle"
-        style={{ width: 6, height: 6, background: color, boxShadow: active ? `0 0 5px ${color}` : 'none', opacity: active ? 1 : 0.45 }}
+        style={{
+          width: 7,
+          height: 7,
+          borderRadius: '50%',
+          background: active
+            ? `radial-gradient(circle at 35% 30%, #fff, ${color} 55%, ${color} 100%)`
+            : 'radial-gradient(circle at 35% 30%, #3a3348, #0c0812 80%)',
+          boxShadow: active
+            ? `0 0 6px ${color}, 0 0 2px #fff`
+            : 'inset 1px 1px 1px rgba(0,0,0,0.8)',
+        }}
       />
       {label}
     </button>

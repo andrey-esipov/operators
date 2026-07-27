@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import type { QualityFlags } from '../../core/QualityManager'
 import type { StageConfig } from '../StageRegistry'
-import { StageBuild, structureMat, glowMat, makeScreen, trussBeam, lightShaft, crowdBand } from '../StageKit'
+import { StageBuild, structureMat, glowMat, makeScreen, trussBeam, lightShaft, crowdBand, radialGlow } from '../StageKit'
 import { overhead, screenWall, foreground } from './StageSet'
 
 export function buildHypergrowth(b: StageBuild, cfg: StageConfig, flags: QualityFlags) {
@@ -135,4 +135,37 @@ export function buildHypergrowth(b: StageBuild, cfg: StageConfig, flags: Quality
   }
   overhead(b, cfg, flags, 'gantry')
   foreground(b, 'gantry', cfg)
+
+  // --- hero foreground: heavy launch hardware hugging the lower frame so the
+  // extreme-fg plane reads as a physical place, not two thin lines. Placed at
+  // z~5.5-5.9 / x~+-2.7 (the true frame edges) with DOF bokeh separating them. -
+  const fgDark = new THREE.Color(cfg.structure).multiplyScalar(0.34).getHex()
+  const fgMetal = (c: number, r = 0.68, mt = 0.6) => structureMat({ color: c, roughness: r, metalness: mt })
+  // bottom-left hold-down clamp: a chunky strut + an angled arm reaching inward
+  const clampBase = new THREE.Mesh(new THREE.BoxGeometry(0.9, 2.4, 0.9), fgMetal(fgDark))
+  clampBase.position.set(-2.8, 0.9, 5.7); b.add(clampBase)
+  const clampArm = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.44, 0.5), fgMetal(fgDark))
+  clampArm.position.set(-2.0, 1.55, 5.6); clampArm.rotation.z = -0.34; b.add(clampArm)
+  const hazard = new THREE.Mesh(new THREE.PlaneGeometry(0.74, 0.18), glowMat(0xffb020, 0.7))
+  hazard.position.set(-2.8, 1.95, 5.76); b.add(hazard)
+  const clampLed = new THREE.Mesh(new THREE.SphereGeometry(0.11, 8, 6), glowMat(0xff3524, 0.9))
+  clampLed.position.set(-2.35, 1.78, 5.62); b.add(clampLed)
+  // bottom-right vent stack: pipe + elbow venting a soft rolling steam puff
+  const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.26, 2.8, 14), fgMetal(fgDark, 0.5, 0.72))
+  pipe.position.set(3.0, 1.1, 5.9); b.add(pipe)
+  const elbow = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 1.0, 12), fgMetal(fgDark, 0.5, 0.72))
+  elbow.position.set(2.65, 2.35, 5.85); elbow.rotation.z = Math.PI / 2 * 0.72; b.add(elbow)
+  const puff = radialGlow(1.25, 1.5, 0xcdeeff, 0x2ec6ff, 0.3)
+  puff.mesh.position.set(2.4, 2.75, 5.82); b.add(puff.mesh)
+  // foreground diagnostic terminal — a small lit screen tilted up toward camera
+  const term = makeScreen(1.0, 0.66, 'data', cfg.screen.hue, cfg.screen.hue2, 1.35, 22)
+  term.mesh.position.set(2.1, 1.02, 5.42); term.mesh.rotation.set(0.34, -0.3, 0); b.add(term.mesh)
+  const termFrame = new THREE.Mesh(new THREE.BoxGeometry(1.18, 0.84, 0.12), fgMetal(fgDark, 0.6, 0.55))
+  termFrame.position.set(2.1, 1.02, 5.39); termFrame.rotation.set(0.34, -0.3, 0); b.add(termFrame)
+  b.onUpdate((t) => {
+    puff.mat.uniforms.uTime.value = t
+    term.mat.uniforms.uTime.value = t
+    ;(clampLed.material as THREE.MeshBasicMaterial).opacity = 0.4 + 0.5 * (0.5 + 0.5 * Math.sin(t * 3.0))
+    puff.mesh.position.y = 2.75 + 0.16 * Math.sin(t * 0.8)
+  })
 }

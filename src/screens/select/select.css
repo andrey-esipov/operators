@@ -1,0 +1,250 @@
+/*
+ * Character / Stage select design system — "Operators" AAA rebuild.
+ *
+ * Owned by the select-screens agent. Scoped with the `.sel-` prefix so it
+ * cannot collide with the shared src/index.css tokens. Consumes the theme
+ * tokens (--color-pa-*, --color-pb-*, fonts) defined in index.css but never
+ * mutates them.
+ *
+ * Design language: angular, kinetic, layered panels with real material
+ * (bevel + inner shadow + gradient), a single dominant hero render, and a
+ * strong player-side colour identity (warm = P1, cool = P2). Pixel-art soul
+ * kept intact: sprites stay `image-rendering: pixelated` from index.css, and
+ * chrome uses hard bevels rather than soft glassmorphism.
+ */
+
+/* ── Root + art-directed background ─────────────────────────────────── */
+.sel-root {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  /* --sel-accent is the hovered fighter's colour; --sel-side is the active
+     player's colour. Both are set inline per-render and drive the layers. */
+  --sel-accent: #f72585;
+  --sel-side: #e63946;
+}
+
+.sel-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background:
+    radial-gradient(120% 90% at 22% 8%, color-mix(in srgb, var(--sel-accent) 30%, transparent) 0%, transparent 55%),
+    radial-gradient(90% 80% at 100% 100%, color-mix(in srgb, var(--sel-side) 22%, transparent) 0%, transparent 50%),
+    linear-gradient(160deg, #241238 0%, #150c26 45%, #0b0715 100%);
+  transition: background 320ms ease;
+}
+
+/* Diagonal kinetic bands — gives the flat fill depth + motion direction. */
+.sel-bg-bands {
+  position: absolute;
+  inset: -20%;
+  z-index: 0;
+  opacity: 0.5;
+  background-image: repeating-linear-gradient(
+    115deg,
+    transparent 0px,
+    transparent 78px,
+    color-mix(in srgb, var(--sel-accent) 8%, transparent) 78px,
+    color-mix(in srgb, var(--sel-accent) 8%, transparent) 80px
+  );
+  animation: selBandDrift 18s linear infinite;
+}
+
+/* Large ghosted grid — subtle arcade-cabinet texture. */
+.sel-bg-grid {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  opacity: 0.22;
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--sel-side) 30%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--sel-side) 30%, transparent) 1px, transparent 1px);
+  background-size: 46px 46px;
+  mask-image: radial-gradient(120% 100% at 50% 100%, black 10%, transparent 70%);
+  -webkit-mask-image: radial-gradient(120% 100% at 50% 100%, black 10%, transparent 70%);
+}
+
+.sel-bg-vignette {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: radial-gradient(130% 120% at 50% 40%, transparent 45%, rgba(0,0,0,0.55) 100%);
+}
+
+@keyframes selBandDrift {
+  from { transform: translateX(0); }
+  to { transform: translateX(80px); }
+}
+
+/* ── Material panel — hard bevel + inner shadow, the base UI surface ── */
+.sel-panel {
+  position: relative;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0) 14%),
+    linear-gradient(180deg, rgba(28,18,44,0.92), rgba(14,9,22,0.94));
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.14),
+    inset 0 0 0 1px rgba(255,255,255,0.05),
+    inset -3px -3px 0 rgba(0,0,0,0.45),
+    0 8px 24px rgba(0,0,0,0.5);
+}
+
+/* ── Hero stage — the dominant focal point ──────────────────────────── */
+.sel-hero {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(85% 70% at 50% 22%, color-mix(in srgb, var(--sel-accent) 42%, transparent) 0%, transparent 62%),
+    linear-gradient(180deg, color-mix(in srgb, var(--sel-accent) 16%, #140b24) 0%, #0c0716 78%);
+  box-shadow:
+    inset 0 0 0 2px color-mix(in srgb, var(--sel-side) 60%, transparent),
+    inset 0 0 60px color-mix(in srgb, var(--sel-accent) 30%, transparent),
+    0 10px 30px rgba(0,0,0,0.55);
+  transition: background 320ms ease, box-shadow 320ms ease;
+}
+
+/* Angular colour slab behind the fighter — Strive/KOF-style backdrop shape. */
+.sel-hero-slab {
+  position: absolute;
+  left: 50%;
+  top: 8%;
+  width: 78%;
+  height: 82%;
+  transform: translateX(-50%);
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--sel-accent) 65%, transparent) 0%,
+    color-mix(in srgb, var(--sel-accent) 18%, transparent) 55%,
+    transparent 100%);
+  clip-path: polygon(14% 0, 100% 6%, 88% 100%, 0 92%);
+  filter: blur(1px);
+  opacity: 0.85;
+}
+
+/* Big rim-light halo directly behind the sprite. */
+.sel-hero-halo {
+  position: absolute;
+  left: 50%;
+  top: 46%;
+  width: 62%;
+  height: 66%;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(50% 50% at 50% 50%,
+    color-mix(in srgb, var(--sel-accent) 55%, white 10%) 0%,
+    color-mix(in srgb, var(--sel-accent) 20%, transparent) 45%,
+    transparent 72%);
+  filter: blur(6px);
+}
+
+/* Vertical discipline watermark down the side of the hero. */
+.sel-hero-watermark {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%) rotate(180deg);
+  writing-mode: vertical-rl;
+  font-family: var(--font-display);
+  font-size: 34px;
+  letter-spacing: 0.25em;
+  color: rgba(255,255,255,0.07);
+  text-shadow: 0 0 20px color-mix(in srgb, var(--sel-accent) 40%, transparent);
+  pointer-events: none;
+  user-select: none;
+  white-space: nowrap;
+}
+
+/* The sprite container — animates in on every hover swap. */
+.sel-hero-figure {
+  position: absolute;
+  left: 0; right: 0;
+  bottom: 0;
+  top: 4%;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  filter: drop-shadow(0 12px 18px rgba(0,0,0,0.6));
+  animation: selHeroIn 340ms cubic-bezier(0.2, 0.9, 0.3, 1) both;
+}
+@keyframes selHeroIn {
+  0% { opacity: 0; transform: translateX(-26px) scale(0.965); }
+  60% { opacity: 1; }
+  100% { opacity: 1; transform: translateX(0) scale(1); }
+}
+
+/* Floor glow ellipse the fighter stands on. */
+.sel-hero-floor {
+  position: absolute;
+  left: 50%;
+  bottom: 3%;
+  width: 58%;
+  height: 34px;
+  transform: translateX(-50%);
+  background: radial-gradient(50% 50% at 50% 50%,
+    color-mix(in srgb, var(--sel-accent) 75%, transparent) 0%, transparent 72%);
+  filter: blur(3px);
+}
+
+/* Name plate — sits at the base of the hero, animates in on swap. */
+.sel-nameplate {
+  position: relative;
+  animation: selNameIn 380ms cubic-bezier(0.2, 0.9, 0.3, 1) both;
+}
+@keyframes selNameIn {
+  0% { opacity: 0; transform: translateY(14px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Roster cell cursor states ──────────────────────────────────────── */
+.sel-cell {
+  transition: transform 130ms cubic-bezier(0.2, 0.9, 0.3, 1), box-shadow 130ms ease, border-color 130ms ease;
+}
+.sel-cell:hover { transform: translateY(-3px) scale(1.06); z-index: 5; }
+.sel-cell-cursor { transform: translateY(-3px) scale(1.08); z-index: 6; }
+
+/* Confirmed-pick ceremony flash. */
+.sel-confirm-pop { animation: selConfirmPop 420ms cubic-bezier(0.2, 0.9, 0.3, 1); }
+@keyframes selConfirmPop {
+  0% { transform: scale(1); }
+  35% { transform: scale(1.16); }
+  100% { transform: scale(1.08); }
+}
+
+/* Angular segmented filter control. */
+.sel-chip {
+  transition: transform 120ms ease, box-shadow 120ms ease, background 120ms ease, color 120ms ease;
+}
+.sel-chip:hover { transform: translateY(-1px); }
+
+/* VS strip pick-slot pulse when it's that side's turn. */
+.sel-slot-active { animation: selSlotPulse 1.6s ease-in-out infinite; }
+@keyframes selSlotPulse {
+  0%, 100% { box-shadow: inset 0 0 0 2px var(--sel-side), 0 0 10px color-mix(in srgb, var(--sel-side) 40%, transparent); }
+  50% { box-shadow: inset 0 0 0 2px var(--sel-side), 0 0 26px color-mix(in srgb, var(--sel-side) 85%, transparent); }
+}
+
+/* Stage-select hero preview crossfade. */
+.sel-stage-hero { animation: selHeroIn 300ms cubic-bezier(0.2, 0.9, 0.3, 1) both; }
+
+/* Confirm / fight button sheen. */
+.sel-cta {
+  transition: transform 140ms cubic-bezier(0.2, 0.9, 0.3, 1), box-shadow 140ms ease, filter 140ms ease;
+}
+.sel-cta:hover { transform: translateY(-3px) scale(1.02); filter: brightness(1.08); }
+.sel-cta:active { transform: translateY(0) scale(0.99); }
+
+/* ── Reduced motion ─────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .sel-bg-bands { animation: none; }
+  .sel-hero-figure,
+  .sel-nameplate,
+  .sel-stage-hero { animation: none; }
+  .sel-slot-active { animation: none; }
+  .sel-confirm-pop { animation: none; }
+  .sel-cell,
+  .sel-cta,
+  .sel-chip { transition: none; }
+  .sel-cell:hover,
+  .sel-cell-cursor { transform: none; }
+}

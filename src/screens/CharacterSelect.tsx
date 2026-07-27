@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useRef, useCallback } from 'react'
 import { useGame } from '../state/game'
+import './select/select.css'
 import { STARTING_ROSTER, getFighter, UNLOCKABLES, FIGHTERS } from '../data/fighters'
 import { isMarquee } from '../data/story-career-arcs'
 import {
@@ -24,6 +25,13 @@ const DISCIPLINE_FILTER_ORDER: DisciplineFilter[] = [
 ]
 const ERA_FILTER_ORDER: EraFilter[] = ['all', 'early', 'mid', 'recent']
 
+// Player-side identity colours. Warm = P1, cool = P2. Reinforced everywhere
+// (hero frame, VS strip, roster selection) so it's always obvious whose turn
+// it is and which fighter belongs to whom.
+const SIDE_COLOR = { a: '#E63946', b: '#00B4D8' } as const
+const SIDE_GLOW = { a: '#F77F00', b: '#0077B6' } as const
+const SIDE_LABEL = { a: 'PLAYER 1', b: 'PLAYER 2' } as const
+
 export function CharacterSelect() {
   const mode = useGame((s) => s.mode)
   const startArcade = useGame((s) => s.startArcade)
@@ -34,6 +42,7 @@ export function CharacterSelect() {
   const [selectedB, setSelectedB] = useState<string | null>(null)
   const [hovered, setHovered] = useState<string>('chesky')
   const [expanded, setExpanded] = useState(false)
+  const gridRef = useRef<HTMLDivElement | null>(null)
 
   // Filter state — discipline + era chips + free-text search.
   // 'all' means no filter on that axis. Search matches name, shortName,
@@ -143,15 +152,72 @@ export function CharacterSelect() {
   const anyFilterActive = disciplineFilter !== 'all' || eraFilter !== 'all' || query.trim() !== ''
   const totalRoster = ROSTER_ORDER.length
 
+  // Keyboard navigation over the roster grid. Native <button> focus already
+  // gives Tab + Enter; this layers arrow-key movement (measuring the live
+  // column count from the DOM so it tracks the responsive grid) and Enter/Space
+  // to pick — strictly better than today.
+  const onRosterKey = useCallback(
+    (e: React.KeyboardEvent<HTMLDivElement>) => {
+      const key = e.key
+      if (
+        key !== 'ArrowRight' && key !== 'ArrowLeft' &&
+        key !== 'ArrowUp' && key !== 'ArrowDown' &&
+        key !== 'Enter' && key !== ' '
+      ) return
+      const list = filteredRoster
+      if (list.length === 0) return
+      const cur = Math.max(0, list.indexOf(hovered))
+      if (key === 'Enter' || key === ' ') {
+        e.preventDefault()
+        const id = list[cur]
+        if (id && !UNLOCKABLES.includes(id)) pickFighter(id)
+        return
+      }
+      e.preventDefault()
+      // Derive columns by counting cells that share the first row's top offset.
+      const grid = gridRef.current
+      let cols = 6
+      if (grid) {
+        const cells = Array.from(grid.querySelectorAll<HTMLElement>('[data-cell]'))
+        if (cells.length > 1) {
+          const top0 = cells[0].offsetTop
+          const c = cells.filter((el) => el.offsetTop === top0).length
+          if (c > 0) cols = c
+        }
+      }
+      let next = cur
+      if (key === 'ArrowRight') next = Math.min(list.length - 1, cur + 1)
+      else if (key === 'ArrowLeft') next = Math.max(0, cur - 1)
+      else if (key === 'ArrowDown') next = Math.min(list.length - 1, cur + cols)
+      else if (key === 'ArrowUp') next = Math.max(0, cur - cols)
+      if (next !== cur) {
+        Sfx.menuMove()
+        setHovered(list[next])
+        gridRef.current?.querySelector<HTMLElement>(`[data-cell="${list[next]}"]`)?.focus()
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [filteredRoster, hovered]
+  )
+
+  const sideColor = SIDE_COLOR[side]
+  const sideGlow = SIDE_GLOW[side]
+  const heroAccent = hoveredFighter?.accent ?? '#F72585'
+  const heroDiscipline = hoveredFighter ? getDiscipline(hoveredFighter) : 'product'
+
   return (
-    <div className="relative w-full h-full flex flex-col p-4 gap-3 overflow-hidden">
-      <div
-        className="absolute inset-0"
-        style={{
-          background:
-            'radial-gradient(circle at center, #3B2360 0%, #1A0F2E 60%, #0F0A1A 100%)',
-        }}
-      />
+    <div
+      className="sel-root flex flex-col p-4 gap-3"
+      style={{
+        ['--sel-accent' as string]: heroAccent,
+        ['--sel-side' as string]: sideColor,
+      }}
+    >
+      {/* Layered, art-directed background */}
+      <div className="sel-bg" />
+      <div className="sel-bg-bands" />
+      <div className="sel-bg-grid" />
+      <div className="sel-bg-vignette" />
 
       <div className="relative z-10 flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-2">
@@ -191,52 +257,116 @@ export function CharacterSelect() {
           </button>
         </div>
         <h1
-          className="font-display text-2xl tracking-widest"
+          className="font-display text-2xl tracking-widest relative"
           style={{
             color: '#FFD60A',
-            textShadow: '4px 4px 0 rgba(0,0,0,0.6)',
+            textShadow: `3px 3px 0 rgba(0,0,0,0.7), 0 0 22px ${sideGlow}66`,
           }}
         >
           {storyMode
-            ? "STORY MODE · WHO'S TONIGHT'S GUEST?"
+            ? "STORY MODE · TONIGHT'S GUEST"
             : arcadeMode
-              ? 'ARCADE MODE · PICK YOUR FIGHTER'
+              ? 'ARCADE · PICK YOUR FIGHTER'
               : 'SELECT YOUR OPERATOR'}
         </h1>
-        <div className="font-display text-[10px] tracking-widest text-white/70">
-          {singlePickerMode ? 'PLAYER 1' : `P${side === 'a' ? '1' : '2'} PICKING`}
+        <div
+          className="font-display text-[10px] tracking-widest px-3 py-1.5"
+          style={{
+            color: sideColor,
+            background: `linear-gradient(180deg, ${sideColor}2E, ${sideColor}10)`,
+            border: `1px solid ${sideColor}`,
+            boxShadow: `inset -2px -2px 0 rgba(0,0,0,0.4), 0 0 14px ${sideColor}55`,
+            clipPath: 'polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)',
+          }}
+        >
+          {singlePickerMode ? '▸ PLAYER 1' : `▸ ${SIDE_LABEL[side]} · CHOOSE`}
         </div>
       </div>
 
-      {/* Selected sides (VS mode only) */}
-      {!singlePickerMode && (
-        <div className="relative z-10 grid grid-cols-3 gap-3 items-end flex-shrink-0">
-          <SideCard side="a" id={selectedA} active={side === 'a'} />
-          <NextStepHint hasA={!!selectedA} hasB={!!selectedB} />
-          <SideCard side="b" id={selectedB} active={side === 'b'} />
-        </div>
-      )}
+      {/* MAIN: dominant hero (left) + subordinate roster (right) */}
+      <div className="relative z-10 flex gap-4 flex-1 min-h-0">
+        {/* ─── HERO STAGE — the biggest thing on screen ─────────────── */}
+        {hoveredFighter && (
+          <div
+            className="sel-hero flex-shrink-0 flex flex-col"
+            style={{ flex: '0 0 clamp(400px, 34%, 560px)' }}
+          >
+            <div className="relative flex-1 min-h-0">
+              <div className="sel-hero-slab" />
+              <div className="sel-hero-halo" />
+              <div className="sel-hero-watermark">
+                {DISCIPLINE_LABEL[heroDiscipline]}
+              </div>
+              <div className="sel-hero-floor" />
+              {/* Keyed by id so the render snaps/re-animates on every swap */}
+              <div className="sel-hero-figure" key={hoveredFighter.id}>
+                <div style={{ width: '86%', height: '96%' }}>
+                  <Sprite fighter={hoveredFighter} side={side} state="stance" />
+                </div>
+              </div>
+              {/* Era badge top-left */}
+              <div
+                className="absolute top-3 left-3 font-display text-[8px] tracking-widest px-2 py-1"
+                style={{
+                  color: '#FCBF49',
+                  background: 'rgba(0,0,0,0.5)',
+                  border: '1px solid #FCBF4988',
+                }}
+              >
+                {ERA_LABEL[getEra(hoveredFighter)].split(' · ')[0]}
+              </div>
+            </div>
 
-      {arcadeMode && (
-        <div className="relative z-10 px-4 py-2 text-center font-display text-base tracking-widest text-white/80 flex-shrink-0">
-          Beat 8 stages. Final boss: Lenny himself.
-        </div>
-      )}
+            {/* Nameplate + core identity — animates in on swap */}
+            <HeroNameplate
+              key={`np-${hoveredFighter.id}`}
+              fighter={hoveredFighter}
+              side={side}
+              expanded={expanded}
+              onToggleMoves={() => { Sfx.menuMove(); setExpanded((x) => !x) }}
+            />
+          </div>
+        )}
 
-      {storyMode && (
-        <div className="relative z-10 px-4 py-2 text-center font-display text-base tracking-widest flex-shrink-0" style={{ color: '#F72585', textShadow: '2px 2px 0 black' }}>
-          8 chapters on the podcast. Lenny in the final segment.
-        </div>
-      )}
+        {/* ─── RIGHT COLUMN — VS strip · filters · roster ───────────── */}
+        <div className="flex flex-col flex-1 min-w-0 min-h-0 gap-3">
+          {/* VS strip (VS mode only) — compact player identity */}
+          {!singlePickerMode && (
+            <div className="flex items-stretch gap-2 flex-shrink-0">
+              <PickSlot side="a" id={selectedA} active={side === 'a'} />
+              <div className="flex flex-col items-center justify-center px-1">
+                <span
+                  className="font-display text-lg"
+                  style={{ color: '#FFD60A', textShadow: '2px 2px 0 black' }}
+                >
+                  VS
+                </span>
+                <span className="font-display text-[7px] tracking-widest text-white/50 mt-1 text-center">
+                  {selectedA && selectedB ? 'READY' : selectedA ? 'P2 PICKS' : 'P1 PICKS'}
+                </span>
+              </div>
+              <PickSlot side="b" id={selectedB} active={side === 'b'} />
+            </div>
+          )}
 
-      {/* FILTER BAR — discipline chips · era chips · search · reset.
-          Discipline chips are color-coded to their accent so the bucket
-          colors carry over into the roster cells the player just picked
-          from. Counts on each chip surface how many fighters live there. */}
-      <div className="relative z-10 flex-shrink-0 flex flex-col gap-2">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="font-display text-[8px] tracking-widest text-white/40 pr-1">DISCIPLINE</span>
-          {DISCIPLINE_FILTER_ORDER.map((d) => (
+          {(arcadeMode || storyMode) && (
+            <div
+              className="relative flex-shrink-0 px-3 py-2 text-center font-display text-[10px] tracking-widest"
+              style={{
+                color: storyMode ? '#F72585' : '#FCBF49',
+                background: 'rgba(0,0,0,0.35)',
+                border: `1px solid ${storyMode ? '#F7258566' : '#FCBF4966'}`,
+              }}
+            >
+              {arcadeMode ? 'BEAT 8 STAGES · FINAL BOSS: LENNY' : '8 CHAPTERS · LENNY IN THE FINAL SEGMENT'}
+            </div>
+          )}
+
+          {/* FILTER BAR */}
+          <div className="flex-shrink-0 flex flex-col gap-2">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="font-display text-[8px] tracking-widest text-white/40 pr-1">DISCIPLINE</span>
+              {DISCIPLINE_FILTER_ORDER.map((d) => (
             <FilterChip
               key={d}
               label={d === 'all' ? 'ALL' : DISCIPLINE_LABEL[d]}
@@ -264,19 +394,23 @@ export function CharacterSelect() {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="search name · framework · archetype…"
-            className="px-2 py-1 font-body text-base text-white placeholder:text-white/30"
+            placeholder="search name · framework…"
+            className="px-2 py-1 font-body text-base text-white placeholder:text-white/30 flex-shrink"
             style={{
-              background: 'rgba(0,0,0,0.4)',
-              border: '1px solid rgba(255,255,255,0.2)',
-              minWidth: 240,
+              background: 'rgba(0,0,0,0.45)',
+              border: `1px solid ${query ? sideColor : 'rgba(255,255,255,0.2)'}`,
+              boxShadow: query
+                ? `inset 2px 2px 0 rgba(0,0,0,0.4), 0 0 10px ${sideColor}44`
+                : 'inset 2px 2px 0 rgba(0,0,0,0.4)',
+              minWidth: 150,
+              maxWidth: 220,
               outline: 'none',
             }}
           />
           {anyFilterActive && (
             <button
               onClick={clearFilters}
-              className="font-display text-[8px] tracking-widest px-2 py-1"
+              className="sel-chip font-display text-[8px] tracking-widest px-2 py-1"
               style={{
                 background: 'rgba(255,255,255,0.06)',
                 color: 'white',
@@ -290,24 +424,25 @@ export function CharacterSelect() {
         </div>
       </div>
 
-      {/* MAIN AREA: roster + profile */}
-      <div className="relative z-10 flex gap-4 flex-1 min-h-0">
-        {/* LEFT: roster grid — auto-fits cells to available width.
-            ~92px min-cell means we get 6 cols on a typical desktop pane
-            but degrade to 5 on smaller viewports without overflowing. */}
-        <div className="flex flex-col flex-1 min-w-0 min-h-0">
-          <div className="font-display text-[8px] tracking-widest text-white/40 mb-1">
-            {filteredRoster.length === totalRoster
-              ? `${totalRoster} OPERATORS`
-              : `${filteredRoster.length} / ${totalRoster} OPERATORS`}
-          </div>
-          <div
-            className="grid gap-2 content-start auto-rows-max overflow-y-auto pr-2"
-            style={{
-              gridTemplateColumns: 'repeat(auto-fill, minmax(92px, 1fr))',
-              flex: '1 1 0',
-            }}
-          >
+      {/* ROSTER — dense, subordinate to the hero */}
+      <div className="relative flex flex-col flex-1 min-w-0 min-h-0">
+        <div className="font-display text-[8px] tracking-widest text-white/40 mb-1 flex-shrink-0">
+          {filteredRoster.length === totalRoster
+            ? `${totalRoster} OPERATORS`
+            : `${filteredRoster.length} / ${totalRoster} OPERATORS`}
+        </div>
+        <div
+          ref={gridRef}
+          role="listbox"
+          aria-label="Operator roster"
+          tabIndex={0}
+          onKeyDown={onRosterKey}
+          className="grid gap-2 content-start auto-rows-max overflow-y-auto pr-2 outline-none"
+          style={{
+            gridTemplateColumns: 'repeat(auto-fill, minmax(84px, 1fr))',
+            flex: '1 1 0',
+          }}
+        >
             {filteredRoster.length === 0 ? (
               <div
                 className="col-span-full text-center font-body text-base text-white/50 py-12"
@@ -321,7 +456,6 @@ export function CharacterSelect() {
             ) : filteredRoster.map((id) => {
               const f = getFighter(id)!
               const isLocked = UNLOCKABLES.includes(id)
-              const isSelected = selectedA === id || selectedB === id
               const isHovered = hovered === id
               const discColor = DISCIPLINE_COLOR[getDiscipline(f)]
               // In Story Mode, the marquee 8 get a visible gold rim + star
@@ -329,9 +463,28 @@ export function CharacterSelect() {
               // career arc waiting for them. Non-marquee fighters still play
               // Story Mode but get the universal tournament dialogue.
               const marquee = storyMode && isMarquee(id)
+              const selByA = selectedA === id
+              const selByB = selectedB === id
+              const isCursor = isHovered
+              // Uniform, legible border language (kills the old rainbow):
+              //  · picked  → that player's colour (P1 warm / P2 cool) + white
+              //  · cursor  → the active side's colour, thick
+              //  · marquee → gold rim
+              //  · idle    → quiet neutral edge; craft is carried by the pip
+              const borderCol = selByA
+                ? SIDE_COLOR.a
+                : selByB
+                ? SIDE_COLOR.b
+                : isCursor
+                ? sideColor
+                : marquee
+                ? '#FFD60A'
+                : 'rgba(255,255,255,0.12)'
+              const pickGlow = selByA ? SIDE_COLOR.a : selByB ? SIDE_COLOR.b : sideColor
               return (
                 <button
                   key={id}
+                  data-cell={id}
                   onMouseEnter={() => {
                     setHovered(id)
                     Sfx.menuMove()
@@ -339,55 +492,62 @@ export function CharacterSelect() {
                   onClick={() => !isLocked && pickFighter(id)}
                   disabled={isLocked}
                   aria-label={`${f.name} — ${f.archetype}${isLocked ? ', locked' : ''}${marquee ? ', ★ marquee story arc' : ''}`}
-                  className={`relative aspect-square flex flex-col items-center justify-center transition-transform hover:scale-105 overflow-hidden ${isSelected ? 'lock-in-pulse' : ''} ${marquee ? 'marquee-pulse' : ''}`}
+                  aria-selected={isCursor}
+                  className={`sel-cell relative aspect-square flex flex-col items-center justify-center overflow-hidden ${isCursor ? 'sel-cell-cursor' : ''} ${(selByA || selByB) ? 'sel-confirm-pop' : ''} ${marquee && !isCursor ? 'marquee-pulse' : ''}`}
                   style={{
                     background: marquee
-                      ? `linear-gradient(180deg, #FFD60A33, ${f.accent}22, #FFD60A11)`
-                      : `linear-gradient(180deg, ${f.accent}33, ${f.accent}11)`,
-                    border: `2px solid ${
-                      isSelected ? 'white'
-                      : marquee ? '#FFD60A'
-                      : isHovered ? f.accent
-                      : f.accent + '88'
-                    }`,
-                    boxShadow: isSelected
-                      ? `0 0 24px white, 0 0 48px ${f.accent}, inset -2px -2px 0 rgba(0,0,0,0.4)`
-                      : marquee && isHovered
-                      ? `0 0 22px #FFD60A, 0 0 36px ${f.accent}, inset -2px -2px 0 rgba(0,0,0,0.4)`
+                      ? 'linear-gradient(180deg, rgba(60,48,20,0.75), rgba(16,10,26,0.9))'
+                      : 'linear-gradient(180deg, rgba(42,30,60,0.72), rgba(14,9,22,0.9))',
+                    border: `${(selByA || selByB || isCursor) ? '2px' : '1px'} solid ${borderCol}`,
+                    boxShadow: (selByA || selByB)
+                      ? `0 0 0 2px ${pickGlow}, 0 0 22px ${pickGlow}, inset 0 -14px 18px -12px ${f.accent}`
+                      : isCursor
+                      ? `0 0 18px ${sideColor}cc, inset 0 -16px 20px -12px ${f.accent}, inset 0 1px 0 rgba(255,255,255,0.16)`
                       : marquee
-                      ? `0 0 14px #FFD60A88, inset -2px -2px 0 rgba(0,0,0,0.4)`
-                      : isHovered
-                      ? `0 0 16px ${f.accent}, inset -2px -2px 0 rgba(0,0,0,0.4)`
-                      : 'inset -2px -2px 0 rgba(0,0,0,0.4), inset 2px 2px 0 rgba(255,255,255,0.15)',
+                      ? `0 0 12px #FFD60A55, inset -2px -2px 0 rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.08)`
+                      : 'inset -2px -2px 0 rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.08)',
                     cursor: isLocked ? 'not-allowed' : 'pointer',
                     opacity: isLocked ? 0.4 : 1,
-                    minHeight: 92,
+                    minHeight: 84,
                   }}
                 >
-                  {/* Discipline marker — tiny corner pip so the player can
-                      visually scan the grid by craft (PMs, designers, AI
-                      builders, etc.) without reading the label. */}
+                  {/* Discipline pip — the one intentional colour cue, so the
+                      grid stays scannable by craft without rainbow borders. */}
                   <span
                     aria-hidden
                     style={{
                       position: 'absolute',
                       top: 4,
                       left: 4,
-                      width: 8,
-                      height: 8,
+                      width: 7,
+                      height: 7,
                       background: discColor,
                       border: '1px solid rgba(0,0,0,0.6)',
                       boxShadow: `0 0 6px ${discColor}`,
                     }}
                   />
+                  {/* Player-pick corner flag */}
+                  {(selByA || selByB) && (
+                    <span
+                      className="absolute top-0 right-0 font-display text-[7px] px-1 py-0.5"
+                      style={{
+                        color: 'white',
+                        background: selByA ? SIDE_COLOR.a : SIDE_COLOR.b,
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.6)',
+                      }}
+                    >
+                      {selByA ? 'P1' : 'P2'}
+                    </span>
+                  )}
                   <div className="absolute inset-0 flex items-center justify-center pb-3">
-                    <Sprite fighter={f} side="a" state="stance" />
+                    <Sprite fighter={f} side={selByB ? 'b' : 'a'} state="stance" />
                   </div>
                   <div
                     className="absolute left-0 right-0 bottom-0 font-display text-[8px] text-center py-[3px] text-white truncate"
                     style={{
-                      background: 'rgba(0,0,0,0.78)',
+                      background: 'rgba(0,0,0,0.8)',
                       letterSpacing: '0.5px',
+                      borderTop: `1px solid ${isCursor ? sideColor : 'transparent'}`,
                     }}
                     title={f.shortName}
                   >
@@ -423,24 +583,12 @@ export function CharacterSelect() {
               )
             })}
           </div>
+          {expanded && hoveredFighter && (
+            <MoveDrawer fighter={hoveredFighter} onClose={() => { Sfx.menuMove(); setExpanded(false) }} />
+          )}
         </div>
-
-        {/* RIGHT: profile card */}
-        {hoveredFighter && (
-          <div
-            className="overflow-y-auto pr-1"
-            style={{
-              background: 'rgba(15,10,26,0.9)',
-              border: `3px solid ${hoveredFighter.accent}`,
-              boxShadow: `inset -2px -2px 0 rgba(0,0,0,0.5), inset 2px 2px 0 rgba(255,255,255,0.1), 0 0 24px ${hoveredFighter.accent}55`,
-              flex: '0 0 420px',
-              maxWidth: 420,
-            }}
-          >
-            <ProfileCard fighter={hoveredFighter} expanded={expanded} onToggle={() => setExpanded((x) => !x)} />
-          </div>
-        )}
       </div>
+    </div>
     </div>
   )
 }
@@ -461,16 +609,26 @@ function FilterChip({
   return (
     <button
       onClick={onClick}
-      className="font-display text-[8px] tracking-widest px-2 py-1 transition-transform hover:translate-y-[-1px]"
+      className="sel-chip font-display text-[8px] tracking-widest px-2 py-1"
       style={{
-        background: active ? `${color}33` : 'rgba(0,0,0,0.45)',
-        color: active ? color : 'rgba(255,255,255,0.75)',
-        border: `1px solid ${active ? color : 'rgba(255,255,255,0.15)'}`,
-        boxShadow: active ? `0 0 10px ${color}55, inset -1px -1px 0 rgba(0,0,0,0.4)` : 'inset -1px -1px 0 rgba(0,0,0,0.4)',
+        background: active
+          ? `linear-gradient(180deg, ${color}44, ${color}18)`
+          : 'linear-gradient(180deg, rgba(255,255,255,0.05), rgba(0,0,0,0.4))',
+        color: active ? '#fff' : 'rgba(255,255,255,0.7)',
+        border: `1px solid ${active ? color : 'rgba(255,255,255,0.12)'}`,
+        boxShadow: active
+          ? `0 0 12px ${color}66, inset 0 1px 0 rgba(255,255,255,0.2), inset -1px -1px 0 rgba(0,0,0,0.4)`
+          : 'inset 0 1px 0 rgba(255,255,255,0.06), inset -1px -1px 0 rgba(0,0,0,0.4)',
         cursor: 'pointer',
         letterSpacing: '0.15em',
+        clipPath: 'polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%, 0 5px)',
       }}
     >
+      <span
+        aria-hidden
+        className="inline-block mr-1.5 align-middle"
+        style={{ width: 6, height: 6, background: color, boxShadow: `0 0 5px ${color}` }}
+      />
       {label}
       <span className="ml-1.5" style={{ opacity: active ? 1 : 0.55 }}>
         {count}
@@ -479,174 +637,226 @@ function FilterChip({
   )
 }
 
-function ProfileCard({
+function HeroNameplate({
   fighter,
+  side,
   expanded,
-  onToggle,
+  onToggleMoves,
 }: {
   fighter: FighterDef
+  side: 'a' | 'b'
   expanded: boolean
-  onToggle: () => void
+  onToggleMoves: () => void
 }) {
+  const sideColor = SIDE_COLOR[side]
+  const bestIn = (() => {
+    const tops = Object.entries(fighter.scenarioBonus)
+      .filter(([, v]) => v >= 1.3)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 2)
+      .map(([k]) => SCENARIOS[k as ScenarioId].tag)
+    return tops.length > 0 ? tops : ['ALL-ROUNDER']
+  })()
+  const hpPct = Math.max(0.35, Math.min(1, fighter.maxHp / 1200))
+
   return (
-    <div className="p-4">
-      {/* HEADER */}
-      <div className="flex gap-4 items-start">
-        <div style={{ width: 130, height: 180, flexShrink: 0 }}>
-          <Sprite fighter={fighter} side="a" state="stance" />
-        </div>
-        <div className="flex-1 min-w-0">
+    <div
+      className="sel-nameplate flex-shrink-0 px-4 pt-3 pb-3"
+      style={{
+        background: `linear-gradient(180deg, ${fighter.accent}14, rgba(10,7,20,0.92) 55%)`,
+        borderTop: `2px solid ${fighter.accent}`,
+        boxShadow: `inset 0 1px 0 rgba(255,255,255,0.12), 0 -6px 20px -8px ${fighter.accent}`,
+      }}
+    >
+      {/* Name + episode */}
+      <div className="flex items-end justify-between gap-2">
+        <div className="min-w-0">
           <div
-            className="font-display text-2xl tracking-widest"
-            style={{ color: fighter.accent, textShadow: '3px 3px 0 black' }}
+            className="font-display leading-tight"
+            style={{
+              fontSize: 'clamp(15px, 1.7vw, 24px)',
+              color: '#fff',
+              textShadow: `2px 2px 0 #000, 0 0 18px ${fighter.accent}88`,
+              display: '-webkit-box',
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: 'vertical',
+              overflow: 'hidden',
+            }}
+            title={fighter.name}
           >
             {fighter.name.toUpperCase()}
           </div>
-          <div className="font-display text-[8px] tracking-widest text-white/60 mt-1">
+          <div className="font-display text-[8px] tracking-widest mt-1" style={{ color: fighter.accent }}>
             {fighter.archetype} · {fighter.episode}
           </div>
-          {/* Discipline + era tags — surfaces the same taxonomy the filter
-              chips operate on so the player understands why a fighter
-              appeared under a given filter. */}
-          <div className="flex gap-2 mt-2">
-            <Tag color={DISCIPLINE_COLOR[getDiscipline(fighter)]}>
-              {DISCIPLINE_LABEL[getDiscipline(fighter)]}
-            </Tag>
-            <Tag color="#FCBF49">{ERA_LABEL[getEra(fighter)].split(' · ')[0]}</Tag>
-          </div>
-          <p className="font-body text-base text-white/90 mt-2 leading-snug">{fighter.bio}</p>
-          {/* Quick stats */}
-          <div className="flex gap-3 mt-3 font-display text-[8px] tracking-widest">
-            <Stat label="HP" value={String(fighter.maxHp)} color="#06D6A0" />
-            <Stat
-              label="BEST IN"
-              value={(() => {
-                const tops = Object.entries(fighter.scenarioBonus)
-                  .filter(([, v]) => v >= 1.3)
-                  .sort((a, b) => b[1] - a[1])
-                  .slice(0, 2)
-                  .map(([k]) => SCENARIOS[k as ScenarioId].tag)
-                return tops.length > 0 ? tops.join(' / ') : 'ALL-ROUNDER'
-              })()}
-              color="#FFD60A"
+        </div>
+        <div className="flex gap-1.5 flex-shrink-0">
+          <Tag color={DISCIPLINE_COLOR[getDiscipline(fighter)]}>
+            {DISCIPLINE_LABEL[getDiscipline(fighter)]}
+          </Tag>
+          <Tag color="#FCBF49">{ERA_LABEL[getEra(fighter)].split(' · ')[0]}</Tag>
+        </div>
+      </div>
+
+      {/* Bio — kept to a single storytelling line */}
+      <p className="font-body text-base text-white/85 mt-2 leading-snug line-clamp-2">
+        {fighter.bio}
+      </p>
+
+      {/* HP bar + BEST IN */}
+      <div className="flex items-center gap-3 mt-2.5">
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          <span className="font-display text-[8px] tracking-widest" style={{ color: '#06D6A0' }}>HP</span>
+          <div className="flex-1 h-2.5 relative" style={{ background: 'rgba(0,0,0,0.55)', border: '1px solid rgba(255,255,255,0.15)' }}>
+            <div
+              className="absolute inset-y-0 left-0"
+              style={{
+                width: `${hpPct * 100}%`,
+                background: 'linear-gradient(180deg, #29f0b4, #06D6A0)',
+                boxShadow: '0 0 8px #06D6A0aa',
+              }}
             />
           </div>
-          <div className="flex gap-2 mt-3">
-            <button
-              onClick={onToggle}
-              className="font-display text-[9px] tracking-widest px-3 py-1"
-              style={{
-                background: `${fighter.accent}33`,
-                color: fighter.accent,
-                border: `1px solid ${fighter.accent}`,
-              }}
-            >
-              {expanded ? '▾ HIDE MOVE LIST' : '▸ SEE FULL MOVE LIST'}
-            </button>
-            <button
-              onClick={() => {
-                Sfx.menuSelect()
-                useGame.getState().setSpotlightFighter(fighter.id)
-                useGame.getState().setPhase('fighter-spotlight')
-              }}
-              className="font-display text-[9px] tracking-widest px-3 py-1"
-              style={{
-                background: 'rgba(255,214,10,0.18)',
-                color: '#FFD60A',
-                border: '1px solid #FFD60A',
-              }}
-            >
-              ★ SPOTLIGHT →
-            </button>
-          </div>
+          <span className="font-num text-base tabular-nums text-white">{fighter.maxHp}</span>
         </div>
       </div>
+      <div className="flex items-center gap-1.5 mt-2">
+        <span className="font-display text-[7px] tracking-widest text-white/40">BEST IN</span>
+        {bestIn.map((t) => (
+          <span
+            key={t}
+            className="font-display text-[7px] tracking-widest px-1.5 py-0.5"
+            style={{ color: '#FFD60A', background: '#FFD60A1A', border: '1px solid #FFD60A66' }}
+          >
+            {t}
+          </span>
+        ))}
+      </div>
 
-      {/* SIGNATURE ULT — always shown */}
+      {/* Signature ult — hero ribbon, compact */}
       <div
-        className="mt-4 p-3"
+        className="mt-2.5 px-3 py-2 relative overflow-hidden"
         style={{
-          background: `linear-gradient(180deg, #F7258544, #F7258522)`,
-          border: '2px solid #F72585',
-          boxShadow: 'inset -2px -2px 0 rgba(0,0,0,0.5)',
+          background: 'linear-gradient(100deg, #7209B755, #F7258533)',
+          borderLeft: '3px solid #F72585',
+          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.12)',
         }}
       >
-        <div className="flex items-baseline justify-between">
-          <span className="font-display text-[9px] tracking-widest" style={{ color: '#F72585' }}>
-            ⚡ SIGNATURE ULTIMATE
-          </span>
-          <span className="font-num text-base tabular-nums text-white">
-            {fighter.ult.baseDamage} DMG
-          </span>
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="font-display text-[8px] tracking-widest" style={{ color: '#F72585' }}>⚡ ULTIMATE</span>
+          <span className="font-num text-base tabular-nums text-white/90">{fighter.ult.baseDamage} DMG</span>
         </div>
-        <div className="font-display text-base tracking-wider text-white mt-1">{fighter.ult.name}</div>
-        <p className="font-body italic text-lg text-white/85 mt-1 leading-snug">
-          &ldquo;{fighter.ult.quote}&rdquo;
-        </p>
-        <p className="font-display text-[7px] tracking-widest mt-1 text-white/50">
-          {fighter.ult.episode} · {fighter.ult.timestamp}
-        </p>
-        {fighter.ult.requiresSelfStatus && (
-          <p className="font-display text-[7px] tracking-widest mt-2" style={{ color: '#FFD60A' }}>
-            REQUIRES: {fighter.ult.requiresSelfStatus.replace('_', ' ')}
-          </p>
-        )}
+        <div className="font-display text-[11px] tracking-wider text-white mt-0.5 truncate" title={fighter.ult.name}>
+          {fighter.ult.name}
+        </div>
       </div>
 
-      {/* MOVE LIST — expandable */}
-      {expanded && (
-        <div className="mt-4 space-y-2">
-          <div
-            className="font-display text-[10px] tracking-widest"
-            style={{ color: fighter.accent, borderBottom: `1px solid ${fighter.accent}` }}
-          >
-            ▌ FULL MOVE LIST
-          </div>
-          {fighter.moves.map((m) => (
-            <MoveDetail key={m.id} move={m} />
-          ))}
+      {/* Actions */}
+      <div className="flex gap-2 mt-2.5">
+        <button
+          onClick={onToggleMoves}
+          className="sel-chip flex-1 font-display text-[9px] tracking-widest px-3 py-1.5"
+          style={{
+            background: expanded ? `${sideColor}33` : `${fighter.accent}22`,
+            color: '#fff',
+            border: `1px solid ${expanded ? sideColor : fighter.accent}`,
+            cursor: 'pointer',
+          }}
+        >
+          {expanded ? '▾ HIDE DETAILS' : '▸ MOVE LIST'}
+        </button>
+        <button
+          onClick={() => {
+            Sfx.menuSelect()
+            useGame.getState().setSpotlightFighter(fighter.id)
+            useGame.getState().setPhase('fighter-spotlight')
+          }}
+          className="sel-chip flex-1 font-display text-[9px] tracking-widest px-3 py-1.5"
+          style={{
+            background: 'rgba(255,214,10,0.16)',
+            color: '#FFD60A',
+            border: '1px solid #FFD60A',
+            cursor: 'pointer',
+          }}
+        >
+          ★ SPOTLIGHT
+        </button>
+      </div>
+    </div>
+  )
+}
 
-          {/* Scenario bonus full breakdown */}
-          <div
-            className="font-display text-[10px] tracking-widest mt-4 pt-2"
-            style={{ color: fighter.accent, borderBottom: `1px solid ${fighter.accent}` }}
-          >
-            ▌ SCENARIO BONUSES
-          </div>
-          <div className="grid grid-cols-2 gap-2 mt-2">
-            {Object.entries(fighter.scenarioBonus).map(([sc, mult]) => (
-              <div
-                key={sc}
-                className="p-2 font-display text-[8px] tracking-widest"
-                style={{
-                  background: mult >= 1.5 ? '#FFD60A22' : mult >= 1.3 ? '#F7790022' : '#3B236022',
-                  border: `1px solid ${mult >= 1.5 ? '#FFD60A' : mult >= 1.3 ? '#F77F00' : '#3B2360'}`,
-                  color: 'white',
-                }}
-              >
-                <div className="text-white/70">{SCENARIOS[sc as ScenarioId].name}</div>
-                <div style={{ color: mult >= 1.5 ? '#FFD60A' : mult >= 1.3 ? '#F77F00' : '#90E0EF' }}>
-                  +{Math.round((mult - 1) * 100)}% damage
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Voice line sample */}
-          <div
-            className="font-display text-[10px] tracking-widest mt-4 pt-2"
-            style={{ color: fighter.accent, borderBottom: `1px solid ${fighter.accent}` }}
-          >
-            ▌ VOICE LINES
-          </div>
-          <div className="font-body text-base text-white/85 leading-snug space-y-1 italic mt-2">
-            <p>• Match start: &ldquo;{fighter.voiceLines.matchStart}&rdquo;</p>
-            <p>• On win: &ldquo;{fighter.voiceLines.win}&rdquo;</p>
-            <p>• On crit: &ldquo;{fighter.voiceLines.crit}&rdquo;</p>
-            <p>• Trash talk: &ldquo;{fighter.voiceLines.trash[0]}&rdquo;</p>
-          </div>
+/**
+ * Full spec-sheet content (move list · scenario bonuses · voice lines), now
+ * behind a toggle so the default view stays a clean hero portrait rather than
+ * a wall of text. Rendered as a material drawer over the roster.
+ */
+function MoveDrawer({ fighter, onClose }: { fighter: FighterDef; onClose: () => void }) {
+  return (
+    <div
+      className="sel-panel absolute z-30 overflow-y-auto p-4"
+      style={{
+        top: 0,
+        right: 0,
+        bottom: 0,
+        width: 'min(440px, 60%)',
+        borderLeft: `3px solid ${fighter.accent}`,
+        boxShadow: `-12px 0 40px rgba(0,0,0,0.6), inset 0 0 40px ${fighter.accent}18`,
+      }}
+    >
+      <div className="flex items-center justify-between mb-3">
+        <div className="font-display text-sm tracking-widest" style={{ color: fighter.accent, textShadow: '2px 2px 0 #000' }}>
+          {fighter.name.toUpperCase()}
         </div>
-      )}
+        <button
+          onClick={onClose}
+          className="sel-chip font-display text-[9px] tracking-widest px-2 py-1"
+          style={{ color: '#fff', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.3)', cursor: 'pointer' }}
+        >
+          ✕ CLOSE
+        </button>
+      </div>
+
+      <div className="font-display text-[10px] tracking-widest pb-1 mb-2" style={{ color: fighter.accent, borderBottom: `1px solid ${fighter.accent}` }}>
+        ▌ FULL MOVE LIST
+      </div>
+      <div className="space-y-2">
+        {fighter.moves.map((m) => (
+          <MoveDetail key={m.id} move={m} />
+        ))}
+      </div>
+
+      <div className="font-display text-[10px] tracking-widest mt-4 pb-1 mb-2" style={{ color: fighter.accent, borderBottom: `1px solid ${fighter.accent}` }}>
+        ▌ SCENARIO BONUSES
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        {Object.entries(fighter.scenarioBonus).map(([sc, mult]) => (
+          <div
+            key={sc}
+            className="p-2 font-display text-[8px] tracking-widest"
+            style={{
+              background: mult >= 1.5 ? '#FFD60A22' : mult >= 1.3 ? '#F7790022' : '#3B236022',
+              border: `1px solid ${mult >= 1.5 ? '#FFD60A' : mult >= 1.3 ? '#F77F00' : '#3B2360'}`,
+              color: 'white',
+            }}
+          >
+            <div className="text-white/70">{SCENARIOS[sc as ScenarioId].name}</div>
+            <div style={{ color: mult >= 1.5 ? '#FFD60A' : mult >= 1.3 ? '#F77F00' : '#90E0EF' }}>
+              +{Math.round((mult - 1) * 100)}% damage
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="font-display text-[10px] tracking-widest mt-4 pb-1 mb-2" style={{ color: fighter.accent, borderBottom: `1px solid ${fighter.accent}` }}>
+        ▌ VOICE LINES
+      </div>
+      <div className="font-body text-base text-white/85 leading-snug space-y-1 italic">
+        <p>• Match start: &ldquo;{fighter.voiceLines.matchStart}&rdquo;</p>
+        <p>• On win: &ldquo;{fighter.voiceLines.win}&rdquo;</p>
+        <p>• On crit: &ldquo;{fighter.voiceLines.crit}&rdquo;</p>
+        <p>• Trash talk: &ldquo;{fighter.voiceLines.trash[0]}&rdquo;</p>
+      </div>
     </div>
   )
 }
@@ -704,73 +914,51 @@ function MoveDetail({ move }: { move: Move }) {
   )
 }
 
-function Stat({ label, value, color }: { label: string; value: string; color: string }) {
-  return (
-    <div>
-      <div className="text-white/50" style={{ color }}>
-        {label}
-      </div>
-      <div className="font-num text-base tabular-nums text-white">{value || '—'}</div>
-    </div>
-  )
-}
-
-function SideCard({ side, id, active }: { side: 'a' | 'b'; id: string | null; active: boolean }) {
+function PickSlot({ side, id, active }: { side: 'a' | 'b'; id: string | null; active: boolean }) {
   const f = id ? getFighter(id) : null
+  const color = SIDE_COLOR[side]
+  const glow = SIDE_GLOW[side]
   return (
     <div
-      className="flex flex-col items-center gap-1 p-2"
+      className={`sel-panel flex items-center gap-2 px-2 py-1.5 flex-1 min-w-0 ${active && !f ? 'sel-slot-active' : ''}`}
       style={{
-        background: active ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.3)',
-        border: `2px solid ${active ? (side === 'a' ? '#E63946' : '#00B4D8') : '#2A1F33'}`,
-        boxShadow: active ? `0 0 24px ${side === 'a' ? '#E6394644' : '#00B4D844'}` : 'none',
-        minHeight: 100,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ['--sel-side' as any]: color,
+        borderTop: `2px solid ${color}`,
+        boxShadow: f
+          ? `inset 0 0 0 1px ${color}88, 0 0 14px ${color}44`
+          : active
+          ? undefined
+          : 'inset -2px -2px 0 rgba(0,0,0,0.45)',
+        flexDirection: side === 'b' ? 'row-reverse' : 'row',
+        textAlign: side === 'b' ? 'right' : 'left',
       }}
     >
-      <span
-        className="font-display text-[10px] tracking-widest"
-        style={{ color: side === 'a' ? '#E63946' : '#00B4D8' }}
+      <div
+        className="flex-shrink-0 relative"
+        style={{
+          width: 48,
+          height: 56,
+          background: f ? `radial-gradient(60% 60% at 50% 45%, ${glow}55, transparent)` : 'rgba(0,0,0,0.35)',
+          border: `1px solid ${f ? color : 'rgba(255,255,255,0.12)'}`,
+        }}
       >
-        PLAYER {side === 'a' ? '1' : '2'}
-      </span>
-      {f ? (
-        <>
-          <div style={{ width: 70, height: 90 }}>
-            <Sprite fighter={f} side={side} state="stance" />
+        {f ? (
+          <Sprite fighter={f} side={side} state="stance" />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center font-display text-[9px]" style={{ color: active ? color : 'rgba(255,255,255,0.3)' }}>
+            {active ? '?' : '—'}
           </div>
-          <span className="font-display text-[9px] tracking-widest text-white">{f.shortName}</span>
-        </>
-      ) : (
-        <div className="font-body text-xl text-white/40">{active ? 'PICK!' : '...'}</div>
-      )}
-    </div>
-  )
-}
-
-function NextStepHint({ hasA, hasB }: { hasA: boolean; hasB: boolean }) {
-  const ready = hasA && hasB
-  return (
-    <div
-      className="flex flex-col items-center justify-center gap-1 p-3 text-center"
-      style={{
-        background: 'rgba(0,0,0,0.4)',
-        border: `2px solid ${ready ? '#06D6A0' : '#FFD60A66'}`,
-        boxShadow: ready
-          ? '0 0 14px #06D6A0AA, inset -2px -2px 0 rgba(0,0,0,0.5)'
-          : 'inset -2px -2px 0 rgba(0,0,0,0.5)',
-      }}
-    >
-      <span
-        className="font-display text-[10px] tracking-widest"
-        style={{ color: ready ? '#06D6A0' : '#FFD60A' }}
-      >
-        {hasA && !hasB ? '↓ P2 PICKS' : hasA && hasB ? '✓ READY' : 'P1 PICKS FIRST'}
-      </span>
-      <p className="font-body text-sm text-white/70 leading-snug">
-        {ready
-          ? 'Next: select your battleground.'
-          : 'After both picks you choose the stage (or let it auto-pick).'}
-      </p>
+        )}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="font-display text-[9px] tracking-widest" style={{ color }}>
+          {SIDE_LABEL[side]}
+        </div>
+        <div className="font-display text-[11px] tracking-wider text-white truncate" style={{ textShadow: '1px 1px 0 #000' }}>
+          {f ? f.shortName : active ? 'CHOOSING…' : 'WAITING'}
+        </div>
+      </div>
     </div>
   )
 }

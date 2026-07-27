@@ -116,8 +116,28 @@ export function MatchEnd() {
       <div className="cer-grain" />
       <ImpactFlash duration={0.22} />
 
-      {/* RESULT WORD — enormous, crashes down from the top. */}
-      <div className="relative z-10" style={{ animation: 'cer-shake-hard 0.3s ease-out both' }}>
+      {/* RESULT WORD — enormous, crashes down from the top, seated on an
+          authored title slab. Victory's slab is centred and symmetric; the loss
+          slab is shifted and more sharply raked so the two states read as
+          different compositions, not one template recoloured. */}
+      <div className="relative z-10 flex items-center justify-center" style={{ animation: 'cer-shake-hard 0.3s ease-out both' }}>
+        <div
+          aria-hidden
+          className="absolute pointer-events-none"
+          style={{
+            left: '50%', top: '52%',
+            width: arcadePlayerLost ? 'min(72vw, 1040px)' : 'min(80vw, 1180px)',
+            height: 'clamp(40px, 6.4vw, 96px)',
+            transform: `translate(${arcadePlayerLost ? '-56%' : '-50%'}, -50%) skewX(${arcadePlayerLost ? -15 : -8}deg)`,
+            background: arcadePlayerLost
+              ? 'linear-gradient(180deg, transparent, rgba(46,92,138,0.32) 22%, rgba(10,20,40,0.5) 50%, rgba(46,92,138,0.32) 78%, transparent)'
+              : 'linear-gradient(180deg, transparent, rgba(247,164,0,0.34) 20%, rgba(60,30,4,0.5) 50%, rgba(247,164,0,0.34) 80%, transparent)',
+            borderTop: arcadePlayerLost ? '2px solid #2E5C8A' : '2px solid #FFC23D',
+            borderBottom: arcadePlayerLost ? '2px solid #2E5C8A' : '2px solid #FFC23D',
+            boxShadow: arcadePlayerLost ? '0 0 30px rgba(46,92,138,0.4)' : '0 0 30px rgba(247,147,19,0.45)',
+            animation: 'cer-wipe-right 0.42s cubic-bezier(0.16,0.9,0.3,1) both',
+          }}
+        />
         <PowerWord
           size={arcadePlayerLost ? 'clamp(72px, 12.5vw, 186px)' : 'clamp(80px, 13.5vw, 202px)'}
           color={arcadePlayerLost ? '#DCE4F2' : '#FFFFFF'}
@@ -130,6 +150,7 @@ export function MatchEnd() {
           entrance="ko"
           live
           idle
+          style={{ position: 'relative', zIndex: 1 }}
         >
           {arcadePlayerLost ? 'DEFEATED' : 'VICTORY'}
         </PowerWord>

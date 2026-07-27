@@ -244,7 +244,7 @@ export function PreFight() {
             }}
           >
             <div className="cer-breathe-slow" style={{ width: '100%', height: '100%' }}>
-              <div style={{ width: '100%', height: '100%', transform: 'scale(1.16)', transformOrigin: '38% 100%' }}>
+              <div style={{ width: '100%', height: '100%', transform: 'scale(1.32)', transformOrigin: '34% 100%' }}>
                 <Sprite fighter={a} side="a" state="stance" />
               </div>
             </div>
@@ -276,7 +276,7 @@ export function PreFight() {
             }}
           >
             <div className="cer-breathe-slow" style={{ width: '100%', height: '100%' }}>
-              <div style={{ width: '100%', height: '100%', transform: 'scale(1.16)', transformOrigin: '62% 100%' }}>
+              <div style={{ width: '100%', height: '100%', transform: 'scale(1.32)', transformOrigin: '66% 100%' }}>
                 <Sprite fighter={b} side="b" state="stance" />
               </div>
             </div>

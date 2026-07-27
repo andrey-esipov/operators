@@ -603,12 +603,15 @@
   clip-path: polygon(16% 0, 100% 0, 84% 100%, 0 100%);
   box-shadow: inset 0 0 0 2px rgba(255,120,60,0.46), inset 0 0 24px rgba(255,110,60,0.22);
 }
-/* Two hard accent ticks flanking the emblem. */
+/* Hard impact/speed lines that break the emblem bounding box for aggression. */
 .mm-vs::after {
   content: ""; position: absolute; z-index: -1;
-  left: -14%; right: -14%; top: 50%; height: 3px;
+  left: -28%; right: -28%; top: 50%; height: 44%;
   transform: translateY(-50%) skewX(-8deg);
-  background: linear-gradient(90deg, transparent, var(--mm-magenta) 22%, transparent 40%, transparent 60%, var(--mm-amber) 78%, transparent);
+  background:
+    linear-gradient(90deg, transparent 0, var(--mm-magenta) 13%, transparent 36%) left 30% / 100% 3px no-repeat,
+    linear-gradient(90deg, transparent 62%, var(--mm-amber) 86%, transparent 100%) left 70% / 100% 3px no-repeat;
+  filter: drop-shadow(2px 2px 0 rgba(6,3,12,0.7));
 }
 .mm-anim .mm-vs { animation: mmVsPulse 1.8s ease-in-out infinite; }
 @keyframes mmVsPulse {

@@ -341,15 +341,16 @@ export function CharacterSelect() {
             </div>
           )}
 
-          {/* Compact arcade filter strip (one line, low-key) */}
+          {/* Compact filter strip — monochrome at rest, lights in the player's
+              colour on the active tab only (no rainbow taxonomy). */}
           <div className="sel-filterbar flex items-center flex-shrink-0">
             {DISCIPLINE_FILTER_ORDER.map((d) => (
               <FilterTab
                 key={d}
                 label={d === 'all' ? 'ALL' : DISCIPLINE_LABEL[d]}
                 count={d === 'all' ? totalRoster : (disciplineCounts[d] ?? 0)}
-                color={d === 'all' ? sideColor : DISCIPLINE_COLOR[d]}
-                showDot={d !== 'all'}
+                color={sideColor}
+                showDot={false}
                 active={disciplineFilter === d}
                 onClick={() => { Sfx.menuMove(); setDisciplineFilter(d) }}
               />
@@ -360,7 +361,7 @@ export function CharacterSelect() {
                 key={e}
                 label={e === 'all' ? 'ERA' : ERA_LABEL[e].split(' · ')[0]}
                 count={e === 'all' ? 0 : (eraCounts[e] ?? 0)}
-                color={e === 'all' ? 'rgba(255,255,255,0.6)' : '#FCBF49'}
+                color={sideColor}
                 showDot={false}
                 active={eraFilter === e}
                 onClick={() => { Sfx.menuMove(); setEraFilter(e) }}
@@ -457,6 +458,8 @@ export function CharacterSelect() {
         <div className="sel-vsburst" aria-hidden>
           <div className="sel-vsburst-slash sel-vsburst-slash-a" />
           <div className="sel-vsburst-slash sel-vsburst-slash-b" />
+          <div className="sel-vsburst-name sel-vsburst-name-a sel-name-face">{p1Fighter.shortName}</div>
+          <div className="sel-vsburst-name sel-vsburst-name-b sel-name-face">{p2Fighter.shortName}</div>
           <div className="sel-vsburst-vs sel-name-face">VS</div>
         </div>
       )}
@@ -520,8 +523,8 @@ function StandoffHero({
         <div className="sel-standoff-tab sel-h">{singlePicker ? 'OPERATOR' : SIDE_LABEL[side]}</div>
         {disc && era && (
           <div className="sel-standoff-tags">
-            <Tag color={DISCIPLINE_COLOR[disc]}>{DISCIPLINE_LABEL[disc]}</Tag>
-            <Tag color="#FCBF49">{ERA_LABEL[era].split(' · ')[0]}</Tag>
+            <Tag color={sideColor}>{DISCIPLINE_LABEL[disc]}</Tag>
+            <Tag color="rgba(255,255,255,0.55)">{ERA_LABEL[era].split(' · ')[0]}</Tag>
           </div>
         )}
         {locked && <div className="sel-standoff-lock sel-h">✔ LOCKED IN</div>}

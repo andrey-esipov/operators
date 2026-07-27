@@ -27,20 +27,28 @@ export function StageSelect() {
 
   const [picked, setPicked] = useState<ScenarioId | 'auto'>('auto')
   const [hovered, setHovered] = useState<ScenarioId | null>(null)
+  const [randomHover, setRandomHover] = useState(false)
+  const [touched, setTouched] = useState(false)
 
   const fighterA = selectedA ? getFighter(selectedA) : null
   const fighterB = selectedB ? getFighter(selectedB) : null
 
-  // When nothing is hovered and AUTO is armed we still showcase a real arena
-  // behind the ceremony banner, so the dominant panel is never dead space.
-  const isAutoIdle = !hovered && picked === 'auto'
+  // Three preview moods. Idle (before any pick) is a neutral "choose" hero, not
+  // a gold ceremony — gold is reserved for an intentional RANDOM draw and FIGHT.
+  const previewMode: 'arena' | 'random' | 'idle' =
+    hovered ? 'arena'
+      : randomHover ? 'random'
+        : picked === 'auto' ? (touched ? 'random' : 'idle')
+          : 'arena'
   const featuredId: ScenarioId = hovered ?? (picked === 'auto' ? SCENARIO_ORDER[0] : picked)
   const featuredScenario = SCENARIOS[featuredId]
   const accent = hovered
     ? SCENARIOS[hovered].accent
-    : picked === 'auto'
+    : previewMode === 'random'
       ? '#FFD60A'
-      : SCENARIOS[picked].accent
+      : picked === 'auto'
+        ? 'rgba(255,255,255,0.5)'
+        : SCENARIOS[picked].accent
 
   function confirm() {
     if (!fighterA || !fighterB) return
@@ -111,11 +119,11 @@ export function StageSelect() {
         {/* LEFT: dominant cinematic arena render */}
         <div className="sel-hero flex-shrink-0 flex flex-col" style={{ flex: '0 0 clamp(430px, 40%, 620px)' }}>
           <StagePreview
-            key={featuredScenario.id + (isAutoIdle ? '-auto' : '')}
+            key={featuredScenario.id + '-' + previewMode}
             scenario={featuredScenario}
             fighterA={fighterA}
             fighterB={fighterB}
-            isAuto={isAutoIdle}
+            mode={previewMode}
           />
         </div>
 
@@ -127,10 +135,10 @@ export function StageSelect() {
           <div className="grid gap-2.5 pr-1" style={{ flex: '1 1 0', gridTemplateColumns: 'repeat(3, 1fr)', gridAutoRows: '1fr', alignContent: 'stretch' }}>
             {/* RANDOM card — a designed ceremony slot, not an empty hole. */}
             <button
-              onMouseEnter={() => { Sfx.menuMove(); setHovered(null) }}
-              onMouseLeave={() => setHovered(null)}
-              onClick={() => { Sfx.menuSelect(); setPicked('auto') }}
-              className={`sel-stagecard sel-stage-random flex flex-col items-center justify-center text-center ${picked === 'auto' ? 'is-active is-random-on' : ''}`}
+              onMouseEnter={() => { Sfx.menuMove(); setHovered(null); setRandomHover(true) }}
+              onMouseLeave={() => setRandomHover(false)}
+              onClick={() => { Sfx.menuSelect(); setPicked('auto'); setTouched(true) }}
+              className={`sel-stagecard sel-stage-random flex flex-col items-center justify-center text-center ${picked === 'auto' && touched ? 'is-active is-random-on' : ''}`}
               style={{ minHeight: 0 }}
             >
               <span aria-hidden className="sel-stage-random-q sel-name-face">?</span>
@@ -153,7 +161,7 @@ export function StageSelect() {
                   data-stage={id}
                   onMouseEnter={() => { Sfx.menuMove(); setHovered(id) }}
                   onMouseLeave={() => setHovered(null)}
-                  onClick={() => { Sfx.menuSelect(); setPicked(id) }}
+                  onClick={() => { Sfx.menuSelect(); setPicked(id); setTouched(true) }}
                   className={`sel-stagecard flex flex-col justify-end text-left ${isActive ? 'is-active' : ''}`}
                   style={{
                     minHeight: 0,
@@ -276,13 +284,16 @@ function StagePreview({
   scenario,
   fighterA,
   fighterB,
-  isAuto = false,
+  mode = 'arena',
 }: {
   scenario: (typeof SCENARIOS)[ScenarioId]
   fighterA: ReturnType<typeof getFighter> | null
   fighterB: ReturnType<typeof getFighter> | null
-  isAuto?: boolean
+  mode?: 'arena' | 'random' | 'idle'
 }) {
+  const isRandom = mode === 'random'
+  const isIdle = mode === 'idle'
+  const isArena = mode === 'arena'
   return (
     <div className="sel-stage-preview relative flex flex-col h-full">
       {/* Cinematic art */}
@@ -293,7 +304,7 @@ function StagePreview({
             backgroundImage: `url(/stages/${scenario.id}.png)`,
             backgroundSize: 'cover',
             backgroundPosition: 'center',
-            filter: isAuto ? 'saturate(0.85) brightness(0.6)' : 'none',
+            filter: isRandom ? 'saturate(0.85) brightness(0.55)' : isIdle ? 'saturate(0.96) brightness(0.82)' : 'none',
             transform: 'scale(1.04)',
           }}
         />
@@ -301,7 +312,7 @@ function StagePreview({
         <div className="absolute inset-0" style={{ boxShadow: `inset 0 0 120px ${scenario.accent}44` }} />
 
         {/* RANDOM ceremony — designed, no emoji */}
-        {isAuto && (
+        {isRandom && (
           <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-8">
             <div className="sel-stage-ceremony sel-name-face" aria-hidden>?</div>
             <div
@@ -316,8 +327,26 @@ function StagePreview({
           </div>
         )}
 
+        {/* Neutral idle prompt — before any pick, no gold */}
+        {isIdle && (
+          <div className="absolute left-5 right-5 bottom-4">
+            <div
+              className="inline-block sel-h"
+              style={{ fontSize: 10, letterSpacing: '0.22em', color: 'rgba(255,255,255,0.85)', padding: '4px 10px', marginBottom: 10, background: 'rgba(255,255,255,0.1)', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.25)' }}
+            >
+              8 BATTLEGROUNDS
+            </div>
+            <div
+              className="sel-name-face"
+              style={{ fontSize: 'clamp(34px, 4vw, 62px)', color: '#fff', letterSpacing: '0.01em', lineHeight: 0.86, textShadow: '3px 3px 0 #000, 0 0 26px rgba(255,255,255,0.28)' }}
+            >
+              CHOOSE YOUR<br />ARENA
+            </div>
+          </div>
+        )}
+
         {/* Title lockup overlaid on the art */}
-        {!isAuto && (
+        {isArena && (
           <div className="absolute left-5 right-5 bottom-4">
             <div
               className="inline-block sel-h"
@@ -341,14 +370,20 @@ function StagePreview({
         style={{
           padding: '14px 18px 16px',
           background: `linear-gradient(180deg, ${scenario.accent}16, rgba(10,7,20,0.96) 62%)`,
-          borderTop: `2px solid ${isAuto ? '#FFD60A' : scenario.accent}`,
+          borderTop: `2px solid ${isRandom ? '#FFD60A' : isIdle ? 'rgba(255,255,255,0.4)' : scenario.accent}`,
         }}
       >
-        {isAuto ? (
+        {isRandom && (
           <p className="sel-cond" style={{ fontSize: 17, color: 'rgba(255,255,255,0.82)', lineHeight: 1.25 }}>
-            One of nine battlegrounds is chosen at random when the match begins. Stage bonuses still apply — pick deliberately to swing the odds.
+            One of eight battlegrounds is chosen at random when the match begins. Stage bonuses still apply — pick deliberately to swing the odds.
           </p>
-        ) : (
+        )}
+        {isIdle && (
+          <p className="sel-cond" style={{ fontSize: 17, color: 'rgba(255,255,255,0.78)', lineHeight: 1.25, letterSpacing: '0.02em' }}>
+            Every arena rewrites the fight. Hover a battleground to preview its edge — or take the RANDOM draw and let the dice decide.
+          </p>
+        )}
+        {isArena && (
           <div
             className="sel-name-face"
             style={{ fontSize: 'clamp(17px, 1.5vw, 22px)', color: '#fff', lineHeight: 1.06, letterSpacing: '0.01em', paddingLeft: 12, borderLeft: `4px solid ${scenario.accent}`, textShadow: `2px 2px 0 #000, 0 0 18px ${scenario.accent}55` }}
@@ -358,7 +393,7 @@ function StagePreview({
         )}
 
         {/* Stage bonuses */}
-        {!isAuto && (
+        {isArena && (
           <div className="grid grid-cols-2 gap-2" style={{ marginTop: 12 }}>
             {fighterA && <FighterBonusRow side="a" name={fighterA.shortName} mult={fighterA.scenarioBonus[scenario.id] ?? 1.0} />}
             {fighterB && <FighterBonusRow side="b" name={fighterB.shortName} mult={fighterB.scenarioBonus[scenario.id] ?? 1.0} />}

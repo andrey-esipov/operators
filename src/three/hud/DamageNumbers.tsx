@@ -42,7 +42,7 @@ export function DamageNumbers({ numbers }: Props) {
               rotate: n.side === 'a' ? [-9, -4, 0, 2] : [9, 4, 0, -2],
             }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.9, times: [0, 0.16, 0.55, 1], ease: 'easeOut' }}
+            transition={{ duration: 0.95, times: [0, 0.12, 0.74, 1], ease: 'easeOut' }}
           >
             <span
               className="v"
@@ -51,7 +51,7 @@ export function DamageNumbers({ numbers }: Props) {
                 WebkitBackgroundClip: 'text',
                 backgroundClip: 'text',
                 color: 'transparent',
-                filter: `drop-shadow(0 5px 3px rgba(0,0,0,0.6)) drop-shadow(0 0 18px ${f.c2}aa)`,
+                filter: `drop-shadow(0 3px 2px rgba(0,0,0,0.95)) drop-shadow(0 0 3px rgba(0,0,0,0.95)) drop-shadow(0 0 10px rgba(0,0,0,0.75)) drop-shadow(0 0 18px ${f.c2}66)`,
               }}
             >
               {n.value}

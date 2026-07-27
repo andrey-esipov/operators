@@ -359,7 +359,7 @@ export function MainMenu() {
       <div className="mm-seam" />
 
       <div className="mm-foot">
-        v1.0 · #LENNYSBUILDATHON · OPERATORS.REPLIT.APP
+        ● INSERT COIN ● #LENNYSBUILDATHON ● OPERATORS V1.0
       </div>
     </div>
   )

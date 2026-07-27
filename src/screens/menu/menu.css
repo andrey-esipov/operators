@@ -110,8 +110,8 @@
   align-items: center;
   justify-content: center;
 }
-/* Ambient arena floor glow so the right two-thirds feels like a lit stage
-   instead of an empty black void behind two sprites. */
+/* Ambient arena floor glow + a soft horizon so the right two-thirds feels
+   like a lit stage with a real ground plane, not an empty black void. */
 .mm-right::before {
   content: "";
   position: absolute;
@@ -119,9 +119,10 @@
   pointer-events: none;
   z-index: 0;
   background:
+    linear-gradient(180deg, transparent 67%, rgba(247,127,0,0.11) 71.5%, rgba(247,127,0,0.03) 73%, transparent 76%),
     radial-gradient(64% 42% at 52% 80%, rgba(150,54,130,0.20) 0%, transparent 62%),
     radial-gradient(46% 30% at 52% 90%, rgba(247,127,0,0.12) 0%, transparent 66%),
-    linear-gradient(0deg, rgba(70,26,80,0.16) 0%, transparent 34%);
+    linear-gradient(0deg, rgba(70,26,80,0.22) 0%, transparent 34%);
 }
 
 /* ── Title lockup ───────────────────────────────────────────────────── */
@@ -130,7 +131,7 @@
   align-items: center;
   gap: 8px;
   font-family: var(--font-display);
-  font-size: clamp(7px, 1.05vh, 9px);
+  font-size: clamp(8px, 1.1vh, 10px);
   letter-spacing: 0.42em;
   color: #FFE08A;
   text-shadow: 1px 1px 0 #000, 0 0 10px rgba(247,127,0,0.5);
@@ -242,6 +243,7 @@
   transform: translateX(14px) scale(1.015);
   outline: 3px solid var(--accent);
   outline-offset: 4px;
+  filter: drop-shadow(0 0 7px var(--accent)) drop-shadow(0 0 2px var(--accent));
 }
 .mm-anim .mm-item:focus-visible { animation: mmFocusPulse 0.85s ease-in-out infinite; }
 @keyframes mmFocusPulse {
@@ -417,12 +419,12 @@
   position: relative;
   font-family: var(--font-display);
   font-size: clamp(7.5px, 1.05vh, 10px);
-  letter-spacing: 0.1em;
+  letter-spacing: 0.09em;
   color: #F5EEFF;
-  padding: clamp(7px, 1.05vh, 10px) clamp(8px, 0.8vw, 12px) clamp(7px, 1.05vh, 10px) clamp(11px, 0.9vw, 14px);
+  padding: clamp(7px, 1.05vh, 10px) clamp(7px, 0.65vw, 11px) clamp(7px, 1.05vh, 10px) clamp(11px, 0.9vw, 14px);
   background: linear-gradient(180deg, rgba(40,27,58,0.95), rgba(16,10,26,0.97));
   border: 0;
-  clip-path: polygon(0 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
+  clip-path: polygon(7px 0, 100% 0, calc(100% - 7px) 100%, 0 100%);
   cursor: pointer;
   text-shadow: 1px 1px 0 #000;
   box-shadow:
@@ -490,19 +492,19 @@
 }
 .mm-fighter-art {
   position: relative;
-  width: clamp(215px, 28vw, 360px);
-  height: clamp(290px, 55vh, 480px);
+  width: clamp(170px, 21vw, 340px);
+  height: clamp(250px, 49vh, 450px);
 }
 /* Contact shadow so the fighter is planted on a floor, not floating. */
 .mm-fighter-art::after {
   content: "";
   position: absolute;
   left: 50%;
-  bottom: 6%;
-  width: 66%;
-  height: 8%;
+  bottom: 8%;
+  width: 74%;
+  height: 10%;
   transform: translateX(-50%);
-  background: radial-gradient(ellipse at center, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.32) 46%, transparent 74%);
+  background: radial-gradient(ellipse at center, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.45) 46%, transparent 76%);
   z-index: -1;
   pointer-events: none;
 }
@@ -533,9 +535,9 @@
 .mm-vs {
   position: relative;
   font-family: var(--font-display);
-  font-size: clamp(24px, 4.4vh, 44px);
+  font-size: clamp(22px, 4vh, 40px);
   color: #FFD60A;
-  text-shadow: 3px 3px 0 #000, 0 0 16px #F77F00;
+  text-shadow: 3px 3px 0 #000, 0 0 12px #F77F00;
   transform: skewX(-4deg);
   flex-shrink: 0;
   z-index: 3;
@@ -620,7 +622,7 @@
   text-align: center;
   z-index: 12;
   font-family: var(--font-display);
-  font-size: clamp(7.5px, 1vh, 9.5px);
+  font-size: clamp(8px, 1.05vh, 10px);
   letter-spacing: 0.2em;
   color: rgba(232,218,252,0.82);
   text-shadow: 1px 1px 0 #000;

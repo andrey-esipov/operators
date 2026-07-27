@@ -53,6 +53,25 @@ export interface StageGrade {
   lensDirt: number
   anamorphic: number
   anamorphicTint: [number, number, number]
+  /**
+   * Aerial-perspective haze: the tint the far background lifts toward and how
+   * strongly. Builds near/far depth separation (far reads lighter + lower
+   * contrast). Applied only to the background — the character matte is excluded.
+   */
+  hazeColor: [number, number, number]
+  hazeAmount: number
+  /**
+   * Character/environment chroma separation. `envTint` is the arena's dominant
+   * on-screen hue direction; inside the character matte the component of the
+   * fighter's chroma that points along `envTint` is removed by `charUntint`
+   * strength (0 = off). This neutralises a same-hue environment cast on strongly
+   * MONOCHROME stages (crisis/distribution red, ai-native/ipo-prep blue) so the
+   * fighter reads as a separate subject, while the fighter's own differently-hued
+   * colours (orthogonal to `envTint`) survive untouched — so multi-hue stages
+   * keep `charUntint` at 0 and are unaffected.
+   */
+  envTint: [number, number, number]
+  charUntint: number
 }
 
 const base: StageGrade = {
@@ -83,6 +102,10 @@ const base: StageGrade = {
   lensDirt: 0.35,
   anamorphic: 0.35,
   anamorphicTint: [0.35, 0.55, 1.0],
+  hazeColor: [0.5, 0.55, 0.62],
+  hazeAmount: 0.32,
+  envTint: [1, 1, 1],
+  charUntint: 0,
 }
 
 function grade(overrides: Partial<StageGrade>): StageGrade {
@@ -119,6 +142,8 @@ export const STAGE_GRADES: Record<ScenarioId, StageGrade> = {
     lensDirt: 0.25,
     anamorphic: 0.28,
     anamorphicTint: [0.4, 0.55, 1.0],
+    hazeColor: [0.42, 0.5, 0.62],
+    hazeAmount: 0.44,
   }),
 
   // Explosive, electric momentum. Punchy teal-and-orange, high saturation and
@@ -149,6 +174,8 @@ export const STAGE_GRADES: Record<ScenarioId, StageGrade> = {
     lensDirt: 0.42,
     anamorphic: 0.5,
     anamorphicTint: [0.5, 0.7, 1.0],
+    hazeColor: [0.34, 0.52, 0.6],
+    hazeAmount: 0.32,
   }),
 
   // Stalled, airless. Flat, faintly sickly green-grey — the grind of the
@@ -176,6 +203,8 @@ export const STAGE_GRADES: Record<ScenarioId, StageGrade> = {
     lensDirt: 0.2,
     anamorphic: 0.22,
     anamorphicTint: [0.5, 0.6, 0.7],
+    hazeColor: [0.5, 0.53, 0.48],
+    hazeAmount: 0.42,
   }),
 
   // Neon future. Cyan/magenta bi-chromatic, cool and high-contrast with hot
@@ -206,6 +235,10 @@ export const STAGE_GRADES: Record<ScenarioId, StageGrade> = {
     lensDirt: 0.45,
     anamorphic: 0.68,
     anamorphicTint: [0.5, 0.8, 1.0],
+    hazeColor: [0.28, 0.44, 0.66],
+    hazeAmount: 0.38,
+    envTint: [0.3, 0.5, 1.0],
+    charUntint: 0.42,
   }),
 
   // Money. Warm gold with rich green undertones, luxe and slightly opulent —
@@ -235,6 +268,8 @@ export const STAGE_GRADES: Record<ScenarioId, StageGrade> = {
     lensDirt: 0.4,
     anamorphic: 0.4,
     anamorphicTint: [1.0, 0.8, 0.4],
+    hazeColor: [0.6, 0.54, 0.42],
+    hazeAmount: 0.3,
   }),
 
   // Crisis. Smouldering red/orange danger, crushed cool shadows, high
@@ -265,6 +300,10 @@ export const STAGE_GRADES: Record<ScenarioId, StageGrade> = {
     lensDirt: 0.5,
     anamorphic: 0.45,
     anamorphicTint: [1.0, 0.5, 0.3],
+    hazeColor: [0.58, 0.4, 0.3],
+    hazeAmount: 0.44,
+    envTint: [1.0, 0.34, 0.22],
+    charUntint: 0.6,
   }),
 
   // Prestige. Clean, bright, cool corporate glass — champagne highlights, low
@@ -293,6 +332,10 @@ export const STAGE_GRADES: Record<ScenarioId, StageGrade> = {
     lensDirt: 0.3,
     anamorphic: 0.42,
     anamorphicTint: [0.7, 0.8, 1.0],
+    hazeColor: [0.62, 0.66, 0.72],
+    hazeAmount: 0.34,
+    envTint: [0.34, 0.5, 1.0],
+    charUntint: 0.4,
   }),
 
   // Broadcast blockbuster. Wide warm sunset, saturated teal-and-orange with a
@@ -323,6 +366,10 @@ export const STAGE_GRADES: Record<ScenarioId, StageGrade> = {
     lensDirt: 0.44,
     anamorphic: 0.55,
     anamorphicTint: [1.0, 0.75, 0.45],
+    hazeColor: [0.62, 0.55, 0.45],
+    hazeAmount: 0.36,
+    envTint: [1.0, 0.5, 0.28],
+    charUntint: 0.5,
   }),
 }
 
@@ -363,6 +410,10 @@ export function mixGrades(a: StageGrade, b: StageGrade, t: number): StageGrade {
     lensDirt: lerp(a.lensDirt, b.lensDirt, t),
     anamorphic: lerp(a.anamorphic, b.anamorphic, t),
     anamorphicTint: lerp3(a.anamorphicTint, b.anamorphicTint, t),
+    hazeColor: lerp3(a.hazeColor, b.hazeColor, t),
+    hazeAmount: lerp(a.hazeAmount, b.hazeAmount, t),
+    envTint: lerp3(a.envTint, b.envTint, t),
+    charUntint: lerp(a.charUntint, b.charUntint, t),
   }
 }
 

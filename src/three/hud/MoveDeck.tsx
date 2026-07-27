@@ -31,7 +31,7 @@ export function MoveDeck({ deck }: Props) {
         const isUlt = card.kind === 'ultimate'
         const offset = i - center
         const fan = card.selected ? 0 : offset * 3.6
-        const arcY = card.selected ? -22 : Math.abs(offset) * 7
+        const arcY = card.selected ? -34 : Math.abs(offset) * 7
         return (
           <motion.button
             key={card.id}
@@ -40,13 +40,21 @@ export function MoveDeck({ deck }: Props) {
             } ${card.selected ? 'selected' : ''}`}
             style={{ ['--ck' as string]: color, transformOrigin: 'bottom center' }}
             initial={{ opacity: 0, y: 46 }}
-            animate={{ opacity: 1, y: arcY, rotate: fan, scale: card.selected ? 1.08 : 1 }}
+            animate={{ opacity: 1, y: arcY, rotate: fan, scale: card.selected ? 1.12 : 1 }}
             transition={{ delay: 0.05 * i, type: 'spring', stiffness: 320, damping: 26 }}
-            whileHover={card.disabled ? undefined : { y: card.selected ? -30 : -16, rotate: 0, scale: card.selected ? 1.11 : 1.07 }}
+            whileHover={card.disabled ? undefined : { y: card.selected ? -42 : -16, rotate: 0, scale: card.selected ? 1.15 : 1.07 }}
             whileTap={card.disabled ? undefined : { scale: 0.96, y: -6 }}
             onClick={() => !card.disabled && card.onSelect?.()}
             disabled={card.disabled}
           >
+            {card.selected && (
+              <motion.div
+                className="fh-card-cursor"
+                initial={{ y: 0 }}
+                animate={{ y: [0, 7, 0] }}
+                transition={{ duration: 0.72, repeat: Infinity, ease: 'easeInOut' }}
+              />
+            )}
             <div className="stripe" />
             <div className="kind">{KIND_LABEL[card.kind]}</div>
             <div className="title">{card.name}</div>

@@ -536,7 +536,7 @@ export const FIGHTER_FRAGMENT = /* glsl */ `
     // exceeds the floor's regardless of hue (survives even a monochrome red grade),
     // and lift the very-edge floor there so the leg contour isn't half-dimmed.
     float lowerBody = 1.0 - smoothstep(0.0, 0.46, vHeightNorm);
-    kicker *= 1.0 + lowerBody * 0.7;
+    kicker *= 1.0 + lowerBody * 0.95;
     // Hold the kicker just inside the linework (so it never haloes the ink
     // outline) but keep enough of it right at the back edge to actually read as
     // separation, and clamp to sprite alpha so it can't spill past the silhouette.
@@ -594,6 +594,16 @@ export const FIGHTER_FRAGMENT = /* glsl */ `
     // it never grays out a dark top that is already reading as lit cloth.
     float darkNeed = 1.0 - smoothstep(0.035, 0.11, luma(lit));
     lit += keyCol * dark * wrapKey * selfShadow * ao * uKeyIntensity * 0.1 * darkNeed;
+    // Lower-body form: the overhead key barely reaches the legs, so the key-driven
+    // term above sculpts the torso but leaves dark trousers a flat black void below
+    // a modeled torso (a value discontinuity read head-on). Drive a second form term
+    // from the FILL direction (a cross-leg left/right gradient) and the floor BOUNCE
+    // (an up-from-below gradient) so the leg planes catch a rounded gradient too —
+    // knees, shins and the inseam separation now read as form instead of a cutout.
+    float lowerForm = (1.0 - smoothstep(0.0, 0.5, vHeightNorm)) * dark * darkNeed * ao;
+    float fillWrap = dot(Nbroad, normalize(uFillDir)) * 0.5 + 0.5;
+    lit += fillCol * lowerForm * fillWrap * uFillIntensity * 0.7;
+    lit += uBounceColor * lowerForm * bounce * uBounceIntensity * 0.9;
     vec3 color = lit;
 
     // ---- Hero grade: authored value range + defended colour identity ------

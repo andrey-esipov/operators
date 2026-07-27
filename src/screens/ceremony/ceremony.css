@@ -1,0 +1,184 @@
+/* Ceremony screens — kinetic keyframes.
+   Owned by the ceremony agent. index.css is shared and off-limits, so every
+   new motion primitive the VS / round-end / match-end / arcade screens need
+   lives here. Base (un-animated) styles are authored as the RESTING state so
+   that `prefers-reduced-motion` can switch animations off and still leave a
+   correct, readable composition. */
+
+/* ---- PreFight: fighters slam in from opposite sides with overshoot ---- */
+@keyframes cer-slam-left {
+  0%   { transform: translateX(-140%) scaleX(1.18); opacity: 0; }
+  55%  { transform: translateX(6%) scaleX(0.96);   opacity: 1; }
+  72%  { transform: translateX(-2%) scaleX(1.02); }
+  100% { transform: translateX(0) scaleX(1);        opacity: 1; }
+}
+@keyframes cer-slam-right {
+  0%   { transform: translateX(140%) scaleX(1.18); opacity: 0; }
+  55%  { transform: translateX(-6%) scaleX(0.96);  opacity: 1; }
+  72%  { transform: translateX(2%) scaleX(1.02); }
+  100% { transform: translateX(0) scaleX(1);        opacity: 1; }
+}
+
+/* Name plates crash in from the outer corners, overshoot, settle. */
+@keyframes cer-name-left {
+  0%   { transform: translateX(-160%) skewX(-12deg); opacity: 0; }
+  60%  { transform: translateX(8%) skewX(-12deg);    opacity: 1; }
+  100% { transform: translateX(0) skewX(-12deg);     opacity: 1; }
+}
+@keyframes cer-name-right {
+  0%   { transform: translateX(160%) skewX(-12deg); opacity: 0; }
+  60%  { transform: translateX(-8%) skewX(-12deg);  opacity: 1; }
+  100% { transform: translateX(0) skewX(-12deg);    opacity: 1; }
+}
+
+/* Expanding shock ring on impact. */
+@keyframes cer-shock-ring {
+  0%   { transform: translate(-50%, -50%) scale(0.2); opacity: 0.9; }
+  100% { transform: translate(-50%, -50%) scale(2.4); opacity: 0; }
+}
+
+/* VS badge: huge + spun, crashes to rest with a hard snap. */
+@keyframes cer-vs-impact {
+  0%   { transform: translate(-50%, -50%) scale(4) rotate(-90deg); opacity: 0; filter: blur(8px); }
+  45%  { transform: translate(-50%, -50%) scale(0.82) rotate(6deg); opacity: 1; filter: blur(0); }
+  62%  { transform: translate(-50%, -50%) scale(1.12) rotate(-4deg); }
+  100% { transform: translate(-50%, -50%) scale(1) rotate(-6deg); opacity: 1; }
+}
+@keyframes cer-vs-idle {
+  0%, 100% { transform: translate(-50%, -50%) scale(1) rotate(-6deg); }
+  50%      { transform: translate(-50%, -50%) scale(1.06) rotate(-6deg); }
+}
+
+/* FIGHT! punches in from scale-up with a blur, then jitters. */
+@keyframes cer-fight-punch {
+  0%   { transform: translate(-50%, -50%) scale(3.4) skewX(-8deg); opacity: 0; filter: blur(10px); }
+  40%  { transform: translate(-50%, -50%) scale(0.9) skewX(-8deg); opacity: 1; filter: blur(0); }
+  55%  { transform: translate(-50%, -50%) scale(1.08) skewX(-8deg); }
+  100% { transform: translate(-50%, -50%) scale(1) skewX(-8deg); opacity: 1; }
+}
+@keyframes cer-fight-jitter {
+  0%, 100% { transform: translate(-50%, -50%) scale(1) skewX(-8deg); }
+  25%      { transform: translate(calc(-50% - 3px), calc(-50% + 2px)) scale(1.01) skewX(-8deg); }
+  75%      { transform: translate(calc(-50% + 3px), calc(-50% - 2px)) scale(1.01) skewX(-8deg); }
+}
+
+/* Full-frame white impact flash. */
+@keyframes cer-impact-flash {
+  0%   { opacity: 0.85; }
+  100% { opacity: 0; }
+}
+
+/* Hard, short camera shake used on impacts. */
+@keyframes cer-shake-hard {
+  0%, 100% { transform: translate(0, 0); }
+  20%      { transform: translate(-6px, 3px); }
+  40%      { transform: translate(5px, -4px); }
+  60%      { transform: translate(-4px, -3px); }
+  80%      { transform: translate(4px, 2px); }
+}
+
+/* Diagonal speed streaks sweeping across the frame behind a slam. */
+@keyframes cer-streak {
+  0%   { transform: translateX(-30%) skewX(-18deg); opacity: 0; }
+  30%  { opacity: 0.55; }
+  100% { transform: translateX(130%) skewX(-18deg); opacity: 0; }
+}
+
+/* Stage title slams down from above. */
+@keyframes cer-title-drop {
+  0%   { transform: translateY(-120%) skewX(-6deg); opacity: 0; }
+  60%  { transform: translateY(8%) skewX(-6deg);    opacity: 1; }
+  100% { transform: translateY(0) skewX(-6deg);     opacity: 1; }
+}
+
+/* Diagonal split panels wipe in from their outer edges. */
+@keyframes cer-wipe-left  { 0% { transform: translateX(-100%); } 100% { transform: translateX(0); } }
+@keyframes cer-wipe-right { 0% { transform: translateX(100%);  } 100% { transform: translateX(0); } }
+
+/* ---- Round / Match / Arcade ---- */
+
+/* KO / result title crash: drop + overshoot + settle. */
+@keyframes cer-title-crash {
+  0%   { transform: scale(2.6) translateY(-14%); opacity: 0; filter: blur(6px); }
+  50%  { transform: scale(0.9) translateY(4%);   opacity: 1; filter: blur(0); }
+  68%  { transform: scale(1.06) translateY(0); }
+  100% { transform: scale(1) translateY(0);      opacity: 1; }
+}
+
+/* Winner rises into a hero pose from below with a scale punch. */
+@keyframes cer-hero-rise {
+  0%   { transform: translateY(70px) scale(0.85); opacity: 0; }
+  60%  { transform: translateY(-8px) scale(1.03); opacity: 1; }
+  100% { transform: translateY(0) scale(1);       opacity: 1; }
+}
+
+/* Loser fades and slumps in. */
+@keyframes cer-loser-in {
+  0%   { transform: translateY(20px); opacity: 0; }
+  100% { transform: translateY(0);    opacity: 0.5; }
+}
+
+/* Sweeping spotlight sheen behind the winner. */
+@keyframes cer-spotlight {
+  0%, 100% { opacity: 0.55; transform: translate(-50%, -50%) scale(1); }
+  50%      { opacity: 0.8;  transform: translate(-50%, -50%) scale(1.06); }
+}
+
+/* Confetti falls with a slight horizontal sway. */
+@keyframes cer-confetti {
+  0%   { transform: translateY(-12vh) rotate(0deg); opacity: 0; }
+  8%   { opacity: 1; }
+  100% { transform: translateY(112vh) rotate(320deg); opacity: 1; }
+}
+
+/* Stat tiles pop up in sequence. */
+@keyframes cer-tile-pop {
+  0%   { transform: translateY(24px) scale(0.9); opacity: 0; }
+  70%  { transform: translateY(-3px) scale(1.02); }
+  100% { transform: translateY(0) scale(1);       opacity: 1; }
+}
+
+/* Buttons slide up last. */
+@keyframes cer-rise-fade {
+  0%   { transform: translateY(28px); opacity: 0; }
+  100% { transform: translateY(0);    opacity: 1; }
+}
+
+/* Radiant burst rays rotating slowly behind a champion. */
+@keyframes cer-rays {
+  0%   { transform: translate(-50%, -50%) rotate(0deg); }
+  100% { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+.cer-rays {
+  position: absolute;
+  left: 50%; top: 50%;
+  width: 180vmax; height: 180vmax;
+  background: repeating-conic-gradient(
+    from 0deg,
+    rgba(255, 214, 10, 0.12) 0deg 6deg,
+    transparent 6deg 18deg
+  );
+  transform: translate(-50%, -50%);
+  animation: cer-rays 24s linear infinite;
+  pointer-events: none;
+}
+
+/* Utility helpers */
+.cer-shock {
+  position: absolute;
+  left: 50%; top: 50%;
+  border-radius: 9999px;
+  pointer-events: none;
+  will-change: transform, opacity;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cer-anim,
+  .cer-anim * {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}

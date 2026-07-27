@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import type { QualityFlags } from '../../core/QualityManager'
 import type { StageConfig } from '../StageRegistry'
 import {
@@ -366,4 +367,107 @@ export function shippingContainer(color: number, stencil: number): THREE.Group {
   badge.position.set(-w / 2 + 0.7, 0.15, d / 2 + 0.03)
   g.add(badge)
   return g
+}
+
+// ---------------------------------------------------------------------------
+// Instanced container field.
+//
+// A single shippingContainer() is a Group of ~31 meshes (body + 26 corrugation
+// ribs + 2 rails + seam + badge). A yard of ~20 of them minted ~650 meshes and,
+// doubled by the planar-reflection pass, ~1600 draw calls — the whole reason
+// `distribution` blew its budget. containerField() collapses the entire static
+// field into TWO instanced draws: one InstancedMesh for the merged container
+// shell (body+ribs+rails+seam baked into one geometry, with the per-part
+// dark/light shading carried as a grayscale vertex-colour multiplier so a single
+// PBR material still reads corrugated), and one for the additive stencil badges.
+// Per-instance colour supplies each container's paint via `instanceColor`, which
+// the shader multiplies against the vertex-colour part mask — so ribs still read
+// 0.6× and rails 1.25× of the body paint, exactly as the per-mesh version did.
+// ---------------------------------------------------------------------------
+
+export interface ContainerSpec {
+  x: number; y: number; z: number; ry: number; color: number; stencil: number
+}
+
+const _CONT_W = 3.2, _CONT_H = 1.4, _CONT_D = 1.6
+const _CONT_UP = new THREE.Vector3(0, 1, 0)
+// paintedMetal bakery mean-luma compensation (matches structureMat's internal
+// brightness comp) so instanced paint lands at the same value as the per-mesh
+// containers did before instancing.
+const _CONT_COMP = Math.min(2.6, Math.max(1, 0.66 / 0.26))
+
+function buildContainerGeo(): THREE.BufferGeometry {
+  const w = _CONT_W, h = _CONT_H, d = _CONT_D
+  const parts: THREE.BufferGeometry[] = []
+  const push = (geo: THREE.BufferGeometry, mul: number) => {
+    const n = geo.attributes.position.count
+    const col = new Float32Array(n * 3)
+    col.fill(mul)
+    geo.setAttribute('color', new THREE.BufferAttribute(col, 3))
+    parts.push(geo)
+  }
+  push(new THREE.BoxGeometry(w, h, d), 1.0)
+  for (let i = 0; i < 13; i++) {
+    const rx = -w / 2 + 0.18 + i * ((w - 0.36) / 12)
+    for (const fz of [d / 2 + 0.015, -d / 2 - 0.015]) {
+      const rib = new THREE.BoxGeometry(0.07, h - 0.16, 0.03)
+      rib.translate(rx, 0, fz)
+      push(rib, 0.6)
+    }
+  }
+  for (const ry of [h / 2 - 0.06, -h / 2 + 0.06]) {
+    const rail = new THREE.BoxGeometry(w + 0.03, 0.12, d + 0.03)
+    rail.translate(0, ry, 0)
+    push(rail, 1.25)
+  }
+  const seam = new THREE.BoxGeometry(0.05, h - 0.12, 0.02)
+  seam.translate(0, 0, d / 2 + 0.02)
+  push(seam, 0.6)
+  const merged = mergeGeometries(parts, false)
+  if (!merged) throw new Error('containerField: geometry merge failed')
+  return merged
+}
+
+/** Render a static field of shipping containers as two instanced draw calls. */
+export function containerField(b: StageBuild, specs: ContainerSpec[]): void {
+  if (specs.length === 0) return
+  const geo = buildContainerGeo()
+  const mat = structureMat({ color: 0xffffff, roughness: 0.82, metalness: 0.28 }).clone()
+  mat.vertexColors = true
+  const bodies = new THREE.InstancedMesh(geo, mat, specs.length)
+  bodies.castShadow = true
+  bodies.receiveShadow = true
+
+  const badgeGeo = new THREE.PlaneGeometry(0.7, 0.32)
+  const badgeMat = glowMat(0xffffff, 0.5)
+  const badges = new THREE.InstancedMesh(badgeGeo, badgeMat, specs.length)
+
+  const m4 = new THREE.Matrix4()
+  const q = new THREE.Quaternion()
+  const pos = new THREE.Vector3()
+  const scl = new THREE.Vector3(1, 1, 1)
+  const off = new THREE.Vector3()
+  const paint = new THREE.Color()
+  const ink = new THREE.Color()
+
+  specs.forEach((s, i) => {
+    q.setFromAxisAngle(_CONT_UP, s.ry)
+    pos.set(s.x, s.y, s.z)
+    m4.compose(pos, q, scl)
+    bodies.setMatrixAt(i, m4)
+    paint.setHex(s.color).multiplyScalar(_CONT_COMP)
+    paint.r = Math.min(1, paint.r); paint.g = Math.min(1, paint.g); paint.b = Math.min(1, paint.b)
+    bodies.setColorAt(i, paint)
+    off.set(-_CONT_W / 2 + 0.7, 0.15, _CONT_D / 2 + 0.03).applyQuaternion(q).add(pos)
+    m4.compose(off, q, scl)
+    badges.setMatrixAt(i, m4)
+    badges.setColorAt(i, ink.setHex(s.stencil))
+  })
+  bodies.instanceMatrix.needsUpdate = true
+  if (bodies.instanceColor) bodies.instanceColor.needsUpdate = true
+  badges.instanceMatrix.needsUpdate = true
+  if (badges.instanceColor) badges.instanceColor.needsUpdate = true
+
+  b.add(bodies)
+  b.add(badges)
 }

@@ -61,11 +61,44 @@ function newChannels(): AnimChannels {
   }
 }
 
-/** Critically-damped spring — the workhorse for every channel. */
+/**
+ * Critically-damped spring — the workhorse for every channel.
+ *
+ * Sub-stepped, and it has to be. This is semi-implicit Euler, which is only
+ * conditionally stable: it needs dt < 2/damping AND dt < 2/sqrt(stiffness).
+ * The stiffest channels here are the squash/stretch pair at stiffness 260 /
+ * damping 22, which needs dt < 0.0909s. Engine.frame() clamps rawDt to 0.1s,
+ * so the engine was handing this function a dt it could not integrate.
+ *
+ * That is not a theoretical concern. At dt = 0.1 the velocity term amplifies
+ * by 1.2x per frame, so the squash factor reaches ~1e19 within 40 frames and
+ * the fighter's mesh stretches into an off-screen ribbon with only the pinned
+ * shoes left in place. It never recovers, because the divergence is
+ * exponential and the spring has no way back. Any single 100ms frame does it:
+ * a GC pause, an asset decode, alt-tab, or just a slow machine.
+ *
+ * This went unseen for the whole project because every QA capture called
+ * __OPS3D__.settle(2) believing it waited 2 seconds; settle() takes a FRAME
+ * COUNT, so every frame ever reviewed was taken ~30ms after load, long before
+ * a hitch could occur.
+ *
+ * Sub-stepping at 1/120s keeps every channel inside its stability bound
+ * regardless of what dt arrives, and costs ~12 iterations in the worst case.
+ */
+const SPRING_MAX_DT = 1 / 120
+
 function spring(value: number, vel: number, target: number, stiffness: number, damping: number, dt: number) {
-  const a = (target - value) * stiffness - vel * damping
-  const nv = vel + a * dt
-  return [value + nv * dt, nv] as const
+  if (!(dt > 0)) return [value, vel] as const
+  const steps = Math.min(16, Math.ceil(dt / SPRING_MAX_DT))
+  const h = dt / steps
+  let v = value
+  let nv = vel
+  for (let i = 0; i < steps; i++) {
+    const a = (target - v) * stiffness - nv * damping
+    nv += a * h
+    v += nv * h
+  }
+  return [v, nv] as const
 }
 
 class FighterRig {

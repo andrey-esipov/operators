@@ -34,8 +34,8 @@
 
 /* Scrims — guarantee HUD/scene separation without dimming the whole game. */
 .fh-topscrim {
-  position: absolute; top: 0; left: 0; right: 0; height: 190px;
-  background: linear-gradient(180deg, rgba(2,3,8,0.72) 0%, rgba(2,3,8,0.28) 46%, transparent 100%);
+  position: absolute; top: 0; left: 0; right: 0; height: 200px;
+  background: linear-gradient(180deg, rgba(2,3,8,0.8) 0%, rgba(2,3,8,0.5) 40%, rgba(2,3,8,0.16) 66%, transparent 100%);
   pointer-events: none;
 }
 .fh-botscrim {
@@ -52,7 +52,7 @@
 .fh-side.mirror .fh-idrow { flex-direction: row-reverse; }
 .fh-portrait {
   position: relative; z-index: 3;
-  width: 70px; height: 70px; flex: none;
+  width: 84px; height: 84px; flex: none;
   background: #06080f;
   clip-path: polygon(50% 0, 100% 27%, 100% 73%, 50% 100%, 0 73%, 0 27%);
   box-shadow: 0 0 0 3px var(--ink), 0 4px 12px rgba(0,0,0,0.6);
@@ -162,13 +162,13 @@
 .fh-hp-ticks {
   position: absolute; inset: -2px -1px; pointer-events: none;
   background-image: repeating-linear-gradient(105deg,
-    transparent 0, transparent calc(10% - 1.5px),
-    rgba(0,0,0,0.48) calc(10% - 1.5px), rgba(0,0,0,0.48) 10%);
+    transparent 0, transparent calc(20% - 2px),
+    rgba(0,0,0,0.6) calc(20% - 2px), rgba(0,0,0,0.6) 20%);
 }
 .fh-hp.mirror .fh-hp-ticks {
   background-image: repeating-linear-gradient(75deg,
-    transparent 0, transparent calc(10% - 1.5px),
-    rgba(0,0,0,0.48) calc(10% - 1.5px), rgba(0,0,0,0.48) 10%);
+    transparent 0, transparent calc(20% - 2px),
+    rgba(0,0,0,0.6) calc(20% - 2px), rgba(0,0,0,0.6) 20%);
 }
 .fh-hp.mirror .fh-hp-chip, .fh-hp.mirror .fh-hp-fill, .fh-hp.mirror .fh-hp-core { left: auto; right: 0; }
 .fh-hp.danger { animation: fhDanger 0.68s ease-in-out infinite; }
@@ -328,14 +328,20 @@
 .fh-pips { display: flex; align-items: center; gap: 34px; margin-top: 11px; }
 .fh-pipset { display: flex; gap: 10px; }
 .fh-pip {
-  width: 30px; height: 27px;
+  position: relative; width: 34px; height: 30px;
   clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
-  background: rgba(6,9,16,0.55);
-  box-shadow: inset 0 0 0 2.5px rgba(255,255,255,0.82), 0 0 0 1px rgba(0,0,0,0.9), 0 2px 8px rgba(0,0,0,0.75);
+  background: rgba(6,9,16,0.5);
+  box-shadow: inset 0 0 0 2.5px rgba(255,255,255,0.6), 0 0 0 1px rgba(0,0,0,0.9), 0 2px 8px rgba(0,0,0,0.75);
   transition: all 0.35s cubic-bezier(0.22,1,0.36,1);
 }
-.fh-pip.a.won { background: var(--acc-a); box-shadow: inset 0 0 0 3px rgba(255,255,255,0.98), 0 0 22px var(--acc-a), 0 0 0 1px rgba(0,0,0,0.8); }
-.fh-pip.b.won { background: var(--acc-b); box-shadow: inset 0 0 0 3px rgba(255,255,255,0.98), 0 0 22px var(--acc-b), 0 0 0 1px rgba(0,0,0,0.8); }
+.fh-pip::after {
+  content: ''; position: absolute; inset: 34%;
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+  background: transparent; transition: all 0.35s cubic-bezier(0.22,1,0.36,1);
+}
+.fh-pip.a.won { background: var(--acc-a); box-shadow: inset 0 0 0 2px rgba(255,255,255,0.9), 0 0 24px var(--acc-a), 0 0 0 1px rgba(0,0,0,0.85); }
+.fh-pip.b.won { background: var(--acc-b); box-shadow: inset 0 0 0 2px rgba(255,255,255,0.9), 0 0 24px var(--acc-b), 0 0 0 1px rgba(0,0,0,0.85); }
+.fh-pip.won::after { inset: 30%; background: #fff; box-shadow: 0 0 7px rgba(255,255,255,0.95); }
 
 /* ============================ COMBO COUNTER ============================= */
 .fh-combo { position: absolute; top: 24%; pointer-events: none; display: flex; align-items: flex-end; gap: 6px; transform: skewX(-11deg); }
@@ -394,7 +400,7 @@
 }
 
 /* ============================ MOVE DECK =============================== */
-.fh-deck { position: absolute; left: 50%; bottom: 24px; transform: translateX(-50%); display: flex; gap: 15px; align-items: flex-end; }
+.fh-deck { position: absolute; left: 50%; bottom: 38px; transform: translateX(-50%); display: flex; gap: 15px; align-items: flex-end; }
 .fh-card {
   position: relative; width: 158px; height: 180px; padding: 13px 14px 15px;
   background: linear-gradient(180deg, rgba(30,35,50,0.98), rgba(8,10,17,0.98));

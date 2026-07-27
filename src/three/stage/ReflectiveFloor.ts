@@ -302,47 +302,51 @@ function floorMaterial(): THREE.ShaderMaterial {
           jit.y += uRoughness * 0.004;
           vec3 r0 = texture2D(tDiffuse, ruv + jit).rgb;
           vec3 r1 = texture2D(tDiffuse, ruv + jit*1.5).rgb;
-          refl = mix(r0, r1, uRoughness*0.3) * uReflTint * 1.28;
-          // Lift so dark reflected geometry still separates from the base, and
-          // punch bright reflected emissives (screens, neon) so the mirror reads.
-          refl += refl*refl*0.7;
+          refl = mix(r0, r1, uRoughness*0.3) * uReflTint * 1.4;
+          // Lift mid-tones so the reflected FIGHTERS (dark clothing, denim, skin)
+          // separate from the base and actually read as a mirror image, and
+          // punch bright reflected emissives (screens, neon) harder still.
+          refl += pow(refl, vec3(0.72)) * 0.34;
+          refl += refl*refl*0.85;
         }
         float fres = pow(1.0 - clamp(dot(vec3(0.0,1.0,0.0), V), 0.0, 1.0), 3.0);
 
-        // Contact: a directional CAST shadow (offset + elongated away from the
-        // key light) plus a tight dark AO core at the feet, so the sprites read
-        // as physically planted with a shadow that agrees with the lighting.
+        // Contact: a directional CAST shadow that rakes AWAY from the key light,
+        // plus a tight dense AO core pinched right at the feet, so the sprites
+        // read as physically planted with a shadow that agrees with the lighting.
         vec2 keyXZ = uKeyDir.xz;
         float kl = length(keyXZ);
         vec2 castDir = kl > 1e-3 ? -keyXZ / kl : vec2(0.0, 1.0); // shadow throw dir
         vec2 castPerp = vec2(-castDir.y, castDir.x);
-        // wide soft skirt, stretched along the cast direction
+        // Long soft skirt, strongly stretched along the cast direction and
+        // pushed off the feet, so it reads as a raking cast shadow (not a puddle).
         float skirt = 0.0;
         {
-          vec2 da = P - (uContactA + castDir * 0.5);
-          vec2 ea = vec2(dot(da, castDir) / 1.35, dot(da, castPerp) / 0.82);
+          vec2 da = P - (uContactA + castDir * 0.95);
+          vec2 ea = vec2(dot(da, castDir) / 2.4, dot(da, castPerp) / 0.64);
           skirt = max(skirt, 1.0 - smoothstep(0.0, 1.0, length(ea)));
-          vec2 db = P - (uContactB + castDir * 0.5);
-          vec2 eb = vec2(dot(db, castDir) / 1.35, dot(db, castPerp) / 0.82);
+          vec2 db = P - (uContactB + castDir * 0.95);
+          vec2 eb = vec2(dot(db, castDir) / 2.4, dot(db, castPerp) / 0.64);
           skirt = max(skirt, 1.0 - smoothstep(0.0, 1.0, length(eb)));
         }
-        // tight core (darker, smaller footprint right at the feet)
+        // Tight dense core: a small dark ellipse pinched at the feet, with a
+        // near-solid centre so the point of contact reads crisp, not hazy.
         float core = 0.0;
         {
-          vec2 da = P - (uContactA + castDir * 0.16);
-          vec2 ca = vec2(dot(da, castDir) / 0.72, dot(da, castPerp) / 0.44);
+          vec2 da = P - (uContactA + castDir * 0.12);
+          vec2 ca = vec2(dot(da, castDir) / 0.62, dot(da, castPerp) / 0.4);
           core = max(core, 1.0 - smoothstep(0.0, 1.0, length(ca)));
-          vec2 db = P - (uContactB + castDir * 0.16);
-          vec2 cb = vec2(dot(db, castDir) / 0.72, dot(db, castPerp) / 0.44);
+          vec2 db = P - (uContactB + castDir * 0.12);
+          vec2 cb = vec2(dot(db, castDir) / 0.62, dot(db, castPerp) / 0.4);
           core = max(core, 1.0 - smoothstep(0.0, 1.0, length(cb)));
         }
-        core = core*core;
-        float contactCore = max(skirt*skirt*0.5, core);
+        core = smoothstep(0.0, 0.85, core);
 
         float reflAmt = uReflectivity * (0.62 + 0.38*fres);
-        // reflection gains only in the wet skirt, NOT in the dark AO core
-        reflAmt = clamp(reflAmt + skirt*skirt*0.25*(1.0-core), 0.0, 0.97);
-        reflAmt *= 1.0 - core*0.9;
+        // Reflection gains in the wet skirt AROUND the feet (where the fighter's
+        // mirror image lands), but is killed in the dark AO core at the contact.
+        reflAmt = clamp(reflAmt + skirt*skirt*0.42*(1.0-core), 0.0, 0.98);
+        reflAmt *= 1.0 - core*0.95;
         reflAmt *= 1.0 - smoothstep(16.0, 34.0, rad);
 
         vec3 H = normalize(normalize(uKeyDir) + V);
@@ -365,8 +369,8 @@ function floorMaterial(): THREE.ShaderMaterial {
 
         vec3 col = diff + grid + trim + sheen + flash + uTrimColor*ring*2.0;
         // Contact shadow: darken the surface (and grid) under each fighter, with
-        // a strong tight AO core at the feet so they read as grounded, not lit.
-        col *= 1.0 - core*0.9 - skirt*skirt*0.32;
+        // a strong dense AO core at the feet so they read as firmly grounded.
+        col *= 1.0 - core*0.94 - skirt*skirt*0.42;
         col = mix(col, refl, reflAmt);
         col += sheen*0.35 + trim*0.4;
 

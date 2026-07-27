@@ -67,6 +67,12 @@ export class PostPipeline implements Subsystem, RenderDriver {
 
   private freeze = 0
 
+  // Scratch objects for the per-frame character-matte projection.
+  private _pv = new THREE.Vector3()
+  private _charA = new THREE.Vector2(-1, -1)
+  private _charB = new THREE.Vector2(-1, -1)
+  private _charHalf = new THREE.Vector2(0.09, 0.24)
+
   async init(ctx: EngineContext) {
     this.ctx = ctx
     this.quality = ctx.quality
@@ -104,6 +110,8 @@ export class PostPipeline implements Subsystem, RenderDriver {
     // --- master grade + AgX display transform ---------------------------
     this.grade = new MasterGradeEffect()
     this.grade.applyGrade(this.currentGrade)
+    this.grade.setCamera(camera.near, camera.far)
+    this.grade.setBlackPoint(0.03)
 
     // --- chromatic aberration + sharpen (own convolution pass) ----------
     this.finalize = new LensFinalizeEffect()
@@ -163,6 +171,12 @@ export class PostPipeline implements Subsystem, RenderDriver {
 
   update(dt: number, state: FightRenderState) {
     this.time += dt
+
+    // --- character matte projection ------------------------------------
+    // Build the screen-space power windows over the two fighters from their
+    // published anchors, so the grade can keep their chroma separate from the
+    // arena. Fully self-contained (no dependency on layer tagging).
+    this.updateCharMatte()
 
     // --- decays ---------------------------------------------------------
     this.impact = Math.max(0, this.impact - dt * 3.4)
@@ -261,6 +275,70 @@ export class PostPipeline implements Subsystem, RenderDriver {
   render(_dt: number) {
     void _dt
     this.composer.render()
+  }
+
+  /**
+   * Project both fighters' anchors into screen space and upload the soft power
+   * windows the grade uses to keep character chroma separate from the arena.
+   */
+  private updateCharMatte() {
+    const anchors = this.ctx.anchors
+    const camera = this.ctx.camera
+    const chestA = anchors.get('fighter:a') ?? anchors.fighter('a')
+    const chestB = anchors.get('fighter:b') ?? anchors.fighter('b')
+
+    const cax = this.projX(chestA)
+    const cay = this.lastY
+    const cbx = this.projX(chestB)
+    const cby = this.lastY
+    this._charA.set(cax, cay)
+    this._charB.set(cbx, cby)
+
+    // Vertical extent + a stable centre from each fighter's head/feet anchors.
+    let halfH = 0.24
+    const headA = anchors.get('fighter:a:head')
+    const feetA = anchors.get('fighter:a:feet')
+    if (headA && feetA) {
+      this.projX(headA)
+      const hy = this.lastY
+      this.projX(feetA)
+      const fy = this.lastY
+      halfH = Math.max(0.12, Math.abs(hy - fy) * 0.5 * 1.14)
+      this._charA.y = (hy + fy) * 0.5
+    }
+    const headB = anchors.get('fighter:b:head')
+    const feetB = anchors.get('fighter:b:feet')
+    if (headB && feetB) {
+      this.projX(headB)
+      const hy = this.lastY
+      this.projX(feetB)
+      const fy = this.lastY
+      this._charB.y = (hy + fy) * 0.5
+    }
+
+    // Horizontal extent from a fixed world offset around the chest.
+    this._pv.copy(chestA)
+    this._pv.x += 0.95
+    this._pv.project(camera)
+    const offx = this._pv.x * 0.5 + 0.5
+    let halfW = Math.abs(offx - cax) * 1.18
+    if (!(halfW > 0.02)) halfW = 0.08
+    this._charHalf.set(halfW, halfH)
+
+    // Distance from camera to the fighter plane, so the grade can depth-gate
+    // the matte and exclude the far background inside the power window.
+    const dist = this.ctx.camera.position.distanceTo(chestA)
+    this.grade.setCharDepth(dist + 2.2, 5.5)
+
+    this.grade.setCharMatte(this._charA, this._charB, this._charHalf)
+  }
+
+  private lastY = 0
+  /** Project a world point, return its screen-space uv.x and stash uv.y. */
+  private projX(v: THREE.Vector3): number {
+    this._pv.copy(v).project(this.ctx.camera)
+    this.lastY = this._pv.y * 0.5 + 0.5
+    return this._pv.x * 0.5 + 0.5
   }
 
   resize(width: number, height: number) {

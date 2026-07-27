@@ -794,7 +794,8 @@ function HeroNameplate({
               className="absolute inset-0 pointer-events-none"
               style={{
                 backgroundImage:
-                  'repeating-linear-gradient(90deg, transparent 0, transparent calc(10% - 1px), rgba(0,0,0,0.6) calc(10% - 1px), rgba(0,0,0,0.6) 10%)',
+                  'repeating-linear-gradient(90deg, transparent 0, transparent calc(12.5% - 2px), rgba(0,0,0,0.8) calc(12.5% - 2px), rgba(0,0,0,0.8) 12.5%)',
+                boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.4)',
               }}
             />
           </div>

@@ -442,6 +442,13 @@ export const FIGHTER_FRAGMENT = /* glsl */ `
     // the key's own shape (wrapKey) so it stays a lit-side warm anchor, not a flat
     // fill. This is what keeps a face legible as a face under the crisis red rig.
     diffuse += vec3(1.0, 0.74, 0.6) * skin * wrapKey * selfShadow * uKeyIntensity * 0.16;
+    // Skin legibility floor: the flesh key above rides wrapKey, so a face turned
+    // AWAY from the key (or shadowed by a dim/side rig) drops toward the grade and
+    // loses its lit-face reading. Add a small omnidirectional warm skin fill so the
+    // face plane never falls below a legible floor regardless of orientation. Kept
+    // low and skin-only so it lifts a turned/shadowed face to parity without
+    // flattening the directional form the key still layers on top.
+    diffuse += vec3(1.0, 0.82, 0.72) * skin * 0.13;
 
     float ndlFill = dot(Nbroad, normalize(uFillDir));
     diffuse += fillCol * uFillIntensity * (ndlFill * 0.5 + 0.5);
@@ -602,7 +609,7 @@ export const FIGHTER_FRAGMENT = /* glsl */ `
     // knees, shins and the inseam separation now read as form instead of a cutout.
     float lowerForm = (1.0 - smoothstep(0.0, 0.5, vHeightNorm)) * dark * darkNeed * ao;
     float fillWrap = dot(Nbroad, normalize(uFillDir)) * 0.5 + 0.5;
-    lit += fillCol * lowerForm * fillWrap * uFillIntensity * 0.7;
+    lit += fillCol * lowerForm * fillWrap * uFillIntensity * 0.85;
     lit += uBounceColor * lowerForm * bounce * uBounceIntensity * 0.9;
     vec3 color = lit;
 

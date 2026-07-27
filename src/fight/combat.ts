@@ -10,7 +10,7 @@
 import type { Box, Direction, FightEvent, FightState, FighterState, Hit } from './types'
 import type { FighterDef } from './def'
 import { anyOverlap, contactPoint, placeBox } from './geometry'
-import { hasButton, pressedOf } from './input/motion'
+import { dirOf, hasButton, pressedOf } from './input/motion'
 import {
   AIR_HURT,
   CROUCH_HURT,
@@ -25,6 +25,10 @@ import {
   MAX_METER,
   MIN_DAMAGE,
   MIN_SCALE,
+  PARRY_FREEZE,
+  PARRY_LOCK,
+  PARRY_METER,
+  PARRY_WINDOW,
   THROW_TECH_FRAMES,
   THROW_TECH_PUSH,
   THROW_TECH_WINDOW,
@@ -78,9 +82,64 @@ function isBlocking(d: FighterState, guard: Hit['guard'], relDir: Direction): bo
   return relDir === 4 || relDir === 1 // high: either guard blocks
 }
 
+/** Is this fighter in a state where a parry attempt is even possible? Not
+ *  stunned (hitstun/blockstun), not committed to their own move, not on the
+ *  floor or mid-juggle. Neutral, walking, crouching and airborne are all fine —
+ *  a parry is a defensive read you make while free. */
+function canParry(d: FighterState): boolean {
+  if (d.stunRemaining > 0) return false
+  switch (d.stance) {
+    case 'attack':
+    case 'juggle':
+    case 'knockdown':
+    case 'wakeup':
+    case 'throw-tech':
+    case 'ko':
+    case 'dash':
+    case 'backdash':
+      return false
+    default:
+      return true
+  }
+}
+
+/** The exact direction that parries a given guard. High/overhead (and airborne
+ *  attacks) parry FORWARD (6); lows parry straight DOWN (2). Throws and
+ *  unblockables cannot be parried. Chosen distinct from the block directions
+ *  (back / down-back) so blocking and parrying never collapse into one input. */
+function parryDirFor(guard: Hit['guard']): Direction | null {
+  if (guard === 'throw' || guard === 'unblockable') return null
+  if (guard === 'low') return 2
+  return 6
+}
+
+/** Was there a FRESH tap into `dir` within the last `window` frames? Fresh
+ *  means a real edge (the previous frame was a different direction), so holding
+ *  forward to walk does not arm a perpetual parry — you must re-tap. This is the
+ *  anti-mash property that makes parry a read rather than a hold. */
+function freshTapWithin(log: number[], dir: Direction, window: number): boolean {
+  const start = Math.max(0, log.length - window)
+  for (let i = log.length - 1; i >= start; i--) {
+    if (dirOf(log[i]) !== dir) continue
+    const prev = i > 0 ? dirOf(log[i - 1]) : 5
+    if (prev !== dir) return true
+  }
+  return false
+}
+
+/** Did the defender parry this incoming hit? Combines "can I parry right now"
+ *  with "did I tap the right direction in the window". */
+function isParrying(d: FighterState, guard: Hit['guard'], log: number[]): boolean {
+  if (!canParry(d)) return false
+  const dir = parryDirFor(guard)
+  if (dir === null) return false
+  return freshTapWithin(log, dir, PARRY_WINDOW)
+}
+
 interface Pending {
   ai: 0 | 1
   blocked: boolean
+  parried: boolean
   hit: Hit
   at: { x: number; y: number }
 }
@@ -138,7 +197,18 @@ export function resolveCombat(
     if (!anyOverlap(hitboxes, hurt)) continue
 
     const at = contactPoint(hitboxes, hurt) ?? { x: A.pos.x, y: A.pos.y + 90 }
-    pending.push({ ai, blocked: isBlocking(D, move.hit.guard, relDirs[di]), hit: move.hit, at })
+    const logD = s.inputLog?.[di] ?? []
+    // Parry is checked before block: it needs a distinct forward/down tap, so it
+    // never collides with a back/down-back block, but a fighter who read the hit
+    // and tapped in should get the parry rather than merely blocking.
+    const parried = isParrying(D, move.hit.guard, logD)
+    pending.push({
+      ai,
+      blocked: !parried && isBlocking(D, move.hit.guard, relDirs[di]),
+      parried,
+      hit: move.hit,
+      at,
+    })
   }
 
   if (pending.length === 0) {
@@ -158,9 +228,33 @@ export function resolveCombat(
     const D = s.fighters[(1 - p.ai) as 0 | 1]
     A.attackConnected = true
     s.hitstop = Math.max(s.hitstop, p.hit.hitstop)
-    if (p.blocked) applyBlock(A, D, p.hit, p.at, p.ai, events)
+    if (p.parried) resolveParry(s, A, D, p.at, p.ai, events)
+    else if (p.blocked) applyBlock(A, D, p.hit, p.at, p.ai, events)
     else applyHit(A, D, p.hit, p.at, p.ai, events)
   }
+}
+
+/**
+ * A parried hit: the defender eats nothing — no damage, no chip, no knockback —
+ * banks meter, and recovers almost immediately (PARRY_LOCK frames) while the
+ * attacker is left in the full recovery of a move that "connected", so the
+ * parrier comes out heavily plus. Both fighters share a PARRY_FREEZE hitstop for
+ * the signature flash; because it is equal on both sides it does not eat into
+ * the advantage. The attacker's move is NOT reset (attackConnected is already
+ * set by the caller), so it cannot re-hit on a later active frame.
+ */
+function resolveParry(
+  s: FightState, A: FighterState, D: FighterState, at: Pending['at'], ai: 0 | 1, events: FightEvent[],
+): void {
+  void A
+  s.hitstop = Math.max(s.hitstop, PARRY_FREEZE)
+  D.meter = Math.min(MAX_METER, D.meter + PARRY_METER)
+  // Snap the defender out of any block/walk into a short, actionable recovery.
+  D.stance = D.grounded ? 'idle' : 'jump-fall'
+  D.stunRemaining = PARRY_LOCK
+  D.vel.x = 0
+  D.lastHitAt = at
+  events.push({ type: 'parry', at, attacker: ai })
 }
 
 // ── Throws ───────────────────────────────────────────────────────────────────

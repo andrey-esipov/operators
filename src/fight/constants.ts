@@ -130,6 +130,25 @@ export const CHARGE_MIN = 40
 export const CHARGE_RELEASE_WINDOW = 10
 export const DOUBLE_TAP_WINDOW = 9
 
+/**
+ * Parry (Third-Strike-style). The defining defensive mechanic of our reference
+ * game: tap toward an incoming high/overhead (or straight down for a low) in a
+ * tight window just before it lands, take no damage, and come out massively plus
+ * with meter in hand. Getting the window right is the whole feel — too wide and
+ * it replaces blocking, too tight and nobody lands it.
+ */
+// Leniency: a fresh directional tap this many frames before contact still
+// parries. Deliberately tighter than a motion window — parry is a read.
+export const PARRY_WINDOW = 7
+// Freeze on a successful parry, both fighters, for that crisp Third-Strike
+// flash. Equal for both, so it does not change the frame advantage.
+export const PARRY_FREEZE = 14
+// Meter rewarded to the parrying defender.
+export const PARRY_METER = 120
+// Brief recovery the parrier owes before acting. Kept far below any attacker's
+// move recovery so a parry is always a genuine plus — you get your turn.
+export const PARRY_LOCK = 2
+
 /** Camera framing. The renderer derives its shot from these; the sim only
  *  reports where the action is and how tight to frame it. */
 export const CAMERA_MIN_ZOOM = 1.0

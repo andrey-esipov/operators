@@ -112,14 +112,14 @@
   box-shadow: -14px 0 34px rgba(0,0,0,0.55), inset 0 0 0 1px rgba(255,194,61,0.14);
 }
 .mm-panel-edge::after {
-  content: ""; position: absolute; top: -6%; bottom: -6%;
+  content: ""; position: absolute; top: 8%; bottom: 8%;
   left: min(48%, 780px);
-  width: 5px; height: 112%;
+  width: 2px; height: 84%;
   transform: translateX(-82px) skewX(-9.4deg);
   transform-origin: top;
-  background: linear-gradient(180deg, transparent, var(--mm-magenta) 20%, var(--mm-amber) 80%, transparent);
-  box-shadow: 0 0 22px rgba(255,46,136,0.65), 0 0 44px rgba(255,140,40,0.4);
-  opacity: 0.95;
+  background: linear-gradient(180deg, transparent, rgba(255,120,150,0.55) 26%, rgba(255,180,80,0.55) 74%, transparent);
+  box-shadow: 0 0 10px rgba(255,110,60,0.28);
+  opacity: 0.7;
 }
 
 /* Vignette + letterbox to frame the whole composition. */
@@ -238,14 +238,14 @@
   font-size: clamp(72px, 12.6vh, 148px);
   line-height: 0.82;
   letter-spacing: 0.004em;
-  transform: skewX(-7deg);
-  background: linear-gradient(178deg, #FFFBEA 0%, #FFE96B 19%, #FFC21F 41%, #FF8A12 64%, #F0431F 86%, #B90E2E 100%);
+  transform: skewX(-8deg);
+  background:
+    radial-gradient(rgba(9,3,10,0.20) 21%, transparent 23%) 0 0 / 6px 6px,
+    linear-gradient(180deg, #FFF7D6 0%, #FFE04A 30%, #FF9E1B 56%, #F0431F 80%, #C21230 100%);
   -webkit-background-clip: text; background-clip: text;
   color: transparent;
   -webkit-text-stroke: 3px #0a0510;
-  filter:
-    drop-shadow(2px 2px 0 #0a0510) drop-shadow(4px 4px 0 #0a0510)
-    drop-shadow(6px 7px 0 rgba(0,0,0,0.55)) drop-shadow(0 4px 5px rgba(0,0,0,0.75));
+  filter: drop-shadow(3px 4px 0 #0a0510) drop-shadow(0 3px 4px rgba(0,0,0,0.65));
 }
 .mm-logo-slash {
   display: block; height: 6px; width: clamp(180px, 26vw, 340px);
@@ -279,12 +279,19 @@
     inset 0 1px 0 color-mix(in srgb, var(--mm-accent) 40%, transparent),
     inset 0 -1px 0 color-mix(in srgb, var(--mm-accent) 40%, transparent),
     0 0 34px color-mix(in srgb, var(--mm-accent) 34%, transparent);
-  clip-path: polygon(0 0, 100% 0, calc(100% - 16px) 100%, 0 100%);
   transition:
     top 0.19s cubic-bezier(0.2,0.85,0.25,1),
     height 0.19s cubic-bezier(0.2,0.85,0.25,1),
     border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
   opacity: 0;
+}
+/* Solid chevron nub on the cursor's leading edge — physical selection HW. */
+.mm-cursor::before {
+  content: ""; position: absolute; left: -5px; top: 50%; width: 0; height: 0;
+  transform: translateY(-50%);
+  border-top: 9px solid transparent; border-bottom: 9px solid transparent;
+  border-left: 12px solid var(--mm-accent);
+  filter: drop-shadow(0 0 8px color-mix(in srgb, var(--mm-accent) 60%, transparent));
 }
 .mm-menu.mm-ready .mm-cursor { opacity: 1; }
 /* Keyboard/gamepad steering gets a hard targeting frame + pulse. */
@@ -320,11 +327,11 @@
 .mm-item-main { min-width: 0; }
 .mm-item-label {
   display: block;
-  font-family: var(--mm-menu); font-weight: 400;
-  font-size: clamp(26px, 3.8vh, 36px); line-height: 0.86;
-  letter-spacing: 0.012em; text-transform: uppercase;
-  transform: skewX(-6deg); transform-origin: left center;
-  color: var(--mm-ink); opacity: 0.7;
+  font-family: var(--mm-display); font-weight: 400;
+  font-size: clamp(23px, 3.4vh, 33px); line-height: 0.92;
+  letter-spacing: 0.008em; text-transform: uppercase;
+  transform: skewX(-8deg); transform-origin: left center;
+  color: var(--mm-ink); opacity: 0.62;
   transition: opacity 0.16s ease, text-shadow 0.16s ease, letter-spacing 0.18s ease;
 }
 .mm-item-sub {
@@ -338,11 +345,13 @@
 .mm-item-tag {
   margin-left: auto; flex-shrink: 0;
   font-family: var(--mm-ui); font-weight: 700;
-  font-size: clamp(10px, 1.2vh, 12px); letter-spacing: 0.14em;
+  font-size: clamp(10px, 1.2vh, 12px); letter-spacing: 0.16em;
   color: var(--mm-faint); text-transform: uppercase;
-  padding: 3px 9px; border: 1px solid rgba(146,124,190,0.3);
-  border-radius: 2px; white-space: nowrap;
-  transition: color 0.16s ease, border-color 0.16s ease, background 0.16s ease, box-shadow 0.16s ease;
+  padding: 3px 10px; border: 0;
+  background: rgba(146,124,190,0.1);
+  clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
+  white-space: nowrap;
+  transition: color 0.16s ease, background 0.16s ease, box-shadow 0.16s ease;
 }
 
 /* Active state (mouse hover, keyboard focus, or programmatic active). */
@@ -367,7 +376,7 @@
 
 /* PRIMARY (Story) — always visibly the winner. */
 .mm-item.mm-primary { padding-top: clamp(14px, 2.1vh, 22px); padding-bottom: clamp(18px, 2.6vh, 28px); }
-.mm-item.mm-primary .mm-item-label { font-size: clamp(46px, 6.8vh, 60px); opacity: 0.98; letter-spacing: 0.004em; }
+.mm-item.mm-primary .mm-item-label { font-size: clamp(42px, 6.2vh, 56px); opacity: 0.98; letter-spacing: 0.003em; }
 .mm-item.mm-primary .mm-item-sub { opacity: 1; max-height: 40px; color: #E4D6FF; }
 /* Full-bleed selection underbar — the strongest single mark in the frame. */
 .mm-item.mm-primary::after {
@@ -403,28 +412,28 @@
 .mm-anim .mm-quote-in { animation: mmFade 0.6s ease-out both; }
 @keyframes mmFade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 
-.mm-util { display: flex; flex-direction: column; gap: 8px; }
-.mm-util-row { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
+.mm-util { display: flex; flex-direction: column; gap: 6px; }
+.mm-util-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 2px; }
 .mm-util-label {
   font-family: var(--mm-ui); font-weight: 700;
-  font-size: 10px; letter-spacing: 0.24em; color: var(--mm-faint);
-  text-transform: uppercase; width: 62px; flex-shrink: 0;
+  font-size: 9.5px; letter-spacing: 0.28em; color: var(--mm-faint);
+  text-transform: uppercase; width: 54px; flex-shrink: 0;
 }
 .mm-chip {
+  position: relative;
   font-family: var(--mm-ui); font-weight: 600;
-  font-size: clamp(10.5px, 1.3vh, 12.5px); letter-spacing: 0.06em;
+  font-size: clamp(10px, 1.25vh, 12px); letter-spacing: 0.08em;
   color: var(--mm-dim); text-transform: uppercase;
-  padding: 6px 12px;
-  background: rgba(20,13,32,0.66);
-  border: 1px solid rgba(146,124,190,0.22);
-  border-radius: 2px;
-  transition: color 0.14s ease, border-color 0.14s ease, background 0.14s ease, transform 0.14s ease;
+  padding: 3px 12px; background: none; border: 0; border-radius: 0;
+  transition: color 0.14s ease, text-shadow 0.14s ease;
+}
+.mm-chip + .mm-chip::before {
+  content: ""; position: absolute; left: 0; top: 20%; bottom: 20%;
+  width: 1px; background: rgba(146,124,190,0.28);
 }
 .mm-chip:hover, .mm-chip:focus-visible {
-  outline: none; color: #fff; transform: translateY(-1px);
-  border-color: rgba(255,194,61,0.6);
-  background: rgba(40,24,58,0.9);
-  box-shadow: 0 0 16px rgba(255,194,61,0.25);
+  outline: none; color: #fff;
+  text-shadow: 0 0 12px rgba(255,194,61,0.55);
 }
 .mm-toggle-on { color: var(--mm-cyan); font-weight: 700; }
 .mm-toggle-off { color: var(--mm-faint); font-weight: 700; }
@@ -445,7 +454,7 @@
 }
 .mm-otd-v {
   font-family: var(--mm-display); font-size: clamp(18px, 2.6vh, 26px);
-  letter-spacing: 0.02em; color: #fff; transform: skewX(-6deg);
+  letter-spacing: 0.02em; color: #fff; transform: skewX(-8deg);
   text-shadow: 0 0 16px color-mix(in srgb, var(--accent,#FFC23D) 60%, transparent);
 }
 
@@ -507,7 +516,7 @@
 }
 .mm-fighter-name {
   font-family: var(--mm-display); font-size: clamp(20px, 2.8vh, 30px);
-  letter-spacing: 0.03em; color: #fff; transform: skewX(-5deg);
+  letter-spacing: 0.03em; color: #fff; transform: skewX(-8deg);
   text-shadow: 0 0 14px color-mix(in srgb, var(--faccent,#FFC23D) 55%, transparent);
 }
 .mm-fighter-arch {
@@ -519,25 +528,23 @@
   align-self: center;
   margin-bottom: clamp(30px, 6vh, 80px);
   font-family: var(--mm-display);
-  font-size: clamp(56px, 10vh, 116px); line-height: 1;
-  background: linear-gradient(180deg, #FFFFFF 0%, #FFE07A 40%, #FF9A1F 72%, #FF3B6B 100%);
+  font-size: clamp(60px, 11vh, 124px); line-height: 1;
+  background: linear-gradient(180deg, #FFFFFF 0%, #FFD24A 46%, #FF8A1B 74%, #F0431F 100%);
   -webkit-background-clip: text; background-clip: text; color: transparent;
   -webkit-text-stroke: 3px #0a0510;
   transform: skewX(-8deg);
-  filter:
-    drop-shadow(2px 2px 0 #0a0510) drop-shadow(4px 5px 0 #0a0510)
-    drop-shadow(0 6px 10px rgba(0,0,0,0.6)) drop-shadow(0 0 30px rgba(255,46,136,0.4));
+  filter: drop-shadow(3px 4px 0 #0a0510) drop-shadow(0 4px 6px rgba(0,0,0,0.6));
   flex-shrink: 0;
 }
 .mm-anim .mm-vs { animation: mmVsPulse 1.8s ease-in-out infinite; }
 @keyframes mmVsPulse {
   0%, 100% {
     transform: skewX(-8deg) scale(1);
-    filter: drop-shadow(2px 2px 0 #0a0510) drop-shadow(4px 5px 0 #0a0510) drop-shadow(0 6px 10px rgba(0,0,0,0.6)) drop-shadow(0 0 24px rgba(255,140,40,0.35));
+    filter: drop-shadow(3px 4px 0 #0a0510) drop-shadow(0 4px 6px rgba(0,0,0,0.6));
   }
   50% {
-    transform: skewX(-8deg) scale(1.05);
-    filter: drop-shadow(2px 2px 0 #0a0510) drop-shadow(4px 5px 0 #0a0510) drop-shadow(0 6px 10px rgba(0,0,0,0.6)) drop-shadow(0 0 34px rgba(255,46,136,0.7));
+    transform: skewX(-8deg) scale(1.045);
+    filter: drop-shadow(3px 4px 0 #0a0510) drop-shadow(0 4px 6px rgba(0,0,0,0.6)) drop-shadow(0 0 26px rgba(255,140,40,0.5));
   }
 }
 
@@ -638,13 +645,13 @@
   position: relative; display: inline-block;
   font-family: var(--mm-display);
   font-size: clamp(90px, 17vh, 210px); line-height: 0.82;
-  letter-spacing: 0.006em; transform: skewX(-7deg);
-  background: linear-gradient(178deg, #FFFBEA 0%, #FFE96B 19%, #FFC21F 41%, #FF8A12 64%, #F0431F 86%, #B90E2E 100%);
+  letter-spacing: 0.006em; transform: skewX(-8deg);
+  background:
+    radial-gradient(rgba(9,3,10,0.20) 21%, transparent 23%) 0 0 / 8px 8px,
+    linear-gradient(180deg, #FFF7D6 0%, #FFE04A 30%, #FF9E1B 56%, #F0431F 80%, #C21230 100%);
   -webkit-background-clip: text; background-clip: text; color: transparent;
   -webkit-text-stroke: 3.5px #0a0510;
-  filter:
-    drop-shadow(3px 3px 0 #0a0510) drop-shadow(6px 6px 0 #0a0510)
-    drop-shadow(9px 11px 0 rgba(0,0,0,0.5)) drop-shadow(0 18px 26px rgba(0,0,0,0.7));
+  filter: drop-shadow(4px 5px 0 #0a0510) drop-shadow(0 5px 6px rgba(0,0,0,0.7));
 }
 .ss-rule {
   height: 4px; width: clamp(300px, 40vw, 560px); margin: clamp(18px,3vh,32px) 0 0;
@@ -655,7 +662,7 @@
   margin-top: clamp(48px, 8vh, 96px);
   font-family: var(--mm-display);
   font-size: clamp(38px, 6.2vh, 70px); letter-spacing: 0.04em;
-  color: #FFF6E0; transform: skewX(-6deg);
+  color: #FFF6E0; transform: skewX(-8deg);
   text-shadow: 0 0 22px rgba(255,194,61,0.65), 3px 4px 0 rgba(0,0,0,0.6);
 }
 .ss-cta b {
@@ -716,13 +723,13 @@
 }
 .am-logo {
   position: relative; display: inline-block; font-family: var(--mm-display);
-  line-height: 0.82; letter-spacing: 0.006em; transform: skewX(-7deg);
-  background: linear-gradient(178deg, #FFFBEA 0%, #FFE96B 19%, #FFC21F 41%, #FF8A12 64%, #F0431F 86%, #B90E2E 100%);
+  line-height: 0.82; letter-spacing: 0.006em; transform: skewX(-8deg);
+  background:
+    radial-gradient(rgba(9,3,10,0.20) 21%, transparent 23%) 0 0 / 7px 7px,
+    linear-gradient(180deg, #FFF7D6 0%, #FFE04A 30%, #FF9E1B 56%, #F0431F 80%, #C21230 100%);
   -webkit-background-clip: text; background-clip: text; color: transparent;
   -webkit-text-stroke: 3px #0a0510;
-  filter:
-    drop-shadow(3px 3px 0 #0a0510) drop-shadow(6px 6px 0 #0a0510)
-    drop-shadow(8px 10px 0 rgba(0,0,0,0.5)) drop-shadow(0 16px 24px rgba(0,0,0,0.65));
+  filter: drop-shadow(4px 5px 0 #0a0510) drop-shadow(0 4px 6px rgba(0,0,0,0.65));
 }
 .am-anim { animation: amLogoBreathe 3.4s ease-in-out infinite; }
 @keyframes amLogoBreathe {
@@ -730,15 +737,15 @@
   50%      { transform: skewX(-7deg) scale(1.03); }
 }
 .am-prompt {
-  font-family: var(--mm-display); letter-spacing: 0.08em; color: #fff;
-  transform: skewX(-6deg);
-  text-shadow: 0 0 22px rgba(255,194,61,0.8), 0 3px 0 rgba(0,0,0,0.5);
-  animation: amFlash 1.15s steps(1) infinite;
+  font-family: var(--mm-display); letter-spacing: 0.06em; color: var(--mm-amber);
+  transform: skewX(-8deg);
+  text-shadow: 0 0 26px rgba(255,140,40,0.75), 3px 4px 0 rgba(0,0,0,0.6);
+  animation: amFlash 1.05s steps(1) infinite;
 }
-@keyframes amFlash { 0%, 62% { opacity: 1; } 63%, 100% { opacity: 0.32; } }
+@keyframes amFlash { 0%, 60% { opacity: 1; } 61%, 100% { opacity: 0.22; } }
 .am-banner {
   font-family: var(--mm-display); letter-spacing: 0.06em; color: #fff;
-  transform: skewX(-6deg); text-shadow: 0 0 28px rgba(255,46,136,0.6), 0 4px 0 rgba(0,0,0,0.55);
+  transform: skewX(-8deg); text-shadow: 0 0 28px rgba(255,46,136,0.6), 3px 4px 0 rgba(0,0,0,0.55);
 }
 .am-label {
   font-family: var(--mm-ui); font-weight: 700; letter-spacing: 0.24em; text-transform: uppercase;

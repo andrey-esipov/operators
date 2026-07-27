@@ -139,8 +139,8 @@ export function AttractMode({ onExit }: Props) {
       <div
         className="am-prompt"
         style={{
-          position: 'absolute', left: 0, right: 0, bottom: 30, zIndex: 41,
-          textAlign: 'center', fontSize: 18, pointerEvents: 'none',
+          position: 'absolute', left: 0, right: 0, bottom: 44, zIndex: 41,
+          textAlign: 'center', fontSize: 40, pointerEvents: 'none',
         }}
       >
         PRESS&nbsp; START

@@ -434,11 +434,15 @@ export class PostPipeline implements Subsystem, RenderDriver {
     this.grade.setCharDepth(farDist + 1.1, 2.4)
     this.grade.setCharMatte(this._charA, this._charB, this._charHalf)
 
-    // Background contrast floor rides the same fighter plane: it starts a metre
-    // and a half behind the farther fighter (so nothing co-planar with a
-    // character is ever compressed) and reaches full strength across the next
-    // ten units, which covers every arena's back wall and skyline.
-    if (!this.bgFloorOff) this.grade.setBgFloor(farDist + 3.4, farDist + 13.5)
+    // Background contrast floor rides the same fighter plane. The ramp has to be
+    // TIGHT: measured on ai-native and ipo-prep, the highlights that actually
+    // sit against a fighter's head are the stage practicals a few units behind
+    // them, not the distant skyline, and a wide 3.4..13.5 ramp left the gate at
+    // ~0.06 there -- the floor was effectively off on the two stages that needed
+    // it most. Start just past the farther fighter and reach full strength
+    // within seven units. Fighters themselves sit at or nearer than farDist, so
+    // the gate is exactly 0 on them.
+    if (!this.bgFloorOff) this.grade.setBgFloor(farDist + 1.4, farDist + 7.0)
 
     // The finalize pass re-asserts the same matte after bloom (see below).
     this.finalize.setCharDepth(farDist + 1.1, 2.4)

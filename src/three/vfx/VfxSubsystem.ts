@@ -639,26 +639,29 @@ export class VfxSubsystem implements Subsystem {
 
     // Beat 1 (0ms): blinding contact — brief flash + massive light + a HERO gold
     // star sheared along the launch. The star (not a white sun) carries the read.
-    this.lights.pop(p, white, 26, 0.5, 0.04, 22)
+    // Light range kept below full-arena so the blast reads as a bright fireball
+    // with dark frame edges, not a flat full-screen colour wash on bright stages.
+    this.lights.pop(p, white, 20, 0.42, 0.04, 15)
     this.flashMat.uniforms.uColor.value.copy(C(0xffe6a3))
     this.flashMat.uniforms.uColor2.value.copy(orange)
     this.flashMat.uniforms.uSpikes.value = 2.2
     this.flashMat.uniforms.uStreak.value = 3.0
     this.flash.position.copy(p)
-    this.flash.scale.setScalar(1.4)
+    this.flash.scale.setScalar(1.35)
     this.flash.visible = true
-    this.flashMax = 0.16
-    this.flashLife = 0.16
+    this.flashMax = 0.08
+    this.flashLife = 0.08
     this.additive.emit({
       position: p, count: 1, speed: 0, color: gold, color2: orange,
       size: 1.3, life: 0.3, gravity: 0, drag: 0.001, shape: 'flare', intensity: 1.4,
     })
     // hero directional gold star — the defining KO silhouette. Sized LARGE so its
     // spikes punch out well past the central hot mass (otherwise bloom fills the
-    // gaps and the money shot reads as a blob instead of a star).
-    this.waves.spawn('star', p, 10.5, 1.0, white, gold, 1.5, 1.5)
+    // gaps and the money shot reads as a blob instead of a star) — but not so large
+    // or bright it overruns the frame into a flat colour wash on graded stages.
+    this.waves.spawn('star', p, 8.5, 1.0, gold, orange, 1.7, 1.5)
     // directional compression front punched along the launch vector
-    this.waves.spawn('shock', p.clone().add(launch.clone().multiplyScalar(0.7)), 9.0, 0.95, white, orange, 0.85, 1.4)
+    this.waves.spawn('shock', p.clone().add(launch.clone().multiplyScalar(0.7)), 8.0, 0.95, white, orange, 0.85, 1.4)
     // immediate impact crater on the floor so the ground registers the finish
     this.decals.spawn('scorch', feet, 3.0, 2.4, orange, C(0x180402), 1.1)
     this.decals.spawn('ring', feet, 3.4, 0.5, gold, orange, 1.6)
@@ -672,15 +675,15 @@ export class VfxSubsystem implements Subsystem {
     // Beat 2 (60ms): the blast — spark storm + debris + ground rupture, all
     // sheared along the launch vector so the force reads as directional.
     this.schedule(0.06, () => {
-      this.lights.pop(p, gold, 20, 0.4, 0.08, 18)
+      this.lights.pop(p, gold, 15, 0.36, 0.08, 13)
       this.additive.emit({
-        position: p, count: 240, speed: 21, speedVariance: 0.85, direction: launch, spread: 1.15,
+        position: p, count: 170, speed: 21, speedVariance: 0.85, direction: launch, spread: 1.15,
         color: white, color2: orange, size: 0.13, sizeVariance: 0.9, life: 1.1, lifeVariance: 0.4,
         gravity: -14, drag: 1.1, shape: 'spark', stretch: 4.2, intensity: 2.7, jitter: 0.4, spin: 9,
       })
       // a radial minority so it still bursts in all directions
       this.additive.emit({
-        position: p, count: 90, speed: 17, speedVariance: 0.85, color: white, color2: orange,
+        position: p, count: 60, speed: 17, speedVariance: 0.85, color: white, color2: orange,
         size: 0.12, sizeVariance: 0.9, life: 1.0, lifeVariance: 0.4, gravity: -14, drag: 1.2,
         shape: 'spark', stretch: 3.4, intensity: 2.5, jitter: 0.4, spin: 9,
       })

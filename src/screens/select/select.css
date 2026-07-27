@@ -110,17 +110,17 @@
 .sel-hero-slab {
   position: absolute;
   left: 50%;
-  top: 8%;
-  width: 78%;
-  height: 82%;
+  top: 4%;
+  width: 88%;
+  height: 90%;
   transform: translateX(-50%);
   background: linear-gradient(180deg,
-    color-mix(in srgb, var(--sel-accent) 65%, transparent) 0%,
-    color-mix(in srgb, var(--sel-accent) 18%, transparent) 55%,
+    color-mix(in srgb, var(--sel-accent) 68%, transparent) 0%,
+    color-mix(in srgb, var(--sel-accent) 22%, transparent) 55%,
     transparent 100%);
-  clip-path: polygon(14% 0, 100% 6%, 88% 100%, 0 92%);
+  clip-path: polygon(12% 0, 100% 5%, 90% 100%, 0 94%);
   filter: blur(1px);
-  opacity: 0.85;
+  opacity: 0.9;
 }
 
 /* Big rim-light halo directly behind the sprite. */
@@ -178,11 +178,11 @@
   position: absolute;
   left: 50%;
   bottom: 3%;
-  width: 58%;
-  height: 34px;
+  width: 66%;
+  height: 42px;
   transform: translateX(-50%);
   background: radial-gradient(50% 50% at 50% 50%,
-    color-mix(in srgb, var(--sel-accent) 75%, transparent) 0%, transparent 72%);
+    color-mix(in srgb, var(--sel-accent) 82%, transparent) 0%, transparent 74%);
   filter: blur(3px);
 }
 

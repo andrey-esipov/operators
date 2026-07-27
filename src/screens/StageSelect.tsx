@@ -372,8 +372,14 @@ function FighterBonusRow({ side, name, mult }: { side: 'a' | 'b'; name: string; 
       }}
     >
       <span style={{ color: sideColor }}>{side === 'a' ? 'P1 ' : 'P2 '}{name}</span>
-      <span style={{ color: pct >= 30 ? '#06D6A0' : pct > 0 ? '#FFD60A' : '#FFFFFF99' }}>
-        {sign}{pct}% DMG
+      <span
+        className="text-[12px]"
+        style={{
+          color: pct >= 30 ? '#0AF0A8' : pct > 0 ? '#FFD60A' : pct < 0 ? '#FF6B6B' : '#FFFFFFcc',
+          textShadow: pct !== 0 ? `0 0 8px ${pct >= 30 ? '#0AF0A8' : pct > 0 ? '#FFD60A' : '#FF6B6B'}66, 1px 1px 0 rgba(0,0,0,0.8)` : '1px 1px 0 rgba(0,0,0,0.8)',
+        }}
+      >
+        {sign}{pct}% <span className="text-[8px] opacity-70">DMG</span>
       </span>
     </div>
   )

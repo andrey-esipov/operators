@@ -257,10 +257,11 @@ export function CharacterSelect() {
           </button>
         </div>
         <h1
-          className="font-display text-2xl tracking-widest relative"
+          className="font-display text-lg tracking-widest relative"
           style={{
-            color: '#FFD60A',
-            textShadow: `3px 3px 0 rgba(0,0,0,0.7), 0 0 22px ${sideGlow}66`,
+            color: '#C79216',
+            textShadow: `2px 2px 0 rgba(0,0,0,0.7), 0 0 12px ${sideGlow}44`,
+            opacity: 0.92,
           }}
         >
           {storyMode
@@ -367,14 +368,21 @@ export function CharacterSelect() {
             </div>
           )}
 
-          {/* FILTER BAR — housed in one material panel so it reads as an
-              arcade control cluster, not a row of free-floating web chips. */}
+          {/* FILTER CONSOLE — a recessed material panel so the chips read as
+              raised switches sitting inside a physical control cluster. */}
           <div
-            className="sel-panel flex-shrink-0 flex flex-col gap-2 px-3 py-2"
-            style={{ clipPath: 'polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px)' }}
+            className="flex-shrink-0 flex flex-col gap-2 px-3 py-2.5"
+            style={{
+              background: 'linear-gradient(180deg, rgba(8,5,14,0.94), rgba(17,11,27,0.92))',
+              boxShadow: 'inset 0 3px 10px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.06), inset 0 0 0 1px rgba(255,255,255,0.05)',
+              clipPath: 'polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px)',
+            }}
           >
             <div className="flex flex-wrap items-center gap-1.5">
-              <span className="font-display text-[8px] tracking-widest text-white/40 pr-1">DISCIPLINE</span>
+              <span
+                className="font-display text-[8px] tracking-widest px-1.5 py-1 mr-0.5"
+                style={{ color: 'rgba(255,255,255,0.5)', background: 'rgba(0,0,0,0.5)', boxShadow: 'inset 1px 1px 0 rgba(0,0,0,0.6)', letterSpacing: '0.15em' }}
+              >DISCIPLINE</span>
               {DISCIPLINE_FILTER_ORDER.map((d) => (
             <FilterChip
               key={d}
@@ -387,7 +395,10 @@ export function CharacterSelect() {
           ))}
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
-          <span className="font-display text-[8px] tracking-widest text-white/40 pr-1">ERA</span>
+          <span
+            className="font-display text-[8px] tracking-widest px-1.5 py-1 mr-0.5"
+            style={{ color: 'rgba(255,255,255,0.5)', background: 'rgba(0,0,0,0.5)', boxShadow: 'inset 1px 1px 0 rgba(0,0,0,0.6)', letterSpacing: '0.15em' }}
+          >ERA</span>
           {ERA_FILTER_ORDER.map((e) => (
             <FilterChip
               key={e}
@@ -400,19 +411,19 @@ export function CharacterSelect() {
           ))}
           <div className="flex-1" />
           <div
-            className="flex items-center gap-1 px-2 py-1"
+            className="flex items-center gap-1.5 px-2 py-1"
             style={{
-              background: 'rgba(0,0,0,0.55)',
+              background: 'linear-gradient(180deg, rgba(0,0,0,0.7), rgba(0,0,0,0.5))',
               border: `1px solid ${query ? sideColor : 'rgba(255,255,255,0.18)'}`,
               boxShadow: query
-                ? `inset 2px 2px 0 rgba(0,0,0,0.55), 0 0 10px ${sideColor}44`
-                : 'inset 2px 2px 0 rgba(0,0,0,0.55)',
+                ? `inset 2px 2px 4px rgba(0,0,0,0.75), inset -1px -1px 0 rgba(255,255,255,0.12), 0 0 10px ${sideColor}44`
+                : 'inset 2px 2px 4px rgba(0,0,0,0.75), inset -1px -1px 0 rgba(255,255,255,0.12)',
               clipPath: 'polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%, 0 5px)',
               minWidth: 150,
               maxWidth: 220,
             }}
           >
-            <span aria-hidden className="font-display text-[9px]" style={{ color: query ? sideColor : 'rgba(255,255,255,0.35)' }}>⌕</span>
+            <span aria-hidden className="font-display text-[11px] leading-none" style={{ color: query ? sideColor : 'rgba(255,255,255,0.5)', textShadow: query ? `0 0 6px ${sideColor}` : 'none' }}>⌕</span>
             <input
               type="text"
               value={query}

@@ -67,6 +67,10 @@ interface HitSpec {
   /** Lowpassed noise burst co-located with the body — roughens the low end (kills the clean sine rail). */
   bodyGrit?: { level: number; lp: number; dur: number }
   sub?: { level: number; f0: number; f1: number; dur: number }
+  /** Punchy 60–120Hz transient "thump" — concentrated low-mid body at the moment
+   * of contact. Short + fast so it adds measurable 60–120Hz authority AND crest
+   * (it's a transient, not a sustained tone). */
+  thump?: { level: number; f0: number; dur: number }
   texture: { level: number; bp: number; q: number; dur: number; color: NoiseColor; spread?: number; haas?: number }
   ring?: { level: number; partials: number[]; dur: number; type?: OscillatorType; spread?: number }
   drive: number // 0..1 waveshaper aggression
@@ -254,6 +258,22 @@ function oneHit(
     end = Math.max(end, sWhen + s.dur)
   }
 
+  // 3b) THUMP — a punchy 60–120Hz half-cycle at contact. Short + steep so its
+  //     energy lands on the transient (raising 60–120Hz authority AND crest).
+  if (spec.thump) {
+    const t = spec.thump
+    const tWhen = when + 0.0015
+    const { osc, gain } = oscVoice(ctx, 'sine', t.f0)
+    osc.frequency.setValueAtTime(t.f0 * 1.6, tWhen) // quick drop = "thud"
+    osc.frequency.exponentialRampToValueAtTime(t.f0, tWhen + t.dur * 0.7)
+    gain.connect(g)
+    gain.gain.setValueAtTime(0.0001, tWhen)
+    gain.gain.linearRampToValueAtTime(t.level, tWhen + 0.004)
+    gain.gain.exponentialRampToValueAtTime(0.0001, tWhen + t.dur)
+    osc.start(tWhen); osc.stop(tWhen + t.dur + 0.02)
+    end = Math.max(end, tWhen + t.dur)
+  }
+
   // 4) TEXTURE — broadband noise crunch as TWO decorrelated voices panned L/R
   //    (different centres + seeds), with an optional Haas delay on one side to
   //    widen the stereo image. Sub/body stay mono; the "air" spreads.
@@ -362,11 +382,12 @@ function lightSpec(p: number): HitSpec {
 function heavySpec(p: number): HitSpec {
   return {
     gain: 1.05 * (0.85 + 0.3 * p),
-    crack: { level: 1.15, punch: 3.0, hp: 1500, lp: 9000, attack: 0.0009, dur: 0.010, color: 'white' },
+    crack: { level: 1.2, punch: 3.4, hp: 1500, lp: 9000, attack: 0.0008, dur: 0.010, color: 'white' },
     sizzle: { level: 0.55, hp: 2000, dur: 0.09, color: 'pink' },
     body: { level: 0.95, f0: 120, f1: 44, dur: 0.24, type: 'sine', partial: 2.7, partialLevel: 0.28 },
-    bodyGrit: { level: 0.85, lp: 620, dur: 0.16 },
+    bodyGrit: { level: 0.8, lp: 620, dur: 0.16 },
     sub: { level: 1.05, f0: 56, f1: 30, dur: 0.3 },
+    thump: { level: 1.25, f0: 82, dur: 0.11 },
     texture: { level: 0.6, bp: 1300, q: 0.85, dur: 0.15, color: 'pink', spread: 1.0, haas: 0.009 },
     ring: { level: 0.16, partials: [178, 267, 401, 590], dur: 0.22, type: 'sine', spread: 0.5 },
     drive: 0.28,
@@ -394,7 +415,7 @@ function exSpec(p: number): HitSpec {
   return {
     gain: 1.5 * (0.85 + 0.3 * p),
     // electric identity: bright, buzzy, sawtooth body + a long fluttering buzz.
-    crack: { level: 0.98, punch: 2.6, hp: 3800, attack: 0.0005, dur: 0.006, color: 'blue' },
+    crack: { level: 1.1, punch: 3.1, hp: 3800, attack: 0.0005, dur: 0.006, color: 'blue' },
     sizzle: { level: 0.58, hp: 4400, dur: 0.1, color: 'blue', spread: 0.95 },
     body: { level: 1.0, f0: 158, f1: 72, dur: 0.17, type: 'sawtooth', partial: 2.0, partialLevel: 0.3 },
     bodyGrit: { level: 0.6, lp: 950, dur: 0.14 },
@@ -437,23 +458,30 @@ export function renderImpact(
 
     case 'combo': {
       // 3-hit rising flurry, each a bit brighter + higher, then a heavy capper.
+      // The capper lands after a short gap so the flurry has decayed away — the
+      // finishing blow rises sharply from near-silence (sub-5ms local transient)
+      // and is the clear global peak.
       let end = when
-      const gaps = [0, 0.075, 0.15]
+      const gaps = [0, 0.07, 0.14]
       gaps.forEach((gp, i) => {
-        const s = lightSpec(0.7)
-        s.gain *= 0.85 + i * 0.12
-        s.body.f0 *= 1 + i * 0.12
-        s.body.dur *= 0.8
-        s.crack.hp *= 1 + i * 0.1
-        s.reverbSend = 0.1
+        const s = lightSpec(0.5)
+        s.gain *= 0.5 + i * 0.08
+        s.body.f0 *= 1 + i * 0.09
+        s.body.dur *= 0.5
+        if (s.sizzle) s.sizzle.level *= 0.4      // darker flurry so combo separates
+        s.crack.hp *= 0.8                         // spectrally from the brighter shatter
+        s.crack.lp = 6500
+        s.reverbSend = 0.03
         end = Math.max(end, oneHit(ctx, routing, when + gp, s, pan + (i - 1) * 0.15, seed + i * 17))
       })
-      const cap = heavySpec(0.85)
-      cap.gain *= 0.95
-      cap.body.dur *= 0.7
-      cap.sub!.dur *= 0.5
-      cap.reverbSend = 0.09
-      end = Math.max(end, oneHit(ctx, routing, when + 0.24, cap, pan, seed + 91))
+      const cap = critSpec(1.0)   // bright, sharp capper: its HF transient survives the
+      cap.gain *= 1.25            // limiter as the global peak (a bass-heavy hit gets
+      cap.crack.level *= 1.2      // squashed below the flurry cracks → inflated riseMs)
+      cap.crack.punch *= 1.2
+      cap.thump = { level: 1.3, f0: 84, dur: 0.12 } // low-end weight for the finisher
+      cap.body.dur *= 0.9
+      cap.reverbSend = 0.1
+      end = Math.max(end, oneHit(ctx, routing, when + 0.32, cap, pan, seed + 91))
       return end + IMPACT_END_PAD
     }
 
@@ -478,7 +506,7 @@ export function renderImpact(
       // on white noise) with dispersion + pitch drift, so they read as fracturing
       // debris rather than a bank of stationary sine rails.
       for (let i = 0; i < 20; i++) {
-        const f = 1400 + rnd() * 6200
+        const f = 2400 + rnd() * 7200
         const nb2 = noiseBuffer(ctx, 0.7, { color: 'white', stereo: true, seed: seed + 200 + i * 7 })
         const sv = bufferVoice(ctx, nb2)
         const bp2 = ctx.createBiquadFilter(); bp2.type = 'bandpass'; bp2.Q.value = 22 + rnd() * 26
@@ -497,7 +525,7 @@ export function renderImpact(
       // crackle
       const nb = noiseBuffer(ctx, 0.5, { color: 'blue', seed: seed + 3 })
       const { src, gain } = bufferVoice(ctx, nb)
-      const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 3000
+      const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 4200
       gain.disconnect(); src.connect(gain); gain.connect(hp); hp.connect(g)
       gain.gain.setValueAtTime(0.28, when + 0.01)
       gain.gain.exponentialRampToValueAtTime(0.0001, when + 0.4)
@@ -527,11 +555,12 @@ export function renderImpact(
       // (b) the impact
       const big: HitSpec = {
         gain: 1.15, 
-        crack: { level: 1.05, punch: 3.4, hp: 1400, lp: 11000, attack: 0.0016, dur: 0.014, color: 'white' },
+        crack: { level: 1.1, punch: 3.9, hp: 1400, lp: 11000, attack: 0.0016, dur: 0.014, color: 'white' },
         sizzle: { level: 0.6, hp: 1800, dur: 0.14, color: 'white' },
         body: { level: 1.15, f0: 115, f1: 44, dur: 0.5, type: 'sine', partial: 2.6, partialLevel: 0.3 },
         bodyGrit: { level: 0.9, lp: 600, dur: 0.32 },
         sub: { level: 1.25, f0: 62, f1: 24, dur: 0.9 },
+        thump: { level: 1.5, f0: 84, dur: 0.15 },
         texture: { level: 0.62, bp: 1400, q: 0.8, dur: 0.4, color: 'brown', spread: 0.9, haas: 0.011 },
         ring: { level: 0.26, partials: [96, 151, 233, 337], dur: 0.6, type: 'sine', spread: 0.5 },
         drive: 0.45,
@@ -546,7 +575,7 @@ export function renderImpact(
       lp.connect(routing.out)
       if (routing.reverb) { const s = ctx.createGain(); s.gain.value = 0.5; lp.connect(s); s.connect(routing.reverb) }
       rv.gain.gain.setValueAtTime(0.0001, hitAt + 0.02)
-      rv.gain.gain.linearRampToValueAtTime(0.5, hitAt + 0.08)
+      rv.gain.gain.linearRampToValueAtTime(0.42, hitAt + 0.08)
       rv.gain.gain.exponentialRampToValueAtTime(0.0001, hitAt + 1.3)
       rv.src.start(hitAt + 0.02); rv.src.stop(hitAt + 1.4)
       return Math.max(end, hitAt + 1.3) + IMPACT_END_PAD
@@ -601,26 +630,35 @@ export function renderImpact(
       }
       end = Math.max(end, oneHit(ctx, routing, hit2, s2, pan, seed + 11))
 
-      // (c) ascending sparkle arp — bright triangle notes with a touch of pitch
-      // drift + vibrato so they shimmer instead of sitting as clean rails.
+      // (c) ascending sparkle arp — each note is a NOISE-EXCITED RESONATOR shard
+      // (noise → high-Q bandpass with frequency drift) instead of a clean triangle,
+      // so it shimmers as a granular burst rather than a stationary horizontal rail.
       const spk = [1568, 1976, 2637, 3520, 4699]
       const arng = mulberryLite(seed + 55)
       spk.forEach((f, i) => {
-        const o = ctx.createOscillator(); o.type = 'triangle'; o.frequency.value = f
         const t0 = hit2 + 0.18 + i * 0.07
-        o.frequency.setValueAtTime(f * (1.01 + arng() * 0.01), t0)
-        o.frequency.exponentialRampToValueAtTime(f * (0.985 + arng() * 0.01), t0 + 0.32)
-        const vib = ctx.createOscillator(); vib.type = 'sine'; vib.frequency.value = 6 + arng() * 4
-        const vibG = ctx.createGain(); vibG.gain.value = f * 0.006
-        vib.connect(vibG); vibG.connect(o.frequency); vib.start(t0); vib.stop(t0 + 0.35)
-        const gg = ctx.createGain()
+        const dur = 0.3
+        const nb = noiseBuffer(ctx, dur * 1.3, { color: 'white', stereo: false, seed: seed + 300 + i * 13 })
+        const { src, gain: ng } = bufferVoice(ctx, nb)
+        const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 24 + arng() * 12
+        const f0 = f * (1.01 + arng() * 0.012)
+        bp.frequency.setValueAtTime(f0 * 1.02, t0)
+        bp.frequency.exponentialRampToValueAtTime(f * (0.985 + arng() * 0.01), t0 + dur)
         const sp = ctx.createStereoPanner(); sp.pan.value = clamp(pan + (i % 2 ? 0.8 : -0.8), -1, 1)
-        o.connect(gg); gg.connect(sp); sp.connect(routing.out)
-        gg.gain.setValueAtTime(0.0001, t0)
-        gg.gain.linearRampToValueAtTime(0.12, t0 + 0.008)
-        gg.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.32)
-        o.start(t0); o.stop(t0 + 0.36)
-        end = Math.max(end, t0 + 0.32)
+        ng.disconnect(); src.connect(ng); ng.connect(bp); bp.connect(sp); sp.connect(routing.out)
+        ng.gain.setValueAtTime(0.0001, t0)
+        ng.gain.linearRampToValueAtTime(0.42, t0 + 0.006)
+        ng.gain.exponentialRampToValueAtTime(0.0001, t0 + dur)
+        src.start(t0); src.stop(t0 + dur + 0.02)
+        // faint pure tone (0.3×) purely for pitch definition — too quiet to rail.
+        const o = ctx.createOscillator(); o.type = 'triangle'; o.frequency.value = f0
+        o.frequency.exponentialRampToValueAtTime(f * 0.99, t0 + dur * 0.6)
+        const og = ctx.createGain(); o.connect(og); og.connect(sp)
+        og.gain.setValueAtTime(0.0001, t0)
+        og.gain.linearRampToValueAtTime(0.03, t0 + 0.008)
+        og.gain.exponentialRampToValueAtTime(0.0001, t0 + dur * 0.6)
+        o.start(t0); o.stop(t0 + dur * 0.6 + 0.02)
+        end = Math.max(end, t0 + dur)
       })
       return end + IMPACT_END_PAD
     }
@@ -632,11 +670,12 @@ export function renderImpact(
       const big: HitSpec = {
         gain: 1.65, 
         // KO needs a BROADBAND CRACK, not just rumble — bright, wide, violent.
-        crack: { level: 1.05, punch: 3.4, hp: 1800, attack: 0.0014, dur: 0.016, color: 'white' },
+        crack: { level: 1.2, punch: 3.9, hp: 1800, attack: 0.0012, dur: 0.016, color: 'white' },
         sizzle: { level: 0.5, hp: 2400, dur: 0.14, color: 'white', spread: 0.95 },
-        body: { level: 1.35, f0: 105, f1: 42, dur: 0.6, type: 'sine', partial: 2.7, partialLevel: 0.3 },
-        bodyGrit: { level: 0.95, lp: 800, dur: 0.95 },
-        sub: { level: 1.6, f0: 55, f1: 24, dur: 0.95 },
+        body: { level: 1.3, f0: 105, f1: 42, dur: 0.5, type: 'sine', partial: 2.7, partialLevel: 0.3 },
+        bodyGrit: { level: 0.8, lp: 800, dur: 0.6 },
+        sub: { level: 1.4, f0: 55, f1: 24, dur: 0.7 },
+        thump: { level: 1.7, f0: 78, dur: 0.16 },
         texture: { level: 0.85, bp: 2200, q: 0.6, dur: 0.6, color: 'white', spread: 1.0, haas: 0.014 },
         ring: { level: 0.34, partials: [2100, 3300, 4700, 6100], dur: 0.45, type: 'sine', spread: 1.0 },
         drive: 0.4,
@@ -653,7 +692,7 @@ export function renderImpact(
       gg.connect(lp); lp.connect(routing.out)
       if (routing.reverb) { const s = ctx.createGain(); s.gain.value = 0.6; lp.connect(s); s.connect(routing.reverb) }
       gg.gain.setValueAtTime(0.0001, when + 0.05)
-      gg.gain.linearRampToValueAtTime(0.3, when + 0.1)
+      gg.gain.linearRampToValueAtTime(0.24, when + 0.1)
       gg.gain.exponentialRampToValueAtTime(0.0001, when + 1.0)
       o.start(when + 0.05); o.stop(when + 1.05)
       return Math.max(end, when + 1.0) + IMPACT_END_PAD

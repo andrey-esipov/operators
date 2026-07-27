@@ -15,7 +15,7 @@ import type { EngineContext, QualityTier } from '../types'
  *   halo   — soft energy disc that flashes and fades (contact bloom)
  */
 
-type WaveMode = 'shock' | 'radial' | 'halo' | 'star' | 'crystal'
+type WaveMode = 'shock' | 'radial' | 'halo' | 'star' | 'crystal' | 'bolt' | 'beam'
 
 interface Wave {
   mesh: THREE.Mesh
@@ -90,7 +90,7 @@ export class Shockwave {
     w.mat.uniforms.uColor.value.copy(color)
     w.mat.uniforms.uColor2.value.copy(color2)
     w.mat.uniforms.uMode.value =
-      mode === 'shock' ? 0 : mode === 'radial' ? 1 : mode === 'halo' ? 2 : mode === 'star' ? 3 : 4
+      mode === 'shock' ? 0 : mode === 'radial' ? 1 : mode === 'halo' ? 2 : mode === 'star' ? 3 : mode === 'crystal' ? 4 : mode === 'bolt' ? 5 : 6
     w.mat.uniforms.uIntensity.value = intensity
     w.mat.uniforms.uSeed.value = Math.random() * 10
     w.mat.uniforms.uAge.value = 0
@@ -124,7 +124,7 @@ const WAVE_FRAG = /* glsl */ `
   uniform float uAge;    // 0..1
   uniform vec3  uColor;
   uniform vec3  uColor2;
-  uniform float uMode;   // 0 shock, 1 radial, 2 halo
+  uniform float uMode;   // 0 shock,1 radial,2 halo,3 star,4 crystal,5 bolt,6 beam
   uniform float uIntensity;
   uniform float uSeed;
 
@@ -150,6 +150,16 @@ const WAVE_FRAG = /* glsl */ `
   // A thin, bright ring at radius 'rad' with half-width 'w'.
   float ring(float r, float rad, float w){
     return smoothstep(w, 0.0, abs(r - rad));
+  }
+
+  // Structured hot core: a bright centre broken up by turbulence so it never
+  // reads as a flat blown-out white blob. White only at the pinpoint; the body
+  // is tinted so the flavour colour survives bloom + grade.
+  vec3 hotCore(float r, float ang, vec3 tint, float radius, float seed){
+    float body = smoothstep(radius, 0.0, r);
+    float churn = 0.45 + 0.9 * fbm(vec2(cos(ang), sin(ang)) * 5.0 + vec2(seed, -uAge * 3.0));
+    float pin = smoothstep(radius * 0.32, 0.0, r);      // tiny white pinpoint
+    return tint * pow(body, 1.6) * churn * 2.2 + vec3(1.0) * pin * 1.6;
   }
 
   void main(){
@@ -192,7 +202,7 @@ const WAVE_FRAG = /* glsl */ `
       if (a < 0.005) discard;
       gl_FragColor = vec4(col, a);
     } else if (uMode < 1.5) {
-      // RADIAL: super burst — sharp, uneven light rays from the centre.
+      // RADIAL: super burst — dense, uneven light shafts from a structured core.
       float aa = ang * 22.0;
       // irregular ray lengths so it doesn't read as a perfect gear
       float raylen = 0.5 + 0.5 * hash(floor(ang * 22.0 / 6.2831 * 22.0) + uSeed);
@@ -203,11 +213,11 @@ const WAVE_FRAG = /* glsl */ `
       float radial = smoothstep(1.0, 0.12, r);
       float grow = smoothstep(0.0, 0.1, uAge);
       float fade = 1.0 - smoothstep(0.3, 1.0, uAge);
-      float core = smoothstep(0.28, 0.0, r);
-      float a = clamp((rays * radial * 0.95 + core) * grow * fade, 0.0, 1.0);
-      // energy colour owns the rays; white only at the pinpoint core so the
-      // super reads as a coloured star-burst, not a featureless whiteout.
-      vec3 col = uColor2 * (rays * radial * 2.4 + 0.3) + vec3(1.0) * core * 2.6;
+      // structured, churning core instead of a flat white disc
+      vec3 core = hotCore(r, ang, uColor2, 0.42, uSeed);
+      float coreA = smoothstep(0.42, 0.0, r);
+      float a = clamp((rays * radial * 0.95 + coreA) * grow * fade, 0.0, 1.0);
+      vec3 col = uColor2 * (rays * radial * 2.4 + 0.25) + core;
       col *= uIntensity;
       if (a < 0.005) discard;
       gl_FragColor = vec4(col, a);
@@ -219,51 +229,125 @@ const WAVE_FRAG = /* glsl */ `
       float churn = 0.55 + 0.7 * fbm(vec2(cos(ang), sin(ang)) * 3.0 + vec2(uSeed, -uAge * 2.0));
       float a = pow(body, 1.7) * grow * fade * churn;
       // hot white only at the very core; the disc body is saturated identity colour
-      float hotcore = smoothstep(0.35, 0.0, r);
-      vec3 col = uColor2 * (0.8 + body * 2.2) + vec3(1.0) * hotcore * 1.4;
+      float hotcore = smoothstep(0.28, 0.0, r);
+      vec3 col = uColor2 * (0.8 + body * 2.2) + vec3(1.0) * hotcore * 1.0;
       col *= uIntensity;
       if (a < 0.005) discard;
       gl_FragColor = vec4(col, a * 0.9);
     } else if (uMode < 3.5) {
-      // STAR: a hard, angular impact star (CRIT signature) — sharp geometric
-      // points, nothing like the soft radial super rays. Reads as a struck-metal
-      // spark cross, giving crit its own unmistakable silhouette.
-      float grow = smoothstep(0.0, 0.06, uAge);
+      // STAR: a hard 6-point impact star (CRIT signature) — sharp, thin spikes
+      // that narrow to a razor tip, with a bright core line down each one. The
+      // sharp geometry gives crit an unmistakable silhouette, nothing like the
+      // soft radial super sun or the electric ex ring.
+      float grow = smoothstep(0.0, 0.05, uAge);
+      float fade = 1.0 - smoothstep(0.24, 1.0, uAge);
+      float ease = 1.0 - pow(1.0 - uAge, 2.6);
+      float N = 6.0;
+      float sector = 6.28318 / N;
+      // angular distance to the nearest of 6 spoke axes
+      float da = abs(mod(ang + sector * 0.5, sector) - sector * 0.5);
+      float reach = 0.98 * ease;
+      float along = smoothstep(reach, 0.0, r);                 // full near centre → tip
+      float halfw = 0.30 * clamp(1.0 - r / max(reach, 0.001), 0.0, 1.0); // narrows to tip
+      float spike = along * smoothstep(halfw, halfw * 0.15, da);
+      float coreline = along * smoothstep(halfw * 0.35, 0.0, da); // bright white spine
+      // small crisp impact ring at the base
+      float baseRing = ring(r, 0.30 * ease, 0.04 * ease + 0.01);
+      vec3 core = hotCore(r, ang, uColor2, 0.24, uSeed);
+      float coreA = smoothstep(0.24, 0.0, r);
+      float a = clamp((spike * 0.85 + coreline + baseRing + coreA) * grow * fade, 0.0, 1.0);
+      vec3 col = uColor2 * (spike * 2.2 + baseRing * 2.0 + 0.2) + vec3(1.0) * coreline * 2.0 + core;
+      col *= uIntensity;
+      if (a < 0.005) discard;
+      gl_FragColor = vec4(col, a);
+    } else if (uMode < 4.5) {
+      // CRYSTAL: an actual faceted glass polygon (SHATTER signature). The shell
+      // is a hard regular-polygon boundary (flat facets, sharp corners), with
+      // straight radial fracture lines lancing from the corners to the centre —
+      // a shattering pane of armour, never a soft round ring.
+      float grow = smoothstep(0.0, 0.04, uAge);
+      float fade = 1.0 - smoothstep(0.32, 1.0, uAge);
+      float ease = 1.0 - pow(1.0 - uAge, 1.9);
+      float N = 7.0;
+      float sector = 6.28318 / N;
+      float rot = uSeed * 1.7;
+      float da = mod(ang + rot + sector * 0.5, sector) - sector * 0.5; // -s/2..s/2
+      // regular-polygon edge distance for this angle (flat facets)
+      float edge = ease * 0.92 * (cos(sector * 0.5) / cos(da));
+      // hard glassy shell band on the polygon boundary
+      float shell = smoothstep(0.055, 0.0, abs(r - edge));
+      // inner concentric facet (a second, smaller pane) for layered glass
+      float edge2 = edge * 0.6;
+      float shell2 = smoothstep(0.035, 0.0, abs(r - edge2)) * 0.6;
+      // straight radial fracture lines running from each corner to the centre
+      float corner = abs(abs(da) - sector * 0.5);       // 0 at a polygon corner
+      float crack = smoothstep(0.02, 0.0, corner) * smoothstep(edge * 1.02, 0.0, r);
+      // fine secondary chip cracks
+      float chip = smoothstep(0.008, 0.0, abs(mod(ang * 3.0 + uSeed, sector) - sector * 0.5))
+                   * smoothstep(edge, edge2, r) * 0.5;
+      vec3 core = hotCore(r, ang, uColor2, 0.22, uSeed) * 0.8;
+      float coreA = smoothstep(0.22, 0.0, r) * 0.8;
+      float a = clamp((shell + shell2 + crack * 0.9 + chip + coreA) * grow * fade, 0.0, 1.0);
+      // bright glassy rim (white) on the shell crest, flavour colour in the body
+      vec3 col = uColor2 * (shell * 1.4 + shell2 + crack * 1.8 + chip * 1.5 + 0.2)
+                 + vec3(1.0) * (shell * 1.3 + crack * 0.6) + core;
+      col *= uIntensity;
+      if (a < 0.005) discard;
+      gl_FragColor = vec4(col, a);
+    } else if (uMode < 5.5) {
+      // BOLT: a crackling electric discharge (EX signature). Thin, jagged
+      // lightning fingers of random length jitter around the centre and a torn
+      // crackle-ring snaps around the rim — reads as raw electricity, clearly
+      // distinct from combo's smooth violet ring.
+      float grow = smoothstep(0.0, 0.03, uAge);
       float fade = 1.0 - smoothstep(0.22, 1.0, uAge);
       float ease = 1.0 - pow(1.0 - uAge, 2.4);
-      float lobes = pow(abs(cos(ang * 3.0)), 7.0);              // 6 hard points
-      float lobesB = pow(abs(cos(ang * 2.0 + 0.7)), 12.0) * 0.7; // 4 sub-points
-      float lobe = max(lobes, lobesB);
-      float reach = (0.28 + 0.68 * lobe) * ease;
-      float spike = smoothstep(reach, reach - 0.42, r) * (0.35 + lobe);
-      // thin bright edge running down each spike
-      float edge = smoothstep(0.06, 0.0, abs(r - reach)) * lobe;
-      float core = smoothstep(0.24, 0.0, r);
-      float a = clamp((spike * 0.85 + edge * 0.9 + core) * grow * fade, 0.0, 1.0);
-      vec3 col = uColor2 * (spike * 2.0 + edge * 2.4 + 0.35) + vec3(1.0) * core * 2.4;
+      float NB = 13.0;
+      float lane = floor((ang + 3.14159) / 6.28318 * NB);
+      float within = fract((ang + 3.14159) / 6.28318 * NB) - 0.5;   // -0.5..0.5 in lane
+      // each bolt wanders sideways with noise as it travels outward
+      float wander = (fbm(vec2(lane * 4.1 + uSeed, r * 7.0 - ease * 6.0)) - 0.5) * 0.7;
+      float bolt = smoothstep(0.16, 0.0, abs(within - wander));
+      // random per-lane length; only some lanes reach far
+      float len = 0.35 + 0.65 * hash(lane + uSeed * 3.0);
+      bolt *= smoothstep(ease * len, ease * len - 0.18, r);
+      bolt *= smoothstep(0.02, 0.10, r);   // clear the very centre
+      // flicker so it feels alive, not a static gear
+      bolt *= 0.55 + 0.9 * fbm(vec2(lane * 2.0, r * 12.0) + uSeed * 4.0);
+      // torn crackle ring
+      float ringR = ease * 0.62 * (0.85 + 0.3 * fbm(vec2(cos(ang), sin(ang)) * 6.0 + uSeed));
+      float crackle = smoothstep(0.05, 0.0, abs(r - ringR))
+                      * (0.5 + 0.8 * pow(0.5 + 0.5 * sin(ang * 24.0 + uSeed * 8.0), 3.0));
+      vec3 core = hotCore(r, ang, uColor2, 0.20, uSeed);
+      float coreA = smoothstep(0.20, 0.0, r);
+      float a = clamp((bolt + crackle + coreA) * grow * fade, 0.0, 1.0);
+      // bolts are white-hot cyan cores
+      vec3 col = uColor2 * (bolt * 1.6 + crackle * 2.0 + 0.2) + vec3(1.0) * (bolt * 1.4 + crackle * 0.6) + core;
       col *= uIntensity;
       if (a < 0.005) discard;
       gl_FragColor = vec4(col, a);
     } else {
-      // CRYSTAL: a faceted, brittle ice shell (SHATTER signature). The radius is
-      // quantised into hard flat facets so the silhouette is angular and glassy,
-      // with radial fracture lines lancing inward — never a soft round ring.
-      float grow = smoothstep(0.0, 0.05, uAge);
-      float fade = 1.0 - smoothstep(0.3, 1.0, uAge);
+      // BEAM: an anime super-flash column (SIGNATURE). A blinding vertical light
+      // pillar with a thin horizontal lens crossbar and secondary radial spokes.
+      // The strong vertical shape is unmistakably different from the round golden
+      // ult sun, so the two biggest supers never collide.
+      float grow = smoothstep(0.0, 0.04, uAge);
+      float fade = 1.0 - smoothstep(0.28, 1.0, uAge);
       float ease = 1.0 - pow(1.0 - uAge, 2.0);
-      float facets = 9.0;
-      float seg = floor((ang + 3.14159) / (6.28318 / facets));
-      float fr = hash(seg + uSeed * 2.0);
-      float rad = ease * (0.66 + 0.4 * fr);
-      float w = mix(0.11, 0.015, uAge);
-      float shell = ring(r, rad, w);
-      // bevel highlight just inside each facet
-      float bevel = smoothstep(0.05, 0.0, abs(r - rad + 0.05)) * 0.6;
-      // radial fracture cracks
-      float crack = pow(0.5 + 0.5 * sin(ang * facets + uSeed * 4.0), 22.0) * smoothstep(rad, 0.0, r);
-      float core = smoothstep(0.26, 0.0, r);
-      float a = clamp((shell + bevel + crack * 0.7 + core) * grow * fade, 0.0, 1.0);
-      vec3 col = uColor2 * (shell * 2.4 + crack * 1.6 + 0.3) + vec3(1.0) * (core * 2.0 + bevel * 1.5);
+      // vertical pillar — narrow in x, tall in y, feathered edges + churn
+      float pillarW = 0.14 + 0.05 * fbm(vec2(d.y * 6.0, uSeed));
+      float pillar = smoothstep(pillarW, 0.0, abs(d.x)) * smoothstep(1.0, 0.1, abs(d.y) * 0.9);
+      // thin horizontal lens crossbar
+      float bar = smoothstep(0.035, 0.0, abs(d.y)) * smoothstep(1.0, 0.0, abs(d.x) * 0.85);
+      // secondary radial spokes so the centre still bursts
+      float spokes = pow(0.5 + 0.5 * sin(ang * 16.0 + uSeed * 6.0), 9.0) * smoothstep(0.9, 0.15, r) * 0.7;
+      float grid = grow * ease;
+      pillar *= grid; bar *= grid; spokes *= grid;
+      vec3 core = hotCore(r, ang, uColor2, 0.34, uSeed);
+      float coreA = smoothstep(0.34, 0.0, r);
+      float a = clamp((pillar + bar + spokes + coreA) * fade, 0.0, 1.0);
+      vec3 col = uColor2 * (pillar * 1.9 + bar * 1.6 + spokes * 2.0 + 0.2)
+                 + vec3(1.0) * (bar * 0.8 + pillar * 0.4) + core;
       col *= uIntensity;
       if (a < 0.005) discard;
       gl_FragColor = vec4(col, a);

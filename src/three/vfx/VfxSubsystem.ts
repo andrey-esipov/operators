@@ -70,6 +70,10 @@ interface Recipe {
 
   // crit-only hard geometric impact star
   starBurst?: boolean
+  // ex-only crackling electric discharge
+  bolt?: boolean
+  // signature-only vertical super-flash pillar
+  beam?: boolean
 }
 
 const C = (hex: number) => new THREE.Color(hex)
@@ -138,7 +142,7 @@ const RECIPES: Record<HitFlavor, Recipe> = {
     groundRing: 1.9, scorch: 0.7, dust: 12,
     smokeCount: 10, emberCount: 24,
     lightPeak: 13, lightDecay: 0.24, lightRange: 12,
-    radial: false,
+    radial: false, bolt: true,
   },
   ult: {
     core: 0xffffff, energy: 0xffcf4d, ember: 0xff6a00, scale: 1.5,
@@ -164,7 +168,7 @@ const RECIPES: Record<HitFlavor, Recipe> = {
     groundRing: 3.8, scorch: 2.2, dust: 36,
     smokeCount: 32, emberCount: 58,
     lightPeak: 22, lightDecay: 0.36, lightRange: 18,
-    radial: true,
+    radial: false, beam: true,
   },
 }
 
@@ -253,10 +257,10 @@ export class VfxSubsystem implements Subsystem {
           star *= pow(max(0.0, 1.0 - r * 0.6), 2.2) * uSpikes;
           // horizontal lens streak
           float streak = smoothstep(0.5, 0.0, abs(d.y) * 8.0) * smoothstep(1.0, 0.0, abs(d.x)) * uStreak;
-          float a = (core * 1.7 + hot * 2.2 + star * 1.1 + streak * 1.3) * uAlpha;
+          float a = (core * 1.6 + hot * 2.0 + star * 1.1 + streak * 1.3) * uAlpha;
           if (a < 0.003) discard;
-          vec3 col = mix(uColor2, uColor, clamp(core + hot, 0.0, 1.0));
-          col += uColor2 * hot * 1.0 + vec3(1.0) * hot * 0.55;
+          vec3 col = mix(uColor2, uColor, clamp(core * 0.7 + hot, 0.0, 1.0));
+          col += uColor2 * hot * 1.2 + vec3(1.0) * hot * 0.38;
           gl_FragColor = vec4(col * (1.0 + core), a);
         }
       `,
@@ -321,6 +325,8 @@ export class VfxSubsystem implements Subsystem {
 
   private comboStrike(target: 'a' | 'b', attacker: 'a' | 'b', power: number) {
     const r = RECIPES.combo
+    const p0 = this.ctx.anchors.fighter(target).clone()
+    p0.z += 0.35
     const offsets = [0, 0.07, 0.15]
     const scales = [0.7, 0.85, 1.15]
     offsets.forEach((dt, i) => {
@@ -328,6 +334,17 @@ export class VfxSubsystem implements Subsystem {
         const jx = (Math.random() - 0.5) * 0.5
         const jy = (Math.random() - 0.5) * 0.5
         this.strike(target, attacker, r, power, scales[i], new THREE.Vector3(jx, jy, 0))
+        // stacked expanding echo ring per hit — sells the rising combo count
+        this.waves.spawn(
+          'shock',
+          p0.clone().add(new THREE.Vector3(jx, jy, 0)),
+          (2.6 + i * 1.3) * r.scale,
+          0.66 + i * 0.06,
+          C(r.core),
+          C(r.energy),
+          1.3,
+          1.0,
+        )
       })
     })
   }
@@ -415,23 +432,33 @@ export class VfxSubsystem implements Subsystem {
       })
     }
 
-    // 6. screen shock ring (chromatic) — directionally biased so the blast
-    // reads as force punching THROUGH the victim, not a centred soap bubble.
-    if (r.shock) {
+    // 6. screen shock ring (chromatic) — routed per flavour so each hit owns a
+    // distinct silhouette instead of one recoloured ring.
+    if (r.bolt) {
+      // EX: crackling electric discharge, no smooth ring.
+      this.waves.spawn('bolt', p, r.shockSize * 1.15 * scale, 0.92, C(0xffffff), energy, 2.2 * mult)
+      this.waves.spawn('halo', p, r.shockSize * 0.5 * scale, 0.6, core, energy, 1.6 * mult)
+    } else if (r.starBurst) {
+      // CRIT: the hard impact star dominates — no competing shock ring.
+      this.waves.spawn('star', p, r.shockSize * 1.5 * scale, 0.92, C(0xffffff), energy, 2.4 * mult)
+      this.waves.spawn('halo', p, r.shockSize * 0.44 * scale, 0.58, core, energy, 1.5 * mult)
+    } else if (r.beam) {
+      // SIGNATURE: anime super-flash pillar (handled with the radial block below too).
+      this.waves.spawn('beam', p, r.shockSize * 1.35 * scale, 1.05, C(0xffffff), energy, 2.2 * mult, 1.0)
+      this.waves.spawn('halo', p, r.shockSize * 0.7 * scale, 0.66, core, energy, 1.7 * mult)
+    } else if (r.shock) {
       const shockPos = p.clone().add(away.clone().multiplyScalar(0.35 * scale))
-      this.waves.spawn('shock', shockPos, r.shockSize * scale, 0.78, core, energy, 1.6 * mult, 1.18)
+      this.waves.spawn('shock', shockPos, r.shockSize * scale, 0.86, core, energy, 1.6 * mult, 1.18)
       // filled hot core behind the ring so the centre has mass (kills the donut)
-      this.waves.spawn('halo', p, r.shockSize * 0.62 * scale, 0.5, core, energy, 2.0 * mult)
+      this.waves.spawn('halo', p, r.shockSize * 0.62 * scale, 0.6, core, energy, 2.0 * mult)
     } else {
       // light hits still get a compact energy bloom so the hit reads on capture
-      this.waves.spawn('halo', p, 1.6 * scale, 0.5, core, energy, 1.6 * mult)
-    }
-    // crit's unmistakable hard geometric impact star
-    if (r.starBurst) {
-      this.waves.spawn('star', p, r.shockSize * 1.35 * scale, 0.52, C(0xffffff), energy, 2.2 * mult)
+      this.waves.spawn('halo', p, 1.6 * scale, 0.6, core, energy, 1.6 * mult)
     }
     if (r.radial) {
-      this.waves.spawn('radial', p, r.shockSize * 1.5 * scale, 0.72, C(0xffffff), energy, 1.8)
+      // ULT: golden radial sun + a trailing expanding shock ring for depth.
+      this.waves.spawn('radial', p, r.shockSize * 1.5 * scale, 0.98, C(0xffffff), energy, 1.9)
+      this.waves.spawn('shock', p, r.shockSize * 1.9 * scale, 0.9, core, ember, 1.3, 1.0)
     }
 
     // 7. ground reaction
@@ -536,10 +563,10 @@ export class VfxSubsystem implements Subsystem {
       size: 4.0, life: 0.55, gravity: 0, drag: 0.001, shape: 'flare', intensity: 3.8,
     })
     // CRYSTAL shell — the faceted, brittle ice silhouette (shatter's identity)
-    this.waves.spawn('crystal', p, 6.8, 0.68, ice, ice, 1.9)
+    this.waves.spawn('crystal', p, 6.8, 1.0, ice, ice, 1.9)
     // a second, tighter crimson crystal for the two-tone armour-rupture read
-    this.waves.spawn('crystal', p, 4.6, 0.6, red, C(0xff5a72), 1.7)
-    this.waves.spawn('halo', p, 2.6, 0.42, C(0xffffff), ice, 1.8)
+    this.waves.spawn('crystal', p, 4.6, 0.9, red, C(0xff5a72), 1.7)
+    this.waves.spawn('halo', p, 2.6, 0.58, C(0xffffff), ice, 1.8)
     // sharp icy shards exploding as hard darts, bouncing on the floor
     this.additive.emit({
       position: p, count: 90, speed: 13, speedVariance: 0.75, color: C(0xffffff), color2: ice,
@@ -587,10 +614,10 @@ export class VfxSubsystem implements Subsystem {
       position: p, count: 1, speed: 0, color: white, color2: gold,
       size: 6.0, life: 0.5, gravity: 0, drag: 0.001, shape: 'flare', intensity: 4.5,
     })
-    this.waves.spawn('radial', p, 13, 0.95, white, gold, 2.2)
-    this.waves.spawn('star', p, 11, 0.6, white, gold, 2.4)
-    this.waves.spawn('shock', p.clone().add(launch.clone().multiplyScalar(0.6)), 9, 0.82, white, orange, 1.9, 1.2)
-    this.waves.spawn('halo', p, 5.5, 0.7, gold, orange, 1.6)
+    this.waves.spawn('radial', p, 13, 1.15, white, gold, 2.2, 1.55)
+    this.waves.spawn('star', p, 11, 0.95, white, gold, 2.4, 1.5)
+    this.waves.spawn('shock', p.clone().add(launch.clone().multiplyScalar(0.6)), 9, 0.95, white, orange, 1.9, 1.35)
+    this.waves.spawn('halo', p, 5.5, 0.9, gold, orange, 1.6, 1.3)
 
     // Beat 2 (60ms): the blast — spark storm + debris + ground rupture, all
     // sheared along the launch vector so the force reads as directional.
@@ -689,7 +716,7 @@ export class VfxSubsystem implements Subsystem {
       const t = this.flashLife / this.flashMax
       // Punchy: blinding opening spike, then a bright but decaying glow tail
       // that survives the real-time capture latency.
-      const a = t > 0.82 ? 2.3 : Math.pow(t, 1.3) * 2.8
+      const a = t > 0.82 ? 2.0 : Math.pow(t, 1.3) * 2.5
       this.flashMat.uniforms.uAlpha.value = a
       this.flash.quaternion.copy(this.ctx.camera.quaternion)
       this.flash.visible = true

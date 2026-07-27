@@ -367,8 +367,6 @@ export function MainMenu() {
                 <span className="mm-util-label">Library</span>
                 <Chip label="How to Play" onClick={() => goPhase('how-to-play')} onHover={() => prefetchScreen('how-to-play')} />
                 <Chip label="Encyclopedia" onClick={() => goPhase('framework-encyclopedia')} onHover={() => prefetchScreen('framework-encyclopedia')} />
-                <Chip label="Quote Bank" onClick={() => goPhase('quote-bank')} onHover={() => prefetchScreen('quote-bank')} />
-                <Chip label="Stats" onClick={() => goPhase('stats')} onHover={() => prefetchScreen('stats')} />
                 <Chip label="Credits" onClick={() => goPhase('credits')} onHover={() => prefetchScreen('credits')} />
               </div>
               <div className="mm-util-row">

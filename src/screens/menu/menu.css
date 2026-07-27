@@ -57,7 +57,7 @@
   object-fit: cover;
   object-position: 64% 36%;
   image-rendering: pixelated;
-  filter: brightness(0.42) contrast(1.02) saturate(0.8) blur(2.2px);
+  filter: brightness(0.5) contrast(1.08) saturate(0.9) blur(2.2px);
   transform: scale(1.05);
   will-change: transform;
   z-index: 0;
@@ -126,7 +126,7 @@
   position: absolute; inset: 0; z-index: 4; pointer-events: none;
   background:
     linear-gradient(180deg, rgba(8,7,20,0.5) 0%, transparent 15%, transparent 88%, rgba(7,6,16,0.62) 100%),
-    radial-gradient(140% 120% at 62% 46%, transparent 62%, rgba(7,6,18,0.44) 100%);
+    radial-gradient(140% 120% at 62% 46%, transparent 66%, rgba(7,6,18,0.36) 100%);
 }
 /* Fine grain + scanlines for film / arcade texture (very subtle). */
 .mm-grain {
@@ -211,9 +211,10 @@
 .mm-right::before {
   content: ""; position: absolute; inset: 0; z-index: 0; pointer-events: none;
   background:
-    radial-gradient(56% 54% at 56% 44%, rgba(255,200,124,0.28) 0%, rgba(255,140,60,0.1) 36%, transparent 64%),
+    radial-gradient(48% 46% at 56% 42%, rgba(255,214,150,0.4) 0%, rgba(255,150,66,0.14) 34%, transparent 60%),
+    radial-gradient(56% 54% at 56% 44%, rgba(255,200,124,0.24) 0%, rgba(255,140,60,0.08) 40%, transparent 66%),
     radial-gradient(70% 44% at 56% 92%, rgba(128,56,128,0.4) 0%, rgba(60,26,64,0.14) 46%, transparent 74%),
-    linear-gradient(180deg, rgba(6,3,12,0.5) 0%, rgba(8,4,16,0.1) 26%, transparent 48%, rgba(8,4,16,0.22) 82%, rgba(6,3,12,0.54) 100%);
+    linear-gradient(180deg, rgba(6,3,12,0.44) 0%, rgba(8,4,16,0.08) 26%, transparent 48%, rgba(8,4,16,0.2) 82%, rgba(6,3,12,0.5) 100%);
 }
 
 /* ── Brand / logotype ───────────────────────────────────────────────── */
@@ -271,15 +272,20 @@
   margin: clamp(14px, 2vh, 26px) 0;
 }
 .mm-cursor {
-  position: absolute; left: -6px; right: 8px; top: 0; height: 0;
+  position: absolute; left: -12px; right: 6px; top: 0; height: 0;
   z-index: 1; pointer-events: none;
   --mm-accent: var(--mm-magenta);
-  border-left: 5px solid var(--mm-accent);
-  background: linear-gradient(90deg, color-mix(in srgb, var(--mm-accent) 30%, transparent) 0%, color-mix(in srgb, var(--mm-accent) 9%, transparent) 46%, transparent 84%);
+  border-left: 6px solid var(--mm-accent);
+  background: linear-gradient(90deg,
+    color-mix(in srgb, var(--mm-accent) 42%, rgba(12,6,20,0.7)) 0%,
+    color-mix(in srgb, var(--mm-accent) 15%, rgba(12,6,20,0.66)) 40%,
+    rgba(12,6,20,0.5) 74%,
+    transparent 100%);
+  clip-path: polygon(0 0, 100% 0, calc(100% - 14px) 100%, 0 100%);
   box-shadow:
-    inset 3px 0 0 color-mix(in srgb, var(--mm-accent) 55%, transparent),
-    inset 0 1px 0 color-mix(in srgb, #000 35%, transparent),
-    inset 0 -1px 0 color-mix(in srgb, #000 35%, transparent);
+    6px 6px 0 rgba(6,3,12,0.62),
+    inset 0 2px 0 color-mix(in srgb, var(--mm-accent) 45%, transparent),
+    inset 0 -2px 0 rgba(0,0,0,0.5);
   transition:
     top 0.19s cubic-bezier(0.2,0.85,0.25,1),
     height 0.19s cubic-bezier(0.2,0.85,0.25,1),
@@ -421,19 +427,19 @@
 .mm-anim .mm-quote-in { animation: mmFade 0.6s ease-out both; }
 @keyframes mmFade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 
-.mm-util { display: flex; flex-direction: column; gap: 6px; }
-.mm-util-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 2px; }
+.mm-util { display: flex; flex-direction: column; gap: 9px; }
+.mm-util-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 4px; }
 .mm-util-label {
   font-family: var(--mm-ui); font-weight: 700;
-  font-size: 9.5px; letter-spacing: 0.28em; color: var(--mm-faint);
-  text-transform: uppercase; width: 54px; flex-shrink: 0;
+  font-size: 11px; letter-spacing: 0.26em; color: var(--mm-faint);
+  text-transform: uppercase; width: 58px; flex-shrink: 0;
 }
 .mm-chip {
   position: relative;
   font-family: var(--mm-ui); font-weight: 600;
-  font-size: clamp(10px, 1.25vh, 12px); letter-spacing: 0.08em;
+  font-size: clamp(12px, 1.5vh, 13.5px); letter-spacing: 0.06em;
   color: var(--mm-dim); text-transform: uppercase;
-  padding: 3px 12px; background: none; border: 0; border-radius: 0;
+  padding: 4px 13px; background: none; border: 0; border-radius: 0;
   transition: color 0.14s ease, text-shadow 0.14s ease;
 }
 .mm-chip + .mm-chip::before {
@@ -491,7 +497,7 @@
 .mm-fighter {
   position: relative;
   display: flex; flex-direction: column; align-items: center;
-  width: clamp(240px, 24vw, 400px);
+  width: clamp(264px, 26.5vw, 448px);
 }
 .mm-fighter-art {
   position: relative; width: 100%; aspect-ratio: 3 / 4;
@@ -500,9 +506,9 @@
    floating as a sticker. */
 .mm-fighter-art::before {
   content: ""; position: absolute; left: -8%; right: -8%; bottom: -2%;
-  height: 62%; z-index: -1; pointer-events: none;
-  background: radial-gradient(60% 100% at 50% 100%, color-mix(in srgb, var(--faccent,#FFC23D) 30%, transparent) 0%, transparent 68%);
-  filter: blur(6px);
+  height: 66%; z-index: -1; pointer-events: none;
+  background: radial-gradient(58% 100% at 50% 100%, color-mix(in srgb, var(--faccent,#FFC23D) 42%, transparent) 0%, transparent 66%);
+  filter: blur(5px);
 }
 /* Hard contact shadow anchoring the feet to the floor. */
 .mm-fighter-art::after {

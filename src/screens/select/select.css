@@ -964,14 +964,50 @@
 }
 .sel-standoff.is-active {
   box-shadow:
-    inset 0 0 0 1px color-mix(in srgb, var(--sel-side) 40%, transparent),
-    inset 0 0 150px color-mix(in srgb, var(--sel-side) 30%, transparent),
-    0 0 38px color-mix(in srgb, var(--sel-side) 36%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--sel-side) 48%, transparent),
+    inset 0 0 180px color-mix(in srgb, var(--sel-side) 38%, transparent),
+    inset 0 -60px 90px color-mix(in srgb, var(--sel-side) 28%, transparent),
+    0 0 46px color-mix(in srgb, var(--sel-side) 42%, transparent),
     0 18px 44px rgba(0, 0, 0, 0.6);
 }
 .sel-standoff.is-locked { filter: saturate(1.02); }
 
 .sel-standoff-stage { position: relative; overflow: hidden; }
+
+/* Directional energy streaks raking out from behind the hero — the diagonal
+   speed-lines SF6 / GG Strive rake behind a fighter on select. Side A rakes
+   up-and-in, side B mirrors it. Masked to a soft oval so they bloom behind the
+   figure and vanish at the panel edges. Only lit on the active / locked side. */
+.sel-standoff-stage::before {
+  content: '';
+  position: absolute;
+  inset: -12%;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0;
+  background: repeating-linear-gradient(
+    112deg,
+    transparent 0 20px,
+    color-mix(in srgb, var(--sel-side) 26%, transparent) 20px 23px
+  );
+  -webkit-mask: radial-gradient(72% 62% at 50% 60%, #000 0%, rgba(0, 0, 0, 0.5) 45%, transparent 74%);
+  mask: radial-gradient(72% 62% at 50% 60%, #000 0%, rgba(0, 0, 0, 0.5) 45%, transparent 74%);
+  transition: opacity 320ms ease;
+  animation: selStreakDrift 7s linear infinite;
+}
+.sel-standoff-b .sel-standoff-stage::before {
+  background: repeating-linear-gradient(
+    68deg,
+    transparent 0 20px,
+    color-mix(in srgb, var(--sel-side) 26%, transparent) 20px 23px
+  );
+}
+.sel-standoff.is-active .sel-standoff-stage::before,
+.sel-standoff.is-locked .sel-standoff-stage::before { opacity: 0.55; }
+@keyframes selStreakDrift {
+  0% { background-position: 0 0; }
+  100% { background-position: 128px 0; }
+}
 
 /* Roster number — a small stamped badge in the top outer corner, not a wash. */
 .sel-standoff-index {

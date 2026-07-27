@@ -14,8 +14,13 @@
 }
 
 .fight-hud {
-  --hud-display: 'Saira', 'Arial Narrow', system-ui, sans-serif;
-  --hud-tech: 'Chakra Petch', 'Saira', system-ui, sans-serif;
+  /* The two authored faces this app actually loads (index.html): a chunky
+     pixel display face + a tall CRT numeric face. Everything else the HUD
+     asked for (Saira / Chakra Petch) was never loaded and silently fell back
+     to system-ui — which read as a generic web dashboard and broke the SF2
+     pixel soul. These are the arcade voice. */
+  --hud-display: 'Press Start 2P', 'Courier New', monospace;
+  --hud-tech: 'VT323', 'Courier New', monospace;
   --ink: #04050b;
 
   --hp-good-1: #5affb6; --hp-good-2: #0fbf82;
@@ -69,13 +74,13 @@
 .fh-side.mirror .fh-portrait img { transform: translateX(-50%) scaleX(-1); }
 .fh-portrait .letter {
   position: absolute; inset: 0; display: grid; place-items: center;
-  font-family: var(--hud-display); font-weight: 900; font-style: italic;
-  font-size: 33px; color: var(--acc);
+  font-family: var(--hud-display); font-weight: 400; font-style: normal;
+  font-size: 20px; color: var(--acc);
 }
 .fh-nametab {
   position: relative;
   display: flex; align-items: center; gap: 10px;
-  height: 34px; padding: 0 22px 0 16px;
+  height: 40px; padding: 0 22px 0 16px;
   margin: 0 0 5px -10px;
   background: linear-gradient(180deg, rgba(32,37,55,0.97), rgba(9,11,19,0.97));
   box-shadow: inset 0 2px 0 rgba(255,255,255,0.18), inset 0 0 0 1px rgba(255,255,255,0.06);
@@ -90,22 +95,22 @@
   background: var(--acc); box-shadow: 0 0 12px var(--acc);
 }
 .fh-nametab .n {
-  font-family: var(--hud-display); font-weight: 800; font-style: italic;
-  font-size: 26px; line-height: 0.9; letter-spacing: 0.004em;
+  font-family: var(--hud-display); font-weight: 400; font-style: normal;
+  font-size: 16px; line-height: 0.9; letter-spacing: 0.01em;
   text-transform: uppercase; color: #fff;
   text-shadow: 0 2px 0 rgba(0,0,0,0.9); white-space: nowrap;
 }
 .fh-nametab .tag {
-  font-family: var(--hud-tech); font-weight: 700;
-  font-size: 9px; letter-spacing: 0.28em; color: var(--ink);
-  background: var(--acc); padding: 2px 7px 1px;
+  font-family: var(--hud-display); font-weight: 400;
+  font-size: 11px; letter-spacing: 0.02em; color: var(--ink);
+  background: var(--acc); padding: 4px 7px 3px;
   clip-path: polygon(0 0, 100% 0, calc(100% - 4px) 100%, 0 100%);
 }
 .fh-side.mirror .fh-nametab .tag { clip-path: polygon(4px 0, 100% 0, 100% 100%, 0 100%); }
 
 /* ============================ HEALTH BAR ================================= */
 .fh-hp {
-  position: relative; height: 38px;
+  position: relative; height: 42px;
   background: linear-gradient(180deg, #0f1219, #05070d);
   border: 2px solid var(--ink);
   box-shadow:
@@ -134,41 +139,59 @@
     repeating-linear-gradient(115deg, rgba(255,255,255,0.028) 0 2px, transparent 2px 7px),
     linear-gradient(180deg, #10151f 0%, #070a11 46%, #03050a 100%);
 }
+/* Damage trail — a hot white/red "ghost" that lags behind the fill so the
+   chunk you just lost stays visible for a beat before draining. It sits below
+   the fill, so it only peeks out past the fill's leading edge. */
 .fh-hp-chip {
   position: absolute; top: 0; bottom: 0; left: 0;
-  background: linear-gradient(180deg, #ffffff, #ffcccc);
-  transition: width 640ms cubic-bezier(0.22,1,0.36,1) 200ms; opacity: 0.9;
+  background: linear-gradient(180deg, #ffffff 0%, #ff8a7a 46%, #ff2f45 100%);
+  box-shadow: inset 0 0 10px rgba(255,90,70,0.5), 0 0 12px rgba(255,60,70,0.55);
+  transition: width 720ms cubic-bezier(0.22,1,0.36,1) 260ms; opacity: 1;
 }
 .fh-hp-fill {
   position: absolute; top: 0; bottom: 0; left: 0;
-  transition: width 220ms cubic-bezier(0.3,0.9,0.35,1);
+  /* the fill gradient itself is set inline in HealthBar.tsx; push saturation
+     and brightness so the arcade fill pops off any stage. */
+  filter: saturate(1.4) brightness(1.07);
+  box-shadow: 0 0 10px rgba(255,255,255,0.12);
+  transition: width 200ms cubic-bezier(0.3,0.9,0.35,1);
 }
 .fh-hp-fill::after {
   content: ''; position: absolute; inset: 0;
   background: linear-gradient(180deg,
-    rgba(255,255,255,0.8) 0%, rgba(255,255,255,0.24) 24%,
-    rgba(255,255,255,0.04) 44%, rgba(0,0,0,0.36) 100%);
+    rgba(255,255,255,0.92) 0%, rgba(255,255,255,0.42) 16%,
+    rgba(255,255,255,0.06) 46%, rgba(0,0,0,0.34) 82%, rgba(0,0,0,0.46) 100%);
+}
+/* hard bright rim along the very top edge of the fill — SF6-style gloss */
+.fh-hp-fill::before {
+  content: ''; position: absolute; left: 0; right: 0; top: 0; height: 2px;
+  background: rgba(255,255,255,0.95); z-index: 2;
 }
 .fh-hp-core {
-  position: absolute; top: 38%; height: 3px; left: 0;
+  position: absolute; top: 40%; height: 3px; left: 0;
   background: rgba(255,255,255,0.92); mix-blend-mode: screen;
-  transition: width 220ms cubic-bezier(0.3,0.9,0.35,1);
+  transition: width 200ms cubic-bezier(0.3,0.9,0.35,1);
 }
 .fh-hp-lead {
-  position: absolute; top: -2px; bottom: -2px; width: 4px; background: #fff;
-  box-shadow: 0 0 10px 2px currentColor, 0 0 24px currentColor;
-  transition: left 220ms cubic-bezier(0.3,0.9,0.35,1);
+  position: absolute; top: -2px; bottom: -2px; width: 5px; background: #fff;
+  box-shadow: 0 0 12px 3px currentColor, 0 0 26px currentColor;
+  transition: left 200ms cubic-bezier(0.3,0.9,0.35,1); z-index: 3;
 }
+/* Segment dividers — physical inset grooves, not chart hairlines. Each break
+   is a dark cut with a light highlight on its trailing side, skewed to match
+   the angular bar. */
 .fh-hp-ticks {
-  position: absolute; inset: -2px -1px; pointer-events: none;
+  position: absolute; inset: -2px -1px; pointer-events: none; z-index: 4;
   background-image: repeating-linear-gradient(105deg,
-    transparent 0, transparent calc(20% - 2px),
-    rgba(0,0,0,0.6) calc(20% - 2px), rgba(0,0,0,0.6) 20%);
+    transparent 0, transparent calc(10% - 3px),
+    rgba(0,0,0,0.62) calc(10% - 3px), rgba(0,0,0,0.62) calc(10% - 1px),
+    rgba(255,255,255,0.14) calc(10% - 1px), rgba(255,255,255,0.14) 10%);
 }
 .fh-hp.mirror .fh-hp-ticks {
   background-image: repeating-linear-gradient(75deg,
-    transparent 0, transparent calc(20% - 2px),
-    rgba(0,0,0,0.6) calc(20% - 2px), rgba(0,0,0,0.6) 20%);
+    transparent 0, transparent calc(10% - 3px),
+    rgba(0,0,0,0.62) calc(10% - 3px), rgba(0,0,0,0.62) calc(10% - 1px),
+    rgba(255,255,255,0.14) calc(10% - 1px), rgba(255,255,255,0.14) 10%);
 }
 .fh-hp.mirror .fh-hp-chip, .fh-hp.mirror .fh-hp-fill, .fh-hp.mirror .fh-hp-core { left: auto; right: 0; }
 .fh-hp.danger { animation: fhDanger 0.68s ease-in-out infinite; }
@@ -182,9 +205,9 @@
 }
 .fh-hp-danger-badge {
   position: absolute; top: 2px; right: 7px; z-index: 4;
-  font-family: var(--hud-tech); font-weight: 900; font-size: 14px; letter-spacing: 0.2em;
+  font-family: var(--hud-display); font-weight: 400; font-size: 11px; letter-spacing: 0.06em;
   color: #fff; background: linear-gradient(180deg, #ff4256, #b30a20);
-  padding: 4px 14px 3px; text-shadow: 0 1px 0 rgba(0,0,0,0.7);
+  padding: 5px 12px 4px; text-shadow: 0 1px 0 rgba(0,0,0,0.7);
   box-shadow: 0 0 16px rgba(255,46,70,0.95), inset 0 0 0 1px rgba(255,255,255,0.3);
   clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
   transform-origin: center; animation: fhDangerBadge 0.62s ease-in-out infinite;
@@ -196,36 +219,47 @@
 }
 
 /* ============================ SUPER GAUGE =============================== */
-.fh-sm-wrap { display: flex; align-items: center; gap: 9px; margin-top: 6px; }
+.fh-sm-wrap { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
 .fh-side.mirror .fh-sm-wrap { flex-direction: row-reverse; }
 .fh-sm {
-  position: relative; flex: 1; height: 18px;
-  background: linear-gradient(180deg, #11141e, #04060b);
+  position: relative; flex: 1; height: 22px;
+  /* Empty track reads as chargeable energy cells across the full width so the
+     gauge has combat presence even at 0% — not an invisible dark sliver. */
+  background:
+    repeating-linear-gradient(90deg, rgba(90,150,255,0.10) 0 2px, transparent 2px 26px),
+    linear-gradient(180deg, #182034 0%, #0a1120 50%, #05070d 100%);
   border: 2px solid var(--ink);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), inset 0 -3px 7px rgba(0,0,0,0.62);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.14),
+    inset 0 0 12px rgba(60,110,220,0.28),
+    inset 0 -3px 7px rgba(0,0,0,0.62),
+    0 0 0 2px color-mix(in srgb, var(--sm-2) 34%, #04050b),
+    0 3px 10px rgba(0,0,0,0.5);
   overflow: hidden;
-  clip-path: polygon(0 0, 100% 0, 100% 100%, 9px 100%, 0 50%);
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 11px 100%, 0 50%);
 }
-.fh-side.mirror .fh-sm { clip-path: polygon(0 0, 100% 0, 100% 50%, calc(100% - 9px) 100%, 0 100%); }
+.fh-side.mirror .fh-sm { clip-path: polygon(0 0, 100% 0, 100% 50%, calc(100% - 11px) 100%, 0 100%); }
 .fh-sm .sm-fill {
   position: absolute; inset: 0; transform-origin: left center;
-  background: linear-gradient(90deg, var(--sm-1), var(--sm-2) 55%, var(--sm-3));
-  box-shadow: 0 0 14px rgba(120,90,255,0.8);
+  background: linear-gradient(90deg, var(--sm-1), var(--sm-2) 52%, var(--sm-3));
+  box-shadow: 0 0 16px rgba(120,90,255,0.9), inset 0 0 10px rgba(255,255,255,0.22);
+  filter: saturate(1.3) brightness(1.08);
   transition: transform 300ms cubic-bezier(0.3,0.9,0.35,1);
 }
 .fh-side.mirror .fh-sm .sm-fill { transform-origin: right center; }
 .fh-sm .sm-fill::before {
-  content: ''; position: absolute; inset: 0;
-  background: linear-gradient(180deg, rgba(255,255,255,0.6), transparent 52%);
+  content: ''; position: absolute; left: 0; right: 0; top: 0; height: 45%;
+  background: linear-gradient(180deg, rgba(255,255,255,0.7), transparent);
 }
 .fh-sm .sm-fill::after {
   content: ''; position: absolute; inset: 0;
-  background: repeating-linear-gradient(114deg, rgba(255,255,255,0.16) 0 2px, transparent 2px 13px);
-  mix-blend-mode: overlay; opacity: 0.55;
+  background: repeating-linear-gradient(114deg, rgba(255,255,255,0.18) 0 2px, transparent 2px 13px);
+  mix-blend-mode: overlay; opacity: 0.6;
 }
 .fh-sm .sm-notch {
-  position: absolute; top: -1px; bottom: -1px; width: 5px; margin-left: -2.5px;
-  background: linear-gradient(90deg, rgba(255,255,255,0.14), rgba(2,4,9,0.94) 40% 60%, rgba(255,255,255,0.14));
+  position: absolute; top: -1px; bottom: -1px; width: 6px; margin-left: -3px;
+  background: linear-gradient(90deg, rgba(255,255,255,0.18), rgba(2,4,9,0.96) 40% 60%, rgba(255,255,255,0.18));
+  box-shadow: 0 0 3px rgba(0,0,0,0.8);
   transform: skewX(-16deg); z-index: 2;
 }
 .fh-sm.ready {
@@ -245,10 +279,10 @@
 .fh-sm-tag {
   position: relative;
   display: flex; align-items: center; gap: 6px;
-  font-family: var(--hud-tech); font-weight: 800; font-size: 11px;
-  letter-spacing: 0.2em; color: #e4ecff;
+  font-family: var(--hud-display); font-weight: 400; font-size: 11px;
+  letter-spacing: 0.02em; color: #e4ecff;
   white-space: nowrap; min-width: 44px; text-align: center;
-  text-shadow: 0 1px 0 rgba(0,0,0,0.85), 0 0 4px rgba(0,0,0,0.9);
+  text-shadow: 0 2px 0 rgba(0,0,0,0.85), 0 0 4px rgba(0,0,0,0.9);
   -webkit-text-stroke: 0.5px rgba(0,0,0,0.6); paint-order: stroke fill;
 }
 .fh-sm-tag::before {
@@ -316,13 +350,13 @@
   background: linear-gradient(90deg, transparent, rgba(255,255,255,0.35), transparent);
 }
 .fh-round-label {
-  font-family: var(--hud-tech); font-weight: 800; font-size: 13px;
-  letter-spacing: 0.42em; padding-left: 0.42em; text-align: center;
-  color: #ffd88a; text-shadow: 0 1px 0 rgba(0,0,0,0.75); margin-bottom: 1px;
+  font-family: var(--hud-display); font-weight: 400; font-size: 12px;
+  letter-spacing: 0.14em; padding-left: 0.14em; text-align: center;
+  color: #ffd88a; text-shadow: 0 2px 0 rgba(0,0,0,0.75); margin-bottom: 8px;
 }
 .fh-timer {
-  font-family: var(--hud-tech); font-weight: 700; font-size: 80px; line-height: 0.88;
-  letter-spacing: 0.005em; color: #fff; font-variant-numeric: tabular-nums;
+  font-family: var(--hud-display); font-weight: 400; font-size: 46px; line-height: 0.9;
+  letter-spacing: 0.02em; color: #fff; font-variant-numeric: tabular-nums;
   -webkit-text-stroke: 2.5px var(--ink); paint-order: stroke fill;
   text-shadow: 0 4px 0 rgba(0,0,0,0.62), 0 0 26px rgba(255,255,255,0.24);
 }
@@ -361,15 +395,15 @@
   filter: blur(0.4px); pointer-events: none;
 }
 .fh-combo .num {
-  font-family: var(--hud-display); font-weight: 900; font-style: italic;
-  font-size: 132px; line-height: 0.72;
+  font-family: var(--hud-display); font-weight: 400; font-style: normal;
+  font-size: 84px; line-height: 0.8;
   background: linear-gradient(180deg, #fff 16%, #ffe14a 50%, #ff9420 100%);
   -webkit-background-clip: text; background-clip: text; color: transparent;
   -webkit-text-stroke: 3px var(--ink); paint-order: stroke fill;
   filter: drop-shadow(0 6px 0 rgba(0,0,0,0.42)) drop-shadow(0 0 24px rgba(255,170,50,0.65));
 }
 .fh-combo .stack { display: flex; flex-direction: column; margin-bottom: 18px; }
-.fh-combo .hits { font-family: var(--hud-display); font-weight: 800; font-style: italic; font-size: 40px; line-height: 0.8; color: #fff; -webkit-text-stroke: 2px var(--ink); paint-order: stroke fill; }
+.fh-combo .hits { font-family: var(--hud-display); font-weight: 400; font-style: normal; font-size: 22px; line-height: 0.9; color: #fff; -webkit-text-stroke: 2px var(--ink); paint-order: stroke fill; }
 .fh-combo .word { font-family: var(--hud-tech); font-weight: 700; font-size: 12px; letter-spacing: 0.42em; color: #ffd23c; text-shadow: 0 2px 0 #000; margin-top: 1px; }
 .fh-combo .dmgchip {
   align-self: flex-start; margin-top: 6px;
@@ -381,7 +415,7 @@
 }
 
 /* ============================ DAMAGE NUMBERS =========================== */
-.fh-dmg { position: absolute; pointer-events: none; font-family: var(--hud-display); font-weight: 900; font-style: italic; transform: translate(-50%, -50%); will-change: transform, opacity; }
+.fh-dmg { position: absolute; pointer-events: none; font-family: var(--hud-display); font-weight: 400; font-style: normal; transform: translate(-50%, -50%); will-change: transform, opacity; }
 .fh-dmg .v { display: block; -webkit-text-stroke: 3.5px var(--ink); paint-order: stroke fill; filter: drop-shadow(0 3px 2px rgba(0,0,0,0.9)) drop-shadow(0 0 4px rgba(0,0,0,0.95)) drop-shadow(0 0 16px rgba(0,0,0,0.85)); }
 
 /* ============================ ANNOUNCER ================================ */
@@ -403,7 +437,7 @@
 }
 .fh-letterbox.top { top: 0; border-bottom: 2px solid rgba(255,255,255,0.09); }
 .fh-letterbox.bot { bottom: 0; border-top: 2px solid rgba(255,255,255,0.09); }
-.fh-announce .big { font-family: var(--hud-display); font-weight: 900; font-style: italic; text-transform: uppercase; line-height: 0.82; text-align: center; letter-spacing: -0.01em; }
+.fh-announce .big { font-family: var(--hud-display); font-weight: 400; font-style: normal; text-transform: uppercase; line-height: 0.82; text-align: center; letter-spacing: -0.01em; }
 .fh-announce .sub {
   font-family: var(--hud-tech); font-weight: 900; font-size: clamp(15px, 2.1vw, 34px);
   letter-spacing: 0.5em; padding-left: 0.5em; margin-top: 16px;
@@ -433,7 +467,7 @@
 .fh-card:nth-child(4) { transform: rotate(1deg) translateY(1px); }
 .fh-card:nth-child(5) { transform: rotate(2.5deg) translateY(6px); }
 .fh-card .kind { font-family: var(--hud-tech); font-weight: 900; font-size: 11px; letter-spacing: 0.22em; color: var(--ck); text-shadow: 0 0 10px var(--ck); }
-.fh-card .title { font-family: var(--hud-display); font-weight: 800; font-style: italic; font-size: 19px; line-height: 0.96; text-transform: uppercase; margin-top: 8px; color: #fff; text-shadow: 0 2px 0 rgba(0,0,0,0.6); }
+.fh-card .title { font-family: var(--hud-display); font-weight: 400; font-style: normal; font-size: 19px; line-height: 0.96; text-transform: uppercase; margin-top: 8px; color: #fff; text-shadow: 0 2px 0 rgba(0,0,0,0.6); }
 .fh-card .spacer { flex: 1; }
 .fh-card .stat-row {
   display: flex; justify-content: space-between; align-items: flex-end;

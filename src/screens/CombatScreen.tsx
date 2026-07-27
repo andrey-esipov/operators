@@ -24,6 +24,7 @@ import { fightAudio, type Flavor } from '../audio'
 import { getRenderMode, setRenderMode } from '../lib/renderMode'
 import type { AnnounceMoment, DamageNumber } from '../three/hud/types'
 import { AnimatePresence, motion } from 'framer-motion'
+import './../components/combat-hud.css'
 
 // The WebGL layer is ~250 kB gzipped. Loading it lazily keeps the 2D fallback
 // path — and the first paint of the fight — off that budget entirely.
@@ -933,13 +934,32 @@ function ActiveMoves({
     <div className="absolute left-0 right-0 bottom-0 z-20 px-6 pb-4">
       {showHumanControls ? (
         <>
-          <div className="font-display text-[10px] tracking-widest text-center mb-2" style={{ color: side === 'a' ? '#E63946' : '#00B4D8' }}>
-            P{side === 'a' ? '1' : '2'} · {def.shortName} · CHOOSE MOVE
-            {activeRt.read && (
-              <span className="ml-2 px-1.5 py-0.5" style={{ background: '#00B4D8', color: '#0F0A1A', fontSize: '8px' }}>
-                READING {activeRt.read.toUpperCase()}
-              </span>
-            )}
+          <div className="flex justify-center mb-2">
+            <div
+              className="combat-turn-prompt font-display tracking-widest inline-flex items-center gap-2 px-4 py-2"
+              style={{
+                fontSize: 14,
+                lineHeight: 1,
+                color: '#fff',
+                background: 'linear-gradient(180deg, rgba(15,10,26,0.92), rgba(6,4,12,0.94))',
+                border: `2px solid ${side === 'a' ? '#E63946' : '#00B4D8'}`,
+                boxShadow: `inset 0 2px 0 rgba(255,255,255,0.12), 0 0 18px ${side === 'a' ? 'rgba(230,57,70,0.55)' : 'rgba(0,180,216,0.55)'}, 0 4px 12px rgba(0,0,0,0.6)`,
+                clipPath: 'polygon(10px 0, 100% 0, calc(100% - 10px) 100%, 0 100%)',
+                textShadow: '0 2px 0 rgba(0,0,0,0.9)',
+                animation: 'turnPromptPulse 1.4s ease-in-out infinite',
+              }}
+            >
+              <span style={{ color: side === 'a' ? '#ff6b78' : '#4fd6f5' }}>P{side === 'a' ? '1' : '2'}</span>
+              <span style={{ opacity: 0.55 }}>·</span>
+              <span>{def.shortName}</span>
+              <span style={{ opacity: 0.55 }}>·</span>
+              <span style={{ color: '#FFD60A' }}>CHOOSE MOVE</span>
+              {activeRt.read && (
+                <span className="ml-1 px-1.5 py-0.5" style={{ background: '#00B4D8', color: '#0F0A1A', fontSize: 11 }}>
+                  READING {activeRt.read.toUpperCase()}
+                </span>
+              )}
+            </div>
           </div>
           <div className="flex gap-2 flex-wrap justify-center">
             {def.moves.map((m, i) => (

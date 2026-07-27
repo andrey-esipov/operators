@@ -1,10 +1,15 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import { useGame } from '../state/game'
 import { Sfx } from '../lib/audio'
 import { FIGHTERS, FEATURED_ROSTER, getFighter } from '../data/fighters'
-import { SCENARIO_ORDER } from '../data/scenarios'
 import { Sprite } from '../components/Sprite'
-import { PULL_QUOTES } from '../data/pull-quotes'
 import { AttractMode } from './AttractMode'
 import { prefetchScreen } from './registry'
 import type { Phase } from '../types'
@@ -13,6 +18,64 @@ import './menu/menu.css'
 const prefersReduced =
   typeof window !== 'undefined' &&
   window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+
+type ModeAct = 'story' | 'vs' | 'practice' | 'marquee'
+
+interface ModeDef {
+  id: string
+  index: string
+  label: string
+  sub: string
+  tag: string
+  accent: string
+  act: ModeAct
+  prefetch: Parameters<typeof prefetchScreen>[0]
+  primary?: boolean
+}
+
+const MODES: ModeDef[] = [
+  {
+    id: 'story',
+    index: '01',
+    label: 'STORY MODE',
+    sub: '8 CHAPTERS // ONE FIGHT AT A TIME',
+    tag: '▶ START',
+    accent: '#FF2E88',
+    act: 'story',
+    prefetch: 'character-select',
+    primary: true,
+  },
+  {
+    id: 'vs',
+    index: '02',
+    label: 'VS MODE',
+    sub: 'LOCAL HOT-SEAT // P1 vs P2',
+    tag: '2P',
+    accent: '#37D0FF',
+    act: 'vs',
+    prefetch: 'character-select',
+  },
+  {
+    id: 'marquee',
+    index: '03',
+    label: 'MARQUEE',
+    sub: 'DREAM MATCHES // CURATED CARD',
+    tag: '★',
+    accent: '#FFC23D',
+    act: 'marquee',
+    prefetch: 'marquee-matchups',
+  },
+  {
+    id: 'practice',
+    index: '04',
+    label: 'PRACTICE',
+    sub: 'FREE TRAINING // NO STAKES',
+    tag: '◇',
+    accent: '#FCBF49',
+    act: 'practice',
+    prefetch: 'character-select',
+  },
+]
 
 export function MainMenu() {
   const setPhase = useGame((s) => s.setPhase)
@@ -24,22 +87,6 @@ export function MainMenu() {
   const difficulty = useGame((s) => s.difficulty)
   const setDifficulty = useGame((s) => s.setDifficulty)
 
-  // Cycle through hand-curated pull quotes every 7 seconds
-  const allQuotes = useMemo(() => {
-    const arr = [...PULL_QUOTES]
-    for (let i = arr.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1))
-      ;[arr[i], arr[j]] = [arr[j], arr[i]]
-    }
-    return arr
-  }, [])
-  const [quoteIdx, setQuoteIdx] = useState(0)
-  useEffect(() => {
-    if (allQuotes.length === 0) return
-    const id = setInterval(() => setQuoteIdx((i) => (i + 1) % allQuotes.length), 7000)
-    return () => clearInterval(id)
-  }, [allQuotes.length])
-
   // Featured fighters — only ones with hand-curated sprite art.
   const featured = useMemo(() => {
     const out = FEATURED_ROSTER.map((id) => getFighter(id)).filter(
@@ -48,15 +95,14 @@ export function MainMenu() {
     return out.length > 0 ? out : FIGHTERS
   }, [])
 
-  // Rotating VS spotlight on the right — a fresh pairing every 3.4s.
+  // Rotating VS spotlight on the right — a fresh pairing every 3.6s.
   const [focusIdx, setFocusIdx] = useState(0)
   useEffect(() => {
-    const id = setInterval(() => setFocusIdx((i) => (i + 1) % featured.length), 3400)
+    const id = setInterval(() => setFocusIdx((i) => (i + 1) % featured.length), 3600)
     return () => clearInterval(id)
   }, [featured.length])
 
-  // Attract mode: defaults ON at first menu load; any explicit input drops
-  // into the real menu; 10s idle on the menu re-arms the reel. (unchanged)
+  // Attract mode: on by first load, exits on any input, re-arms after 12s idle.
   const [attract, setAttract] = useState(true)
   useEffect(() => {
     if (attract) {
@@ -79,7 +125,7 @@ export function MainMenu() {
       lastY = 0
     function reset() {
       if (timer) clearTimeout(timer)
-      timer = setTimeout(() => setAttract(true), 10_000)
+      timer = setTimeout(() => setAttract(true), 12_000)
     }
     function onMove(e: PointerEvent) {
       const dx = Math.abs(e.clientX - lastX)
@@ -106,23 +152,48 @@ export function MainMenu() {
     }
   }, [attract])
 
-  // Operator of the Day — deterministic from today's date.
-  const operatorOfDay = useMemo(() => {
-    const today = new Date().toISOString().slice(0, 10)
-    let h = 0
-    for (let i = 0; i < today.length; i++) h = (h * 31 + today.charCodeAt(i)) >>> 0
-    return featured[h % featured.length]
-  }, [featured])
-
-  // No row is pre-lit at rest: STORY wins as primary by size + the START HERE
-  // badge, not by a persistent cursor glow. That keeps hover/focus feedback a
-  // real, visible state change on every row (including STORY) instead of a no-op.
-  const [activeId, setActiveId] = useState('')
   const [leaving, setLeaving] = useState(false)
-  // Which device the player is currently steering with. Keyboard/gamepad gets a
-  // distinct targeting reticle; mouse gets a lighter hover. Drives `.mm-kbd`.
   const [kbNav, setKbNav] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
+
+  // ── Moving selection cursor ──────────────────────────────────────────
+  const [activeIndex, setActiveIndex] = useState(0) // STORY is the default pick
+  const menuRef = useRef<HTMLDivElement>(null)
+  const itemRefs = useRef<Array<HTMLButtonElement | null>>([])
+  const [cursor, setCursor] = useState({ top: 0, height: 0 })
+  const [cursorReady, setCursorReady] = useState(false)
+
+  const positionCursor = useCallback((idx: number) => {
+    const el = itemRefs.current[idx]
+    if (!el) return
+    setCursor({ top: el.offsetTop, height: el.offsetHeight })
+  }, [])
+
+  useLayoutEffect(() => {
+    positionCursor(activeIndex)
+  }, [activeIndex, positionCursor])
+
+  // Reposition once fonts have loaded / on resize, so the highlight never
+  // ends up misaligned after a late web-font layout shift.
+  useEffect(() => {
+    let raf = 0
+    const recalc = () => {
+      cancelAnimationFrame(raf)
+      raf = requestAnimationFrame(() => {
+        positionCursor(activeIndex)
+        setCursorReady(true)
+      })
+    }
+    recalc()
+    const t = window.setTimeout(recalc, 360)
+    document.fonts?.ready?.then(recalc).catch(() => {})
+    window.addEventListener('resize', recalc)
+    return () => {
+      window.clearTimeout(t)
+      cancelAnimationFrame(raf)
+      window.removeEventListener('resize', recalc)
+    }
+  }, [activeIndex, positionCursor])
 
   // Authored menu-out transition, then navigate.
   const leaveTo = useCallback((fn: () => void) => {
@@ -132,7 +203,7 @@ export function MainMenu() {
       return
     }
     setLeaving(true)
-    window.setTimeout(fn, 320)
+    window.setTimeout(fn, 300)
   }, [])
 
   const go = useCallback(
@@ -149,33 +220,49 @@ export function MainMenu() {
     [leaveTo, setPhase],
   )
 
-  const select = useCallback((id: string) => {
-    setActiveId((prev) => {
-      if (prev !== id) Sfx.menuMove()
-      return id
-    })
-  }, [])
+  const activate = useCallback(
+    (m: ModeDef) => {
+      if (m.act === 'marquee') goPhase('marquee-matchups')
+      else go(m.act)
+    },
+    [go, goPhase],
+  )
 
-  // Roving keyboard nav across every menu control, in visual order.
-  const onKeyDown = useCallback((e: React.KeyboardEvent) => {
-    const key = e.key
-    if (['Tab', 'Enter', ' '].includes(key)) setKbNav(true)
-    if (!['ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight'].includes(key)) return
-    setKbNav(true)
-    const items = Array.from(
-      rootRef.current?.querySelectorAll<HTMLButtonElement>('[data-menu-item]') ?? [],
-    )
-    if (items.length === 0) return
-    e.preventDefault()
-    const cur = items.findIndex((el) => el === document.activeElement)
-    const forward = key === 'ArrowDown' || key === 'ArrowRight'
-    let next: number
-    if (cur === -1) next = forward ? 0 : items.length - 1
-    else next = (cur + (forward ? 1 : -1) + items.length) % items.length
-    items[next]?.focus()
-  }, [])
+  const focusMode = useCallback(
+    (idx: number, viaKeyboard: boolean) => {
+      setActiveIndex((prev) => {
+        if (prev !== idx) Sfx.menuMove()
+        return idx
+      })
+      if (viaKeyboard) itemRefs.current[idx]?.focus()
+    },
+    [],
+  )
 
-  const currentQuote = allQuotes[quoteIdx]
+  // Roving keyboard/gamepad nav across the mode list. Up/Down (and Left/Right)
+  // move the cursor; Enter/Space confirm the current pick.
+  const onKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      const k = e.key
+      if (['ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight'].includes(k)) {
+        e.preventDefault()
+        setKbNav(true)
+        const dir = k === 'ArrowDown' || k === 'ArrowRight' ? 1 : -1
+        setActiveIndex((i) => {
+          const n = (i + dir + MODES.length) % MODES.length
+          if (n !== i) Sfx.menuMove()
+          itemRefs.current[n]?.focus()
+          return n
+        })
+      } else if (k === 'Enter' || k === ' ') {
+        e.preventDefault()
+        setKbNav(true)
+        activate(MODES[activeIndex])
+      }
+    },
+    [activeIndex, activate],
+  )
+
   const focusFighter = featured[focusIdx % featured.length]
   const opposingFighter = featured[(focusIdx + Math.floor(featured.length / 2)) % featured.length]
 
@@ -184,11 +271,7 @@ export function MainMenu() {
   }
 
   const animClass = prefersReduced ? '' : 'mm-anim'
-
-  const stats = `${FIGHTERS.length} OPERATORS · ${FIGHTERS.reduce(
-    (s, f) => s + f.moves.length + 1,
-    0,
-  )} FRAMEWORKS · ${SCENARIO_ORDER.length} STAGES`
+  const activeMode = MODES[activeIndex]
 
   return (
     <div
@@ -198,7 +281,7 @@ export function MainMenu() {
       onPointerMove={() => kbNav && setKbNav(false)}
       onPointerDown={() => kbNav && setKbNav(false)}
     >
-      {/* ── Background: depth-of-field hero art ── */}
+      {/* ── Background stack ── */}
       <img
         src="/menu/title-hero.png"
         alt=""
@@ -206,108 +289,92 @@ export function MainMenu() {
         onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')}
         className={`mm-bg-art ${animClass}`}
       />
-      <div className="mm-scrim-left" />
-      <div className={`mm-godray ${animClass}`} />
-      <div className="mm-scrim-frame" />
+      <div className="mm-grade" />
+      <div className="mm-panel" />
+      <div className="mm-panel-edge" />
+      <div className="mm-vignette" />
+      <div className={`mm-sweep ${animClass}`} />
+      <div className={`mm-embers ${animClass}`} aria-hidden />
       <div className="mm-scan" />
-
-      {/* Operator of the day — top-right pill */}
-      <div className="mm-otd" style={{ ['--accent' as string]: operatorOfDay.accent }}>
-        <span className="mm-otd-k">☼ OP OF THE DAY</span>
-        <span className="mm-otd-v">{operatorOfDay.shortName}</span>
+      <div className="mm-grain" />
+      <div className="mm-corners" aria-hidden>
+        <span /><span /><span /><span />
       </div>
 
       <div className="mm-stage">
-        {/* ── LEFT: title + nav + utility ── */}
+        {/* ── LEFT: brand + nav + utility ── */}
         <div className="mm-left">
-          <div>
-            <div className={`mm-eyebrow ${animClass ? 'mm-title-in' : ''}`}>
-              A TACTICAL FIGHTER ON LENNY&rsquo;S PODCAST
+          <div className="mm-brand">
+            <div className={`mm-eyebrow ${animClass ? 'mm-in' : ''}`}>
+              A Tactical Fighter on Lenny&rsquo;s Podcast
             </div>
-            <h1 className={`mm-title ${animClass ? 'mm-title-in d1' : ''}`}>
+            <h1
+              className={`mm-logo ${animClass ? 'mm-in d1' : ''}`}
+              data-text="OPERATORS"
+            >
               OPERATORS
-              <span className="mm-title-under" />
             </h1>
-            <div className={`mm-subtitle ${animClass ? 'mm-title-in d3' : ''}`}>{stats}</div>
+            <span className={`mm-logo-slash ${animClass ? 'mm-in d2' : ''}`} />
           </div>
 
           {/* Primary navigation — one clear winner (STORY), then modes. */}
-          <nav className="mm-nav" aria-label="Main menu">
-            <PrimaryItem
-              id="story"
-              label="STORY MODE"
-              sub="8 chapters on Lenny's Podcast · your career, one fight at a time"
-              accent="#F72585"
-              active={activeId === 'story'}
-              onSelect={() => select('story')}
-              onActivate={() => go('story')}
-              onPrefetch={() => prefetchScreen('character-select')}
+          <nav className="mm-menu" aria-label="Main menu" ref={menuRef}>
+            <div
+              className={`mm-cursor ${cursorReady ? '' : ''}`}
+              style={{
+                top: cursor.top,
+                height: cursor.height,
+                ['--mm-accent' as string]: activeMode.accent,
+                opacity: cursorReady ? 1 : 0,
+              }}
             />
-            <SecondaryItem
-              id="vs"
-              label="VS MODE"
-              sub="local 2-player hot seat"
-              hint="2P"
-              accent="#00B4D8"
-              active={activeId === 'vs'}
-              onSelect={() => select('vs')}
-              onActivate={() => go('vs')}
-              onPrefetch={() => prefetchScreen('character-select')}
-            />
-            <SecondaryItem
-              id="marquee"
-              label="MARQUEE"
-              sub="curated dream matchups"
-              hint="★"
-              accent="#FFD60A"
-              active={activeId === 'marquee'}
-              onSelect={() => select('marquee')}
-              onActivate={() => goPhase('marquee-matchups')}
-              onPrefetch={() => prefetchScreen('marquee-matchups')}
-            />
-            <SecondaryItem
-              id="practice"
-              label="PRACTICE"
-              sub="train freely, no stakes"
-              hint="◇"
-              accent="#FCBF49"
-              active={activeId === 'practice'}
-              onSelect={() => select('practice')}
-              onActivate={() => go('practice')}
-              onPrefetch={() => prefetchScreen('character-select')}
-            />
+            {MODES.map((m, i) => (
+              <button
+                key={m.id}
+                ref={(el) => {
+                  itemRefs.current[i] = el
+                }}
+                data-menu-item
+                className={`mm-item ${m.primary ? 'mm-primary' : ''} ${activeIndex === i ? 'mm-on' : ''}`}
+                style={{ ['--accent' as string]: m.accent }}
+                onClick={() => activate(m)}
+                onMouseEnter={() => {
+                  focusMode(i, false)
+                  prefetchScreen(m.prefetch)
+                }}
+                onFocus={() => {
+                  setActiveIndex(i)
+                  prefetchScreen(m.prefetch)
+                }}
+                aria-label={`${m.label} — ${m.sub}`}
+              >
+                <span className="mm-index">{m.index}</span>
+                <span className="mm-item-main">
+                  <span className="mm-item-head">
+                    <span className="mm-item-label">{m.label}</span>
+                    <span className="mm-item-tag">{m.tag}</span>
+                  </span>
+                  <span className="mm-item-sub">{m.sub}</span>
+                </span>
+              </button>
+            ))}
           </nav>
 
-          {/* Lower cluster: rotating quote + de-emphasised utilities. */}
+          {/* Lower cluster: de-emphasised utilities. */}
           <div className="mm-lower">
-            <div className={`mm-quote ${animClass ? 'mm-quote-in' : ''}`} key={quoteIdx}>
-              {currentQuote ? (
-                <span>
-                  &ldquo;{currentQuote.quote}&rdquo;{' '}
-                  <cite>
-                    — {currentQuote.who} · {currentQuote.episode}
-                  </cite>
-                </span>
-              ) : (
-                <span style={{ opacity: 0.4 }}>…loading verbatim quotes…</span>
-              )}
-            </div>
-
             <div className="mm-util">
               <div className="mm-util-row">
-                <span className="mm-util-label">LIBRARY</span>
-                <Chip label="HOW TO PLAY" onClick={() => goPhase('how-to-play')} onHover={() => prefetchScreen('how-to-play')} />
-                <Chip label="ENCYCLOPEDIA" onClick={() => goPhase('framework-encyclopedia')} onHover={() => prefetchScreen('framework-encyclopedia')} />
-                <Chip label="QUOTE BANK" onClick={() => goPhase('quote-bank')} onHover={() => prefetchScreen('quote-bank')} />
-                <Chip label="STATS" onClick={() => goPhase('stats')} onHover={() => prefetchScreen('stats')} />
+                <span className="mm-util-label">Library</span>
+                <Chip label="How to Play" onClick={() => goPhase('how-to-play')} onHover={() => prefetchScreen('how-to-play')} />
+                <Chip label="Encyclopedia" onClick={() => goPhase('framework-encyclopedia')} onHover={() => prefetchScreen('framework-encyclopedia')} />
+                <Chip label="Credits" onClick={() => goPhase('credits')} onHover={() => prefetchScreen('credits')} />
               </div>
               <div className="mm-util-row">
-                <span className="mm-util-label">SETTINGS</span>
+                <span className="mm-util-label">Setup</span>
                 <Chip
-                  toggle
                   label={
                     <>
-                      DIFFICULTY ·{' '}
+                      Difficulty ·{' '}
                       <span className="mm-toggle-on">{difficulty.toUpperCase()}</span>
                     </>
                   }
@@ -320,10 +387,9 @@ export function MainMenu() {
                   }}
                 />
                 <Chip
-                  toggle
                   label={
                     <>
-                      MUSIC ·{' '}
+                      Music ·{' '}
                       <span className={music ? 'mm-toggle-on' : 'mm-toggle-off'}>
                         {music ? 'ON' : 'OFF'}
                       </span>
@@ -333,10 +399,9 @@ export function MainMenu() {
                   onClick={toggleMusic}
                 />
                 <Chip
-                  toggle
                   label={
                     <>
-                      VOICE ·{' '}
+                      Voice ·{' '}
                       <span className={voice ? 'mm-toggle-on' : 'mm-toggle-off'}>
                         {voice ? 'ON' : 'OFF'}
                       </span>
@@ -345,7 +410,6 @@ export function MainMenu() {
                   title="Toggle fighter voice lines (browser TTS)"
                   onClick={toggleVoice}
                 />
-                <Chip label="CREDITS" onClick={() => goPhase('credits')} onHover={() => prefetchScreen('credits')} />
               </div>
             </div>
           </div>
@@ -353,116 +417,44 @@ export function MainMenu() {
 
         {/* ── RIGHT: featured VS showcase ── */}
         <div className="mm-right">
-          <div className="mm-right-focus" />
-          <div className="mm-showcase-tag">◇ TONIGHT&rsquo;S CARD ◇</div>
-          <div className="mm-showcase-floor" />
-          <div className="mm-showcase">
+          <div className="mm-show-tag">◇ Tonight&rsquo;s Card ◇</div>
+          <div className="mm-show-floor" />
+          <div className="mm-show">
             <ShowcaseFighter fighter={focusFighter} side="a" anim={animClass} />
             <div className="mm-vs">VS</div>
             <ShowcaseFighter fighter={opposingFighter} side="b" anim={animClass} />
           </div>
-          <div className={`mm-press ${animClass}`}>◇ CHOOSE YOUR MODE ◇</div>
         </div>
       </div>
 
-      <div className="mm-seam" />
-
-      <div className="mm-foot">
-        ● INSERT COIN ● #LENNYSBUILDATHON ● OPERATORS V1.0
+      <div className="mm-hint">
+        <span>
+          <kbd>↑</kbd>
+          <kbd>↓</kbd> Navigate
+        </span>
+        <span>
+          <kbd>⏎</kbd> Select
+        </span>
       </div>
     </div>
   )
 }
 
-/* ── Nav items ──────────────────────────────────────────────────────── */
-
-interface ItemProps {
-  id: string
-  label: string
-  sub: string
-  accent: string
-  active: boolean
-  onSelect: () => void
-  onActivate: () => void
-  onPrefetch?: () => void
-}
-
-function PrimaryItem({ label, sub, accent, active, onSelect, onActivate, onPrefetch }: ItemProps) {
-  return (
-    <button
-      data-menu-item
-      className={`mm-item mm-primary ${active ? 'mm-active' : ''}`}
-      style={{ ['--accent' as string]: accent }}
-      onClick={onActivate}
-      onMouseEnter={() => {
-        onSelect()
-        onPrefetch?.()
-      }}
-      onFocus={() => {
-        onSelect()
-        onPrefetch?.()
-      }}
-      aria-label={`${label} — ${sub}`}
-    >
-      <span className="mm-caret">▶</span>
-      <span className="mm-tag">START HERE</span>
-      <div className="mm-item-label">♛ {label}</div>
-      <div className="mm-item-sub">{sub}</div>
-    </button>
-  )
-}
-
-function SecondaryItem({
-  label,
-  sub,
-  accent,
-  active,
-  hint,
-  onSelect,
-  onActivate,
-  onPrefetch,
-}: ItemProps & { hint?: string }) {
-  return (
-    <button
-      data-menu-item
-      className={`mm-item mm-secondary ${active ? 'mm-active' : ''}`}
-      style={{ ['--accent' as string]: accent }}
-      onClick={onActivate}
-      onMouseEnter={() => {
-        onSelect()
-        onPrefetch?.()
-      }}
-      onFocus={() => {
-        onSelect()
-        onPrefetch?.()
-      }}
-      aria-label={`${label} — ${sub}`}
-    >
-      <span className="mm-caret">▶</span>
-      <div className="mm-item-label">{label}</div>
-      <div className="mm-item-sub">{sub}</div>
-      {hint && <span className="mm-item-key">{hint}</span>}
-    </button>
-  )
-}
-
+/* ── Utility chip ───────────────────────────────────────────────────── */
 function Chip({
   label,
   onClick,
   onHover,
   title,
-  toggle,
 }: {
   label: React.ReactNode
   onClick: () => void
   onHover?: () => void
   title?: string
-  toggle?: boolean
 }) {
   return (
     <button
-      data-menu-item
-      className={`mm-chip ${toggle ? 'mm-toggle' : ''}`}
+      className="mm-chip"
       onClick={onClick}
       onMouseEnter={() => {
         Sfx.menuMove()
@@ -489,13 +481,15 @@ function ShowcaseFighter({
   return (
     <div
       key={fighter.id}
-      className={`mm-fighter mm-showcase-entry ${anim}`}
-      style={{
-        ['--faccent' as string]: fighter.accent,
-        filter: `drop-shadow(0 0 20px ${fighter.accent}99) drop-shadow(0 16px 7px rgba(0,0,0,0.55))`,
-      }}
+      className="mm-fighter"
+      style={{ ['--faccent' as string]: fighter.accent }}
     >
-      <div className={`mm-fighter-art ${anim ? 'idle-bob' : ''}`}>
+      <div
+        className={`mm-fighter-art ${anim ? 'idle-bob' : ''}`}
+        style={{
+          filter: `drop-shadow(0 0 22px ${fighter.accent}88) drop-shadow(0 18px 10px rgba(0,0,0,0.55))`,
+        }}
+      >
         <Sprite fighter={fighter} side={side} state="stance" />
       </div>
       <div className="mm-nameplate">

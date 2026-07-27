@@ -219,36 +219,47 @@
 }
 
 /* ============================ SUPER GAUGE =============================== */
-.fh-sm-wrap { display: flex; align-items: center; gap: 9px; margin-top: 6px; }
+.fh-sm-wrap { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
 .fh-side.mirror .fh-sm-wrap { flex-direction: row-reverse; }
 .fh-sm {
-  position: relative; flex: 1; height: 18px;
-  background: linear-gradient(180deg, #11141e, #04060b);
+  position: relative; flex: 1; height: 22px;
+  /* Empty track reads as chargeable energy cells across the full width so the
+     gauge has combat presence even at 0% — not an invisible dark sliver. */
+  background:
+    repeating-linear-gradient(90deg, rgba(90,150,255,0.10) 0 2px, transparent 2px 26px),
+    linear-gradient(180deg, #182034 0%, #0a1120 50%, #05070d 100%);
   border: 2px solid var(--ink);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), inset 0 -3px 7px rgba(0,0,0,0.62);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.14),
+    inset 0 0 12px rgba(60,110,220,0.28),
+    inset 0 -3px 7px rgba(0,0,0,0.62),
+    0 0 0 2px color-mix(in srgb, var(--sm-2) 34%, #04050b),
+    0 3px 10px rgba(0,0,0,0.5);
   overflow: hidden;
-  clip-path: polygon(0 0, 100% 0, 100% 100%, 9px 100%, 0 50%);
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 11px 100%, 0 50%);
 }
-.fh-side.mirror .fh-sm { clip-path: polygon(0 0, 100% 0, 100% 50%, calc(100% - 9px) 100%, 0 100%); }
+.fh-side.mirror .fh-sm { clip-path: polygon(0 0, 100% 0, 100% 50%, calc(100% - 11px) 100%, 0 100%); }
 .fh-sm .sm-fill {
   position: absolute; inset: 0; transform-origin: left center;
-  background: linear-gradient(90deg, var(--sm-1), var(--sm-2) 55%, var(--sm-3));
-  box-shadow: 0 0 14px rgba(120,90,255,0.8);
+  background: linear-gradient(90deg, var(--sm-1), var(--sm-2) 52%, var(--sm-3));
+  box-shadow: 0 0 16px rgba(120,90,255,0.9), inset 0 0 10px rgba(255,255,255,0.22);
+  filter: saturate(1.3) brightness(1.08);
   transition: transform 300ms cubic-bezier(0.3,0.9,0.35,1);
 }
 .fh-side.mirror .fh-sm .sm-fill { transform-origin: right center; }
 .fh-sm .sm-fill::before {
-  content: ''; position: absolute; inset: 0;
-  background: linear-gradient(180deg, rgba(255,255,255,0.6), transparent 52%);
+  content: ''; position: absolute; left: 0; right: 0; top: 0; height: 45%;
+  background: linear-gradient(180deg, rgba(255,255,255,0.7), transparent);
 }
 .fh-sm .sm-fill::after {
   content: ''; position: absolute; inset: 0;
-  background: repeating-linear-gradient(114deg, rgba(255,255,255,0.16) 0 2px, transparent 2px 13px);
-  mix-blend-mode: overlay; opacity: 0.55;
+  background: repeating-linear-gradient(114deg, rgba(255,255,255,0.18) 0 2px, transparent 2px 13px);
+  mix-blend-mode: overlay; opacity: 0.6;
 }
 .fh-sm .sm-notch {
-  position: absolute; top: -1px; bottom: -1px; width: 5px; margin-left: -2.5px;
-  background: linear-gradient(90deg, rgba(255,255,255,0.14), rgba(2,4,9,0.94) 40% 60%, rgba(255,255,255,0.14));
+  position: absolute; top: -1px; bottom: -1px; width: 6px; margin-left: -3px;
+  background: linear-gradient(90deg, rgba(255,255,255,0.18), rgba(2,4,9,0.96) 40% 60%, rgba(255,255,255,0.18));
+  box-shadow: 0 0 3px rgba(0,0,0,0.8);
   transform: skewX(-16deg); z-index: 2;
 }
 .fh-sm.ready {

@@ -537,17 +537,18 @@
   align-items: center;
 }
 /* per-fighter floor bounce — a LOW, flat pool at the feet (not a tall halo
-   that bleeds up the body and reads as backlight). */
+   that bleeds up the body and reads as backlight). Kept dim so the dark
+   contact shadow below stays visible against it. */
 .mm-fighter::before {
   content: "";
   position: absolute;
-  bottom: 2%;
+  bottom: 1.5%;
   left: 50%;
-  width: 118%;
-  height: 16%;
+  width: 112%;
+  height: 13%;
   transform: translateX(-50%);
-  background: radial-gradient(ellipse at center, color-mix(in srgb, var(--faccent, #FFD60A) 40%, transparent) 0%, transparent 68%);
-  z-index: -1;
+  background: radial-gradient(ellipse at center, color-mix(in srgb, var(--faccent, #FFD60A) 30%, transparent) 0%, transparent 66%);
+  z-index: -2;
   pointer-events: none;
 }
 .mm-fighter-art {
@@ -555,34 +556,31 @@
   width: clamp(170px, 21vw, 340px);
   height: clamp(250px, 49vh, 450px);
 }
-/* Contact shadow so the fighter is planted on a floor, not floating. Two
-   layers: a tight dark core + a soft wide penumbra. The core is cast
-   directionally (down-right) to imply a key light from the upper-left. */
+/* Contact shadow so the fighter is planted on a floor, not floating. A tight
+   near-black core directly under the feet (reads as contact/occlusion),
+   rendered above the dimmed floor pool so it stays visible. */
 .mm-fighter-art::after {
   content: "";
   position: absolute;
-  left: 55%;
-  bottom: 6%;
-  width: 64%;
-  height: 7.5%;
-  transform: translateX(-50%) skewX(-20deg);
-  background: radial-gradient(ellipse at center, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.58) 42%, transparent 74%);
+  left: 50%;
+  bottom: 6.5%;
+  width: 58%;
+  height: 6.5%;
+  transform: translateX(-50%);
+  background: radial-gradient(ellipse at center, rgba(0,0,0,0.96) 0%, rgba(0,0,0,0.7) 46%, transparent 76%);
   z-index: -1;
   pointer-events: none;
-  filter: blur(1px);
 }
-/* wide soft penumbra + a faint warm floor-contact rim under the core */
+/* wide soft penumbra fanning out from the core */
 .mm-fighter-art::before {
   content: "";
   position: absolute;
   left: 50%;
-  bottom: 3.5%;
-  width: 94%;
-  height: 11%;
+  bottom: 4%;
+  width: 96%;
+  height: 10%;
   transform: translateX(-50%);
-  background:
-    radial-gradient(ellipse at center, rgba(0,0,0,0.5) 0%, transparent 70%),
-    radial-gradient(ellipse at center, color-mix(in srgb, var(--faccent, #FFD60A) 24%, transparent) 0%, transparent 60%);
+  background: radial-gradient(ellipse at center, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.28) 40%, transparent 72%);
   z-index: -1;
   pointer-events: none;
   filter: blur(2px);

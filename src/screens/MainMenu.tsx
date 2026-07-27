@@ -114,8 +114,10 @@ export function MainMenu() {
     return featured[h % featured.length]
   }, [featured])
 
-  // Selection state for the primary nav (mouse + keyboard unified).
-  const [activeId, setActiveId] = useState('story')
+  // No row is pre-lit at rest: STORY wins as primary by size + the START HERE
+  // badge, not by a persistent cursor glow. That keeps hover/focus feedback a
+  // real, visible state change on every row (including STORY) instead of a no-op.
+  const [activeId, setActiveId] = useState('')
   const [leaving, setLeaving] = useState(false)
   // Which device the player is currently steering with. Keyboard/gamepad gets a
   // distinct targeting reticle; mouse gets a lighter hover. Drives `.mm-kbd`.
@@ -490,7 +492,7 @@ function ShowcaseFighter({
       className={`mm-fighter mm-showcase-entry ${anim}`}
       style={{
         ['--faccent' as string]: fighter.accent,
-        filter: `drop-shadow(0 0 22px ${fighter.accent}AA) drop-shadow(0 10px 0 rgba(0,0,0,0.55))`,
+        filter: `drop-shadow(0 0 20px ${fighter.accent}99) drop-shadow(0 16px 7px rgba(0,0,0,0.55))`,
       }}
     >
       <div className={`mm-fighter-art ${anim ? 'idle-bob' : ''}`}>

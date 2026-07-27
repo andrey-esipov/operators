@@ -416,8 +416,10 @@ const WAVE_FRAG = /* glsl */ `
       float rot = uSeed * 2.0 + uAge * 1.4;    // slight swirl — energy whipping round
       float idx = floor((ang + rot + 3.14159) / sector);
       float da = mod(ang + rot + sector * 0.5, sector) - sector * 0.5;
-      // per-blade length varies wildly for a ragged, hand-thrown barrage
-      float len = 0.5 + 0.5 * hash(idx + uSeed * 3.0);
+      // per-blade length varies for a ragged, hand-thrown barrage, but every blade
+      // reaches well out into dark space so the rosette punches past the contact
+      // spark cloud (like the crit star) instead of being swallowed by its bloom.
+      float len = 0.68 + 0.32 * hash(idx + uSeed * 3.0);
       float reach = len * ease;
       float along = smoothstep(reach, 0.0, r);
       float halfw = 0.19 * clamp(1.0 - r / max(reach, 0.001), 0.0, 1.0); // narrows to tip
@@ -430,10 +432,10 @@ const WAVE_FRAG = /* glsl */ `
       float rings = ring(r, r1, 0.03) + ring(r, r2, 0.024) * 0.7;
       rings *= (1.0 - smoothstep(0.4, 1.0, uAge));
       vec3 core = hotCore(r, ang, uColor2, 0.16, uSeed);
-      float coreA = smoothstep(0.16, 0.0, r) * 0.7;
+      float coreA = smoothstep(0.16, 0.0, r) * 0.32;
       float a = clamp((blade * 0.95 + coreline + rings + coreA) * grow * fade, 0.0, 1.0);
-      vec3 col = uColor2 * (blade * 2.4 + rings * 2.0)
-                 + vec3(1.0) * (coreline * 0.55 + rings * 0.25) + core * 0.9;
+      vec3 col = uColor2 * (blade * 2.9 + rings * 2.0)
+                 + vec3(1.0) * (coreline * 0.55 + rings * 0.25) + core * 0.4;
       col *= uIntensity;
       if (a < 0.004) discard;
       gl_FragColor = vec4(col, a);

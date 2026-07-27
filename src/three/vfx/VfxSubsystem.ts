@@ -130,7 +130,7 @@ const RECIPES: Record<HitFlavor, Recipe> = {
     shock: true, shockSize: 3.2,
     groundRing: 1.5, scorch: 0.6, dust: 11,
     smokeCount: 8, emberCount: 18,
-    lightPeak: 17, lightDecay: 0.2, lightRange: 11,
+    lightPeak: 15, lightDecay: 0.13, lightRange: 10,
     radial: false, combo: true,
   },
   ex: {
@@ -455,9 +455,11 @@ export class VfxSubsystem implements Subsystem {
       this.waves.spawn('halo', p, r.shockSize * 0.26 * scale, 0.44, core, energy, 0.34 * mult)
     } else if (r.combo) {
       // COMBO: violet multi-hit flurry rosette + a compact energy core. Snaps to
-      // full size instantly so even the opening micro-hit reads on capture.
-      this.waves.spawn('flurry', p, r.shockSize * 1.5 * scale, 0.9, C(0xffffff), energy, 2.2 * mult)
-      this.waves.spawn('halo', p, r.shockSize * 0.4 * scale, 0.46, core, energy, 0.4 * mult)
+      // full size instantly so even the opening micro-hit reads on capture. Sized
+      // up + brighter, with the central halo trimmed, so the violet blades own the
+      // silhouette instead of drowning inside the contact bloom.
+      this.waves.spawn('flurry', p, r.shockSize * 2.35 * scale, 0.9, C(0xffffff), energy, 2.8 * mult)
+      this.waves.spawn('halo', p, r.shockSize * 0.34 * scale, 0.46, core, energy, 0.26 * mult)
     } else if (r.shock && !r.radial) {
       const shockPos = p.clone().add(away.clone().multiplyScalar(0.35 * scale))
       this.waves.spawn('shock', shockPos, r.shockSize * scale, 0.86, core, energy, 1.7 * mult, 1.18)

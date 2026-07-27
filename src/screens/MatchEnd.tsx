@@ -182,17 +182,19 @@ export function MatchEnd() {
           style={{ animation: 'cer-loser-in 0.5s ease-out 0.2s both' }}
         >
           <div style={{
-            width: 'min(21vw, 200px)', height: 'min(27vh, 210px)',
+            width: foil.litVictor ? 'min(29vw, 310px)' : 'min(21vw, 200px)',
+            height: foil.litVictor ? 'min(42vh, 360px)' : 'min(27vh, 210px)',
             filter: foil.litVictor
-              ? `drop-shadow(0 0 20px ${accent}) brightness(1.02)`
+              ? `drop-shadow(0 0 26px ${accent}) brightness(1.05)`
               : 'grayscale(0.7) brightness(0.62)',
           }}>
             <Sprite fighter={foil.fighter} side={foil.side} state={foil.state} />
           </div>
           <Kicker style={{
-            marginTop: 2, fontSize: 'clamp(9px,1vw,12px)',
+            marginTop: 2, fontSize: foil.litVictor ? 'clamp(11px,1.35vw,17px)' : 'clamp(9px,1vw,12px)',
             color: foil.litVictor ? accent : 'rgba(255,255,255,0.5)',
             letterSpacing: '0.18em', fontWeight: 700,
+            textShadow: foil.litVictor ? `0 0 14px ${accent}` : undefined,
           }}>{foil.label}</Kicker>
           {!foil.litVictor && (
             <div className="cer-type cer-quote mt-1 max-w-[16ch] text-center leading-tight" style={{ fontStyle: 'italic', fontSize: 'clamp(12px,1.3vw,15px)', color: 'rgba(255,255,255,0.4)' }}>“{loser.voiceLines.lose}”</div>
@@ -315,7 +317,7 @@ function StatBar({ stats, lost }: { stats: { label: string; value: string; unit:
     <div
       className="cer-type relative z-10 mt-3"
       style={{
-        animation: 'cer-tile-pop 0.5s cubic-bezier(0.2,0.9,0.3,1) 0.5s both',
+        animation: 'cer-tile-pop 0.5s cubic-bezier(0.2,0.9,0.3,1) 1.15s both',
       }}
     >
       <div

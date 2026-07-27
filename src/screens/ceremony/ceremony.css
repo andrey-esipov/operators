@@ -115,6 +115,15 @@
   100% { transform: translate(-50%, -50%) rotate(var(--rot)) scaleX(1); opacity: 0; }
 }
 
+/* KO hit-freeze flash — holds near-peak white through the ~120ms impact frame
+   (screen blend keeps the white KO letters readable while the arena blows out),
+   then drops fast. Makes the impact frame the visual peak. */
+@keyframes cer-hitfreeze {
+  0%   { opacity: 0.72; }
+  38%  { opacity: 0.6; }
+  100% { opacity: 0; }
+}
+
 /* Hard, short camera shake used on impacts. */
 @keyframes cer-shake-hard {
   0%, 100% { transform: translate(0, 0); }

@@ -57,9 +57,17 @@ export function RoundEnd() {
       <StageBackdrop scenario={scenario} tint={isPerfect ? '#F7A400' : '#F0431F'} dim={isPerfect ? 0.5 : 0.42} />
       <div className="cer-rays" style={{ opacity: 0.18 }} />
       <div className="cer-grain" />
-      {/* Hard white impact flash + a second faster flash for percussion. */}
-      <ImpactFlash duration={0.18} />
-      <ImpactFlash duration={0.1} delay={0.12} />
+      {/* Hard white impact flash — a HELD hit-freeze flash makes the ~120ms
+          impact frame the visual peak (screen blend keeps the KO letters
+          readable while the arena blows out), plus a fast percussive second
+          flash. */}
+      {!isDraw && (
+        <div
+          className="absolute inset-0 pointer-events-none z-40"
+          style={{ background: 'white', mixBlendMode: 'screen', opacity: 0, animation: 'cer-hitfreeze 0.34s linear both' }}
+        />
+      )}
+      <ImpactFlash duration={0.12} delay={0.18} />
       {/* Radial speed lines punching out from the KO. */}
       <div
         className="absolute inset-0 pointer-events-none"

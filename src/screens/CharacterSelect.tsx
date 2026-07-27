@@ -471,7 +471,7 @@ function StandoffHero({
   singlePicker: boolean
 }) {
   const sideColor = SIDE_COLOR[side]
-  const basis = singlePicker ? 'clamp(360px, 33%, 520px)' : 'clamp(292px, 23%, 392px)'
+  const basis = singlePicker ? 'clamp(360px, 33%, 520px)' : 'clamp(340px, 27.5%, 480px)'
   const cls = [
     'sel-standoff',
     side === 'a' ? 'sel-standoff-a' : 'sel-standoff-b',
@@ -529,7 +529,7 @@ function StandoffHero({
         </div>
         {fighter ? (
           <>
-            <div className="sel-name sel-standoff-nametext" style={{ fontSize: 'clamp(22px, 2.4vw, 42px)' }} title={fighter.name}>
+            <div className="sel-name sel-standoff-nametext" style={{ fontSize: 'clamp(26px, 2.9vw, 54px)' }} title={fighter.name}>
               {fighter.name}
             </div>
             <div className="sel-h sel-standoff-arch" style={{ fontSize: 11, letterSpacing: '0.16em', color: fighter.accent, textTransform: 'uppercase' }}>

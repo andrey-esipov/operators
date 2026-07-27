@@ -508,6 +508,15 @@ export const FIGHTER_FRAGMENT = /* glsl */ `
     vec3 rim = uRimColor * uRimIntensity * fres * rimTerm * mix(1.0, 0.4, matte);
     // Neutral rim is held off the ink outline so flat frames never halo.
     rim *= mix(0.12, 1.0, interior);
+    // Convexity gate: the fresnel edge terms fire wherever the DETAILED normal
+    // turns away from the camera — which is true at the silhouette (a convex roll)
+    // but ALSO inside every concave fold crease, where a rim would light the crease
+    // and invert the form (fold reads brighter than the lit fabric beside it — the
+    // "flat sticker suit" failure). Cavity is ~1 on convex ridges/edges and low in
+    // recesses, so use it to keep the carving edge on convex silhouette geometry
+    // and starve it inside creases, letting the fold structure read as shadow.
+    float convex = smoothstep(0.30, 0.66, cavity);
+    rim *= mix(0.45, 1.0, convex);
 
     // Always-on separation kicker: a bright, near-neutral back-light that carves
     // the whole silhouette away from the backdrop no matter how weak (or how
@@ -548,6 +557,10 @@ export const FIGHTER_FRAGMENT = /* glsl */ `
     // outline) but keep enough of it right at the back edge to actually read as
     // separation, and clamp to sprite alpha so it can't spill past the silhouette.
     kicker *= mix(mix(0.52, 0.72, lowerBody), 1.0, interior) * base.a;
+    // Same convexity gate as the neutral rim: keep the bright carving edge on
+    // convex silhouette geometry and out of interior fold creases so it separates
+    // the figure without lighting (and inverting) the suit's folds.
+    kicker *= mix(0.5, 1.0, convex);
     rim += kicker;
 
     // Accent corona: the fighter's identity colour, reserved for super state.
@@ -601,6 +614,16 @@ export const FIGHTER_FRAGMENT = /* glsl */ `
     // it never grays out a dark top that is already reading as lit cloth.
     float darkNeed = 1.0 - smoothstep(0.035, 0.11, luma(lit));
     lit += keyCol * dark * wrapKey * selfShadow * ao * uKeyIntensity * 0.1 * darkNeed;
+    // Stage-independent companion to the key-driven fill above: the term above rides
+    // uKeyIntensity/keyCol, so a DIM rig (an ai-native stage whose ambient/fill has
+    // been dropped) leaves a dark jacket a black void with no form, while a bright
+    // rig washes it flat. Anchor a small sculpted gradient on dark cloth that does
+    // NOT depend on the stage's intensity: a fixed cool-neutral light along the broad
+    // body normal paints lit front/top planes, cavity keeps the fold cores dark, and
+    // darkNeed limits it to suits that are actually crushed — so the suit always reads
+    // as rounded form at a controlled value on ANY rig, never a void and never a wash.
+    float suitForm = clamp(dot(Nbroad, normalize(vec3(0.2, 0.72, 0.95))) * 0.5 + 0.5, 0.0, 1.0);
+    lit += vec3(0.10, 0.105, 0.125) * dark * suitForm * cavity * ao * darkNeed;
     // Lower-body form: the overhead key barely reaches the legs, so the key-driven
     // term above sculpts the torso but leaves dark trousers a flat black void below
     // a modeled torso (a value discontinuity read head-on). Drive a second form term

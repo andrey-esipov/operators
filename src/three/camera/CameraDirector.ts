@@ -514,9 +514,10 @@ export class CameraDirector implements Subsystem {
       //    — a hard low up-angle towering over the caster (much lower than the
       //    eye-level opening wide), bold dutch, feet grounded by the wide lens.
       { t: 0.84, build: () => hero(4.3, 0.95, 0.42, 52, 0.12, 0.12, 0.2), ease: easeOutCubic },
-      // 7. Land on a low hero medium that still has torque — end on a peak, not a
-      //    flat eye-level exhale; the spring-back to neutral is the resolution.
-      { t: 1.0, build: () => hero(4.3, 1.1, 0.62, 36, 0.09, 0.34, 0.16), ease: easeOutCubic },
+      // 7. Land the button LOW and wide — drop the camera near the deck and open
+      //    the lens so the finisher settles on a grounded low-hero full figure
+      //    (not a medium re-cant); the spring-back to neutral is the resolution.
+      { t: 1.0, build: () => hero(4.6, 1.15, 0.4, 40, 0.07, 0.2, 0.18), ease: easeOutCubic },
     ]
   }
 

@@ -25,6 +25,21 @@ const DISCIPLINE_FILTER_ORDER: DisciplineFilter[] = [
 ]
 const ERA_FILTER_ORDER: EraFilter[] = ['all', 'early', 'mid', 'recent']
 
+// Luminance-normalised roster-cell wash colours. The canonical DISCIPLINE_COLOR
+// values include dark hues (ai = #7209B7 purple) that vanish against the dark
+// cell; these punchier equivalents keep every discipline's tint legible in the
+// grid while the pip still uses the exact canonical colour.
+const CELL_WASH: Record<string, string> = {
+  product: '#FFD60A',
+  design: '#FF3D9A',
+  engineering: '#0BE8AF',
+  growth: '#FF9410',
+  ai: '#B15EF0',
+  capital: '#2CC8EE',
+  ops: '#FCBF49',
+  host: '#FF5A67',
+}
+
 // Player-side identity colours. Warm = P1, cool = P2. Reinforced everywhere
 // (hero frame, VS strip, roster selection) so it's always obvious whose turn
 // it is and which fighter belongs to whom.
@@ -304,7 +319,7 @@ export function CharacterSelect() {
               </div>
               {/* Keyed by id so the render snaps/re-animates on every swap */}
               <div className="sel-hero-figure" key={hoveredFighter.id}>
-                <div style={{ width: '92%', height: '104%' }}>
+                <div style={{ width: '98%', height: '116%' }}>
                   <Sprite fighter={hoveredFighter} side={side} state="stance" />
                 </div>
               </div>
@@ -499,6 +514,7 @@ export function CharacterSelect() {
               const isLocked = UNLOCKABLES.includes(id)
               const isHovered = hovered === id
               const discColor = DISCIPLINE_COLOR[getDiscipline(f)]
+              const washColor = CELL_WASH[getDiscipline(f)] ?? discColor
               // In Story Mode, the marquee 8 get a visible gold rim + star
               // badge so players know which fighters have a hand-written
               // career arc waiting for them. Non-marquee fighters still play
@@ -538,7 +554,7 @@ export function CharacterSelect() {
                   style={{
                     background: marquee
                       ? 'linear-gradient(180deg, rgba(255,240,200,0.12) 0%, rgba(90,72,28,0.82) 12%, rgba(52,40,14,0.7) 52%, rgba(12,8,20,0.94) 100%)'
-                      : `linear-gradient(180deg, rgba(255,255,255,0.10) 0%, ${discColor}aa 10%, ${discColor}55 48%, ${discColor}26 78%, rgba(9,6,16,0.92) 100%)`,
+                      : `linear-gradient(180deg, rgba(255,255,255,0.10) 0%, ${washColor}b0 10%, ${washColor}5c 48%, ${washColor}2c 78%, rgba(9,6,16,0.92) 100%)`,
                     border: `${(selByA || selByB || isCursor) ? '2px' : '1px'} solid ${borderCol}`,
                     boxShadow: (selByA || selByB)
                       ? `0 0 0 2px ${pickGlow}, 0 0 22px ${pickGlow}, inset 0 -14px 18px -12px ${f.accent}`
@@ -546,7 +562,7 @@ export function CharacterSelect() {
                       ? `0 0 18px ${sideColor}cc, inset 0 -16px 20px -12px ${f.accent}, inset 0 1px 0 rgba(255,255,255,0.16)`
                       : marquee
                       ? `0 0 12px #FFD60A55, inset -2px -2px 0 rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.08)`
-                      : `inset 0 2px 0 rgba(255,255,255,0.12), inset -2px -3px 0 rgba(0,0,0,0.55), inset 0 -13px 16px -10px ${discColor}, 0 4px 9px rgba(0,0,0,0.5)`,
+                      : `inset 0 2px 0 rgba(255,255,255,0.12), inset -2px -3px 0 rgba(0,0,0,0.55), inset 0 -13px 16px -10px ${washColor}, 0 4px 9px rgba(0,0,0,0.5)`,
                     cursor: isLocked ? 'not-allowed' : 'pointer',
                     opacity: isLocked ? 0.4 : (isCursor || selByA || selByB || marquee) ? 1 : 0.78,
                     filter: isLocked
@@ -764,13 +780,21 @@ function HeroNameplate({
       <div className="flex items-center gap-3 mt-2.5">
         <div className="flex items-center gap-2 flex-1 min-w-0">
           <span className="font-display text-[8px] tracking-widest" style={{ color: '#06D6A0' }}>HP</span>
-          <div className="flex-1 h-2.5 relative" style={{ background: 'rgba(0,0,0,0.55)', border: '1px solid rgba(255,255,255,0.15)' }}>
+          <div className="flex-1 h-3 relative" style={{ background: 'rgba(0,0,0,0.55)', border: '1px solid rgba(255,255,255,0.15)' }}>
             <div
               className="absolute inset-y-0 left-0"
               style={{
                 width: `${hpPct * 100}%`,
-                background: 'linear-gradient(180deg, #29f0b4, #06D6A0)',
-                boxShadow: '0 0 8px #06D6A0aa',
+                background: 'linear-gradient(180deg, #4dffca, #06D6A0 60%, #04966f)',
+                boxShadow: '0 0 8px #06D6A0aa, inset 0 1px 0 rgba(255,255,255,0.45)',
+              }}
+            />
+            {/* Segmented notch markers — arcade HP bar, not a smooth web meter */}
+            <div
+              className="absolute inset-0 pointer-events-none"
+              style={{
+                backgroundImage:
+                  'repeating-linear-gradient(90deg, transparent 0, transparent calc(10% - 1px), rgba(0,0,0,0.6) calc(10% - 1px), rgba(0,0,0,0.6) 10%)',
               }}
             />
           </div>
@@ -815,12 +839,13 @@ function HeroNameplate({
           className="sel-chip flex-1 font-display text-[9px] tracking-widest px-3 py-2"
           style={{
             background: expanded
-              ? `linear-gradient(180deg, ${sideColor}66, ${sideColor}22)`
-              : `linear-gradient(180deg, ${fighter.accent}4a, ${fighter.accent}14)`,
-            color: '#fff',
-            border: `1px solid ${expanded ? sideColor : fighter.accent}`,
-            boxShadow: `inset 0 2px 0 rgba(255,255,255,0.35), inset 0 -3px 0 rgba(0,0,0,0.55), 0 2px 4px rgba(0,0,0,0.5)`,
+              ? `linear-gradient(180deg, ${sideColor}cc, ${sideColor}88)`
+              : 'linear-gradient(180deg, #8a93a6, #444d5e 55%, #2b313d)',
+            color: expanded ? '#fff' : '#f2f5fb',
+            border: `1px solid ${expanded ? sideColor : '#aab4c6'}`,
+            boxShadow: `inset 0 2px 0 rgba(255,255,255,0.5), inset 0 -3px 0 rgba(0,0,0,0.55), 0 2px 4px rgba(0,0,0,0.5)`,
             clipPath: 'polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%, 0 5px)',
+            textShadow: expanded ? 'none' : '0 1px 0 rgba(0,0,0,0.45)',
             cursor: 'pointer',
           }}
         >

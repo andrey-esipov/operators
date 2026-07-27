@@ -140,7 +140,12 @@ vec3 agx(vec3 color, vec3 slope, vec3 offset, vec3 power, float sat) {
   color = agxContrast(color);
 
   float l = luma(color);
-  color = pow(max(color * slope + offset, 0.0), power);
+  // Guard the base off exactly 0. GLSL compiles pow(x,y) as exp2(y*log2(x)), and
+  // log2(0) is -INF, so a zero base with a zero exponent evaluates 0 * -INF, which
+  // ANGLE/Metal returns as NaN. lookPower is authored per stage, so a future 0
+  // there would NaN the entire frame. This project has already shipped three
+  // separate bugs from this exact expression; the clamp costs nothing.
+  color = pow(max(color * slope + offset, 1e-5), power);
   color = clamp(l + sat * (color - l), 0.0, 1.0);
 
   color = AgXOutsetMatrix * color;
@@ -263,7 +268,9 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, const in float depth,
     // pixel) is opened up and reads as a lit subject rather than dissolving into
     // the arena. A gamma < 1 lifts shadows hard while leaving highlights, so it
     // only rescues where the fighter is dark and never blows out bright stages.
-    charLit = pow(clamp(charLit, 0.0, 1.0), vec3(charLift));
+    // Base clamped off 0: charLift is a settable uniform, and pow(0.0, 0.0) is
+    // 0 * -INF -> NaN on ANGLE/Metal. See the note in agxLook().
+    charLit = pow(clamp(charLit, 1e-5, 1.0), vec3(charLift));
 
     // Neutral fill floor: on a dark stage whose dominant tint matches the
     // fighter (ai-native / ipo-prep blue, crisis red) a lift alone just makes a

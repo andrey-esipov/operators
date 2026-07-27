@@ -57,3 +57,6 @@ review-shots/
 .sprite-gen/
 fight-shots/
 .impeccable/
+
+# Generated animation review artifacts (previews/contact sheets) — regenerate from cache
+public/fighters/*/review/

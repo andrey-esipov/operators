@@ -512,17 +512,31 @@ function buildHypergrowth(b: StageBuild, cfg: StageConfig, flags: QualityFlags) 
   nose.position.set(0, 15.5, -13.5)
   nose.castShadow = true
   b.add(nose)
-  // engine glow
-  const glow = new THREE.Mesh(new THREE.CircleGeometry(1.9, 24), glowMat(0x66e6ff, 0.8))
-  glow.position.set(0, 0.18, -13.5)
-  glow.rotation.x = -Math.PI / 2
-  b.add(glow)
-  const shaft = lightShaft(1.3, 2.3, 4.2, 0x66e6ff, 0.24)
-  shaft.position.set(0, 1.7, -13.5)
-  b.add(shaft)
+  // engine flame — a WHITE-HOT core inside an amber thruster plume. The warm fire
+  // against the cool teal deck breaks the monochrome wash and gives the rocket a
+  // motivated hero light (was a cold cyan disc that read as a static monument).
+  const flameOuter = new THREE.Mesh(new THREE.CircleGeometry(2.3, 28), glowMat(0xff7a1c, 0.85))
+  flameOuter.position.set(0, 0.16, -13.5); flameOuter.rotation.x = -Math.PI / 2; b.add(flameOuter)
+  const glow = new THREE.Mesh(new THREE.CircleGeometry(1.5, 24), glowMat(0xffd24a, 0.95))
+  glow.position.set(0, 0.2, -13.5); glow.rotation.x = -Math.PI / 2; b.add(glow)
+  const core = new THREE.Mesh(new THREE.CircleGeometry(1.15, 24), glowMat(0xffffff, 1.0))
+  core.position.set(0, 0.24, -13.5); core.rotation.x = -Math.PI / 2; b.add(core)
+  // a tight white-hot exhaust plume + a broad amber flame column above it
+  const plume = lightShaft(0.9, 2.1, 3.8, 0xffffff, 0.6)
+  plume.position.set(0, 1.7, -13.5); b.add(plume)
+  const shaft = lightShaft(1.5, 2.7, 4.6, 0xff8a2c, 0.32)
+  shaft.position.set(0, 1.9, -13.5); b.add(shaft)
+  // warm scorched-glow pool spilling forward onto the pad (motivated floor bounce)
+  const scorch = new THREE.Mesh(new THREE.CircleGeometry(4.6, 32), glowMat(0xd9531a, 0.16))
+  scorch.position.set(0, 0.05, -11.4); scorch.rotation.x = -Math.PI / 2; b.add(scorch)
   b.onUpdate((t) => {
-    ;(glow.material as THREE.MeshBasicMaterial).opacity = 0.55 + 0.25 * Math.abs(Math.sin(t * 4))
+    const f = 0.72 + 0.28 * Math.abs(Math.sin(t * 5.5) * Math.sin(t * 2.3 + 1))
+    ;(glow.material as THREE.MeshBasicMaterial).opacity = 0.72 * f + 0.2
+    ;(core.material as THREE.MeshBasicMaterial).opacity = 0.85 * f + 0.15
+    ;(flameOuter.material as THREE.MeshBasicMaterial).opacity = 0.62 * f + 0.2
+    ;(scorch.material as THREE.MeshBasicMaterial).opacity = 0.12 * f + 0.06
     ;(shaft.material as THREE.ShaderMaterial).uniforms.uTime.value = t
+    ;(plume.material as THREE.ShaderMaterial).uniforms.uTime.value = t
   })
   // control screens — ASYMMETRIC: a tall 2x2 telemetry stack on the left, a low
   // wide status strip plus a big mission-countdown clock on the right.

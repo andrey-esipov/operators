@@ -358,6 +358,15 @@ export const FIGHTER_FRAGMENT = /* glsl */ `
                   * smoothstep(0.05, 0.2, lumA) * (1.0 - smoothstep(0.7, 0.9, lumA));
     float cloth = clamp(1.0 - skin - metal, 0.0, 1.0);
 
+    // Dark-suit form rescue: a pure-black albedo (charcoal suits, black denim)
+    // has no internal value range for the normal-driven shading to reveal, so a
+    // dark-suited fighter collapses to a flat sticker cutout on aggressive rigs.
+    // Lift ONLY the darkest albedo to a dark charcoal so the lit planes catch a
+    // readable gradient and folds show as form; the cavity/self-shadow terms
+    // below still crush the recesses back toward true near-black, so the authored
+    // black end of the value range survives while the suit stops reading flat.
+    albedo = mix(albedo, max(albedo, vec3(0.085)), dark * 0.5);
+
     // Interior mask: ~1 deep inside the silhouette, →0 within a few px of the
     // edge. Keeps the rim glow off the ink outline so the pixel silhouette
     // stays razor-crisp instead of blooming into a halo.
@@ -427,6 +436,13 @@ export const FIGHTER_FRAGMENT = /* glsl */ `
     float sss = pow(clamp(1.0 - abs(ndlKey), 0.0, 1.0), 2.0) * (1.0 - wrapKey);
     vec3 subsurface = keyCol * vec3(1.0, 0.42, 0.32) * sss * skin * uKeyIntensity * 0.62;
 
+    // Stage-resistant flesh key: a small warm near-neutral light applied to SKIN
+    // ONLY, independent of the stage's key hue, so faces and hands keep a human
+    // flesh reading instead of washing 100% to a red/teal stage colour. It rides
+    // the key's own shape (wrapKey) so it stays a lit-side warm anchor, not a flat
+    // fill. This is what keeps a face legible as a face under the crisis red rig.
+    diffuse += vec3(1.0, 0.74, 0.6) * skin * wrapKey * selfShadow * uKeyIntensity * 0.16;
+
     float ndlFill = dot(Nbroad, normalize(uFillDir));
     diffuse += fillCol * uFillIntensity * (ndlFill * 0.5 + 0.5);
 
@@ -466,8 +482,13 @@ export const FIGHTER_FRAGMENT = /* glsl */ `
     // even on a heavily warm/red-lit stage (crisis), so the character's value
     // range always tops at true white on knuckles / cheekbones / hardware — not
     // a warm orange cap. Kept very tight so only the peak texel blows out.
-    float specPin = pow(ndh, 150.0) * (skin * 1.1 + metal * 3.0 + dark * 0.7);
-    specular += vec3(1.0) * specPin * uKeyIntensity * 0.3 * selfShadow;
+    float specPin = pow(ndh, 128.0) * (skin * 1.2 + metal * 3.2 + dark * 0.85 + cloth * 0.3);
+    // Overdriven well past 1.0 so that after the renderer's AgX tone-map and the
+    // stage's warm/red post grade the peak still resolves to a near-white blown
+    // highlight instead of being re-tinted to orange — AgX desaturates very bright
+    // values toward white, so the character keeps a true specular-white ceiling
+    // even inside the crisis red room.
+    specular += vec3(1.0) * specPin * uKeyIntensity * 0.55 * selfShadow;
     // Sweat sheen at low HP / exertion: extra broad wet highlight, skin only.
     specular += keyCol * pow(ndh, 40.0) * skin * uSweat * 0.6 * uKeyIntensity * 0.3;
     specular *= base.a;
@@ -489,6 +510,11 @@ export const FIGHTER_FRAGMENT = /* glsl */ `
     // reads as a light from behind-above.
     float kickF = pow(1.0 - clamp(dot(N, V), 0.0, 1.0), 3.4);
     float kickTop = clamp(Nbroad.y * 0.5 + 0.65, 0.0, 1.0);
+    // Lower-body rescue: the top bias above starves the legs/feet of the carving
+    // edge, so dark trousers merge into an equally dark floor (the single most
+    // common silhouette failure). Force a strong edge back onto the lower body so
+    // the legs stay separated from the ground plane no matter their normal.
+    kickTop = max(kickTop, (1.0 - smoothstep(0.0, 0.46, vHeightNorm)) * 0.92);
     // Stage-rim-aware separation: when the stage's OWN rim is warm and/or dim it
     // gives the silhouette almost no cool back-edge (e.g. warm office/loft
     // stages), so lean harder on the neutral kicker to keep the fighter carved

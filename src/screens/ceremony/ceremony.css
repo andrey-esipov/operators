@@ -377,10 +377,10 @@
 
 /* Diagonal ribbon confetti fall + flutter. */
 @keyframes cer-ribbon {
-  0%   { transform: translateY(-14vh) rotate(0deg) scaleX(1); opacity: 0; }
+  0%   { transform: translate(0, -14vh) rotate(0deg) scaleX(1); opacity: 0; }
   8%   { opacity: 1; }
-  50%  { transform: translateY(50vh) rotate(220deg) scaleX(0.4); }
-  100% { transform: translateY(116vh) rotate(460deg) scaleX(1); opacity: 0.9; }
+  50%  { transform: translate(var(--drift, 0px), 50vh) rotate(220deg) scaleX(0.4); }
+  100% { transform: translate(calc(var(--drift, 0px) * -1), 116vh) rotate(460deg) scaleX(1); opacity: 0.9; }
 }
 
 /* Film grain shimmer for a premium, less-flat surface. */

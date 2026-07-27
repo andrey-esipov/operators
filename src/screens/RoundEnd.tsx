@@ -54,7 +54,7 @@ export function RoundEnd() {
 
   return (
     <div className="cer-anim relative w-full h-full flex items-center justify-center overflow-hidden" style={{ background: '#05030b' }}>
-      <StageBackdrop scenario={scenario} tint={isPerfect ? '#F7A400' : '#F0431F'} dim={isPerfect ? 0.4 : 0.32} />
+      <StageBackdrop scenario={scenario} tint={isPerfect ? '#F7A400' : '#F0431F'} dim={isPerfect ? 0.5 : 0.42} />
       <div className="cer-rays" style={{ opacity: 0.18 }} />
       <div className="cer-grain" />
       {/* Hard white impact flash + a second faster flash for percussion. */}

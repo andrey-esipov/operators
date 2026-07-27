@@ -28,28 +28,31 @@ export function ArcadeVictory() {
 
   return (
     <div className="cer-anim relative w-full h-full flex flex-col items-center justify-center overflow-hidden px-6 py-4" style={{ background: '#05030b' }}>
-      <StageBackdrop scenario={scenario} tint="#F7A400" dim={0.36} />
+      <StageBackdrop scenario={scenario} tint="#F7A400" dim={0.48} />
       <div className="cer-rays" style={{ opacity: 0.26 }} />
       <div className="cer-grain" />
       <ImpactFlash duration={0.3} />
 
-      {/* Falling ribbon confetti. */}
+      {/* Falling ribbon confetti — dense, and pre-seeded with negative delays so
+          the very first frame is already full of falling ribbons, not empty. */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        {Array.from({ length: 70 }).map((_, i) => {
+        {Array.from({ length: 140 }).map((_, i) => {
           const c = CONFETTI[i % CONFETTI.length]
-          const left = (i * 37) % 100
+          const left = (i * 27.3) % 100
           const w = 4 + (i % 3) * 2
-          const h = 10 + (i % 4) * 4
-          const dur = 3 + (i % 5) * 0.7
-          const delay = (i % 12) * 0.32
+          const h = 10 + (i % 4) * 5
+          const dur = 2.6 + (i % 5) * 0.6
+          const delay = -((i * 0.21) % dur)
+          const drift = (i % 2 ? 1 : -1) * (6 + (i % 4) * 5)
           return (
             <div
               key={i}
               className="absolute"
               style={{
-                left: `${left}%`, top: 0, width: w, height: h,
+                left: `${left}%`, top: '-6%', width: w, height: h,
                 background: c, opacity: 0.92,
                 boxShadow: `0 0 6px ${c}`,
+                ['--drift' as string]: `${drift}px`,
                 animation: `cer-ribbon ${dur}s linear ${delay}s infinite`,
               }}
             />
@@ -111,7 +114,7 @@ export function ArcadeVictory() {
               animation: 'cer-spotlight 2.6s ease-in-out infinite',
             }}
           />
-          <div className="relative" style={{ width: 'min(34vw, 360px)', height: 'min(48vh, 380px)' }}>
+          <div className="relative" style={{ width: 'min(42vw, 460px)', height: 'min(58vh, 500px)' }}>
             <div
               className="cer-breathe"
               style={{ width: '100%', height: '100%', filter: `drop-shadow(0 0 38px ${accent}) drop-shadow(6px 10px 0 rgba(0,0,0,0.5))` }}

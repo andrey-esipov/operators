@@ -104,13 +104,13 @@ export function MatchEnd() {
   const titleColor = arcadePlayerLost ? '#9DB8DE' : '#FFD60A'
 
   return (
-    <div className="cer-anim relative w-full h-full flex flex-col items-center justify-center overflow-hidden px-6 py-4" style={{ background: '#05030b' }}>
+    <div className="cer-anim relative w-full h-full flex flex-col items-center justify-center overflow-hidden px-6 py-2" style={{ background: '#05030b' }}>
       {/* Real stage backdrop — state-graded: warm gold for a win, cold steel
           for a loss, so the two results read as opposite moods at a glance. */}
       <StageBackdrop
         scenario={scenario}
         tint={arcadePlayerLost ? '#2E5C8A' : '#F7A400'}
-        dim={arcadePlayerLost ? 0.24 : 0.36}
+        dim={arcadePlayerLost ? 0.36 : 0.5}
       />
       {!arcadePlayerLost && <div className="cer-rays" style={{ opacity: 0.16 }} />}
       <div className="cer-grain" />
@@ -119,7 +119,7 @@ export function MatchEnd() {
       {/* RESULT WORD — enormous, crashes down from the top. */}
       <div className="relative z-10" style={{ animation: 'cer-shake-hard 0.3s ease-out both' }}>
         <PowerWord
-          size={arcadePlayerLost ? 'clamp(78px, 13.5vw, 200px)' : 'clamp(86px, 15vw, 224px)'}
+          size={arcadePlayerLost ? 'clamp(72px, 12.5vw, 186px)' : 'clamp(80px, 13.5vw, 202px)'}
           color={arcadePlayerLost ? '#DCE4F2' : '#FFFFFF'}
           gradient={arcadePlayerLost ? CER_GRAD.steel : CER_GRAD.gold}
           echo={arcadePlayerLost ? '#0A1A33' : '#B3122F'}
@@ -155,7 +155,7 @@ export function MatchEnd() {
       {/* HERO ROW — the winner reads as the large, lit figure; the fallen
           fighter is small and dim. On a player loss the roles swap so the
           player's own fighter is the large defeated hero (never the enemy). */}
-      <div className="relative z-10 mt-3 flex items-end justify-center gap-8 md:gap-16">
+      <div className="relative z-10 mt-1 flex items-end justify-center gap-8 md:gap-16">
         <div
           className="flex flex-col items-center"
           style={{ animation: 'cer-loser-in 0.5s ease-out 0.2s both' }}
@@ -194,7 +194,7 @@ export function MatchEnd() {
           />
           <div
             style={{
-              width: 'min(40vw, 440px)', height: 'min(52vh, 430px)', position: 'relative',
+              width: 'min(42vw, 480px)', height: 'min(50vh, 520px)', position: 'relative',
             }}
           >
             <div
@@ -232,16 +232,7 @@ export function MatchEnd() {
       />
 
       <div
-        className="cer-type relative z-10 mt-3"
-        style={{ animation: 'cer-rise-fade 0.45s ease-out 0.8s both' }}
-      >
-        <Kicker color="#FFD60A" style={{ fontSize: 'clamp(9px,1.05vw,13px)' }}>
-          QUOTE BANK · {quoteBank.length} ENTRIES UNLOCKED · REAL PODCAST FRAMEWORKS
-        </Kicker>
-      </div>
-
-      <div
-        className="relative z-10 mt-4 flex gap-4 flex-wrap justify-center"
+        className="relative z-10 mt-3 flex gap-4 flex-wrap justify-center"
         style={{ animation: 'cer-rise-fade 0.45s ease-out 0.95s both' }}
       >
         {arcadePlayerWon && (
@@ -292,7 +283,7 @@ function StatBar({ stats, lost }: { stats: { label: string; value: string; unit:
   const edge = lost ? '#2E5C8A' : '#FFB400'
   return (
     <div
-      className="cer-type relative z-10 mt-5"
+      className="cer-type relative z-10 mt-3"
       style={{
         animation: 'cer-tile-pop 0.5s cubic-bezier(0.2,0.9,0.3,1) 0.5s both',
       }}

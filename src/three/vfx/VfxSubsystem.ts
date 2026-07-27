@@ -82,7 +82,7 @@ const C = (hex: number) => new THREE.Color(hex)
 
 const RECIPES: Record<HitFlavor, Recipe> = {
   light: {
-    core: 0xffffff, energy: 0xffd27a, ember: 0xff9b3d, scale: 0.72,
+    core: 0xfff2d8, energy: 0xffd27a, ember: 0xff9b3d, scale: 0.72,
     flashSize: 2.4, flashDecay: 0.16, flashSpikes: 0.6, streak: 0.7,
     flareSize: 1.2,
     sparkCount: 34, sparkSpeed: 10.5, sparkLife: 0.72,
@@ -108,8 +108,8 @@ const RECIPES: Record<HitFlavor, Recipe> = {
     radial: false,
   },
   crit: {
-    core: 0xffffff, energy: 0xffd35a, ember: 0xff7a12, scale: 1.35,
-    flashSize: 2.1, flashDecay: 0.2, flashSpikes: 1.4, streak: 2.4,
+    core: 0xffe9bc, energy: 0xffd35a, ember: 0xff7a12, scale: 1.35,
+    flashSize: 1.6, flashDecay: 0.2, flashSpikes: 1.4, streak: 2.4,
     flareSize: 1.3,
     sparkCount: 140, sparkSpeed: 18.5, sparkLife: 0.8,
     shardCount: 30,
@@ -121,8 +121,8 @@ const RECIPES: Record<HitFlavor, Recipe> = {
     radial: false, starBurst: true,
   },
   combo: {
-    core: 0xffffff, energy: 0xc77dff, ember: 0x8a2be2, scale: 1.05,
-    flashSize: 2.4, flashDecay: 0.16, flashSpikes: 1.0, streak: 1.2,
+    core: 0xf3e8ff, energy: 0xc77dff, ember: 0x8a2be2, scale: 1.05,
+    flashSize: 1.7, flashDecay: 0.16, flashSpikes: 1.0, streak: 1.2,
     flareSize: 1.6,
     sparkCount: 70, sparkSpeed: 15, sparkLife: 0.62,
     shardCount: 16,
@@ -147,29 +147,29 @@ const RECIPES: Record<HitFlavor, Recipe> = {
     radial: false, bolt: true,
   },
   ult: {
-    core: 0xffffff, energy: 0xffcf4d, ember: 0xff6a00, scale: 1.5,
+    core: 0xffe8b0, energy: 0xffcf4d, ember: 0xff6a00, scale: 1.1,
     flashSize: 1.3, flashDecay: 0.22, flashSpikes: 1.4, streak: 2.6,
     flareSize: 1.2,
-    sparkCount: 92, sparkSpeed: 20, sparkLife: 0.85,
+    sparkCount: 70, sparkSpeed: 20, sparkLife: 0.85,
     shardCount: 28,
     debrisCount: 20, debrisSpeed: 9,
-    shock: true, shockSize: 6.0,
-    groundRing: 3.0, scorch: 1.6, dust: 18,
+    shock: true, shockSize: 4.6,
+    groundRing: 2.4, scorch: 1.4, dust: 13,
     smokeCount: 16, emberCount: 18,
     lightPeak: 11, lightDecay: 0.34, lightRange: 10,
     radial: true,
   },
   signature: {
-    core: 0xffffff, energy: 0xff3ba0, ember: 0xf72585, scale: 1.55,
+    core: 0xffe0f2, energy: 0xff3ba0, ember: 0xf72585, scale: 1.2,
     flashSize: 1.5, flashDecay: 0.15, flashSpikes: 1.4, streak: 3.0,
     flareSize: 1.2,
-    sparkCount: 150, sparkSpeed: 24, sparkLife: 0.95,
+    sparkCount: 85, sparkSpeed: 18, sparkLife: 0.95,
     shardCount: 40,
     debrisCount: 30, debrisSpeed: 11,
-    shock: true, shockSize: 6.4,
-    groundRing: 3.6, scorch: 2.2, dust: 24,
-    smokeCount: 20, emberCount: 30,
-    lightPeak: 15, lightDecay: 0.38, lightRange: 13,
+    shock: true, shockSize: 4.5,
+    groundRing: 2.4, scorch: 1.3, dust: 13,
+    smokeCount: 12, emberCount: 18,
+    lightPeak: 11, lightDecay: 0.38, lightRange: 11,
     radial: false, beam: true,
   },
 }
@@ -381,14 +381,14 @@ export class VfxSubsystem implements Subsystem {
     this.additive.emit({
       position: p, count: 1, speed: 0, color: core, color2: energy,
       size: r.flareSize * scale, life: 0.6, gravity: 0, drag: 0.001,
-      shape: 'flare', intensity: 2.6,
+      shape: 'flare', intensity: 1.9,
     })
     // secondary smaller offset flares for a busier contact
     if (r.flareSize > 1.4) {
       this.additive.emit({
         position: p, count: 4, speed: 4.0, speedVariance: 0.8, color: core, color2: energy,
         size: r.flareSize * 0.42 * scale, sizeVariance: 0.5, life: 0.5, gravity: -2, drag: 3,
-        shape: 'flare', intensity: 2.0, jitter: 0.35,
+        shape: 'flare', intensity: 1.5, jitter: 0.35,
       })
     }
 
@@ -397,7 +397,7 @@ export class VfxSubsystem implements Subsystem {
       position: p, count: Math.round(r.sparkCount * scale), speed: r.sparkSpeed,
       speedVariance: 0.65, color: core, color2: energy, size: 0.11, sizeVariance: 0.75,
       life: r.sparkLife, gravity: -13, drag: 2.2, shape: 'spark', stretch: 4.2,
-      intensity: 3.2, jitter: 0.16, spin: 5,
+      intensity: 2.6, jitter: 0.16, spin: 5,
     })
 
     // 3b. directional impact slash — a few very fast, hard-stretched tracers
@@ -406,7 +406,7 @@ export class VfxSubsystem implements Subsystem {
       position: p, count: Math.round((6 + r.shardCount * 0.4) * scale), speed: r.sparkSpeed * 1.7,
       speedVariance: 0.4, direction: away, spread: 0.28, color: C(0xffffff), color2: energy,
       size: 0.14, sizeVariance: 0.6, life: r.sparkLife * 0.7, gravity: -4, drag: 1.4,
-      shape: 'spark', stretch: 7.5, intensity: 3.6, jitter: 0.05, spin: 0,
+      shape: 'spark', stretch: 7.5, intensity: 2.9, jitter: 0.05, spin: 0,
     })
 
     // 4. directional shard spray along the hit vector
@@ -445,19 +445,19 @@ export class VfxSubsystem implements Subsystem {
     } else if (r.starBurst) {
       // CRIT: the hard impact star dominates — only a faint halo for depth.
       this.waves.spawn('star', p, r.shockSize * 1.5 * scale, 0.92, C(0xffffff), energy, 2.4 * mult)
-      this.waves.spawn('halo', p, r.shockSize * 0.4 * scale, 0.5, core, energy, 0.85 * mult)
+      this.waves.spawn('halo', p, r.shockSize * 0.4 * scale, 0.5, core, energy, 0.5 * mult)
     } else if (r.beam) {
       // SIGNATURE: anime super-flash pillar. Bright magenta pillar owns the frame;
       // only a small tinted core behind it (a big halo here is what bloomed to a
       // pink blob) so the vertical structure survives the bloom. Narrowed in x
       // (stretchX 0.7) so it reads as a tall column, not a square burst.
-      this.waves.spawn('beam', p, r.shockSize * 1.7 * scale, 1.05, C(0xffffff), energy, 3.0 * mult, 0.66)
+      this.waves.spawn('beam', p, r.shockSize * 1.4 * scale, 1.05, C(0xffffff), energy, 2.4 * mult, 0.66)
       this.waves.spawn('halo', p, r.shockSize * 0.28 * scale, 0.44, core, energy, 0.42 * mult)
     } else if (r.combo) {
       // COMBO: violet multi-hit flurry rosette + a compact energy core. Snaps to
       // full size instantly so even the opening micro-hit reads on capture.
       this.waves.spawn('flurry', p, r.shockSize * 1.5 * scale, 0.9, C(0xffffff), energy, 2.2 * mult)
-      this.waves.spawn('halo', p, r.shockSize * 0.4 * scale, 0.46, core, energy, 0.9 * mult)
+      this.waves.spawn('halo', p, r.shockSize * 0.4 * scale, 0.46, core, energy, 0.5 * mult)
     } else if (r.shock && !r.radial) {
       const shockPos = p.clone().add(away.clone().multiplyScalar(0.35 * scale))
       this.waves.spawn('shock', shockPos, r.shockSize * scale, 0.86, core, energy, 1.7 * mult, 1.18)
@@ -474,9 +474,9 @@ export class VfxSubsystem implements Subsystem {
       // overlaid star was removed: it piled a second radial burst onto the centre
       // and helped bloom it into a ball. Rays now own the silhouette; a thin gold
       // shaft of light adds a vertical accent that survives bloom.
-      this.waves.spawn('radial', p, r.shockSize * 1.4 * scale, 0.95, C(0xffffff), energy, 1.9)
-      this.waves.spawn('beam', p, r.shockSize * 1.15 * scale, 0.8, C(0xffffff), energy, 1.3, 0.42)
-      this.waves.spawn('shock', p, r.shockSize * 1.2 * scale, 0.9, core, ember, 0.6, 1.0)
+      this.waves.spawn('radial', p, r.shockSize * 1.0 * scale, 0.95, C(0xffffff), energy, 1.65)
+      this.waves.spawn('beam', p, r.shockSize * 1.05 * scale, 0.8, C(0xffffff), energy, 1.3, 0.42)
+      this.waves.spawn('shock', p, r.shockSize * 1.0 * scale, 0.9, core, ember, 0.55, 1.0)
     }
 
     // 7. ground reaction

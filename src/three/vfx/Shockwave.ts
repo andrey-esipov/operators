@@ -229,7 +229,7 @@ const WAVE_FRAG = /* glsl */ `
       // Rays own the frame; the central core is kept very dim so it never blooms
       // into a solid dome that swallows the god-ray silhouette. Rays boosted so the
       // long spokes punch out past the hot centre on bright, heavily-graded stages.
-      vec3 col = uColor2 * (body * 3.5) + vec3(1.0) * goldRing * 0.5 + core * 0.25;
+      vec3 col = uColor2 * (body * 2.9) + vec3(1.0) * goldRing * 0.3 + core * 0.25;
       col *= uIntensity;
       if (a < 0.004) discard;
       gl_FragColor = vec4(col, a);
@@ -273,7 +273,7 @@ const WAVE_FRAG = /* glsl */ `
       // filled disc) so under heavy bloom the STAR shape survives instead of
       // melting into a solid bright ball.
       float a = clamp((spike * 0.95 + coreline + baseRing + coreA * 0.32) * grow * fade, 0.0, 1.0);
-      vec3 col = uColor2 * (spike * 3.0 + baseRing * 2.2) + vec3(1.0) * coreline * 1.1 + core * 0.9;
+      vec3 col = uColor2 * (spike * 2.6 + baseRing * 2.0) + vec3(1.0) * coreline * 0.6 + core * 0.9;
       col *= uIntensity;
       if (a < 0.005) discard;
       gl_FragColor = vec4(col, a);
@@ -354,7 +354,7 @@ const WAVE_FRAG = /* glsl */ `
       float a = clamp((bolt * 1.25 + crackle + coreA) * grow * fade, 0.0, 1.0);
       // saturated cyan body with a thin white filament along the strike; core kept
       // dim so the forked bolts own the silhouette instead of a plasma orb.
-      vec3 col = uColor2 * (bolt * 3.4 + crackle * 2.4 + 0.05) + vec3(1.0) * (bolt * 0.9 + crackle * 0.5) + core;
+      vec3 col = uColor2 * (bolt * 2.9 + crackle * 2.2 + 0.05) + vec3(1.0) * (bolt * 0.6 + crackle * 0.35) + core;
       col *= uIntensity;
       if (a < 0.005) discard;
       gl_FragColor = vec4(col, a);
@@ -387,7 +387,7 @@ const WAVE_FRAG = /* glsl */ `
       float a = clamp((pillar + bar + spokes + coreA * 0.8) * fade, 0.0, 1.0);
       // saturated magenta owns the body; white confined to the thin crossbar/spine
       vec3 col = uColor2 * (pillar * 1.7 + bar * 1.5 + spokes * 1.9 + 0.2)
-                 + vec3(1.0) * (bar * 0.7 + pillar * 0.28) + core * 0.85;
+                 + vec3(1.0) * (bar * 0.45 + pillar * 0.16) + core * 0.85;
       col *= uIntensity;
       if (a < 0.005) discard;
       gl_FragColor = vec4(col, a);
@@ -422,8 +422,8 @@ const WAVE_FRAG = /* glsl */ `
       vec3 core = hotCore(r, ang, uColor2, 0.16, uSeed);
       float coreA = smoothstep(0.16, 0.0, r) * 0.7;
       float a = clamp((blade * 0.95 + coreline + rings + coreA) * grow * fade, 0.0, 1.0);
-      vec3 col = uColor2 * (blade * 2.7 + rings * 2.2)
-                 + vec3(1.0) * (coreline * 0.95 + rings * 0.4) + core * 0.9;
+      vec3 col = uColor2 * (blade * 2.4 + rings * 2.0)
+                 + vec3(1.0) * (coreline * 0.55 + rings * 0.25) + core * 0.9;
       col *= uIntensity;
       if (a < 0.004) discard;
       gl_FragColor = vec4(col, a);

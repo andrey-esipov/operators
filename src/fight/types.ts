@@ -176,6 +176,12 @@ export interface FighterState {
   grounded: boolean
   /** Set the frame a move connects, for the renderer to spawn effects from. */
   lastHitAt?: Vec2
+  /**
+   * Sim-owned bookkeeping (additive; the renderer/asset pipeline can ignore
+   * it). True once the current active move has connected, so a move with a
+   * multi-frame active window strikes at most once per use.
+   */
+  attackConnected?: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -192,9 +198,21 @@ export interface FightState {
   phase: 'intro' | 'fight' | 'ko' | 'round-end' | 'match-end'
   /** Non-zero while the world is frozen for impact. */
   hitstop: number
+  /**
+   * Countdown for the current non-fight phase (intro / ko / round-end), in
+   * frames. Additive, sim-owned; the renderer can also use it to time intro and
+   * KO flourishes.
+   */
+  phaseTimer?: number
   /** Camera is derived, not authored — sim reports where the action is. */
   cameraFocus: Vec2
   cameraZoom: number
+  /**
+   * Sim-owned input history (additive; renderer/asset pipeline can ignore it).
+   * One packed, facing-relative ring per fighter so motion-input recognition
+   * stays inside the pure step() with nothing to thread in from outside.
+   */
+  inputLog?: [number[], number[]]
 }
 
 /**

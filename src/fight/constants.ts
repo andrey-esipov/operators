@@ -50,6 +50,11 @@ export const BACKDASH_INVULN = 7
  */
 export const LANDING_LAG = 3
 
+/** Hard knockdown then wake-up, in frames. A swept fighter is on the floor
+ *  long enough to lose their turn but not so long it stalls the match. */
+export const KNOCKDOWN_FRAMES = 40
+export const WAKEUP_FRAMES = 10
+
 /** Default pushbox width; individual move frames may override. Fighters this
  *  wide can never occupy the same space — see collision separation. */
 export const PUSHBOX_W = 62

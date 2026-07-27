@@ -858,7 +858,7 @@ function buildCrisis(b: StageBuild, cfg: StageConfig, flags: QualityFlags) {
     { x: 6.2, postH: 6.6, y: 6.6, z: -7.2 },
   ]
   beaconPlan.forEach((bp, bi) => {
-    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, bp.postH, 8), structureMat({ color: cfg.structure, roughness: 0.7, metalness: 0.5 }))
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, bp.postH, 10), structureMat({ color: cfg.structure, roughness: 0.7, metalness: 0.5 }))
     post.position.set(bp.x, bp.postH / 2, bp.z)
     b.add(post)
     const beacon = new THREE.Mesh(new THREE.SphereGeometry(0.35, 12, 10), glowMat(0xef233c, 1))
@@ -956,6 +956,43 @@ function buildIpoPrep(b: StageBuild, cfg: StageConfig, flags: QualityFlags) {
   b.onUpdate((t) => {
     ;(bellGlow.material as THREE.MeshBasicMaterial).opacity = 0.28 + 0.22 * Math.abs(Math.sin(t * 2.2))
   })
+  // Falling ticker-tape confetti — the unmistakable NYSE/Nasdaq listing-day cue.
+  // Thin fluttering slivers in gold/white/blue drift down across the hall and
+  // wrap, so the stage reads as an IPO celebration, not an awards podium.
+  if (flags.crowdCount > 0) {
+    const tapeColors = [0xffd60a, 0xfcbf49, 0xffffff, 0x9ecbff, 0xffe08a]
+    const N = 70
+    const geo = new THREE.PlaneGeometry(0.07, 0.28)
+    const seeds: { x: number; z: number; y0: number; sp: number; rot: number; sw: number }[] = []
+    const tape = new THREE.InstancedMesh(geo, new THREE.MeshBasicMaterial({ vertexColors: false, toneMapped: false, side: THREE.DoubleSide }), N)
+    const colr = new THREE.Color()
+    for (let i = 0; i < N; i++) {
+      seeds.push({
+        x: (Math.random() * 2 - 1) * 9.5,
+        z: -4 - Math.random() * 9,
+        y0: Math.random() * 13,
+        sp: 1.1 + Math.random() * 1.6,
+        rot: Math.random() * Math.PI,
+        sw: 0.6 + Math.random() * 1.4,
+      })
+      tape.setColorAt(i, colr.setHex(tapeColors[i % tapeColors.length]))
+    }
+    b.add(tape)
+    const m4 = new THREE.Matrix4(); const qq = new THREE.Quaternion(); const eu = new THREE.Euler(); const sc = new THREE.Vector3(1, 1, 1); const pos = new THREE.Vector3()
+    b.onUpdate((t) => {
+      for (let i = 0; i < N; i++) {
+        const s = seeds[i]
+        const y = 13 - ((s.y0 + t * s.sp) % 13.5)
+        const sway = Math.sin(t * s.sw + s.rot) * 0.4
+        pos.set(s.x + sway, y, s.z)
+        eu.set(t * s.sw * 1.6 + s.rot, t * s.sp + s.rot, s.rot * 2)
+        qq.setFromEuler(eu)
+        m4.compose(pos, qq, sc)
+        tape.setMatrixAt(i, m4)
+      }
+      tape.instanceMatrix.needsUpdate = true
+    })
+  }
   overhead(b, cfg, flags, 'atrium')
   foreground(b, 'atrium')
 }

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import './ceremony/devExpose'
 import './ceremony/ceremony.css'
 import { ImpactFlash, StageBackdrop, WinnerFloor } from './ceremony/CeremonyFX'
+import { PowerWord, Kicker } from './ceremony/CeremonyType'
 import { useGame } from '../state/game'
 import { getFighter } from '../data/fighters'
 import { Sprite } from '../components/Sprite'
@@ -90,58 +91,64 @@ export function MatchEnd() {
     return () => { clearInterval(tick); clearTimeout(advance) }
   }, [arcadePlayerWon, isFinalBoss, nextArcadeFight])
 
+  const titleColor = arcadePlayerLost ? '#FF3B57' : '#FFD60A'
+
   return (
-    <div className="cer-anim relative w-full h-full flex flex-col items-center justify-center overflow-hidden px-6 py-4">
+    <div className="cer-anim relative w-full h-full flex flex-col items-center justify-center overflow-hidden px-6 py-4" style={{ background: '#05030b' }}>
       {/* Real stage backdrop keyed to the winner's colour. */}
       <StageBackdrop
         scenario={scenario}
         tint={arcadePlayerLost ? '#E63946' : accent}
-        dim={arcadePlayerLost ? 0.3 : 0.4}
+        dim={arcadePlayerLost ? 0.26 : 0.36}
       />
-      {!arcadePlayerLost && <div className="cer-rays" style={{ opacity: 0.2 }} />}
-      <ImpactFlash duration={0.25} />
+      {!arcadePlayerLost && <div className="cer-rays" style={{ opacity: 0.16 }} />}
+      <div className="cer-grain" />
+      <ImpactFlash duration={0.22} />
 
-      {/* TITLE — crashes down from the top. */}
-      <div
-        className="relative z-10 font-display tracking-widest text-center"
-        style={{
-          color: arcadePlayerLost ? '#E63946' : '#FFD60A',
-          textShadow: '6px 6px 0 black, 0 0 26px #F77F00',
-          fontSize: arcadePlayerLost ? 'clamp(46px, 7vw, 84px)' : 'clamp(50px, 7.5vw, 92px)',
-          animation: 'cer-title-crash 0.5s cubic-bezier(0.15,0.9,0.3,1) both',
-        }}
-      >
-        {arcadePlayerLost ? 'DEFEATED' : 'VICTORY'}
+      {/* RESULT WORD — enormous, crashes down from the top. */}
+      <div className="relative z-10" style={{ animation: 'cer-shake-hard 0.3s ease-out both' }}>
+        <PowerWord
+          size={arcadePlayerLost ? 'clamp(64px, 11vw, 150px)' : 'clamp(70px, 12vw, 168px)'}
+          color={arcadePlayerLost ? '#FF6B7D' : '#FFFFFF'}
+          glow={arcadePlayerLost ? '#E63946' : '#F77F00'}
+          glow2={arcadePlayerLost ? '#7209B7' : '#E63946'}
+          skew={-8}
+          entrance="ko"
+          live
+          idle
+        >
+          {arcadePlayerLost ? 'DEFEATED' : 'VICTORY'}
+        </PowerWord>
       </div>
       <div
-        className="relative z-10 font-display tracking-widest mt-1"
-        style={{
-          color: accent, fontSize: 'clamp(16px, 2.2vw, 28px)',
-          textShadow: '3px 3px 0 black',
-          animation: 'cer-rise-fade 0.5s ease-out 0.25s both',
-        }}
+        className="cer-type relative z-10 mt-1"
+        style={{ animation: 'cer-rise-fade 0.45s ease-out 0.25s both' }}
       >
-        {winner.name.toUpperCase()} WINS
+        <Kicker color={titleColor} style={{ fontSize: 'clamp(14px,2vw,24px)', letterSpacing: '0.28em', fontWeight: 700 }}>
+          {winner.name.toUpperCase()} · WINNER
+        </Kicker>
       </div>
 
       {mode === 'arcade' && arcadePlayerWon && (
-        <div className="relative z-10 font-display text-sm tracking-widest mt-2 text-white/80">
-          STAGE {arcadeStep + 1} / {ARCADE_PROGRESSION.length}
-          {isFinalBoss && <span style={{ color: '#FFD60A' }}> · FINAL BOSS DEFEATED</span>}
+        <div className="cer-type relative z-10 mt-2" style={{ animation: 'cer-rise-fade 0.45s ease-out 0.32s both' }}>
+          <Kicker color="rgba(255,255,255,0.75)" style={{ fontSize: 'clamp(10px,1.2vw,14px)' }}>
+            STAGE {arcadeStep + 1} / {ARCADE_PROGRESSION.length}
+            {isFinalBoss && <span style={{ color: '#FFD60A' }}> · FINAL BOSS DEFEATED</span>}
+          </Kicker>
         </div>
       )}
 
       {/* HERO ROW — winner large and lit, loser small and dim. */}
-      <div className="relative z-10 mt-2 flex items-end justify-center gap-6 md:gap-12">
+      <div className="relative z-10 mt-3 flex items-end justify-center gap-8 md:gap-16">
         <div
           className="flex flex-col items-center"
           style={{ animation: 'cer-loser-in 0.5s ease-out 0.2s both' }}
         >
-          <div style={{ width: 'min(18vw, 165px)', height: 'min(23vh, 175px)' }}>
+          <div style={{ width: 'min(18vw, 165px)', height: 'min(23vh, 175px)', filter: 'grayscale(0.6) brightness(0.7)' }}>
             <Sprite fighter={loser} side={winnerSide === 'a' ? 'b' : 'a'} state="lose" />
           </div>
-          <div className="font-display text-xs tracking-widest mt-1 text-white/55">{loser.shortName}</div>
-          <div className="font-body text-sm italic text-white/40 mt-1 max-w-[14ch] text-center leading-tight">"{loser.voiceLines.lose}"</div>
+          <Kicker style={{ marginTop: 2, fontSize: 'clamp(9px,1vw,12px)', color: 'rgba(255,255,255,0.5)' }}>{loser.shortName}</Kicker>
+          <div className="cer-type cer-quote mt-1 max-w-[16ch] text-center leading-tight" style={{ fontStyle: 'italic', fontSize: 'clamp(12px,1.3vw,15px)', color: 'rgba(255,255,255,0.4)' }}>“{loser.voiceLines.lose}”</div>
         </div>
 
         <div
@@ -152,79 +159,80 @@ export function MatchEnd() {
           <div
             className="absolute pointer-events-none"
             style={{
-              left: '50%', top: '46%', width: '130%', height: '130%',
+              left: '50%', top: '46%', width: '140%', height: '140%',
               transform: 'translate(-50%,-50%)',
-              background: `radial-gradient(ellipse at center, ${accent}55 0%, transparent 68%)`,
+              background: `radial-gradient(ellipse at center, ${accent}55 0%, transparent 66%)`,
               animation: 'cer-spotlight 2.6s ease-in-out infinite',
             }}
           />
           <div
             style={{
-              width: 'min(32vw, 330px)', height: 'min(44vh, 340px)', position: 'relative',
+              width: 'min(34vw, 360px)', height: 'min(46vh, 360px)', position: 'relative',
             }}
           >
             <div
               className="cer-breathe"
-              style={{ width: '100%', height: '100%', filter: `drop-shadow(0 0 34px ${accent})` }}
+              style={{ width: '100%', height: '100%', filter: `drop-shadow(0 0 36px ${accent}) drop-shadow(6px 10px 0 rgba(0,0,0,0.5))` }}
             >
               <Sprite fighter={winner} side={winnerSide} state="win" />
             </div>
             <WinnerFloor color={accent} />
           </div>
-          <div
-            className="font-display tracking-widest mt-1"
-            style={{ color: accent, fontSize: 'clamp(18px, 2.6vw, 30px)', textShadow: '3px 3px 0 black' }}
-          >
-            {winner.shortName}
+          <div className="cer-type mt-1" style={{ transform: 'skewX(-10deg)' }}>
+            <span className="cer-display" style={{ display: 'inline-block', transform: 'skewX(10deg)', color: accent, fontSize: 'clamp(22px,3vw,38px)', letterSpacing: '0.03em', textShadow: `2px 2px 0 rgba(0,0,0,0.85), 0 0 18px ${accent}` }}>
+              {winner.shortName}
+            </span>
           </div>
-          <div className="font-body text-base italic text-white mt-1 max-w-[30ch] text-center leading-tight">"{winner.voiceLines.win}"</div>
+          <div className="cer-type cer-quote mt-1 max-w-[32ch] text-center leading-tight" style={{ fontStyle: 'italic', fontWeight: 500, fontSize: 'clamp(14px,1.6vw,19px)', color: '#fff', textShadow: '1px 1px 0 rgba(0,0,0,0.8)' }}>“{winner.voiceLines.win}”</div>
         </div>
       </div>
 
       {/* MATCH STATS — pop up in sequence. */}
-      <div className="relative z-10 mt-3 grid grid-cols-3 gap-3 max-w-2xl">
-        <StatTile label="BIGGEST HIT" value={`${matchStats.biggest} DMG`} accent="#E63946" delay={0.5} />
-        <StatTile label="LONGEST STREAK" value={`${matchStats.longestCombo}× COMBO`} accent="#FFD60A" delay={0.6} />
-        <StatTile label="WINNER HP" value={`${winnerHpPct}%`} accent={winnerHpPct >= 90 ? '#06D6A0' : '#FCBF49'} delay={0.7} />
+      <div className="relative z-10 mt-4 flex gap-4 flex-wrap justify-center">
+        <StatTile label="BIGGEST HIT" value={`${matchStats.biggest}`} unit="DMG" accent="#FF3B57" delay={0.5} />
+        <StatTile label="LONGEST STREAK" value={`${matchStats.longestCombo}×`} unit="COMBO" accent="#FFD60A" delay={0.6} />
+        <StatTile label="WINNER HP" value={`${winnerHpPct}`} unit="% LEFT" accent={winnerHpPct >= 90 ? '#06D6A0' : '#FCBF49'} delay={0.7} />
       </div>
 
       <div
-        className="relative z-10 mt-2 font-display text-[10px] tracking-widest"
-        style={{ color: '#FFD60A', animation: 'cer-rise-fade 0.5s ease-out 0.8s both' }}
+        className="cer-type relative z-10 mt-3"
+        style={{ animation: 'cer-rise-fade 0.45s ease-out 0.8s both' }}
       >
-        QUOTE BANK · {quoteBank.length} ENTRIES UNLOCKED · REAL PODCAST FRAMEWORKS
+        <Kicker color="#FFD60A" style={{ fontSize: 'clamp(9px,1.05vw,13px)' }}>
+          QUOTE BANK · {quoteBank.length} ENTRIES UNLOCKED · REAL PODCAST FRAMEWORKS
+        </Kicker>
       </div>
 
       <div
-        className="relative z-10 mt-3 flex gap-3 flex-wrap justify-center"
-        style={{ animation: 'cer-rise-fade 0.5s ease-out 0.95s both' }}
+        className="relative z-10 mt-4 flex gap-4 flex-wrap justify-center"
+        style={{ animation: 'cer-rise-fade 0.45s ease-out 0.95s both' }}
       >
         {arcadePlayerWon && (
           <button
             onClick={handleContinue}
-            className="px-7 py-3 font-display text-base tracking-widest"
+            className="cer-btn cer-type px-8 py-3"
             style={{
-              background: 'linear-gradient(180deg, #FFD60A66, #F7798066)',
-              color: 'white',
-              border: '2px solid #FFD60A',
-              boxShadow: 'inset -2px -2px 0 rgba(0,0,0,0.6), inset 2px 2px 0 rgba(255,255,255,0.2), 0 0 20px rgba(255,214,10,0.5)',
-              cursor: 'pointer',
-              animation: !isFinalBoss ? 'flash 1.2s ease-in-out infinite' : undefined,
+              background: `linear-gradient(180deg, ${accent}, ${accent}aa)`,
+              color: '#0a0612',
+              fontSize: 'clamp(13px,1.5vw,17px)',
+              border: '2px solid #fff',
+              boxShadow: `0 6px 0 rgba(0,0,0,0.5), 0 0 24px ${accent}88`,
+              textShadow: '0 1px 0 rgba(255,255,255,0.4)',
             }}
           >
-            {isFinalBoss ? 'CLAIM YOUR PRIZE →' : `NEXT STAGE → (auto in ${secondsLeft}s)`}
+            {isFinalBoss ? 'CLAIM YOUR PRIZE →' : `NEXT STAGE → (${secondsLeft}s)`}
           </button>
         )}
         {!arcadePlayerWon && (
           <button
             onClick={() => { Sfx.menuSelect(); resetMatch() }}
-            className="px-7 py-3 font-display text-base tracking-widest"
+            className="cer-btn cer-type px-8 py-3"
             style={{
-              background: 'linear-gradient(180deg, #F77F0055, #E6394655)',
-              color: 'white',
-              border: '2px solid #E63946',
-              boxShadow: 'inset -2px -2px 0 rgba(0,0,0,0.6), inset 2px 2px 0 rgba(255,255,255,0.2)',
-              cursor: 'pointer',
+              background: 'linear-gradient(180deg, #E63946, #7209B7)',
+              color: '#fff',
+              fontSize: 'clamp(13px,1.5vw,17px)',
+              border: '2px solid rgba(255,255,255,0.9)',
+              boxShadow: '0 6px 0 rgba(0,0,0,0.5), 0 0 22px rgba(230,57,70,0.6)',
             }}
           >
             REMATCH / MENU
@@ -243,19 +251,26 @@ export function MatchEnd() {
   )
 }
 
-function StatTile({ label, value, accent, delay }: { label: string; value: string; accent: string; delay: number }) {
+function StatTile({ label, value, unit, accent, delay }: { label: string; value: string; unit: string; accent: string; delay: number }) {
   return (
     <div
-      className="p-3 text-center"
+      className="cer-type relative"
       style={{
-        background: 'rgba(15,10,26,0.72)',
-        border: `2px solid ${accent}`,
-        boxShadow: `inset -2px -2px 0 rgba(0,0,0,0.5), 0 0 14px ${accent}44`,
+        minWidth: 148,
+        padding: '10px 20px 12px',
+        background: 'linear-gradient(160deg, rgba(12,8,20,0.9), rgba(20,10,28,0.75))',
+        border: '1px solid rgba(255,255,255,0.14)',
+        borderTop: `3px solid ${accent}`,
+        clipPath: 'polygon(0 0, 100% 0, 100% 100%, 10px 100%, 0 calc(100% - 10px))',
+        boxShadow: `0 0 18px ${accent}33, inset 0 0 18px rgba(0,0,0,0.5)`,
         animation: `cer-tile-pop 0.45s cubic-bezier(0.2,0.9,0.3,1) ${delay}s both`,
       }}
     >
-      <div className="font-display text-[8px] tracking-widest" style={{ color: accent }}>{label}</div>
-      <div className="font-num text-2xl tabular-nums text-white mt-1">{value}</div>
+      <div className="cer-cond" style={{ fontSize: 'clamp(8px,0.9vw,11px)', fontWeight: 600, letterSpacing: '0.22em', color: accent }}>{label}</div>
+      <div className="flex items-baseline gap-1 mt-1">
+        <span className="cer-display" style={{ fontSize: 'clamp(26px,3.2vw,44px)', color: '#fff', lineHeight: 0.9, textShadow: `0 0 14px ${accent}66` }}>{value}</span>
+        <span className="cer-cond" style={{ fontSize: 'clamp(9px,1vw,13px)', fontWeight: 600, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.6)' }}>{unit}</span>
+      </div>
     </div>
   )
 }
@@ -281,13 +296,13 @@ function ShareButton({
   return (
     <button
       onClick={tweet}
-      className="px-7 py-3 font-display text-base tracking-widest"
+      className="cer-btn cer-type px-8 py-3"
       style={{
-        background: 'linear-gradient(180deg, #00B4D855, #0077B655)',
-        color: 'white',
-        border: '2px solid #00B4D8',
-        boxShadow: 'inset -2px -2px 0 rgba(0,0,0,0.6), inset 2px 2px 0 rgba(255,255,255,0.2)',
-        cursor: 'pointer',
+        background: 'linear-gradient(180deg, #00B4D8, #0077B6)',
+        color: '#fff',
+        fontSize: 'clamp(13px,1.5vw,17px)',
+        border: '2px solid rgba(255,255,255,0.9)',
+        boxShadow: '0 6px 0 rgba(0,0,0,0.5), 0 0 22px rgba(0,180,216,0.5)',
       }}
     >
       ↗ TWEET RESULT

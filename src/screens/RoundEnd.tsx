@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import './ceremony/devExpose'
 import './ceremony/ceremony.css'
 import { ShockRing, ImpactFlash, StageBackdrop, WinnerFloor } from './ceremony/CeremonyFX'
+import { PowerWord, Kicker } from './ceremony/CeremonyType'
 import { useGame } from '../state/game'
 import { getFighter } from '../data/fighters'
 import { Sfx } from '../lib/audio'
@@ -36,6 +37,8 @@ export function RoundEnd() {
     winner && winnerSide && fighterA && fighterB &&
     (winnerSide === 'a' ? fighterA.hp === fighterA.maxHp : fighterB.hp === fighterB.maxHp)
   )
+  // Double-KO / time-up: neither side is clearly standing.
+  const isDraw = !!(fighterA && fighterB && fighterA.hp <= 0 && fighterB.hp <= 0)
 
   useEffect(() => {
     Sfx.ko()
@@ -50,91 +53,160 @@ export function RoundEnd() {
   const accent = winner.accent || '#FFD60A'
 
   return (
-    <div className="cer-anim relative w-full h-full flex items-center justify-center overflow-hidden">
-      <StageBackdrop scenario={scenario} tint={accent} dim={isPerfect ? 0.44 : 0.36} />
-      {/* Rotating burst behind the winner — subtle over the real stage. */}
-      <div className="cer-rays" style={{ opacity: 0.22 }} />
-      <ImpactFlash duration={0.22} />
+    <div className="cer-anim relative w-full h-full flex items-center justify-center overflow-hidden" style={{ background: '#05030b' }}>
+      <StageBackdrop scenario={scenario} tint={accent} dim={isPerfect ? 0.4 : 0.32} />
+      <div className="cer-rays" style={{ opacity: 0.18 }} />
+      <div className="cer-grain" />
+      {/* Hard white impact flash + a second faster flash for percussion. */}
+      <ImpactFlash duration={0.18} />
+      <ImpactFlash duration={0.1} delay={0.12} />
+      {/* Radial speed lines punching out from the KO. */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background: 'repeating-conic-gradient(from 0deg at 50% 42%, rgba(255,255,255,0.10) 0deg 1.4deg, transparent 1.4deg 5deg)',
+          maskImage: 'radial-gradient(circle at 50% 42%, black 6%, transparent 46%)',
+          WebkitMaskImage: 'radial-gradient(circle at 50% 42%, black 6%, transparent 46%)',
+          animation: 'cer-impact-flash 0.5s ease-out both',
+        }}
+      />
 
-      <div className="relative z-10 flex flex-col items-center">
+      {/* Everything shakes hard on impact, then settles. */}
+      <div
+        className="relative z-10 flex flex-col items-center"
+        style={{ animation: 'cer-shake-hard 0.32s ease-out both' }}
+      >
         {isPerfect && (
-          <div
-            className="font-display tracking-widest"
-            style={{
-              color: '#FFD60A',
-              fontSize: 'clamp(24px, 4vw, 48px)',
-              letterSpacing: '0.3em',
-              textShadow: '6px 6px 0 black, 0 0 32px #F77F00, 0 0 64px #FFD60A',
-              transform: 'skewX(-6deg)',
-              animation: 'cer-title-crash 0.5s cubic-bezier(0.15,0.9,0.3,1) both',
-            }}
-          >
-            ★ PERFECT ★
+          <div className="flex items-center gap-3 mb-1">
+            <span style={{ color: '#FFD60A', fontSize: 'clamp(20px,3vw,34px)' }}>★</span>
+            <PowerWord
+              size="clamp(28px, 5vw, 62px)"
+              color="#FFE68A"
+              glow="#FFB703"
+              glow2="#F77F00"
+              skew={-8}
+              entrance="slam"
+              live
+            >
+              PERFECT
+            </PowerWord>
+            <span style={{ color: '#FFD60A', fontSize: 'clamp(20px,3vw,34px)' }}>★</span>
           </div>
         )}
-        <div
-          className="font-display tracking-widest"
-          style={{
-            color: '#FFFFFF',
-            fontSize: 'clamp(58px, 10vw, 132px)',
-            textShadow: '8px 8px 0 black, 0 0 32px #F77F00, 0 0 64px #E63946',
-            animation: 'cer-title-crash 0.42s cubic-bezier(0.15,0.9,0.3,1) both',
-          }}
-        >
-          K.O.
+
+        {/* The word IS the design. Enormous, chromatic, lands in ~130ms. */}
+        <div className="relative">
+          {/* angular energy slashes flanking the KO */}
+          <span className="absolute top-1/2 -left-[6%] pointer-events-none" style={{
+            width: 'clamp(60px,10vw,150px)', height: 8, transform: 'translateY(-50%) skewX(-30deg)',
+            background: `linear-gradient(90deg, transparent, ${accent})`, boxShadow: `0 0 16px ${accent}`,
+            animation: 'cer-wipe-left 0.3s ease-out 0.1s both',
+          }} />
+          <span className="absolute top-1/2 -right-[6%] pointer-events-none" style={{
+            width: 'clamp(60px,10vw,150px)', height: 8, transform: 'translateY(-50%) skewX(-30deg)',
+            background: `linear-gradient(270deg, transparent, ${accent})`, boxShadow: `0 0 16px ${accent}`,
+            animation: 'cer-wipe-right 0.3s ease-out 0.1s both',
+          }} />
+          <PowerWord
+            size={isDraw ? 'clamp(64px, 13vw, 180px)' : 'clamp(90px, 18vw, 260px)'}
+            color="#FFFFFF"
+            glow="#F77F00"
+            glow2="#E63946"
+            skew={-8}
+            entrance="ko"
+            live
+            idle
+          >
+            {isDraw ? 'DRAW' : 'K.O.'}
+          </PowerWord>
         </div>
 
-        <div className="flex items-end gap-8 md:gap-14 mt-1">
-          {/* Loser — slumped, dim, off to the side. */}
+        <div className="flex items-end gap-8 md:gap-16 mt-2">
+          {/* Loser — slumped, desaturated, off to the side. */}
           <div
             className="flex flex-col items-center"
             style={{ animation: 'cer-loser-in 0.5s ease-out 0.15s both' }}
           >
-            <div style={{ width: 'min(22vw, 210px)', height: 'min(30vh, 240px)' }}>
+            <div style={{ width: 'min(22vw, 210px)', height: 'min(30vh, 240px)', filter: 'grayscale(0.6) brightness(0.7)' }}>
               <Sprite fighter={loser} side={loserSide} state="lose" />
             </div>
-            <div
-              className="font-display text-[10px] tracking-widest mt-1 text-white/60"
-              style={{ textShadow: '2px 2px 0 black' }}
-            >
-              {loser.shortName} · DEFEATED
-            </div>
+            <Kicker style={{ marginTop: 2, fontSize: 'clamp(9px,1vw,12px)', letterSpacing: '0.28em', color: 'rgba(255,255,255,0.5)' }}>
+              {loser.shortName} · DOWN
+            </Kicker>
           </div>
 
           {/* Winner — larger, rises into a hero pose, breathes, shock rings at the feet. */}
           <div className="flex flex-col items-center relative" style={{ animation: 'cer-hero-rise 0.55s cubic-bezier(0.15,0.9,0.3,1) 0.12s both' }}>
-            <div className="absolute" style={{ left: '50%', bottom: '16%' }}>
-              <ShockRing color={accent} size={190} thickness={4} delay={0.25} duration={0.6} />
+            {/* light beam behind the winner */}
+            <div className="absolute pointer-events-none" style={{
+              left: '50%', bottom: '4%', width: '62%', height: '150%', transform: 'translateX(-50%)',
+              background: `linear-gradient(180deg, transparent, ${accent}33 60%, ${accent}66)`,
+              clipPath: 'polygon(38% 0, 62% 0, 100% 100%, 0 100%)',
+              animation: 'cer-beam-breathe 2.8s ease-in-out infinite',
+            }} />
+            <div className="absolute" style={{ left: '50%', bottom: '14%' }}>
+              <ShockRing color={accent} size={200} thickness={4} delay={0.25} duration={0.6} />
             </div>
-            <div className="relative" style={{ width: 'min(36vw, 380px)', height: 'min(54vh, 460px)' }}>
+            <div className="relative" style={{ width: 'min(38vw, 400px)', height: 'min(56vh, 480px)' }}>
               <div
                 className="cer-breathe"
                 style={{
                   width: '100%', height: '100%',
-                  filter: `drop-shadow(0 0 30px ${accent})`,
+                  filter: `drop-shadow(0 0 32px ${accent}) drop-shadow(6px 10px 0 rgba(0,0,0,0.5))`,
                 }}
               >
                 <Sprite fighter={winner} side={winnerSide} state="win" />
               </div>
               <WinnerFloor color={accent} />
             </div>
-            <div
-              className="font-display tracking-widest mt-1"
-              style={{ color: accent, fontSize: 'clamp(16px, 2.4vw, 30px)', textShadow: '3px 3px 0 black' }}
-            >
-              {winner.shortName} WINS ROUND
-            </div>
           </div>
         </div>
 
-        <div className="flex gap-3 mt-3">
-          <RoundDot won={roundsWon.a > 0} color="#E63946" />
-          <RoundDot won={roundsWon.b > 0} color="#00B4D8" />
+        {/* WINS banner — angular slab. */}
+        <div
+          className="cer-type mt-1"
+          style={{ animation: 'cer-rise-fade 0.45s ease-out 0.35s both' }}
+        >
+          <div
+            className="cer-cond inline-block px-6 py-1"
+            style={{
+              transform: 'skewX(-10deg)',
+              background: `linear-gradient(150deg, rgba(8,4,14,0.9), ${accent}cc)`,
+              border: '2px solid rgba(255,255,255,0.85)',
+              boxShadow: `5px 5px 0 rgba(0,0,0,0.5), 0 0 22px ${accent}88`,
+            }}
+          >
+            <span
+              className="cer-display"
+              style={{
+                display: 'inline-block', transform: 'skewX(10deg)', color: '#fff',
+                fontSize: 'clamp(20px, 3vw, 40px)', letterSpacing: '0.04em',
+                textShadow: `2px 2px 0 rgba(0,0,0,0.8), 0 0 16px ${accent}`,
+              }}
+            >
+              {winner.shortName} WINS THE ROUND
+            </span>
+          </div>
+        </div>
+
+        {/* Round tally — diamonds. */}
+        <div className="flex gap-4 mt-3" style={{ animation: 'cer-rise-fade 0.45s ease-out 0.45s both' }}>
+          <RoundDot won={roundsWon.a > 0} color={fighterA ? (getFighter(fighterA.defId)?.accent ?? '#E63946') : '#E63946'} />
+          <RoundDot won={roundsWon.b > 0} color={fighterB ? (getFighter(fighterB.defId)?.accent ?? '#00B4D8') : '#00B4D8'} />
         </div>
 
         {lastEntry?.quote && (
-          <div className="font-body text-xl italic text-white/80 mt-3 max-w-xl text-center px-6">
-            "{lastEntry.quote}" — {lastEntry.episode}
+          <div
+            className="cer-type cer-quote mt-3 max-w-2xl text-center px-6"
+            style={{
+              fontStyle: 'italic', fontWeight: 500, fontSize: 'clamp(16px,2vw,24px)',
+              color: 'rgba(255,255,255,0.82)', letterSpacing: '0.01em', lineHeight: 1.15,
+              animation: 'cer-rise-fade 0.45s ease-out 0.55s both',
+              textShadow: '1px 1px 0 rgba(0,0,0,0.8)',
+            }}
+          >
+            “{lastEntry.quote}”
+            <span style={{ color: accent, fontStyle: 'normal', fontWeight: 600 }}> — {lastEntry.episode}</span>
           </div>
         )}
       </div>
@@ -146,11 +218,12 @@ function RoundDot({ won, color }: { won: boolean; color: string }) {
   return (
     <div
       style={{
-        width: 30,
-        height: 30,
-        background: won ? color : '#2A1F33',
-        border: '3px solid white',
-        boxShadow: won ? `0 0 14px ${color}` : 'none',
+        width: 26,
+        height: 26,
+        transform: 'rotate(45deg)',
+        background: won ? color : 'rgba(255,255,255,0.08)',
+        border: '2px solid rgba(255,255,255,0.85)',
+        boxShadow: won ? `0 0 16px ${color}` : 'none',
       }}
     />
   )

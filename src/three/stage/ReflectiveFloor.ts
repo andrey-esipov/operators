@@ -222,7 +222,7 @@ function floorMaterial(): THREE.ShaderMaterial {
         vec2 P = vWorld.xz;
         float rad = length(P);
 
-        float wear = fbm(P * 0.6);
+        float wear = fbm(P * 0.9);
         float wear2 = fbm(P * 2.4 + 11.3);
         vec2 grad = vec2(
           fbm(P*2.4 + vec2(0.05,0.0)) - fbm(P*2.4 - vec2(0.05,0.0)),
@@ -230,8 +230,10 @@ function floorMaterial(): THREE.ShaderMaterial {
         );
         N = normalize(mix(N, normalize(vec3(-grad.x, 1.0, -grad.y)*vec3(0.35,1.0,0.35)), 0.5));
 
-        vec3 base = uBase * (0.75 + wear*0.5);
-        base *= 0.85 + wear2*0.3;
+        // subtle surface variation only — big low-frequency swings read as dirty
+        // blotches, so keep the amplitude tight for a clean polished read.
+        vec3 base = uBase * (0.9 + wear*0.2);
+        base *= 0.94 + wear2*0.12;
 
         float ndl = max(dot(N, normalize(uKeyDir)), 0.0);
         vec3 diff = base * (uAmbient*uAmbientIntensity + uKeyColor*uKeyIntensity*0.11*ndl);
@@ -268,10 +270,14 @@ function floorMaterial(): THREE.ShaderMaterial {
           float pulse = 0.6 + 0.4*sin(rad*0.8 - uTime*1.5);
           detail = uGridColor * lat * 0.3 * pulse;
         } else if (pm < 4.5) {
-          // 4 marble: bright thin veins + large inlaid tile seams, no cell grid
-          float veins = smoothstep(0.56, 0.62, fbm(P*0.85 + 9.0));
+          // 4 marble: thin dark vein contours + large inlaid tile seams (elegant,
+          // not blobby) — veins are the boundary of an fbm field, so they read as
+          // real marble threading rather than smudges
+          float mv = fbm(P*0.7 + 9.0);
+          float veins = smoothstep(0.49, 0.5, mv) - smoothstep(0.5, 0.51, mv);
+          float veins2 = smoothstep(0.61, 0.615, mv) - smoothstep(0.615, 0.62, mv);
           float seams = max(gridLine(P.x*0.085, 1.9), gridLine(P.y*0.085, 1.9));
-          detail = uGridColor * (veins*0.14 + seams*0.4);
+          detail = uGridColor * ((veins + veins2*0.6)*0.5 + seams*0.4);
         } else {
           // 5 lane: painted loading-bay lane lines + a hatched perimeter
           float lanes = gridLine(P.x*0.18, 2.4);

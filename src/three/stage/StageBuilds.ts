@@ -694,11 +694,35 @@ function buildAiNative(b: StageBuild, cfg: StageConfig, flags: QualityFlags) {
   plinth.position.set(holoX, 0.6, holoZ)
   b.add(plinth)
   const globe = new THREE.Mesh(
-    new THREE.IcosahedronGeometry(1.5, 2),
-    new THREE.MeshBasicMaterial({ color: 0x00e5ff, wireframe: true, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, depthWrite: false, fog: false, toneMapped: false }),
+    new THREE.IcosahedronGeometry(1.6, 2),
+    new THREE.MeshBasicMaterial({ color: 0x00e5ff, wireframe: true, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false, fog: false, toneMapped: false }),
   )
   globe.position.set(holoX, holoY, holoZ)
   b.add(globe)
+  // counter-rotating denser inner lattice + a glowing solid core so the model
+  // reads as a live hologram, not a greybox wireframe placeholder
+  const globe2 = new THREE.Mesh(
+    new THREE.IcosahedronGeometry(1.05, 1),
+    new THREE.MeshBasicMaterial({ color: 0x66fff0, wireframe: true, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false, fog: false, toneMapped: false }),
+  )
+  globe2.position.set(holoX, holoY, holoZ)
+  b.add(globe2)
+  const core = new THREE.Mesh(new THREE.SphereGeometry(0.55, 20, 16), glowMat(0xd8ffff, 0.85))
+  core.position.set(holoX, holoY, holoZ)
+  b.add(core)
+  const coreHalo = new THREE.Mesh(new THREE.SphereGeometry(1.15, 20, 16), glowMat(0x33e5ff, 0.22))
+  coreHalo.position.set(holoX, holoY, holoZ)
+  b.add(coreHalo)
+  // orbiting data nodes on the outer shell
+  const nodeGrp = new THREE.Group()
+  for (let n = 0; n < 10; n++) {
+    const na = (n / 10) * Math.PI * 2
+    const nd = new THREE.Mesh(new THREE.SphereGeometry(0.08, 8, 8), glowMat(0xaef8ff, 0.9))
+    nd.position.set(Math.cos(na) * 1.7, Math.sin(na * 1.7) * 0.9, Math.sin(na) * 1.7)
+    nodeGrp.add(nd)
+  }
+  nodeGrp.position.set(holoX, holoY, holoZ)
+  b.add(nodeGrp)
   const projShaft = lightShaft(1.6, 0.5, 3.4, 0x00e5ff, 0.14)
   projShaft.position.set(holoX, 2.1, holoZ)
   projShaft.rotation.z = Math.PI
@@ -714,6 +738,10 @@ function buildAiNative(b: StageBuild, cfg: StageConfig, flags: QualityFlags) {
   }
   b.onUpdate((t) => {
     globe.rotation.y = t * 0.3
+    globe2.rotation.y = -t * 0.5
+    globe2.rotation.x = t * 0.2
+    nodeGrp.rotation.y = t * 0.6
+    ;(core.material as THREE.MeshBasicMaterial).opacity = 0.7 + 0.2 * Math.sin(t * 2.5)
     ;(projShaft.material as THREE.ShaderMaterial).uniforms.uTime.value = t
   })
   overhead(b, cfg, flags, 'server')

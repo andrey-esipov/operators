@@ -83,10 +83,13 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, const in float depth,
   // --- contrast-adaptive sharpen -----------------------------------------
   if (sharpen > 0.001) {
     vec2 t = texelSize;
-    vec3 n = texture2D(inputBuffer, uv + vec2(0.0, -t.y)).rgb;
-    vec3 s = texture2D(inputBuffer, uv + vec2(0.0,  t.y)).rgb;
-    vec3 e = texture2D(inputBuffer, uv + vec2( t.x, 0.0)).rgb;
-    vec3 w = texture2D(inputBuffer, uv + vec2(-t.x, 0.0)).rgb;
+    // Neighbour taps must be NaN-scrubbed too: on a monochrome stage the raw
+    // buffer carries NaN in the unlit channels, and feeding that into the blur
+    // re-poisons col (the max() above only cleaned the centre tap). Scrub each.
+    vec3 n = max(texture2D(inputBuffer, uv + vec2(0.0, -t.y)).rgb, 0.0);
+    vec3 s = max(texture2D(inputBuffer, uv + vec2(0.0,  t.y)).rgb, 0.0);
+    vec3 e = max(texture2D(inputBuffer, uv + vec2( t.x, 0.0)).rgb, 0.0);
+    vec3 w = max(texture2D(inputBuffer, uv + vec2(-t.x, 0.0)).rgb, 0.0);
     vec3 blur = (n + s + e + w) * 0.25;
     // Local contrast estimate limits sharpening in flat areas (less grain
     // amplification) and near blown highlights (no ringing).

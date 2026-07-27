@@ -140,17 +140,22 @@ export function MoveCard({
         </div>
 
         <div className="mc-desc">{move.description}</div>
+
+        {(move.readsType || signatureHint || signatureReady) && (
+          <div className="mc-chips">
+            {move.readsType && <span className="mc-chip mc-chip-reads">READS {move.readsType.toUpperCase()}</span>}
+            {signatureHint && (
+              <span className="mc-chip mc-chip-sig" title={`+50% damage when ${move.requiresSelfStatus} is active`}>
+                +50% W/ {move.requiresSelfStatus?.replace('_', ' ')}
+              </span>
+            )}
+            {signatureReady && <span className="mc-chip mc-chip-sig is-ready">SIGNATURE +50%</span>}
+          </div>
+        )}
       </div>
 
       {comboReady && <div className="mc-badge mc-badge-combo">COMBO READY</div>}
       {exAvailable && <div className="mc-badge mc-badge-ex">EX READY</div>}
-      {signatureHint && (
-        <div className="mc-badge mc-badge-sig" title={`+50% damage when ${move.requiresSelfStatus} is active`}>
-          +50% W/ {move.requiresSelfStatus?.replace('_', ' ')}
-        </div>
-      )}
-      {signatureReady && <div className="mc-badge mc-badge-sig is-ready">SIGNATURE +50%</div>}
-      {move.readsType && <div className="mc-badge mc-badge-reads">READS {move.readsType.toUpperCase()}</div>}
 
       {onCooldown && (
         <div className="mc-veil">
@@ -160,11 +165,16 @@ export function MoveCard({
 
       {ultGated && isUltimate && (
         <div className="mc-lock">
-          <div className="mc-lock-tag">SUPER LOCKED</div>
+          <div className="mc-lock-row">
+            <span className="mc-lock-tag">
+              <span className="mc-lock-ico" />
+              CHARGE SUPER
+            </span>
+            <span className="mc-lock-sub">{Math.round(Math.min(100, superMeter))}/100</span>
+          </div>
           <div className="mc-lock-meter">
             <div className="mc-lock-fill" style={{ width: `${Math.min(100, Math.max(0, superMeter))}%` }} />
           </div>
-          <div className="mc-lock-sub">{Math.round(Math.min(100, superMeter))} / 100</div>
         </div>
       )}
     </button>

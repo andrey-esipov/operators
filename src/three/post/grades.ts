@@ -238,7 +238,7 @@ export const STAGE_GRADES: Record<ScenarioId, StageGrade> = {
     hazeColor: [0.28, 0.44, 0.66],
     hazeAmount: 0.38,
     envTint: [0.3, 0.5, 1.0],
-    charUntint: 0.42,
+    charUntint: 0.62,
   }),
 
   // Money. Warm gold with rich green undertones, luxe and slightly opulent —
@@ -303,7 +303,7 @@ export const STAGE_GRADES: Record<ScenarioId, StageGrade> = {
     hazeColor: [0.58, 0.4, 0.3],
     hazeAmount: 0.44,
     envTint: [1.0, 0.34, 0.22],
-    charUntint: 0.6,
+    charUntint: 0.9,
   }),
 
   // Prestige. Clean, bright, cool corporate glass — champagne highlights, low
@@ -335,7 +335,7 @@ export const STAGE_GRADES: Record<ScenarioId, StageGrade> = {
     hazeColor: [0.62, 0.66, 0.72],
     hazeAmount: 0.34,
     envTint: [0.34, 0.5, 1.0],
-    charUntint: 0.4,
+    charUntint: 0.6,
   }),
 
   // Broadcast blockbuster. Wide warm sunset, saturated teal-and-orange with a
@@ -369,7 +369,7 @@ export const STAGE_GRADES: Record<ScenarioId, StageGrade> = {
     hazeColor: [0.62, 0.55, 0.45],
     hazeAmount: 0.36,
     envTint: [1.0, 0.5, 0.28],
-    charUntint: 0.5,
+    charUntint: 0.78,
   }),
 }
 

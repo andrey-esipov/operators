@@ -256,13 +256,21 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, const in float depth,
     float dk = 1.0 - smoothstep(0.06, 0.42, luma(charLit));
     charLit += charFill * dk;
 
-    // Environment-aligned chroma un-tint: remove the part of the fighter's
-    // chroma that points the SAME way as the arena's dominant hue. On a strongly
-    // monochrome stage (crisis/distribution red, ai-native/ipo-prep blue) this is
-    // what stops the fighter from being a "same tinted silhouette" — the shared
-    // cast is subtracted so the subject reads neutral/separate, while any chroma
-    // ORTHOGONAL to the arena hue (the fighter's own identity colour) is kept, so
-    // two fighters stay distinguishable. charUntint is 0 on multi-hue stages.
+    // Subject pop so the characters read as the most saturated things in frame.
+    // This runs BEFORE the arena un-tint so it boosts the fighter's OWN identity
+    // chroma (the component orthogonal to the arena hue). The un-tint below then
+    // strips the shared cast the pop would otherwise re-introduce.
+    float cl = luma(charLit);
+    charLit = mix(vec3(cl), charLit, 1.0 + charPop);
+
+    // Environment-aligned chroma un-tint (LAST chroma op): remove the part of the
+    // fighter's chroma that points the SAME way as the arena's dominant hue. On a
+    // strongly monochrome stage (crisis/distribution red, ai-native/ipo-prep blue)
+    // this is what stops the fighter from being a "same tinted silhouette" — the
+    // shared cast is subtracted so the subject reads neutral/separate, while any
+    // chroma ORTHOGONAL to the arena hue (the fighter's own identity colour) is
+    // kept, so two fighters stay distinguishable. Running it after the pop means
+    // the re-saturation cannot put the arena cast back. 0 on multi-hue stages.
     if (charUntint > 0.001) {
       float lch = luma(charLit);
       vec3 chroma = charLit - lch;                       // signed chroma about luma
@@ -271,10 +279,6 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, const in float depth,
       charLit -= tdir * max(align, 0.0) * charUntint;    // subtract only the shared cast
       charLit = max(charLit, 0.0);
     }
-
-    // Subject pop so the characters read as the most saturated things in frame.
-    float cl = luma(charLit);
-    charLit = mix(vec3(cl), charLit, 1.0 + charPop);
 
     // Blend how strongly we keep the character look vs the environment.
     vec3 charFinal = mix(cEnv, charLit, charChroma);
@@ -287,11 +291,12 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, const in float depth,
   // ── depth-weighted aerial perspective (never touches the fighters) ─────
   if (hazeAmount > 0.001) {
     float fog = smoothstep(hazeStart, hazeEnd, dist) * hazeAmount * (1.0 - matte);
-    // Far → lifts toward the haze tint and loses local contrast, exactly the
-    // near/far separation that builds depth.
-    vec3 hazed = mix(c, hazeColor, 0.55);
+    // Far → lifts toward the haze tint and loses local contrast/saturation, the
+    // near/far separation that builds real depth (near stays punchy + darker,
+    // far reads lighter + flatter, i.e. classic aerial perspective).
+    vec3 hazed = mix(c, hazeColor, 0.6);
     float lo = luma(hazed);
-    hazed = mix(vec3(lo), hazed, 0.82);
+    hazed = mix(vec3(lo), hazed, 0.7);
     c = mix(c, hazed, fog);
   }
 
@@ -378,8 +383,8 @@ export class MasterGradeEffect extends Effect {
       // depth haze
       ['hazeColor', new THREE.Uniform(new THREE.Vector3(0.5, 0.55, 0.62))],
       ['hazeAmount', new THREE.Uniform(0.35)],
-      ['hazeStart', new THREE.Uniform(16)],
-      ['hazeEnd', new THREE.Uniform(90)],
+      ['hazeStart', new THREE.Uniform(12)],
+      ['hazeEnd', new THREE.Uniform(54)],
       ['camNear', new THREE.Uniform(0.1)],
       ['camFar', new THREE.Uniform(320)],
     ])

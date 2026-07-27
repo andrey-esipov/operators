@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import {
   BloomEffect,
+  BlendFunction,
   EffectComposer,
   EffectPass,
   KernelSize,
@@ -124,14 +125,23 @@ export class PostPipeline implements Subsystem, RenderDriver {
     gradeEffects.push(this.grade)
     this.composer.addPass(new EffectPass(camera, ...gradeEffects))
 
-    // Chromatic aberration is gated by quality; sharpen always runs (it's the
-    // pixel-art crispness guarantee).
+    // Chromatic aberration + sharpen + FINAL character clarity. This pass runs
+    // after bloom, so it is the authoritative last word on the fighters: it
+    // re-asserts the neutral, separated character read that the environment's
+    // saturated bloom bleeds back over (see LensFinalizeEffect).
     this.finalize.setCa(flags.chromaticAberration ? 0.0011 : 0, 0)
     this.finalize.setSharpen(0.32)
+    this.grade.setCamera(camera.near, camera.far)
+    this.finalize.setCamera(camera.near, camera.far)
+    this.finalize.setCharClarity(this.currentGrade.envTint, this.currentGrade.charUntint)
     this.composer.addPass(new EffectPass(camera, this.finalize))
 
     if (flags.aa === 'smaa') {
       this.smaa = new SMAAEffect({ preset: SMAAPreset.HIGH })
+      // SMAA resolves the full output colour itself; force a straight copy so the
+      // pass does not alpha-blend against the stale (bloomed) buffer it ping-pongs
+      // over, which would re-multiply the frame by the environment hue.
+      this.smaa.blendMode.blendFunction = BlendFunction.SRC
       this.composer.addPass(new EffectPass(camera, this.smaa))
     } else {
       this.smaa = null
@@ -195,6 +205,7 @@ export class PostPipeline implements Subsystem, RenderDriver {
       const t = this.fade * this.fade * (3 - 2 * this.fade)
       this.currentGrade = mixGrades(this.fromGrade, this.targetGrade, t)
       this.grade.applyGrade(this.currentGrade)
+      this.finalize.setCharClarity(this.currentGrade.envTint, this.currentGrade.charUntint)
     }
     const g = this.currentGrade
 
@@ -295,7 +306,7 @@ export class PostPipeline implements Subsystem, RenderDriver {
     this._charB.set(cbx, cby)
 
     // Vertical extent + a stable centre from each fighter's head/feet anchors.
-    let halfH = 0.24
+    let halfH = 0.28
     const headA = anchors.get('fighter:a:head')
     const feetA = anchors.get('fighter:a:feet')
     if (headA && feetA) {
@@ -303,7 +314,7 @@ export class PostPipeline implements Subsystem, RenderDriver {
       const hy = this.lastY
       this.projX(feetA)
       const fy = this.lastY
-      halfH = Math.max(0.12, Math.abs(hy - fy) * 0.5 * 1.14)
+      halfH = Math.max(0.18, Math.abs(hy - fy) * 0.5 * 1.5)
       this._charA.y = (hy + fy) * 0.5
     }
     const headB = anchors.get('fighter:b:head')
@@ -313,24 +324,37 @@ export class PostPipeline implements Subsystem, RenderDriver {
       const hy = this.lastY
       this.projX(feetB)
       const fy = this.lastY
+      halfH = Math.max(halfH, Math.abs(hy - fy) * 0.5 * 1.5)
       this._charB.y = (hy + fy) * 0.5
     }
 
-    // Horizontal extent from a fixed world offset around the chest.
+    // Horizontal extent from a fixed world offset around the chest. Kept generous
+    // so the ellipse reliably spans each fighter across lunge/crouch poses; the
+    // depth gate (below) is what keeps the far background at full arena grade, so
+    // a wide window here only ever affects pixels on the fighter plane.
     this._pv.copy(chestA)
     this._pv.x += 0.95
     this._pv.project(camera)
     const offx = this._pv.x * 0.5 + 0.5
-    let halfW = Math.abs(offx - cax) * 1.18
-    if (!(halfW > 0.02)) halfW = 0.08
+    let halfW = Math.abs(offx - cax) * 1.5
+    if (!(halfW > 0.02)) halfW = 0.12
+    halfW = Math.max(halfW, 0.11)
     this._charHalf.set(halfW, halfH)
 
-    // Distance from camera to the fighter plane, so the grade can depth-gate
-    // the matte and exclude the far background inside the power window.
-    const dist = this.ctx.camera.position.distanceTo(chestA)
-    this.grade.setCharDepth(dist + 2.2, 5.5)
-
+    // Distance from camera to the fighter plane, so the grade can depth-gate the
+    // matte and exclude the far background inside the power window. Span BOTH
+    // fighters (they can be at slightly different distances mid-move) with a wide
+    // falloff so neither drops out of the matte.
+    const distA = this.ctx.camera.position.distanceTo(chestA)
+    const distB = this.ctx.camera.position.distanceTo(chestB)
+    const nearDist = Math.min(distA, distB)
+    const spread = Math.abs(distA - distB)
+    this.grade.setCharDepth(nearDist + 2.5, spread + 9.0)
     this.grade.setCharMatte(this._charA, this._charB, this._charHalf)
+
+    // The finalize pass re-asserts the same matte after bloom (see below).
+    this.finalize.setCharDepth(nearDist + 2.5, spread + 9.0)
+    this.finalize.setCharMatte(this._charA, this._charB, this._charHalf)
   }
 
   private lastY = 0

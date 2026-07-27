@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { bakeMaterial, type MaterialPreset } from '../materials/procedural'
 
 /**
  * Procedural set-dressing kit.
@@ -63,14 +64,134 @@ export function structureMat(opts: {
   metalness?: number
   emissive?: number
   emissiveIntensity?: number
+  /** Force a specific bakery preset instead of inferring from metalness. */
+  preset?: MaterialPreset
+  /** Texture tiling across the surface UVs. */
+  repeat?: number | [number, number]
+  /** Override the preset's default normal-map strength. */
+  normalScale?: number
+  /** Opt out of texturing (rare — for tiny props where detail is wasted). */
+  flat?: boolean
 }): THREE.MeshStandardMaterial {
-  return new THREE.MeshStandardMaterial({
+  const roughness = opts.roughness ?? 0.72
+  const metalness = opts.metalness ?? 0.35
+  if (opts.flat) {
+    return new THREE.MeshStandardMaterial({
+      color: opts.color,
+      roughness,
+      metalness,
+      emissive: opts.emissive ?? 0x000000,
+      emissiveIntensity: opts.emissiveIntensity ?? 1,
+    })
+  }
+  return texturedMat({
     color: opts.color,
-    roughness: opts.roughness ?? 0.72,
-    metalness: opts.metalness ?? 0.35,
+    roughness,
+    metalness,
     emissive: opts.emissive ?? 0x000000,
     emissiveIntensity: opts.emissiveIntensity ?? 1,
+    preset: pickPreset(roughness, metalness, opts.preset),
+    repeat: opts.repeat,
+    normalScale: opts.normalScale,
   })
+}
+
+// ---------------------------------------------------------------------------
+// Textured PBR structural material.
+//
+// Every structural primitive routes through the procedural bakery so it carries
+// albedo variation, roughness variation and normal micro-detail for the light to
+// catch — untextured primitives are the single loudest amateur tell. Materials
+// are cached by signature and reuse the bakery's cached base maps (only the
+// wrap/repeat is per-material via a light clone), so a stage that reuses a look
+// in fifty places pays for one bake and a bounded set of texture views. aoMap is
+// intentionally omitted (kit geometry has no second UV set); the baked albedo
+// already darkens crevices so cavity reads even before lighting.
+// ---------------------------------------------------------------------------
+
+function pickPreset(roughness: number, metalness: number, hint?: MaterialPreset): MaterialPreset {
+  if (hint) return hint
+  if (metalness >= 0.6) return roughness <= 0.42 ? 'brushedMetal' : 'darkSteel'
+  if (metalness >= 0.28) return 'paintedMetal'
+  if (roughness >= 0.9) return 'plaster'
+  return 'concrete'
+}
+
+/** Sensible UV tiling per preset so detail sits at a believable physical scale. */
+const PRESET_REPEAT: Record<MaterialPreset, number> = {
+  concrete: 2.2, polishedConcrete: 2.6, asphalt: 3, brushedMetal: 1.6,
+  paintedMetal: 2, darkSteel: 2.2, rustedSteel: 2, marble: 1.4, wornWood: 2.4,
+  plywood: 2, rubberFloor: 3, carpet: 3, fabric: 3, plaster: 2.4, drywall: 2,
+  glassPanel: 1.4, carbonFibre: 3, perforatedMetal: 3, cardboard: 2, whiteboard: 1.2,
+}
+
+/** Approx mean luminance of each preset's baked albedo. The caller's `color` is
+ *  the albedo they expect *before* the bakery multiplied its own texture in, so
+ *  we pre-divide by this (clamped) to keep the surface's average brightness on
+ *  target while the texture supplies the variation on top. */
+const PRESET_MEAN_LUMA: Record<MaterialPreset, number> = {
+  concrete: 0.5, polishedConcrete: 0.55, asphalt: 0.18, brushedMetal: 0.62,
+  paintedMetal: 0.26, darkSteel: 0.16, rustedSteel: 0.3, marble: 0.72, wornWood: 0.32,
+  plywood: 0.55, rubberFloor: 0.16, carpet: 0.24, fabric: 0.32, plaster: 0.6, drywall: 0.72,
+  glassPanel: 0.4, carbonFibre: 0.12, perforatedMetal: 0.28, cardboard: 0.5, whiteboard: 0.9,
+}
+
+const texMatCache = new Map<string, THREE.MeshStandardMaterial>()
+const _cc = new THREE.Color()
+
+interface TexMatOpts {
+  color: number
+  roughness: number
+  metalness: number
+  emissive: number
+  emissiveIntensity: number
+  preset: MaterialPreset
+  repeat?: number | [number, number]
+  normalScale?: number
+  seed?: number
+  size?: number
+}
+
+export function texturedMat(o: TexMatOpts): THREE.MeshStandardMaterial {
+  const rep = o.repeat ?? PRESET_REPEAT[o.preset] ?? 2
+  const [rx, ry] = Array.isArray(rep) ? rep : [rep, rep]
+  const seed = o.seed ?? 1
+  const size = o.size ?? 256
+  const key = `${o.preset}|${o.color}|${o.roughness.toFixed(2)}|${o.metalness.toFixed(2)}|${o.emissive}|${o.emissiveIntensity.toFixed(2)}|${rx}x${ry}|${o.normalScale ?? -1}|${seed}|${size}`
+  const hit = texMatCache.get(key)
+  if (hit) return hit
+
+  const set = bakeMaterial(o.preset, seed, size)
+  const map = set.map.clone(); map.needsUpdate = true
+  const roughnessMap = set.roughnessMap.clone(); roughnessMap.needsUpdate = true
+  const normalMap = set.normalMap.clone(); normalMap.needsUpdate = true
+  const metalnessMap = set.metalnessMap?.clone()
+  if (metalnessMap) metalnessMap.needsUpdate = true
+  for (const t of [map, roughnessMap, normalMap, metalnessMap]) {
+    if (!t) continue
+    t.wrapS = THREE.RepeatWrapping
+    t.wrapT = THREE.RepeatWrapping
+    t.repeat.set(rx, ry)
+  }
+  // Brightness compensation: keep the surface's average on the caller's colour.
+  const comp = Math.min(2.6, Math.max(1.0, 0.66 / (PRESET_MEAN_LUMA[o.preset] ?? 0.5)))
+  _cc.setHex(o.color).multiplyScalar(comp)
+  _cc.r = Math.min(1, _cc.r); _cc.g = Math.min(1, _cc.g); _cc.b = Math.min(1, _cc.b)
+  const m = new THREE.MeshStandardMaterial({
+    map,
+    roughnessMap,
+    normalMap,
+    metalnessMap,
+    color: _cc.getHex(),
+    roughness: o.roughness,
+    metalness: o.metalness,
+    emissive: o.emissive,
+    emissiveIntensity: o.emissiveIntensity,
+  })
+  const ns = o.normalScale ?? set.defaults.normalScale
+  m.normalScale.set(ns, ns)
+  texMatCache.set(key, m)
+  return m
 }
 
 /** Additive self-lit material used for glowing tubes / trims / practicals. */

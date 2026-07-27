@@ -24,7 +24,7 @@
   height: 112%;
   object-fit: cover;
   image-rendering: pixelated;
-  filter: brightness(0.42) saturate(0.72) blur(5px);
+  filter: brightness(0.32) saturate(0.6) blur(6px);
   transform: scale(1.06);
   will-change: transform;
 }
@@ -193,7 +193,7 @@
   width: 100%;
   text-align: left;
   cursor: pointer;
-  opacity: 0.55;
+  opacity: 0.46;
   padding: clamp(9px, 1.5vh, 15px) clamp(16px, 1.6vw, 24px) clamp(9px, 1.5vh, 15px) clamp(22px, 2vw, 30px);
   color: #fff;
   border: 0;
@@ -202,7 +202,7 @@
   background:
     linear-gradient(180deg, rgba(12,8,20,0.86), rgba(6,4,12,0.92));
   box-shadow:
-    inset 3px 0 0 var(--accent),
+    inset 3px 0 0 rgba(150,132,182,0.4),
     inset -1px -1px 0 rgba(0,0,0,0.6),
     inset 1px 1px 0 rgba(255,255,255,0.06);
   transition: transform 0.14s cubic-bezier(0.2,0.9,0.3,1), box-shadow 0.16s ease, background 0.16s ease, opacity 0.16s ease;
@@ -263,14 +263,14 @@
 
 /* PRIMARY (Story) — bigger, hotter, wins the hierarchy. */
 .mm-item.mm-primary {
+  opacity: 0.74;
   padding: clamp(14px, 2.3vh, 22px) clamp(18px, 1.8vw, 26px) clamp(14px, 2.3vh, 22px) clamp(26px, 2.4vw, 36px);
   clip-path: polygon(0 0, 100% 0, calc(100% - 22px) 100%, 0 100%);
   background:
-    linear-gradient(180deg, rgba(30,10,26,0.90), rgba(14,5,16,0.94)),
-    linear-gradient(90deg, color-mix(in srgb, var(--accent) 30%, transparent), transparent 62%);
+    linear-gradient(180deg, rgba(26,12,22,0.92), rgba(12,6,16,0.95)),
+    linear-gradient(90deg, color-mix(in srgb, var(--accent) 15%, transparent), transparent 52%);
   box-shadow:
-    inset 5px 0 0 var(--accent),
-    0 0 22px color-mix(in srgb, var(--accent) 32%, transparent),
+    inset 5px 0 0 color-mix(in srgb, var(--accent) 76%, #2a2036),
     inset -1px -1px 0 rgba(0,0,0,0.6),
     inset 1px 1px 0 rgba(255,255,255,0.10);
 }
@@ -294,10 +294,12 @@
   font-family: var(--font-display);
   font-size: clamp(6px, 0.9vh, 8px);
   letter-spacing: 0.28em;
-  color: #0B0713;
-  background: var(--accent);
+  color: var(--accent);
+  background: rgba(6,4,12,0.86);
   padding: 3px 7px;
-  box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 60%, transparent);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--accent) 68%, transparent),
+    0 0 8px color-mix(in srgb, var(--accent) 30%, transparent);
 }
 
 /* SECONDARY rows */
@@ -336,13 +338,13 @@
   position: relative;
   font-family: var(--font-body);
   font-style: italic;
-  font-size: clamp(13px, 1.9vh, 18px);
+  font-size: clamp(14px, 2vh, 19px);
   line-height: 1.3;
-  color: #fff;
-  padding: clamp(7px, 1.1vh, 12px) clamp(12px, 1.2vw, 18px);
-  background: rgba(6,4,12,0.72);
-  border-left: 3px solid #FFD60A;
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06);
+  color: #FFFDF5;
+  padding: clamp(8px, 1.2vh, 13px) clamp(13px, 1.3vw, 20px);
+  background: rgba(4,2,9,0.9);
+  border-left: 4px solid #FCBF49;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08), 0 0 14px rgba(0,0,0,0.5);
   text-shadow: 1px 1px 0 #000;
   min-height: clamp(40px, 6vh, 54px);
   display: flex;
@@ -374,26 +376,27 @@
   font-family: var(--font-display);
   font-size: clamp(7px, 0.95vh, 9px);
   letter-spacing: 0.24em;
-  color: rgba(216,199,240,0.62);
+  color: rgba(232,220,255,0.85);
   min-width: clamp(50px, 5vw, 66px);
   text-shadow: 1px 1px 0 #000;
 }
 .mm-chip {
   position: relative;
   font-family: var(--font-display);
-  font-size: clamp(7px, 1vh, 9.5px);
-  letter-spacing: 0.08em;
-  color: #E7DAFB;
-  padding: clamp(6px, 0.95vh, 9px) clamp(9px, 0.9vw, 13px) clamp(6px, 0.95vh, 9px) clamp(11px, 1vw, 15px);
-  background: linear-gradient(180deg, rgba(28,18,42,0.92), rgba(10,6,18,0.95));
+  font-size: clamp(7.5px, 1.05vh, 10px);
+  letter-spacing: 0.1em;
+  color: #F5EEFF;
+  padding: clamp(7px, 1.05vh, 10px) clamp(10px, 1vw, 15px) clamp(7px, 1.05vh, 10px) clamp(13px, 1.1vw, 17px);
+  background: linear-gradient(180deg, rgba(40,27,58,0.95), rgba(16,10,26,0.97));
   border: 0;
-  clip-path: polygon(0 0, 100% 0, calc(100% - 6px) 100%, 0 100%);
+  clip-path: polygon(0 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
   cursor: pointer;
   text-shadow: 1px 1px 0 #000;
   box-shadow:
-    inset 3px 0 0 #7B5EA8,
+    inset 4px 0 0 #9B7BD4,
+    inset 0 2px 0 rgba(255,255,255,0.06),
     inset -1px -1px 0 rgba(0,0,0,0.55),
-    inset 1px 1px 0 rgba(255,255,255,0.07);
+    inset 1px 1px 0 rgba(255,255,255,0.08);
   transition: transform 0.12s ease, color 0.14s ease, box-shadow 0.14s ease, background 0.14s ease;
   outline: none;
 }
@@ -409,7 +412,7 @@
     inset 1px 1px 0 rgba(255,255,255,0.12);
 }
 /* toggles read as state, not navigation */
-.mm-chip.mm-toggle { box-shadow: inset 3px 0 0 #FCBF49, inset -1px -1px 0 rgba(0,0,0,0.55), inset 1px 1px 0 rgba(255,255,255,0.07); }
+.mm-chip.mm-toggle { box-shadow: inset 4px 0 0 #FCBF49, inset 0 2px 0 rgba(255,255,255,0.06), inset -1px -1px 0 rgba(0,0,0,0.55), inset 1px 1px 0 rgba(255,255,255,0.08); }
 .mm-chip.mm-toggle .mm-toggle-on  { color: #06D6A0; }
 .mm-chip.mm-toggle .mm-toggle-off { color: #C4A0FF; }
 
@@ -420,7 +423,9 @@
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: radial-gradient(58% 66% at 52% 46%, transparent 34%, rgba(6,4,12,0.82) 82%);
+  background:
+    radial-gradient(54% 60% at 53% 44%, transparent 24%, rgba(4,2,9,0.92) 76%),
+    linear-gradient(90deg, rgba(4,2,9,0.5) 0%, transparent 22%);
 }
 .mm-showcase {
   position: relative;
@@ -428,8 +433,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: clamp(4px, 1vw, 18px);
-  padding-right: clamp(6px, 2vw, 30px);
+  gap: clamp(0px, 0.4vw, 6px);
+  padding-right: clamp(4px, 1.4vw, 20px);
 }
 .mm-fighter {
   position: relative;
@@ -451,8 +456,8 @@
   pointer-events: none;
 }
 .mm-fighter-art {
-  width: clamp(180px, 24vw, 300px);
-  height: clamp(250px, 47vh, 400px);
+  width: clamp(200px, 26vw, 330px);
+  height: clamp(270px, 51vh, 440px);
 }
 .mm-nameplate {
   position: relative;
@@ -479,13 +484,16 @@
   margin-top: 3px;
 }
 .mm-vs {
+  position: relative;
   font-family: var(--font-display);
-  font-size: clamp(30px, 5.6vh, 56px);
+  font-size: clamp(24px, 4.4vh, 44px);
   color: #FFD60A;
-  text-shadow: 4px 4px 0 #000, 0 0 20px #F77F00;
+  text-shadow: 3px 3px 0 #000, 0 0 16px #F77F00;
   transform: skewX(-4deg);
   flex-shrink: 0;
   z-index: 3;
+  padding: clamp(6px, 1vh, 12px) clamp(3px, 0.5vw, 8px);
+  margin: 0 clamp(-16px, -1.5vw, -8px);
 }
 .mm-anim .mm-vs { animation: mmVsPulse 1.8s ease-in-out infinite; }
 @keyframes mmVsPulse {
@@ -506,7 +514,7 @@
 /* label above the showcase */
 .mm-showcase-tag {
   position: absolute;
-  top: clamp(10px, 3vh, 34px);
+  top: clamp(36px, 6.4vh, 50px);
   left: 50%;
   transform: translateX(-50%);
   font-family: var(--font-display);
@@ -548,13 +556,13 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: clamp(5px, 0.8vh, 8px) clamp(9px, 0.9vw, 14px);
-  background: linear-gradient(180deg, rgba(14,9,24,0.94), rgba(6,4,12,0.96));
-  clip-path: polygon(6px 0, 100% 0, calc(100% - 6px) 100%, 0 100%);
-  box-shadow: inset 3px 0 0 var(--accent, #FFD60A), 0 0 16px color-mix(in srgb, var(--accent, #FFD60A) 45%, transparent);
+  padding: clamp(6px, 0.95vh, 10px) clamp(11px, 1vw, 16px);
+  background: linear-gradient(180deg, rgba(12,7,20,0.97), rgba(5,3,10,0.98));
+  clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
+  box-shadow: inset 4px 0 0 var(--accent, #FFD60A), inset 0 0 0 1px rgba(255,255,255,0.08), 0 0 18px color-mix(in srgb, var(--accent, #FFD60A) 50%, transparent);
 }
-.mm-otd-k { font-family: var(--font-display); font-size: clamp(6px, 0.85vh, 8px); letter-spacing: 0.22em; color: #FFE08A; text-shadow: 1px 1px 0 #000; }
-.mm-otd-v { font-family: var(--font-display); font-size: clamp(8px, 1.05vh, 10px); letter-spacing: 0.12em; color: #fff; text-shadow: 1px 1px 0 #000; }
+.mm-otd-k { font-family: var(--font-display); font-size: clamp(6.5px, 0.9vh, 8.5px); letter-spacing: 0.22em; color: #FFE08A; text-shadow: 1px 1px 0 #000; }
+.mm-otd-v { font-family: var(--font-display); font-size: clamp(9px, 1.2vh, 12px); letter-spacing: 0.12em; color: #FFF6DA; text-shadow: 1px 1px 0 #000, 0 0 8px rgba(255,214,10,0.4); }
 
 /* footer credit */
 .mm-foot {
@@ -567,7 +575,7 @@
   font-family: var(--font-display);
   font-size: clamp(6px, 0.85vh, 8px);
   letter-spacing: 0.2em;
-  color: rgba(216,199,240,0.5);
+  color: rgba(224,210,248,0.72);
   text-shadow: 1px 1px 0 #000;
 }
 

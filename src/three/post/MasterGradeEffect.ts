@@ -171,8 +171,8 @@ vec3 finishValue(vec3 c) {
   // shadow tint (red on monetization, warm on distribution, teal on ipo-prep).
   // Coloured shadows and mids above ~0.11 luma keep their graded tint fully.
   float bl = luma(c);
-  float nb = smoothstep(0.11, 0.0, bl);
-  c = mix(c, vec3(bl), nb * 0.7);
+  float nb = smoothstep(0.12, 0.0, bl);
+  c = mix(c, vec3(bl), nb * 0.78);
   return c;
 }
 

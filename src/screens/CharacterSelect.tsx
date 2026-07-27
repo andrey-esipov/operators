@@ -259,18 +259,38 @@ export function CharacterSelect() {
           </button>
         </div>
 
-        <h1
-          className="sel-name-face"
-          style={{
-            fontSize: 26,
-            letterSpacing: '0.14em',
-            color: '#fff',
-            textShadow: `2px 2px 0 rgba(0,0,0,0.8), 0 0 22px ${sideColor}66`,
-            lineHeight: 1,
-          }}
-        >
-          {storyMode ? "TONIGHT'S GUEST" : arcadeMode ? 'PICK YOUR FIGHTER' : 'SELECT YOUR OPERATOR'}
-        </h1>
+        {singlePickerMode ? (
+          <h1
+            className="sel-name-face"
+            style={{
+              fontSize: 26,
+              letterSpacing: '0.14em',
+              color: '#fff',
+              textShadow: `2px 2px 0 rgba(0,0,0,0.8), 0 0 22px ${sideColor}66`,
+              lineHeight: 1,
+            }}
+          >
+            {storyMode ? "TONIGHT'S GUEST" : 'PICK YOUR FIGHTER'}
+          </h1>
+        ) : (
+          <div className="sel-matchup" aria-label="matchup">
+            <div className="sel-matchup-side sel-matchup-a">
+              <span className="sel-name sel-matchup-name" title={p1Fighter?.name}>
+                {p1Fighter ? p1Fighter.shortName : '—'}
+              </span>
+              <span className="sel-matchup-tag sel-h" style={{ color: SIDE_COLOR.a }}>P1</span>
+            </div>
+            <div className="sel-matchup-vs sel-name-face" aria-hidden>
+              <span>VS</span>
+            </div>
+            <div className="sel-matchup-side sel-matchup-b">
+              <span className="sel-matchup-tag sel-h" style={{ color: SIDE_COLOR.b }}>P2</span>
+              <span className="sel-name sel-matchup-name" title={p2Fighter?.name}>
+                {p2Fighter ? p2Fighter.shortName : '—'}
+              </span>
+            </div>
+          </div>
+        )}
 
         <div
           className="sel-h"
@@ -478,7 +498,13 @@ function StandoffHero({
             </div>
           </div>
         ) : (
-          <div className="sel-standoff-empty sel-name-face" aria-hidden>?</div>
+          <div className="sel-standoff-empty" aria-hidden>
+            <div className="sel-standoff-empty-silhouette" />
+            <div className="sel-standoff-empty-mark sel-name-face">?</div>
+            <div className="sel-standoff-empty-prompt sel-h">
+              {active ? 'CHOOSING' : 'WAITING FOR PLAYER 2'}
+            </div>
+          </div>
         )}
 
         <div className="sel-standoff-tab sel-h">{singlePicker ? 'OPERATOR' : SIDE_LABEL[side]}</div>

@@ -25,7 +25,7 @@
   position: relative;
   width: 100%;
   height: 100%;
-  overflow: hidden;
+  overflow: clip;
   /* --sel-accent = hovered operator colour; --sel-side = active player colour. */
   --sel-accent: #f72585;
   --sel-side: #e63946;
@@ -338,7 +338,8 @@
   pointer-events: none;
 }
 
-/* Thin discipline underline — a quiet scannable cue at rest, ignites on focus. */
+/* Thin discipline underline — neutral at rest, ignites in the fighter's craft
+   colour only on hover/cursor/lock so the roster reads calm, not rainbow. */
 .sel-cell-disc {
   position: absolute;
   left: 0;
@@ -346,13 +347,14 @@
   bottom: 0;
   height: 2px;
   z-index: 3;
-  opacity: 0.32;
-  transition: opacity 120ms ease, height 120ms ease, box-shadow 120ms ease;
+  opacity: 0.22;
+  filter: grayscale(1) brightness(1.7);
+  transition: opacity 120ms ease, height 120ms ease, filter 120ms ease, box-shadow 120ms ease;
 }
 .sel-cell:hover .sel-cell-disc,
 .sel-cell.is-cursor .sel-cell-disc,
 .sel-cell.is-p1 .sel-cell-disc,
-.sel-cell.is-p2 .sel-cell-disc { opacity: 1; height: 3px; }
+.sel-cell.is-p2 .sel-cell-disc { opacity: 1; height: 3px; filter: none; }
 
 /* Cursor cell — dramatic emphasis + hard snap. */
 .sel-cell.is-cursor {
@@ -579,6 +581,83 @@
   50% { box-shadow: 0 0 0 2px rgba(255, 214, 10, 0.9), 0 0 34px rgba(255, 214, 10, 0.8), inset 0 2px 0 rgba(255, 255, 255, 0.5); }
 }
 
+/* ── Header matchup lockup — the building VS moment ─────────────────── */
+.sel-matchup {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  min-width: 0;
+}
+.sel-matchup-side {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: clamp(120px, 15vw, 240px);
+}
+.sel-matchup-a { justify-content: flex-end; text-align: right; }
+.sel-matchup-b { justify-content: flex-start; text-align: left; }
+.sel-matchup-name {
+  font-size: clamp(20px, 2.3vw, 36px);
+  line-height: 0.9;
+  color: #fff;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.85);
+}
+.sel-matchup-a .sel-matchup-name { transform: skewX(-7deg); }
+.sel-matchup-b .sel-matchup-name { transform: skewX(-7deg); }
+.sel-matchup-tag {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  padding: 3px 6px;
+  background: rgba(0, 0, 0, 0.4);
+  box-shadow: inset 0 0 0 1px currentColor;
+}
+.sel-matchup-vs {
+  position: relative;
+  flex: 0 0 auto;
+  font-size: clamp(30px, 3.4vw, 48px);
+  line-height: 0.8;
+  padding: 2px 4px;
+  color: #ffd60a;
+  background: linear-gradient(180deg, #fff2b0 0%, #ffd60a 42%, #f08a00 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 0 14px rgba(255, 200, 40, 0.55)) drop-shadow(2px 2px 0 rgba(0, 0, 0, 0.8));
+  transform: skewX(-8deg);
+  animation: selVsPulse 2.4s ease-in-out infinite;
+}
+.sel-matchup-vs::before {
+  content: '';
+  position: absolute;
+  left: -12px;
+  top: 50%;
+  width: 8px;
+  height: 2px;
+  transform: translateY(-50%) skewX(8deg);
+  background: var(--sel-p1, #e63946);
+  box-shadow: 0 0 8px var(--sel-p1, #e63946);
+}
+.sel-matchup-vs::after {
+  content: '';
+  position: absolute;
+  right: -12px;
+  top: 50%;
+  width: 8px;
+  height: 2px;
+  transform: translateY(-50%) skewX(8deg);
+  background: var(--sel-p2, #00b4d8);
+  box-shadow: 0 0 8px var(--sel-p2, #00b4d8);
+}
+@keyframes selVsPulse {
+  0%, 100% { filter: drop-shadow(0 0 14px rgba(255, 200, 40, 0.5)) drop-shadow(2px 2px 0 rgba(0, 0, 0, 0.8)); }
+  50% { filter: drop-shadow(0 0 26px rgba(255, 210, 60, 0.85)) drop-shadow(2px 2px 0 rgba(0, 0, 0, 0.8)); }
+}
+
 /* ── Standoff heroes — one imposing render per player side ──────────── */
 .sel-standoff {
   position: relative;
@@ -662,6 +741,7 @@
   display: flex;
   align-items: flex-end;
   justify-content: center;
+  padding-bottom: 5%;
   filter: drop-shadow(0 18px 20px rgba(0, 0, 0, 0.72));
   animation: selStandoffIn 320ms cubic-bezier(0.16, 1, 0.3, 1) both;
   z-index: 3;
@@ -670,7 +750,7 @@
    the (narrow) figure fills it head-to-toe. Transparent side margins overflow
    the panel and are clipped — that is what makes the hero read as dominant. */
 .sel-standoff-figwrap {
-  height: 116%;
+  height: 112%;
   aspect-ratio: 1 / 1;
   flex: 0 0 auto;
 }
@@ -698,11 +778,52 @@
   position: absolute;
   inset: 0;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  font-size: clamp(90px, 12vw, 160px);
-  color: rgba(255, 255, 255, 0.06);
+  gap: 14px;
   z-index: 2;
+}
+.sel-standoff-empty-silhouette {
+  position: absolute;
+  bottom: 6%;
+  left: 50%;
+  width: 46%;
+  height: 74%;
+  transform: translateX(-50%);
+  background: color-mix(in srgb, var(--sel-side) 40%, #000);
+  opacity: 0.16;
+  -webkit-mask: radial-gradient(42% 24% at 50% 12%, #000 60%, transparent 62%) no-repeat,
+    linear-gradient(#000, #000) no-repeat;
+  -webkit-mask-composite: source-over;
+  clip-path: polygon(38% 0, 62% 0, 70% 20%, 66% 46%, 78% 100%, 22% 100%, 34% 46%, 30% 20%);
+  animation: selEmptyBreathe 3.4s ease-in-out infinite;
+}
+.sel-standoff-empty-mark {
+  position: relative;
+  font-size: clamp(90px, 12vw, 150px);
+  line-height: 0.8;
+  color: color-mix(in srgb, var(--sel-side) 30%, rgba(255, 255, 255, 0.05));
+  text-shadow: 0 0 30px color-mix(in srgb, var(--sel-side) 30%, transparent);
+  z-index: 3;
+}
+.sel-standoff-empty-prompt {
+  position: relative;
+  z-index: 3;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  color: color-mix(in srgb, var(--sel-side) 75%, #fff 25%);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
+  animation: selEmptyBlink 1.6s steps(1, end) infinite;
+}
+@keyframes selEmptyBreathe {
+  0%, 100% { opacity: 0.12; }
+  50% { opacity: 0.22; }
+}
+@keyframes selEmptyBlink {
+  0%, 55% { opacity: 1; }
+  56%, 100% { opacity: 0.35; }
 }
 
 /* Player tab (top corner, angled toward the centre). */

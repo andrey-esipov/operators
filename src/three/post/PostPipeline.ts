@@ -92,12 +92,29 @@ export class PostPipeline implements Subsystem, RenderDriver {
     })
     this.composer.addPass(new RenderPass(scene, camera))
 
-    // --- bloom: multi-scale mipmap blur, energy-conserving --------------
+    // --- bloom: wide Gaussian, energy-conserving ------------------------
+    //
+    // mipmapBlur MUST stay false. On ANGLE/Metal the mipmap blur pass mints
+    // NaN in its upsampling chain: the downsample mips read clean, but every
+    // upsample mip comes back 100% NaN in one or more channels. Because the
+    // deepest mip is fed by the entire frame, that NaN then sprays back across
+    // the full-resolution bloom texture. BloomEffect blends with SCREEN
+    // (dst + src - min(dst*src, 1)), so the NaN propagates into the composite
+    // and the final clamp writes it out as exactly 0.
+    //
+    // The symptom was the whole game rendering in a single pure hue -- crisis
+    // was pure red (G and B were NaN), hypergrowth pure cyan (R was NaN) --
+    // with the surviving channel passing through byte-identical. A neutral grey
+    // emitted from the master grade came out pure red, which is what proved the
+    // damage happened after the grade rather than inside its colour script.
+    // Measured across all 8 arenas: mean saturation was pinned at exactly
+    // 1.000 with up to 100% of lit pixels holding a dead channel; on the
+    // Gaussian path it drops to 0.45-0.86 with dead channels under 10%.
     this.bloom = new BloomEffect({
       intensity: this.currentGrade.bloomIntensity,
       luminanceThreshold: this.currentGrade.bloomThreshold,
       luminanceSmoothing: 0.3,
-      mipmapBlur: true,
+      mipmapBlur: false,
       kernelSize: KernelSize.HUGE,
       radius: 0.85,
     })

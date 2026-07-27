@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { createFight, step, fighterCanAct } from '../sim'
 import { makeAI } from '../ai'
-import type { Button, Direction, InputFrame } from '../types'
-import { inp, run, serialize } from './helpers'
+import type { Button, Direction, FightState, InputFrame } from '../types'
+import { fightAtRange, inp, run, serialize } from './helpers'
 
 /** A deterministic but varied script so the replay exercises movement, jumps,
  *  attacks and motions rather than a single idle path. */
@@ -22,6 +22,42 @@ describe('determinism', () => {
     const b = run(createFight('operator', 'operator'), 400, scripted(0), scripted(3))
     expect(serialize(a.state)).toBe(serialize(b.state))
     expect(JSON.stringify(a.events)).toBe(JSON.stringify(b.events))
+  })
+
+  // A byte-for-byte replay of two idle fighters is trivially deterministic —
+  // and useless. This rig forces real combat (point-blank pressure) and asserts
+  // it happened, so the replay guarantee is proven over a state that actually
+  // hits, blocks, knocks back, spends meter and drains health. If combat ever
+  // silently breaks, this fails on the "something happened" checks, not just on
+  // a mismatch nobody would notice.
+  it('replays a REAL fight (hits, damage, meter) identically', () => {
+    // Point-blank so buttons connect. P1 pressures with a jab string that
+    // chains and cancels; P2 mixes blocking with mashing a jab back.
+    const p1: (f: number) => InputFrame = (f) =>
+      f % 6 < 2 ? inp(2, 'lk') : f % 6 < 4 ? inp(2, 'mk') : inp(6)
+    const p2: (f: number) => InputFrame = (f) =>
+      f % 8 < 5 ? inp(4) : inp(5, 'lp')
+
+    const play = (): { s: FightState; hits: number; dmg: number; meter: number } => {
+      const r = run(fightAtRange(58), 300, p1, p2)
+      const hits = r.events.filter((e) => e.type === 'hit').length
+      const dmg =
+        r.state.fighters[0].maxHealth - r.state.fighters[0].health +
+        (r.state.fighters[1].maxHealth - r.state.fighters[1].health)
+      const meter = r.state.fighters[0].meter + r.state.fighters[1].meter
+      return { s: r.state, hits, dmg, meter }
+    }
+
+    const a = play()
+    const b = play()
+
+    // The replay is byte-identical…
+    expect(serialize(a.s)).toBe(serialize(b.s))
+    // …AND the thing we replayed was a genuine fight, not two statues. These
+    // are the teeth: they go red the moment combat stops resolving.
+    expect(a.hits).toBeGreaterThan(5)
+    expect(a.dmg).toBeGreaterThan(0)
+    expect(a.meter).toBeGreaterThan(0)
   })
 
   it('does not mutate the state passed in', () => {

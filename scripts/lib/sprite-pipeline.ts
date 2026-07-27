@@ -329,21 +329,42 @@ export async function registerFrame(
 ): Promise<Buffer> {
   const a = await findAnchor(pngWithAlpha)
   const desired = opts.targetHeight * (opts.heightRatio ?? 1)
-  const scale = desired / a.height
 
+  // Start from the height-matching scale, then cap it so the whole silhouette
+  // still fits on the canvas once it is pinned by its foot pivot at the origin.
+  //
+  // A wide-and-short pose (a lying knockdown, a full roundhouse) scaled purely
+  // to hit a target *height* balloons in *width* — enough to spill past the
+  // canvas edge, which is exactly the "Image to composite must have same
+  // dimensions or smaller" crash sharp throws. The wrong fix is to clamp the
+  // composite position: that slides the feet off the shared origin and every
+  // frame swims again. Instead we shrink the pose just enough that, placed with
+  // its foot pivot exactly on (originX, originY), it clears all four edges. The
+  // pivot never moves, so registration stays pixel-exact; only an oversized
+  // pose loses a little size.
+  const m = 2 // keep a hair of margin off every edge
+  const leftReach = a.footX - a.left // px from bbox-left to the foot pivot
+  const rightReach = a.width - leftReach // px from the pivot to bbox-right
+  const limits = [desired / a.height]
+  if (leftReach > 0) limits.push((opts.originX - m) / leftReach)
+  if (rightReach > 0) limits.push((opts.canvasW - opts.originX - m) / rightReach)
+  limits.push((opts.originY - m) / a.height) // top edge (feet at originY, head up)
+  limits.push((opts.canvasH - m) / a.height) // total height sanity
+  const scale = Math.max(1e-3, Math.min(...limits))
+
+  const scaledW = Math.max(1, Math.round(a.width * scale))
+  const scaledH = Math.max(1, Math.round(a.height * scale))
   const cropped = await sharp(pngWithAlpha)
     .extract({ left: a.left, top: a.top, width: a.width, height: a.height })
-    .resize({
-      width: Math.max(1, Math.round(a.width * scale)),
-      height: Math.max(1, Math.round(a.height * scale)),
-      kernel: 'nearest',
-    })
+    .resize({ width: scaledW, height: scaledH, kernel: 'nearest' })
     .toBuffer()
 
   // Foot pivot in the cropped+scaled frame, then offset so it hits the origin.
-  const footInCrop = (a.footX - a.left) * scale
-  const left = Math.round(opts.originX - footInCrop)
-  const top = Math.round(opts.originY - a.height * scale)
+  // The scale cap above guarantees these stay within [0, canvas - size], but
+  // clamp defensively so a rounding pixel can never re-trigger the crash.
+  const footInCrop = leftReach * scale
+  const left = Math.min(opts.canvasW - scaledW, Math.max(0, Math.round(opts.originX - footInCrop)))
+  const top = Math.min(opts.canvasH - scaledH, Math.max(0, Math.round(opts.originY - scaledH)))
 
   return sharp({
     create: {

@@ -390,8 +390,28 @@ const clip = (loop: boolean, ...pairs: [string, number][]): ClipSpec => ({
   loop,
 })
 
+// Per-move clips a MoveFrame / attack stance can index into. Defined as named
+// consts so the sim's move ids (st.LP, cr.HP, qcf.P …) can alias straight onto
+// them below without re-specifying frames and durations.
+const LP = clip(false, ['lp-startup', 3], ['lp-active', 4], ['lp-startup', 4])
+const MP = clip(false, ['idle-1', 3], ['mp-active', 5], ['idle-1', 6])
+const HP = clip(false, ['hp-startup', 5], ['hp-active', 5], ['hp-startup', 8])
+const LK = clip(false, ['lk-active', 4], ['idle-1', 5])
+const MK = clip(false, ['mk-active', 5], ['idle-1', 7])
+const HK = clip(false, ['hk-startup', 6], ['hk-active', 6], ['idle-1', 10])
+const FIREBALL = clip(false, ['special-fireball-charge', 8], ['special-fireball-release', 6], ['idle-1', 8])
+const UPPERCUT = clip(false, ['crouch', 4], ['special-uppercut', 6], ['jump-fall', 6])
+const SUPER = clip(false, ['special-fireball-charge', 6], ['special-uppercut', 8], ['special-fireball-release', 8])
+
 export const CLIPS: Record<string, ClipSpec> = {
-  // Stance-enum clips (renderer looks these up by FighterState.stance).
+  // ── Stance-enum clips ────────────────────────────────────────────────────
+  // Keyed by the exact names AnimationDriver.clipCandidates() looks up for each
+  // FighterState.stance. Getting a key wrong here does not error — the driver
+  // silently falls back to `idle`, so the fighter just never plays that stance.
+  // In particular `blockstun` resolves to `['block','guard','idle']` and
+  // `hitstun` to `['hurt','hit','idle']`, so those clips MUST be named `block`
+  // and `hurt`, not after the stance. (An earlier cut named them after the
+  // stance and block/hitstun animation silently vanished.)
   idle: clip(true, ['idle-1', 12], ['idle-2', 12], ['idle-3', 12], ['idle-2', 12]),
   'walk-fwd': clip(true, ['walk-fwd-1', 9], ['walk-fwd-2', 9], ['walk-fwd-3', 9], ['walk-fwd-4', 9]),
   'walk-back': clip(true, ['walk-back-1', 9], ['walk-back-2', 9], ['walk-back-3', 9], ['walk-back-4', 9]),
@@ -401,27 +421,40 @@ export const CLIPS: Record<string, ClipSpec> = {
   dash: clip(false, ['dash', 10]),
   backdash: clip(false, ['backdash', 10]),
   attack: clip(false, ['mp-active', 8]),
-  blockstun: clip(true, ['block-stand', 6]),
-  hitstun: clip(false, ['hit-high', 10]),
+  block: clip(true, ['block-stand', 6]),
+  hurt: clip(false, ['hit-high', 10]),
   juggle: clip(false, ['hit-high', 10]),
   knockdown: clip(false, ['knockdown', 20]),
   wakeup: clip(false, ['wakeup', 14]),
   'throw-tech': clip(false, ['block-stand', 8]),
   ko: clip(false, ['ko', 30]),
 
-  // Per-move clips a MoveFrame can index into.
-  lp: clip(false, ['lp-startup', 3], ['lp-active', 4], ['lp-startup', 4]),
-  mp: clip(false, ['idle-1', 3], ['mp-active', 5], ['idle-1', 6]),
-  hp: clip(false, ['hp-startup', 5], ['hp-active', 5], ['hp-startup', 8]),
-  lk: clip(false, ['lk-active', 4], ['idle-1', 5]),
-  mk: clip(false, ['mk-active', 5], ['idle-1', 7]),
-  hk: clip(false, ['hk-startup', 6], ['hk-active', 6], ['idle-1', 10]),
-  'special-fireball': clip(false, ['special-fireball-charge', 8], ['special-fireball-release', 6], ['idle-1', 8]),
-  'special-uppercut': clip(false, ['crouch', 4], ['special-uppercut', 6], ['jump-fall', 6]),
-  super: clip(false, ['special-fireball-charge', 6], ['special-uppercut', 8], ['special-fireball-release', 8]),
+  // ── Generic per-button clips ─────────────────────────────────────────────
+  lp: LP, mp: MP, hp: HP, lk: LK, mk: MK, hk: HK,
+  'special-fireball': FIREBALL,
+  'special-uppercut': UPPERCUT,
+  super: SUPER,
   'hit-low': clip(false, ['hit-low', 12]),
   'block-crouch': clip(true, ['block-crouch', 6]),
   victory: clip(false, ['victory', 40], ['idle-2', 20]),
+
+  // ── Sim move-id aliases ──────────────────────────────────────────────────
+  // AnimationDriver resolves an attack as [moveId, 'attack', 'idle'], so a clip
+  // named after the sim's move id lets each button play its own animation
+  // instead of every attack collapsing onto the generic `attack` frame. Ids are
+  // the ones authored in src/fight/fighters/operator.ts.
+  'st.LP': LP, 'cr.LP': LP, 'j.LP': LP,
+  'st.MP': MP, 'cr.MP': MP, 'f.MP': MP,
+  'st.HP': HP, 'j.HP': HP,
+  'cr.HP': UPPERCUT, // Rising Uppercut
+  'st.LK': LK, 'cr.LK': LK,
+  'st.MK': MK, 'cr.MK': MK, 'j.MK': MK,
+  'st.HK': HK, 'cr.HK': HK, 'j.HK': HK, 'f.HK': HK,
+  'qcf.P': FIREBALL, // Surge Palm
+  'dp.P': UPPERCUT, // Rising Dragon
+  'qcb.K': HK, // Tornado Kick
+  'charge.P': FIREBALL, // Cannon
+  'super.P': SUPER, // Palm Barrage
 }
 
 /**

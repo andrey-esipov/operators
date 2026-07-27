@@ -110,6 +110,19 @@
   align-items: center;
   justify-content: center;
 }
+/* Ambient arena floor glow so the right two-thirds feels like a lit stage
+   instead of an empty black void behind two sprites. */
+.mm-right::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(64% 42% at 52% 80%, rgba(150,54,130,0.20) 0%, transparent 62%),
+    radial-gradient(46% 30% at 52% 90%, rgba(247,127,0,0.12) 0%, transparent 66%),
+    linear-gradient(0deg, rgba(70,26,80,0.16) 0%, transparent 34%);
+}
 
 /* ── Title lockup ───────────────────────────────────────────────────── */
 .mm-eyebrow {
@@ -193,7 +206,7 @@
   width: 100%;
   text-align: left;
   cursor: pointer;
-  opacity: 0.46;
+  opacity: 0.56;
   padding: clamp(9px, 1.5vh, 15px) clamp(16px, 1.6vw, 24px) clamp(9px, 1.5vh, 15px) clamp(22px, 2vw, 30px);
   color: #fff;
   border: 0;
@@ -222,6 +235,19 @@
     inset -1px -1px 0 rgba(0,0,0,0.6),
     inset 1px 1px 0 rgba(255,255,255,0.14);
 }
+/* Keyboard focus gets its own targeting identity, distinct from mouse hover:
+   an offset accent reticle that pulses, plus a slightly deeper push-in. This
+   is what tells a controller/keyboard player where the cursor lives. */
+.mm-item:focus-visible {
+  transform: translateX(14px) scale(1.015);
+  outline: 3px solid var(--accent);
+  outline-offset: 4px;
+}
+.mm-anim .mm-item:focus-visible { animation: mmFocusPulse 0.85s ease-in-out infinite; }
+@keyframes mmFocusPulse {
+  0%, 100% { outline-color: var(--accent); outline-offset: 4px; }
+  50%      { outline-color: #fff; outline-offset: 7px; }
+}
 .mm-item-label {
   font-family: var(--font-display);
   letter-spacing: 0.08em;
@@ -230,7 +256,7 @@
 }
 .mm-item-sub {
   font-family: var(--font-body);
-  color: rgba(255,255,255,0.72);
+  color: rgba(255,255,255,0.86);
   line-height: 1;
   text-shadow: 1px 1px 0 #000;
 }
@@ -303,8 +329,8 @@
 }
 
 /* SECONDARY rows */
-.mm-item.mm-secondary .mm-item-label { font-size: clamp(14px, 2.1vh, 20px); }
-.mm-item.mm-secondary .mm-item-sub  { font-size: clamp(9px, 1.25vh, 13px); margin-top: 2px; }
+.mm-item.mm-secondary .mm-item-label { font-size: clamp(15px, 2.2vh, 21px); }
+.mm-item.mm-secondary .mm-item-sub  { font-size: clamp(10px, 1.4vh, 14px); margin-top: 3px; }
 .mm-item.mm-secondary .mm-item-key {
   position: absolute;
   right: clamp(20px, 1.8vw, 30px);
@@ -337,9 +363,9 @@
 .mm-quote {
   position: relative;
   font-family: var(--font-body);
-  font-style: italic;
-  font-size: clamp(14px, 2vh, 19px);
-  line-height: 1.3;
+  font-style: normal;
+  font-size: clamp(16px, 2.3vh, 22px);
+  line-height: 1.28;
   color: #FFFDF5;
   padding: clamp(8px, 1.2vh, 13px) clamp(13px, 1.3vw, 20px);
   background: rgba(4,2,9,0.9);
@@ -353,31 +379,38 @@
 .mm-quote cite {
   font-family: var(--font-display);
   font-style: normal;
-  font-size: clamp(7px, 0.95vh, 9px);
+  font-size: clamp(8px, 1.05vh, 10px);
   letter-spacing: 0.14em;
   color: #FFD60A;
 }
 .mm-anim .mm-quote-in { animation: mmFade 0.6s ease-out both; }
 @keyframes mmFade { from { opacity: 0; } to { opacity: 1; } }
 
-/* Utility bar: library + settings, clearly a lower tier. */
+/* Utility bar: library + settings, clearly a lower tier — framed as a single
+   heavy console panel so the chips read as an arcade control deck rather than
+   a row of floating web tags. */
 .mm-util {
   display: flex;
   flex-direction: column;
   gap: clamp(5px, 0.8vh, 9px);
+  padding: clamp(9px, 1.3vh, 15px) clamp(8px, 0.7vw, 12px);
+  background: linear-gradient(180deg, rgba(10,6,18,0.62), rgba(6,4,12,0.42));
+  border-top: 2px solid rgba(155,123,212,0.35);
+  clip-path: polygon(0 0, 100% 0, calc(100% - 16px) 100%, 0 100%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
 }
 .mm-util-row {
   display: flex;
   align-items: center;
-  gap: clamp(5px, 0.5vw, 8px);
+  gap: clamp(4px, 0.4vw, 7px);
   flex-wrap: wrap;
 }
 .mm-util-label {
   font-family: var(--font-display);
   font-size: clamp(7px, 0.95vh, 9px);
-  letter-spacing: 0.24em;
+  letter-spacing: 0.18em;
   color: rgba(232,220,255,0.85);
-  min-width: clamp(50px, 5vw, 66px);
+  min-width: clamp(44px, 4.4vw, 58px);
   text-shadow: 1px 1px 0 #000;
 }
 .mm-chip {
@@ -386,7 +419,7 @@
   font-size: clamp(7.5px, 1.05vh, 10px);
   letter-spacing: 0.1em;
   color: #F5EEFF;
-  padding: clamp(7px, 1.05vh, 10px) clamp(10px, 1vw, 15px) clamp(7px, 1.05vh, 10px) clamp(13px, 1.1vw, 17px);
+  padding: clamp(7px, 1.05vh, 10px) clamp(8px, 0.8vw, 12px) clamp(7px, 1.05vh, 10px) clamp(11px, 0.9vw, 14px);
   background: linear-gradient(180deg, rgba(40,27,58,0.95), rgba(16,10,26,0.97));
   border: 0;
   clip-path: polygon(0 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
@@ -456,8 +489,22 @@
   pointer-events: none;
 }
 .mm-fighter-art {
-  width: clamp(200px, 26vw, 330px);
-  height: clamp(270px, 51vh, 440px);
+  position: relative;
+  width: clamp(215px, 28vw, 360px);
+  height: clamp(290px, 55vh, 480px);
+}
+/* Contact shadow so the fighter is planted on a floor, not floating. */
+.mm-fighter-art::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 6%;
+  width: 66%;
+  height: 8%;
+  transform: translateX(-50%);
+  background: radial-gradient(ellipse at center, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.32) 46%, transparent 74%);
+  z-index: -1;
+  pointer-events: none;
 }
 .mm-nameplate {
   position: relative;
@@ -518,10 +565,10 @@
   left: 50%;
   transform: translateX(-50%);
   font-family: var(--font-display);
-  font-size: clamp(7px, 1vh, 10px);
+  font-size: clamp(8px, 1.15vh, 11px);
   letter-spacing: 0.34em;
-  color: #FCBF49;
-  text-shadow: 2px 2px 0 #000;
+  color: #FFDE9B;
+  text-shadow: 2px 2px 0 #000, 0 0 10px rgba(247,127,0,0.55);
   white-space: nowrap;
 }
 .mm-showcase-entry { animation: none; }
@@ -561,8 +608,8 @@
   clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
   box-shadow: inset 4px 0 0 var(--accent, #FFD60A), inset 0 0 0 1px rgba(255,255,255,0.08), 0 0 18px color-mix(in srgb, var(--accent, #FFD60A) 50%, transparent);
 }
-.mm-otd-k { font-family: var(--font-display); font-size: clamp(6.5px, 0.9vh, 8.5px); letter-spacing: 0.22em; color: #FFE08A; text-shadow: 1px 1px 0 #000; }
-.mm-otd-v { font-family: var(--font-display); font-size: clamp(9px, 1.2vh, 12px); letter-spacing: 0.12em; color: #FFF6DA; text-shadow: 1px 1px 0 #000, 0 0 8px rgba(255,214,10,0.4); }
+.mm-otd-k { font-family: var(--font-display); font-size: clamp(7px, 0.95vh, 9px); letter-spacing: 0.22em; color: #FFE08A; text-shadow: 1px 1px 0 #000; }
+.mm-otd-v { font-family: var(--font-display); font-size: clamp(10px, 1.35vh, 13px); letter-spacing: 0.12em; color: #FFF6DA; text-shadow: 1px 1px 0 #000, 0 0 8px rgba(255,214,10,0.4); }
 
 /* footer credit */
 .mm-foot {
@@ -573,9 +620,9 @@
   text-align: center;
   z-index: 12;
   font-family: var(--font-display);
-  font-size: clamp(6px, 0.85vh, 8px);
+  font-size: clamp(7.5px, 1vh, 9.5px);
   letter-spacing: 0.2em;
-  color: rgba(224,210,248,0.72);
+  color: rgba(232,218,252,0.82);
   text-shadow: 1px 1px 0 #000;
 }
 
@@ -607,6 +654,7 @@
   .mm-godray.mm-anim,
   .mm-anim .mm-vs,
   .mm-anim .mm-press,
+  .mm-anim .mm-item:focus-visible,
   .mm-item:hover .mm-caret,
   .mm-item:focus-visible .mm-caret,
   .mm-item.mm-active .mm-caret {

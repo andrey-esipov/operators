@@ -41,6 +41,8 @@ uniform float charFeather;  // ellipse edge softness
 uniform vec3  envTint;      // arena dominant hue
 uniform float charClarity;  // strength of the final un-tint (0 on multi-hue stages)
 uniform float castRecover;  // bloom-cast recovery strength (0 unless a same-hue bloom stage)
+uniform vec3  charTone;     // arena-complement hue for the subject accent
+uniform float charToneAmt;  // strength of the complementary accent (0 on multi-hue stages)
 uniform float camNear;
 uniform float camFar;
 uniform float charDepth;      // linear distance to the fighter plane
@@ -138,7 +140,16 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, const in float depth,
       float reveal2 = max(reveal, castStrip * castRecover);
       float w = clamp(charClarity, 0.0, 1.0) * matte * reveal2;
       if (w > 0.001) {
-        vec3 target = (vec3(L) + ortho) * charKeyFin;
+        // Re-inject the arena COMPLEMENT as the target hue, weighted toward pixels
+        // that castStrip recovered (bright, arena-aligned skin that carried little
+        // identity chroma of its own). This is what finally de-greens a bloomed
+        // fighter face on the teal stages: the strip neutralises the green, then the
+        // warm complement makes the skin read warm instead of flat grey. Pixels with
+        // their own surviving identity chroma (blue jeans, red hair) keep it because
+        // ortho dominates. charToneAmt is 0 on multi-hue stages, so no effect there.
+        float toneW = clamp(castStrip * castRecover + smoothstep(0.10, 0.02, length(ortho)), 0.0, 1.0);
+        vec3 tone = (charTone - luma(charTone)) * L * charToneAmt * toneW;
+        vec3 target = (vec3(L) + ortho + tone) * charKeyFin;
         col = mix(col, max(target, 0.0), clamp(w, 0.0, 1.0));
       }
     }
@@ -157,10 +168,12 @@ export class LensFinalizeEffect extends Effect {
       ['charA', new THREE.Uniform(new THREE.Vector2(-1, -1))],
       ['charB', new THREE.Uniform(new THREE.Vector2(-1, -1))],
       ['charHalf', new THREE.Uniform(new THREE.Vector2(0.09, 0.24))],
-      ['charFeather', new THREE.Uniform(0.55)],
+      ['charFeather', new THREE.Uniform(0.42)],
       ['envTint', new THREE.Uniform(new THREE.Vector3(1, 1, 1))],
       ['charClarity', new THREE.Uniform(0)],
       ['castRecover', new THREE.Uniform(0)],
+      ['charTone', new THREE.Uniform(new THREE.Vector3(1, 1, 1))],
+      ['charToneAmt', new THREE.Uniform(0)],
       ['camNear', new THREE.Uniform(0.1)],
       ['camFar', new THREE.Uniform(100)],
       ['charDepth', new THREE.Uniform(13.0)],
@@ -206,9 +219,17 @@ export class LensFinalizeEffect extends Effect {
   }
 
   /** Per-stage arena hue + clarity strength (0 on multi-hue stages). */
-  setCharClarity(envTint: [number, number, number], clarity: number, castRecover = 0) {
+  setCharClarity(
+    envTint: [number, number, number],
+    clarity: number,
+    castRecover = 0,
+    charTone: [number, number, number] = [1, 1, 1],
+    charToneAmt = 0,
+  ) {
     ;(this.u('envTint').value as THREE.Vector3).set(...envTint)
     this.u('charClarity').value = clarity
     this.u('castRecover').value = castRecover
+    ;(this.u('charTone').value as THREE.Vector3).set(...charTone)
+    this.u('charToneAmt').value = charToneAmt
   }
 }

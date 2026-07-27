@@ -92,6 +92,17 @@ export interface StageGrade {
    * lets the fighters' own colour read.
    */
   charStrength: number
+  /**
+   * Complementary subject accent. On a single-hue arena, a neutralised fighter
+   * still reads as weak grey; push it toward `charTone` (the arena's COMPLEMENT —
+   * cool for a red room, warm for a cyan/blue room) so the subject becomes a
+   * positive accent colour and its skin can never sit at the arena hue. Only the
+   * de-tinted (low-chroma) fighter pixels are pushed; surviving identity chroma
+   * and saturated background keep their own hue. `charToneAmt` 0 = off (multi-hue
+   * stages), which is the default.
+   */
+  charTone: [number, number, number]
+  charToneAmt: number
 }
 
 const base: StageGrade = {
@@ -128,6 +139,8 @@ const base: StageGrade = {
   charUntint: 0,
   castRecover: 0,
   charStrength: 1.0,
+  charTone: [1, 1, 1],
+  charToneAmt: 0,
 }
 
 function grade(overrides: Partial<StageGrade>): StageGrade {
@@ -206,6 +219,10 @@ export const STAGE_GRADES: Record<ScenarioId, StageGrade> = {
     envTint: [0.5, 1.0, 0.55],
     charUntint: 0.9,
     castRecover: 0.7,
+    // Cyan-green arena → push neutralised fighters WARM (amber/peach) so skin
+    // reads warm not green and the subjects separate from the teal field.
+    charTone: [1.0, 0.45, 0.35],
+    charToneAmt: 0.9,
   }),
 
   // Stalled, airless. Flat, faintly sickly green-grey — the grind of the
@@ -278,6 +295,10 @@ export const STAGE_GRADES: Record<ScenarioId, StageGrade> = {
     envTint: [0.5, 1.0, 0.6],
     charUntint: 0.8,
     castRecover: 0.7,
+    // Blue-teal arena → push neutralised fighters WARM so skin de-greens and the
+    // subjects read as a warm accent against the cold field.
+    charTone: [1.0, 0.44, 0.34],
+    charToneAmt: 0.9,
   }),
 
   // Money. Warm gold with rich green undertones, luxe and slightly opulent —
@@ -344,9 +365,15 @@ export const STAGE_GRADES: Record<ScenarioId, StageGrade> = {
     anamorphic: 0.45,
     anamorphicTint: [1.0, 0.5, 0.3],
     hazeColor: [0.58, 0.4, 0.3],
-    hazeAmount: 0.44,
+    hazeAmount: 0.3,
     envTint: [1.0, 0.34, 0.22],
     charUntint: 0.9,
+    // Red-orange arena → push neutralised fighters COOL (teal). In an all-red room
+    // the subject can carry almost no surviving albedo, so a firm complementary
+    // accent is the strongest separation lever post has: the fighters read as cool
+    // silhouettes against the red field (the value split still tells them apart).
+    charTone: [0.4, 0.72, 1.0],
+    charToneAmt: 0.6,
   }),
 
   // Prestige. Clean, bright, cool corporate glass — champagne highlights, low
@@ -460,6 +487,8 @@ export function mixGrades(a: StageGrade, b: StageGrade, t: number): StageGrade {
     charUntint: lerp(a.charUntint, b.charUntint, t),
     castRecover: lerp(a.castRecover, b.castRecover, t),
     charStrength: lerp(a.charStrength, b.charStrength, t),
+    charTone: lerp3(a.charTone, b.charTone, t),
+    charToneAmt: lerp(a.charToneAmt, b.charToneAmt, t),
   }
 }
 

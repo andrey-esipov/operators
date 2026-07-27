@@ -77,6 +77,8 @@ uniform float charLift;       // subject shadow-lift gamma (<1 opens underlit fi
 uniform float charFill;       // subject fill floor (lifts near-black fighters off same-hue bg)
 uniform vec3  envTint;        // arena dominant hue direction (for chroma un-tint)
 uniform float charUntint;     // strength of removing env-aligned chroma from fighters
+uniform vec3  charTone;       // arena-complement hue to push neutralised fighters toward
+uniform float charToneAmt;    // strength of the complementary subject accent (0 = off)
 uniform float charDepth;      // linear distance to the fighter plane
 uniform float charDepthWidth; // depth falloff past the fighter plane
 
@@ -293,6 +295,24 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, const in float depth,
       charLit = max(charLit, 0.0);
     }
 
+    // Complementary subject accent: a merely NEUTRALISED fighter (grey, after the
+    // un-tint) still reads as weak "absence of arena colour" on a single-hue stage.
+    // Push those de-tinted pixels a step toward the arena's COMPLEMENT so the subject
+    // becomes a positive accent colour — a cool/teal fighter in a red room, a warm
+    // fighter in a cyan/blue room — the orange-teal separation AAA lighting uses. It
+    // targets only LOW-chroma (neutralised) pixels via greyness, so a fighter's
+    // surviving identity chroma (blue jeans, red hair) and any saturated background
+    // inside the matte keep their own hue. Subtracting luma(charTone) makes it a pure
+    // hue push that barely changes brightness. This also guarantees skin can never
+    // sit at the arena hue — it kills the green-skin inversion on the teal stages.
+    // 0 on multi-hue stages (charToneAmt 0), so they are untouched.
+    if (charToneAmt > 0.001) {
+      float lc2 = luma(charLit);
+      float greyness = 1.0 - smoothstep(0.015, 0.14, length(charLit - lc2));
+      charLit += (charTone - luma(charTone)) * lc2 * charToneAmt * greyness;
+      charLit = max(charLit, 0.0);
+    }
+
     // Blend how strongly we keep the character look vs the environment.
     vec3 charFinal = mix(cEnv, charLit, charChroma);
 
@@ -412,6 +432,8 @@ export class MasterGradeEffect extends Effect {
       ['charKey', new THREE.Uniform(1.28)],
       ['charLift', new THREE.Uniform(0.70)],
       ['charFill', new THREE.Uniform(0.15)],
+      ['charTone', new THREE.Uniform(new THREE.Vector3(1, 1, 1))],
+      ['charToneAmt', new THREE.Uniform(0)],
       ['envTint', new THREE.Uniform(new THREE.Vector3(1, 1, 1))],
       ['charUntint', new THREE.Uniform(0)],
       ['charDepth', new THREE.Uniform(13.0)],
@@ -457,6 +479,8 @@ export class MasterGradeEffect extends Effect {
     this.u('hazeAmount').value = g.hazeAmount
     ;(this.u('envTint').value as THREE.Vector3).set(...g.envTint)
     this.u('charUntint').value = g.charUntint
+    ;(this.u('charTone').value as THREE.Vector3).set(...g.charTone)
+    this.u('charToneAmt').value = g.charToneAmt
     this.u('charChroma').value = 0.9 * g.charStrength
   }
 

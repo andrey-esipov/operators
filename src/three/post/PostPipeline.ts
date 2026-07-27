@@ -38,9 +38,9 @@ import { gradeFor, mixGrades, NEUTRAL_GRADE, type StageGrade } from './grades'
  */
 export class PostPipeline implements Subsystem, RenderDriver {
   /**
-   * Reads the ?nobloom / ?nolens / ?nograde / ?nofinalize QA bisect switches.
-   * Static because the pipeline shape is fixed at construction (see the comment
-   * at the addPass site). Returns all-false outside a browser.
+   * Reads the ?nobloom / ?nolens / ?nograde / ?nofinalize / ?nobgfloor QA bisect
+   * switches. Static because the pipeline shape is fixed at construction (see the
+   * comment at the addPass site). Returns all-false outside a browser.
    */
   static qaFlags() {
     const q = typeof location !== 'undefined' ? new URLSearchParams(location.search) : new URLSearchParams()
@@ -49,6 +49,7 @@ export class PostPipeline implements Subsystem, RenderDriver {
       lens: q.has('nolens'),
       grade: q.has('nograde'),
       finalize: q.has('nofinalize'),
+      bgFloor: q.has('nobgfloor'),
     }
   }
   readonly name = 'post'
@@ -60,6 +61,8 @@ export class PostPipeline implements Subsystem, RenderDriver {
   private lens!: LensEffect
   private grade!: MasterGradeEffect
   private finalize!: LensFinalizeEffect
+  /** ?nobgfloor — disables the background contrast floor for QA bisects. */
+  private bgFloorOff = false
   private smaa: SMAAEffect | null = null
   private dirtTexture!: THREE.Texture
 
@@ -155,6 +158,8 @@ export class PostPipeline implements Subsystem, RenderDriver {
     // "the frame is blown out / wrong hue" report can be bisected across post
     // in one capture run instead of by editing source. Do not remove.
     const off = PostPipeline.qaFlags()
+    this.bgFloorOff = off.bgFloor
+    if (off.bgFloor) this.grade.setBgFloor(1e6, 1e6 + 1, undefined, 0)
 
     const gradeEffects: Effect[] = []
     if (flags.bloom && !off.bloom) {
@@ -428,6 +433,12 @@ export class PostPipeline implements Subsystem, RenderDriver {
     const farDist = Math.max(distA, distB)
     this.grade.setCharDepth(farDist + 1.1, 2.4)
     this.grade.setCharMatte(this._charA, this._charB, this._charHalf)
+
+    // Background contrast floor rides the same fighter plane: it starts a metre
+    // and a half behind the farther fighter (so nothing co-planar with a
+    // character is ever compressed) and reaches full strength across the next
+    // ten units, which covers every arena's back wall and skyline.
+    if (!this.bgFloorOff) this.grade.setBgFloor(farDist + 3.4, farDist + 13.5)
 
     // The finalize pass re-asserts the same matte after bloom (see below).
     this.finalize.setCharDepth(farDist + 1.1, 2.4)

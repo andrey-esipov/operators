@@ -90,6 +90,12 @@ uniform float hazeEnd;
 uniform float camNear;
 uniform float camFar;
 
+// --- background contrast floor (silhouette separation) ---
+uniform float bgCeil;       // luminance the background is allowed to reach
+uniform float bgKnock;      // how hard to compress everything above bgCeil
+uniform float bgFloorStart; // depth where the compressor begins
+uniform float bgFloorEnd;   // depth where it reaches full strength
+
 const mat3 LINEAR_SRGB_TO_LINEAR_REC2020 = mat3(
   0.6274, 0.0691, 0.0164,
   0.3293, 0.9195, 0.0880,
@@ -328,17 +334,33 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, const in float depth,
     vec3 charFinal = mix(cEnv, charLit, charChroma);
 
     // Subject gate: the elliptical matte also covers co-planar background at the
-    // fighter depth, and applying the (brighter, key-lifted) character look to it
-    // reads as a rectangular box/glow — worst where the mid-ground around the
-    // fighters is dark (ipo-prep) so the key-lift balloons it into a soft halo.
-    // A real fighter pixel is either in genuine DEEP shadow (an underlit subject
-    // the key rescues) or carries its OWN identity chroma; a merely mid-dark
-    // floor is neither. Fire envDark only on near-black pixels so the mid-dark
-    // co-planar floor is left alone, and drop the old 0.2 blend floor so a pixel
-    // that reads as pure background (subj ~ 0) is untouched entirely. Kills the
-    // matte box/halo without a true silhouette matte.
-    float envDark = 1.0 - smoothstep(0.03, 0.22, luma(cEnv));
-    float subj = clamp(max(envDark, smoothstep(0.02, 0.12, idChroma)), 0.0, 1.0);
+    // fighter depth, so something has to decide which pixels inside the ellipse
+    // are actually the character.
+    //
+    // The previous gate fired on NEAR-BLACK pixels, on the theory that an
+    // underlit fighter is the thing that needs rescuing. The polarity is exactly
+    // backwards. Nothing distinguishes a black FIGHTER pixel from a black FLOOR
+    // pixel by luminance, so on any stage with a dark floor the gate opened to
+    // full strength on the empty ground inside the ellipse -- and the character
+    // branch (a 0.70 shadow-lift gamma followed by a +0.25 achromatic fill)
+    // turned that ground into a soft grey dome standing between the fighter's
+    // feet. It is the "feet blob" in every screenshot of this game.
+    //
+    // The same term did equal damage on the fighter itself: hair, trousers and
+    // boots are near-black by design, so they were lifted to the same neutral
+    // grey as the floor. Lifting the dark parts of a character to grey is
+    // precisely how you destroy a silhouette, which is the one thing a fighting
+    // game cannot afford.
+    //
+    // Real subject evidence is CHROMA, not darkness. A fighter pixel carries its
+    // own albedo hue; the arena ground beside it carries only the arena's light.
+    // Gating on chroma leaves dark pixels dark -- which is what a silhouette is
+    // made of -- and leaves bare floor completely untouched.
+    float subjChroma = length(charLit - luma(charLit));
+    float subj = clamp(
+      max(smoothstep(0.02, 0.12, idChroma), smoothstep(0.035, 0.14, subjChroma)),
+      0.0, 1.0
+    );
     c = mix(cEnv, charFinal, matte * subj);
   } else {
     c = cEnv;
@@ -365,6 +387,34 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, const in float depth,
     vec3 hazed = mix(c, vec3(lo), 0.6);         // drain far chroma (depth cue)
     hazed = mix(hazed, hazeColor, 0.1);          // faint drift toward atmosphere
     c = mix(c, hazed, fog);
+  }
+
+  // ── background contrast floor (silhouette separation) ──────────────────
+  // A fighting game lives or dies on silhouette read. Measured across the
+  // arenas at true neutral framing, background luminance ran 31 (crisis) to 176
+  // (ai-native) while the fighters sat at 88..172 -- so on the bright stages the
+  // ARENA was brighter than the characters and dark hair dissolved into a
+  // backlit wall. Nothing in the per-stage grade prevents that, because each
+  // stage is authored on its own and nobody owns the relationship between them.
+  //
+  // This is that missing owner: a depth-gated highlight compressor that scales
+  // ONLY the luminance sitting above bgCeil. A stage already under the ceiling
+  // (crisis) comes out bit-for-bit identical -- over is 0, so k is 1 -- while
+  // a blown backdrop is pulled under the character plane. It also fixes LOCAL
+  // separation, not just the frame mean: the brightest patch behind a head is
+  // the furthest above the ceiling, so it is knocked hardest.
+  //
+  // Purely a monotonic function of depth and luminance, so it can never stamp a
+  // fighter-shaped window the way a matte carve does. It runs BEFORE bloom in
+  // the compiled pass (grade sorts first on EffectAttribute.DEPTH), so the
+  // tamed backdrop also stops over-feeding the bloom threshold.
+  if (bgKnock > 0.001) {
+    float far = smoothstep(bgFloorStart, bgFloorEnd, dist);
+    float Lb = luma(c);
+    float over = max(0.0, Lb - bgCeil);
+    // over <= Lb by construction, so the ratio is in [0,1] and needs no pow().
+    float k = 1.0 - (over / max(Lb, 1e-4)) * bgKnock * far;
+    c *= max(k, 0.04);
   }
 
   // Dynamic response: colour drain + danger cast (low HP / KO), keyed to the
@@ -454,9 +504,9 @@ export class MasterGradeEffect extends Effect {
       ['charChroma', new THREE.Uniform(0.9)],
       ['charLumaFollow', new THREE.Uniform(0.42)],
       ['charPop', new THREE.Uniform(0.24)],
-      ['charKey', new THREE.Uniform(1.28)],
-      ['charLift', new THREE.Uniform(0.70)],
-      ['charFill', new THREE.Uniform(0.15)],
+      ['charKey', new THREE.Uniform(1.12)],
+      ['charLift', new THREE.Uniform(0.88)],
+      ['charFill', new THREE.Uniform(0.05)],
       ['charTone', new THREE.Uniform(new THREE.Vector3(1, 1, 1))],
       ['charToneAmt', new THREE.Uniform(0)],
       ['envTint', new THREE.Uniform(new THREE.Vector3(1, 1, 1))],
@@ -468,6 +518,11 @@ export class MasterGradeEffect extends Effect {
       ['hazeAmount', new THREE.Uniform(0.35)],
       ['hazeStart', new THREE.Uniform(26)],
       ['hazeEnd', new THREE.Uniform(95)],
+      // background contrast floor
+      ['bgCeil', new THREE.Uniform(0.40)],
+      ['bgKnock', new THREE.Uniform(0.70)],
+      ['bgFloorStart', new THREE.Uniform(16)],
+      ['bgFloorEnd', new THREE.Uniform(30)],
       ['camNear', new THREE.Uniform(0.1)],
       ['camFar', new THREE.Uniform(320)],
     ])
@@ -585,5 +640,19 @@ export class MasterGradeEffect extends Effect {
   setHaze(start: number, end: number) {
     this.u('hazeStart').value = start
     this.u('hazeEnd').value = end
+  }
+
+  /**
+   * Background contrast floor. `start`/`end` are the linear eye-space distances
+   * over which the compressor ramps in; they are driven from the live fighter
+   * plane so the characters are never inside the band. `ceil` is the luminance
+   * the arena is allowed to reach and `knock` is how hard everything above it is
+   * pulled down (0 disables the whole block).
+   */
+  setBgFloor(start: number, end: number, ceil?: number, knock?: number) {
+    this.u('bgFloorStart').value = start
+    this.u('bgFloorEnd').value = end
+    if (ceil !== undefined) this.u('bgCeil').value = ceil
+    if (knock !== undefined) this.u('bgKnock').value = knock
   }
 }

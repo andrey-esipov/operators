@@ -237,12 +237,12 @@ export const STAGE_GRADES: Record<ScenarioId, StageGrade> = {
     // points at that green. Removing the green cast neutralises skin to warm grey;
     // purple denim and red hair (orthogonal to green) survive to read them apart.
     envTint: [0.5, 1.0, 0.55],
-    charUntint: 0.9,
+    charUntint: 0.34,
     castRecover: 0.9,
     // Cyan-green arena → push neutralised fighters WARM (amber/peach) so skin
     // reads warm not green and the subjects separate from the teal field.
     charTone: [1.0, 0.42, 0.32],
-    charToneAmt: 0.95,
+    charToneAmt: 0.22,
     mattePad: 1.2,
   }),
 
@@ -322,12 +322,12 @@ export const STAGE_GRADES: Record<ScenarioId, StageGrade> = {
     // green residue survives the projection. Neutralises skin to warm grey while
     // warm hair and off-axis albedo read the fighters apart.
     envTint: [0.5, 1.0, 0.6],
-    charUntint: 0.8,
+    charUntint: 0.32,
     castRecover: 0.88,
     // Blue-teal arena → push neutralised fighters WARM so skin de-greens and the
     // subjects read as a warm accent against the cold field.
     charTone: [1.0, 0.42, 0.32],
-    charToneAmt: 0.95,
+    charToneAmt: 0.22,
     mattePad: 1.2,
   }),
 
@@ -403,14 +403,14 @@ export const STAGE_GRADES: Record<ScenarioId, StageGrade> = {
     hazeColor: [0.58, 0.4, 0.3],
     hazeAmount: 0.3,
     envTint: [1.0, 0.34, 0.22],
-    charUntint: 0.9,
+    charUntint: 0.34,
     castRecover: 0.55,
     // Red-orange arena → push neutralised fighters COOL (teal). In an all-red room
     // the subject can carry almost no surviving albedo, so a firm complementary
     // accent is the strongest separation lever post has: the fighters read as cool
     // silhouettes against the red field (the value split still tells them apart).
     charTone: [0.32, 0.68, 1.0],
-    charToneAmt: 0.9,
+    charToneAmt: 0.22,
     mattePad: 1.2,
   }),
 

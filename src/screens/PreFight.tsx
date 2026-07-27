@@ -156,16 +156,17 @@ export function PreFight() {
         <div className="absolute inset-y-0 left-0 w-[10px] pointer-events-none" style={{ background: warm, opacity: beat >= 1 ? 0.9 : 0, boxShadow: `0 0 30px ${warm}`, transition: 'opacity 0.4s' }} />
         <div className="absolute inset-y-0 right-0 w-[10px] pointer-events-none" style={{ background: cool, opacity: beat >= 1 ? 0.9 : 0, boxShadow: `0 0 30px ${cool}`, transition: 'opacity 0.4s' }} />
 
-        {/* Bright energised seam down the diagonal. */}
+        {/* Bold diagonal energy slash that physically cuts the frame in two. */}
         <div
-          className="absolute inset-y-[-12%] left-1/2 pointer-events-none"
+          className="absolute inset-y-[-14%] left-1/2 pointer-events-none"
           style={{
-            width: 6,
-            background: 'linear-gradient(180deg, transparent, #ffffff, rgba(255,255,255,0.5), #ffffff, transparent)',
+            width: 14,
+            background: 'linear-gradient(180deg, transparent, #ffffff 12%, rgba(255,255,255,0.7) 50%, #ffffff 88%, transparent)',
             transform: 'translateX(-50%) rotate(11deg)',
             opacity: beat >= 1 ? 1 : 0,
             transition: 'opacity 0.4s',
-            boxShadow: '0 0 26px rgba(255,255,255,0.9), 0 0 60px rgba(120,200,255,0.5)',
+            clipPath: 'polygon(50% 0, 100% 4%, 62% 50%, 100% 96%, 50% 100%, 0 96%, 38% 50%, 0 4%)',
+            boxShadow: '0 0 34px rgba(255,255,255,0.95), 0 0 90px rgba(120,200,255,0.6)',
             animation: beat >= 1 ? 'cer-seam-pulse 1.4s ease-in-out infinite' : undefined,
           }}
         />
@@ -230,8 +231,8 @@ export function PreFight() {
         <div
           className="absolute z-20"
           style={{
-            left: '2%', bottom: '5%',
-            width: 'min(42vw, 520px)', height: 'min(76vh, 680px)',
+            left: '0%', bottom: '-4%',
+            width: 'min(45vw, 580px)', height: 'min(88vh, 850px)',
           }}
         >
           <div
@@ -258,8 +259,8 @@ export function PreFight() {
         <div
           className="absolute z-20"
           style={{
-            right: '2%', bottom: '5%',
-            width: 'min(42vw, 520px)', height: 'min(76vh, 680px)',
+            right: '0%', bottom: '-4%',
+            width: 'min(45vw, 580px)', height: 'min(88vh, 850px)',
           }}
         >
           <div

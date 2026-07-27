@@ -18,6 +18,21 @@ const ENTRANCE_ANIM: Record<Entrance, string> = {
 }
 
 /**
+ * Build a hard 8-direction outline ring using layered text-shadows. Radius is
+ * expressed in `em` so the keyline thickness tracks the font size across the
+ * clamp() range. Produces the crisp "sticker" edge AAA callouts rely on.
+ */
+function ringShadow(radiusEm: number, color: string): string {
+  const pts: string[] = []
+  for (let a = 0; a < 360; a += 45) {
+    const x = (Math.cos((a * Math.PI) / 180) * radiusEm).toFixed(3)
+    const y = (Math.sin((a * Math.PI) / 180) * radiusEm).toFixed(3)
+    pts.push(`${x}em ${y}em 0 ${color}`)
+  }
+  return pts.join(', ')
+}
+
+/**
  * A giant impact word with chromatic-aberration ghosts, a crisp outline and a
  * hard drop shadow so it survives over any stage art. `live` layers a subtle
  * breathing idle + chroma jitter on top of the entrance.
@@ -29,7 +44,7 @@ export function PowerWord({
   glow = '#F77F00',
   glow2,
   stroke = '#08040f',
-  strokeWidth = 'clamp(2px, 0.4vw, 5px)',
+  strokeWidth = 'clamp(2px, 0.5vw, 6px)',
   skew = -8,
   entrance = 'slam',
   delay = 0,
@@ -59,10 +74,16 @@ export function PowerWord({
   const idleAnim = idle ? `cer-word-idle 1.6s ease-in-out ${delay + 0.5}s infinite` : ''
   const anim = [entranceAnim, idleAnim].filter(Boolean).join(', ') || undefined
 
-  const shadow =
-    `0 0 ${glow ? 'clamp(14px,2vw,34px)' : '0'} ${glow || 'transparent'}` +
-    (glow2 ? `, 0 0 clamp(28px,4vw,72px) ${glow2}` : '') +
-    `, clamp(3px,0.5vw,7px) clamp(4px,0.6vw,8px) 0 rgba(0,0,0,0.85)`
+  // A thick 8-direction "sticker" keyline in the stroke colour (em-based so it
+  // scales with the font) reads as authored fighting-game type — it survives
+  // over busy art far better than a soft glow. Layered: hard keyline on top,
+  // then a hard drop shadow for weight, then the coloured glow bloom behind.
+  const shadow = [
+    ringShadow(0.03, stroke),
+    'clamp(4px,0.6vw,9px) clamp(5px,0.7vw,11px) 0 rgba(0,0,0,0.9)',
+    glow ? `0 0 clamp(16px,2.2vw,38px) ${glow}` : '',
+    glow2 ? `0 0 clamp(32px,4.6vw,82px) ${glow2}` : '',
+  ].filter(Boolean).join(', ')
 
   const fillStyle: CSSProperties = {
     fontSize: size,

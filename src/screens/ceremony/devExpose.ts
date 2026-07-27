@@ -24,6 +24,19 @@ if (import.meta.env.DEV) {
 
   type CerKind = 'pre-fight' | 'round-end' | 'match-end' | 'arcade-victory'
 
+  // Warm the lazy screen chunks up front so a phase flip mounts the target
+  // screen synchronously (no React.lazy Suspense fallback flashing on the
+  // early animation frames the screenshot harness captures).
+  const LOADERS: Record<CerKind, () => Promise<unknown>> = {
+    'pre-fight': () => import('../PreFight'),
+    'round-end': () => import('../RoundEnd'),
+    'match-end': () => import('../MatchEnd'),
+    'arcade-victory': () => import('../ArcadeVictory'),
+  }
+  for (const load of Object.values(LOADERS)) void load()
+
+  const nextFrame = () => new Promise<void>((r) => requestAnimationFrame(() => r()))
+
   interface CerOpts {
     a?: string
     b?: string
@@ -51,7 +64,10 @@ if (import.meta.env.DEV) {
       useGame.setState({ phase: 'menu' })
     },
 
-    show(kind: CerKind, opts: CerOpts = {}) {
+    async show(kind: CerKind, opts: CerOpts = {}) {
+      // Ensure the target chunk is resolved before we flip the phase so the
+      // screen mounts on the very next frame (t0) with no Suspense flash.
+      await LOADERS[kind]()
       const a = opts.a ?? 'chesky'
       const b = opts.b ?? (opts.boss ? 'lenny' : 'doshi')
       const scenario: ScenarioId = opts.scenario ?? 'hypergrowth'
@@ -102,7 +118,11 @@ if (import.meta.env.DEV) {
         : kind === 'round-end' ? 'round-end'
         : kind === 'match-end' ? 'match-end'
         : 'arcade-victory'
-      requestAnimationFrame(() => useGame.setState({ phase }))
+      // Flip on the next frame, then resolve one frame later so the caller's
+      // clock (t0) starts exactly when the mounted screen has painted.
+      await nextFrame()
+      useGame.setState({ phase })
+      await nextFrame()
     },
   }
 

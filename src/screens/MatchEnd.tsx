@@ -65,6 +65,16 @@ export function MatchEnd() {
   const isFinalBoss = mode === 'arcade' && arcadeStep === ARCADE_PROGRESSION.length - 1
 
   const accent = winner.accent || '#FFD60A'
+  const loserSide: 'a' | 'b' = winnerSide === 'a' ? 'b' : 'a'
+  // When the arcade player loses, the emotional focus flips: THEIR fighter is
+  // the large, defeated hero and the CPU that beat them stands as the small,
+  // lit victor. On a win it's the classic champion-large / fallen-small frame.
+  const hero = arcadePlayerLost
+    ? { fighter: loser, side: loserSide, state: 'lose' as const, quote: loser.voiceLines.lose, glow: '#5a6373', defeated: true }
+    : { fighter: winner, side: winnerSide, state: 'win' as const, quote: winner.voiceLines.win, glow: accent, defeated: false }
+  const foil = arcadePlayerLost
+    ? { fighter: winner, side: winnerSide, state: 'win' as const, label: `${winner.shortName} WINS`, litVictor: true }
+    : { fighter: loser, side: loserSide, state: 'lose' as const, label: loser.shortName, litVictor: false }
 
   function handleContinue() {
     Sfx.menuSelect()
@@ -125,7 +135,7 @@ export function MatchEnd() {
         style={{ animation: 'cer-rise-fade 0.45s ease-out 0.25s both' }}
       >
         <Kicker color={titleColor} style={{ fontSize: 'clamp(14px,2vw,24px)', letterSpacing: '0.28em', fontWeight: 700 }}>
-          {winner.name.toUpperCase()} · WINNER
+          {arcadePlayerLost ? `DEFEATED BY ${winner.name.toUpperCase()}` : `${winner.name.toUpperCase()} · WINNER`}
         </Kicker>
       </div>
 
@@ -138,30 +148,43 @@ export function MatchEnd() {
         </div>
       )}
 
-      {/* HERO ROW — winner large and lit, loser small and dim. */}
+      {/* HERO ROW — the winner reads as the large, lit figure; the fallen
+          fighter is small and dim. On a player loss the roles swap so the
+          player's own fighter is the large defeated hero (never the enemy). */}
       <div className="relative z-10 mt-3 flex items-end justify-center gap-8 md:gap-16">
         <div
           className="flex flex-col items-center"
           style={{ animation: 'cer-loser-in 0.5s ease-out 0.2s both' }}
         >
-          <div style={{ width: 'min(18vw, 165px)', height: 'min(23vh, 175px)', filter: 'grayscale(0.6) brightness(0.7)' }}>
-            <Sprite fighter={loser} side={winnerSide === 'a' ? 'b' : 'a'} state="lose" />
+          <div style={{
+            width: 'min(18vw, 165px)', height: 'min(23vh, 175px)',
+            filter: foil.litVictor
+              ? `drop-shadow(0 0 20px ${accent}) brightness(1.02)`
+              : 'grayscale(0.7) brightness(0.62)',
+          }}>
+            <Sprite fighter={foil.fighter} side={foil.side} state={foil.state} />
           </div>
-          <Kicker style={{ marginTop: 2, fontSize: 'clamp(9px,1vw,12px)', color: 'rgba(255,255,255,0.5)' }}>{loser.shortName}</Kicker>
-          <div className="cer-type cer-quote mt-1 max-w-[16ch] text-center leading-tight" style={{ fontStyle: 'italic', fontSize: 'clamp(12px,1.3vw,15px)', color: 'rgba(255,255,255,0.4)' }}>“{loser.voiceLines.lose}”</div>
+          <Kicker style={{
+            marginTop: 2, fontSize: 'clamp(9px,1vw,12px)',
+            color: foil.litVictor ? accent : 'rgba(255,255,255,0.5)',
+            letterSpacing: '0.18em', fontWeight: 700,
+          }}>{foil.label}</Kicker>
+          {!foil.litVictor && (
+            <div className="cer-type cer-quote mt-1 max-w-[16ch] text-center leading-tight" style={{ fontStyle: 'italic', fontSize: 'clamp(12px,1.3vw,15px)', color: 'rgba(255,255,255,0.4)' }}>“{loser.voiceLines.lose}”</div>
+          )}
         </div>
 
         <div
           className="flex flex-col items-center relative"
           style={{ animation: 'cer-hero-rise 0.6s cubic-bezier(0.15,0.9,0.3,1) 0.15s both' }}
         >
-          {/* Spotlight cone behind the champion. */}
+          {/* Spotlight cone behind the champion (warm on a win, cold on a loss). */}
           <div
             className="absolute pointer-events-none"
             style={{
               left: '50%', top: '46%', width: '140%', height: '140%',
               transform: 'translate(-50%,-50%)',
-              background: `radial-gradient(ellipse at center, ${accent}55 0%, transparent 66%)`,
+              background: `radial-gradient(ellipse at center, ${hero.glow}${hero.defeated ? '33' : '55'} 0%, transparent 66%)`,
               animation: 'cer-spotlight 2.6s ease-in-out infinite',
             }}
           />
@@ -171,19 +194,25 @@ export function MatchEnd() {
             }}
           >
             <div
-              className="cer-breathe"
-              style={{ width: '100%', height: '100%', filter: `drop-shadow(0 0 36px ${accent}) drop-shadow(6px 10px 0 rgba(0,0,0,0.5))` }}
+              className={hero.defeated ? '' : 'cer-breathe'}
+              style={{
+                width: '100%', height: '100%',
+                filter: hero.defeated
+                  ? 'grayscale(0.85) brightness(0.66) drop-shadow(6px 12px 0 rgba(0,0,0,0.6))'
+                  : `drop-shadow(0 0 36px ${accent}) drop-shadow(6px 10px 0 rgba(0,0,0,0.5))`,
+                transform: hero.defeated ? 'rotate(-2deg) translateY(6px)' : undefined,
+              }}
             >
-              <Sprite fighter={winner} side={winnerSide} state="win" />
+              <Sprite fighter={hero.fighter} side={hero.side} state={hero.state} />
             </div>
-            <WinnerFloor color={accent} />
+            <WinnerFloor color={hero.defeated ? '#3a3f4d' : accent} />
           </div>
           <div className="cer-type mt-1" style={{ transform: 'skewX(-10deg)' }}>
-            <span className="cer-display" style={{ display: 'inline-block', transform: 'skewX(10deg)', color: accent, fontSize: 'clamp(22px,3vw,38px)', letterSpacing: '0.03em', textShadow: `2px 2px 0 rgba(0,0,0,0.85), 0 0 18px ${accent}` }}>
-              {winner.shortName}
+            <span className="cer-display" style={{ display: 'inline-block', transform: 'skewX(10deg)', color: hero.defeated ? '#c8ccd6' : accent, fontSize: 'clamp(22px,3vw,38px)', letterSpacing: '0.03em', textShadow: hero.defeated ? '2px 2px 0 rgba(0,0,0,0.85)' : `2px 2px 0 rgba(0,0,0,0.85), 0 0 18px ${accent}` }}>
+              {hero.fighter.shortName}
             </span>
           </div>
-          <div className="cer-type cer-quote mt-1 max-w-[32ch] text-center leading-tight" style={{ fontStyle: 'italic', fontWeight: 500, fontSize: 'clamp(14px,1.6vw,19px)', color: '#fff', textShadow: '1px 1px 0 rgba(0,0,0,0.8)' }}>“{winner.voiceLines.win}”</div>
+          <div className="cer-type cer-quote mt-1 max-w-[32ch] text-center leading-tight" style={{ fontStyle: 'italic', fontWeight: 500, fontSize: 'clamp(14px,1.6vw,19px)', color: hero.defeated ? 'rgba(255,255,255,0.6)' : '#fff', textShadow: '1px 1px 0 rgba(0,0,0,0.8)' }}>“{hero.quote}”</div>
         </div>
       </div>
 

@@ -75,8 +75,7 @@ export function StartScreen({ onStart }: { onStart: () => void }) {
         <div className="ss-eyebrow">A Tactical Fighter on Lenny&rsquo;s Podcast</div>
         <h1 className="ss-logo" data-text="OPERATORS">OPERATORS</h1>
         <div className="ss-rule" />
-        <div className="ss-cta ss-cta-anim">PRESS START</div>
-        <div className="ss-sub">Click anywhere · or press any key</div>
+        <div className="ss-cta ss-cta-anim"><b>[</b>PRESS START<b>]</b></div>
       </div>
 
       <div className="ss-foot">

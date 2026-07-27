@@ -143,7 +143,7 @@ export function AttractMode({ onExit }: Props) {
           textAlign: 'center', fontSize: 18, pointerEvents: 'none',
         }}
       >
-        PRESS START
+        PRESS&nbsp; START
       </div>
     </div>
   )

@@ -5,13 +5,14 @@
    selection cursor with weight, cinematic background treatment.
    ───────────────────────────────────────────────────────────────────── */
 
-@import url('https://fonts.googleapis.com/css2?family=Anton&family=Chakra+Petch:ital,wght@0,400;0,500;0,600;0,700;1,500;1,600;1,700&family=Saira+Condensed:wght@400;500;600;700;800&family=Saira:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Anton&family=Bebas+Neue&family=Chakra+Petch:ital,wght@0,400;0,500;0,600;0,700;1,500;1,600;1,700&family=Oswald:wght@500;600;700&family=Saira+Condensed:wght@400;500;600;700;800&family=Saira:wght@400;500;600&display=swap');
 
 /* Type + palette tokens for the shell. */
 .mm-root, .ss-root, .am-root {
   --mm-display: 'Anton', 'Arial Narrow', system-ui, sans-serif;
+  --mm-menu: 'Bebas Neue', 'Oswald', 'Arial Narrow', system-ui, sans-serif;
   --mm-ui: 'Chakra Petch', system-ui, sans-serif;
-  --mm-cond: 'Saira Condensed', 'Chakra Petch', system-ui, sans-serif;
+  --mm-cond: 'Oswald', 'Saira Condensed', 'Chakra Petch', system-ui, sans-serif;
   --mm-body: 'Saira', 'Chakra Petch', system-ui, sans-serif;
 
   --mm-ink: #F5F0FF;
@@ -92,19 +93,33 @@
   clip-path: polygon(0 0, 100% 0, calc(100% - 90px) 100%, 0 100%);
 }
 /* Glowing diagonal seam on the panel edge. */
+/* Structural angled rail on the panel edge — a chunky matte bar carrying
+   hazard stripes, capped by a bright accent core. Reads as physical
+   architecture, not a thin neon line. */
 .mm-panel-edge {
   position: absolute; inset: 0; z-index: 3; pointer-events: none;
   background: transparent;
 }
-.mm-panel-edge::after {
-  content: ""; position: absolute; top: -4%; bottom: -4%;
+.mm-panel-edge::before {
+  content: ""; position: absolute; top: -6%; bottom: -6%;
   left: min(48%, 780px);
-  width: 3px; height: 108%;
-  transform: translateX(-90px) skewX(-9.4deg);
+  width: 26px; height: 112%;
+  transform: translateX(-104px) skewX(-9.4deg);
   transform-origin: top;
-  background: linear-gradient(180deg, transparent, var(--mm-magenta) 22%, var(--mm-amber) 78%, transparent);
-  box-shadow: 0 0 22px rgba(255,46,136,0.6), 0 0 40px rgba(255,140,40,0.35);
-  opacity: 0.9;
+  background:
+    repeating-linear-gradient(-45deg, rgba(255,194,61,0.16) 0 7px, transparent 7px 15px),
+    linear-gradient(180deg, rgba(9,5,18,0.96), rgba(14,8,26,0.9));
+  box-shadow: -14px 0 34px rgba(0,0,0,0.55), inset 0 0 0 1px rgba(255,194,61,0.14);
+}
+.mm-panel-edge::after {
+  content: ""; position: absolute; top: -6%; bottom: -6%;
+  left: min(48%, 780px);
+  width: 5px; height: 112%;
+  transform: translateX(-82px) skewX(-9.4deg);
+  transform-origin: top;
+  background: linear-gradient(180deg, transparent, var(--mm-magenta) 20%, var(--mm-amber) 80%, transparent);
+  box-shadow: 0 0 22px rgba(255,46,136,0.65), 0 0 44px rgba(255,140,40,0.4);
+  opacity: 0.95;
 }
 
 /* Vignette + letterbox to frame the whole composition. */
@@ -201,11 +216,13 @@
   line-height: 0.82;
   letter-spacing: 0.004em;
   transform: skewX(-7deg);
-  background: linear-gradient(179deg, #FFF6D0 0%, #FFDA4A 24%, #FFB01E 48%, #FF7E10 72%, #E51D38 100%);
+  background: linear-gradient(178deg, #FFFBEA 0%, #FFE96B 19%, #FFC21F 41%, #FF8A12 64%, #F0431F 86%, #B90E2E 100%);
   -webkit-background-clip: text; background-clip: text;
   color: transparent;
-  -webkit-text-stroke: 2px rgba(6,3,14,0.95);
-  filter: drop-shadow(3px 4px 0 rgba(8,3,14,0.9)) drop-shadow(0 14px 24px rgba(0,0,0,0.6)) drop-shadow(0 0 34px rgba(255,150,40,0.4));
+  -webkit-text-stroke: 3px #0a0510;
+  filter:
+    drop-shadow(2px 2px 0 #0a0510) drop-shadow(4px 4px 0 #0a0510)
+    drop-shadow(6px 7px 0 rgba(0,0,0,0.55)) drop-shadow(0 4px 5px rgba(0,0,0,0.75));
 }
 .mm-logo-slash {
   display: block; height: 6px; width: clamp(180px, 26vw, 340px);
@@ -280,11 +297,12 @@
 .mm-item-main { min-width: 0; }
 .mm-item-label {
   display: block;
-  font-family: var(--mm-ui); font-weight: 700;
-  font-size: clamp(19px, 2.9vh, 28px); line-height: 1;
-  letter-spacing: 0.05em; text-transform: uppercase;
-  color: var(--mm-ink); opacity: 0.72;
-  transition: opacity 0.16s ease, text-shadow 0.16s ease;
+  font-family: var(--mm-menu); font-weight: 400;
+  font-size: clamp(28px, 4.4vh, 42px); line-height: 0.86;
+  letter-spacing: 0.012em; text-transform: uppercase;
+  transform: skewX(-6deg); transform-origin: left center;
+  color: var(--mm-ink); opacity: 0.78;
+  transition: opacity 0.16s ease, text-shadow 0.16s ease, letter-spacing 0.18s ease;
 }
 .mm-item-sub {
   display: block; max-width: 42ch;
@@ -326,7 +344,7 @@
 
 /* PRIMARY (Story) — always visibly the winner. */
 .mm-item.mm-primary { padding-top: clamp(12px, 1.9vh, 20px); padding-bottom: clamp(12px, 1.9vh, 20px); }
-.mm-item.mm-primary .mm-item-label { font-size: clamp(30px, 4.7vh, 46px); opacity: 0.95; }
+.mm-item.mm-primary .mm-item-label { font-size: clamp(44px, 6.6vh, 64px); opacity: 0.96; letter-spacing: 0.005em; }
 .mm-item.mm-primary .mm-item-sub { opacity: 1; max-height: 40px; color: #D9C7FF; }
 .mm-item.mm-primary .mm-index { color: color-mix(in srgb, var(--accent,#FF2E88) 70%, #fff); }
 .mm-item.mm-primary .mm-item-tag {
@@ -432,11 +450,20 @@
 .mm-fighter-art {
   position: relative; width: 100%; aspect-ratio: 3 / 4;
 }
+/* Warm rim/floor glow so the fighter sits in the stage light instead of
+   floating as a sticker. */
+.mm-fighter-art::before {
+  content: ""; position: absolute; left: -8%; right: -8%; bottom: -2%;
+  height: 62%; z-index: -1; pointer-events: none;
+  background: radial-gradient(60% 100% at 50% 100%, color-mix(in srgb, var(--faccent,#FFC23D) 34%, transparent) 0%, transparent 68%);
+  filter: blur(6px);
+}
+/* Hard contact shadow anchoring the feet to the floor. */
 .mm-fighter-art::after {
-  content: ""; position: absolute; left: 12%; right: 12%; bottom: 2%;
-  height: 20px; border-radius: 50%;
-  background: radial-gradient(ellipse, rgba(0,0,0,0.6), transparent 70%);
-  filter: blur(3px);
+  content: ""; position: absolute; left: 8%; right: 8%; bottom: -1%;
+  height: 26px; border-radius: 50%;
+  background: radial-gradient(ellipse, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.4) 46%, transparent 72%);
+  filter: blur(2px);
 }
 .mm-anim .mm-fighter-art .idle-bob,
 .mm-anim .mm-fighter-art { }
@@ -462,17 +489,26 @@
   align-self: center;
   margin-bottom: clamp(30px, 6vh, 80px);
   font-family: var(--mm-display);
-  font-size: clamp(48px, 9vh, 104px); line-height: 1;
-  color: transparent;
-  -webkit-text-stroke: 2px rgba(255,255,255,0.85);
+  font-size: clamp(64px, 12vh, 138px); line-height: 1;
+  background: linear-gradient(180deg, #FFFFFF 0%, #FFE07A 40%, #FF9A1F 72%, #FF3B6B 100%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  -webkit-text-stroke: 3px #0a0510;
   transform: skewX(-8deg);
-  text-shadow: 0 0 40px rgba(255,46,136,0.5);
+  filter:
+    drop-shadow(2px 2px 0 #0a0510) drop-shadow(4px 5px 0 #0a0510)
+    drop-shadow(0 6px 10px rgba(0,0,0,0.6)) drop-shadow(0 0 30px rgba(255,46,136,0.4));
   flex-shrink: 0;
 }
 .mm-anim .mm-vs { animation: mmVsPulse 1.8s ease-in-out infinite; }
 @keyframes mmVsPulse {
-  0%, 100% { transform: skewX(-8deg) scale(1); filter: drop-shadow(0 0 8px rgba(255,140,40,0.4)); }
-  50%      { transform: skewX(-8deg) scale(1.06); filter: drop-shadow(0 0 22px rgba(255,46,136,0.7)); }
+  0%, 100% {
+    transform: skewX(-8deg) scale(1);
+    filter: drop-shadow(2px 2px 0 #0a0510) drop-shadow(4px 5px 0 #0a0510) drop-shadow(0 6px 10px rgba(0,0,0,0.6)) drop-shadow(0 0 24px rgba(255,140,40,0.35));
+  }
+  50% {
+    transform: skewX(-8deg) scale(1.05);
+    filter: drop-shadow(2px 2px 0 #0a0510) drop-shadow(4px 5px 0 #0a0510) drop-shadow(0 6px 10px rgba(0,0,0,0.6)) drop-shadow(0 0 34px rgba(255,46,136,0.7));
+  }
 }
 
 /* Controls hint bar bottom-right. */
@@ -573,10 +609,12 @@
   font-family: var(--mm-display);
   font-size: clamp(90px, 17vh, 210px); line-height: 0.82;
   letter-spacing: 0.006em; transform: skewX(-7deg);
-  background: linear-gradient(179deg, #FFF6D0 0%, #FFDA4A 24%, #FFB01E 48%, #FF7E10 72%, #E51D38 100%);
+  background: linear-gradient(178deg, #FFFBEA 0%, #FFE96B 19%, #FFC21F 41%, #FF8A12 64%, #F0431F 86%, #B90E2E 100%);
   -webkit-background-clip: text; background-clip: text; color: transparent;
-  -webkit-text-stroke: 2.5px rgba(6,3,14,0.95);
-  filter: drop-shadow(4px 5px 0 rgba(8,3,14,0.9)) drop-shadow(0 18px 30px rgba(0,0,0,0.65)) drop-shadow(0 0 48px rgba(255,150,40,0.4));
+  -webkit-text-stroke: 3.5px #0a0510;
+  filter:
+    drop-shadow(3px 3px 0 #0a0510) drop-shadow(6px 6px 0 #0a0510)
+    drop-shadow(9px 11px 0 rgba(0,0,0,0.5)) drop-shadow(0 18px 26px rgba(0,0,0,0.7));
 }
 .ss-rule {
   height: 4px; width: clamp(300px, 40vw, 560px); margin: clamp(18px,3vh,32px) 0 0;
@@ -586,14 +624,18 @@
 .ss-cta {
   margin-top: clamp(48px, 8vh, 96px);
   font-family: var(--mm-display);
-  font-size: clamp(34px, 6vh, 68px); letter-spacing: 0.06em;
+  font-size: clamp(34px, 6vh, 68px); letter-spacing: 0.04em;
   color: #fff; transform: skewX(-6deg);
-  text-shadow: 0 0 26px rgba(255,194,61,0.8), 0 4px 0 rgba(0,0,0,0.5);
+  text-shadow: 0 0 22px rgba(255,194,61,0.7), 3px 4px 0 rgba(0,0,0,0.6);
 }
-.ss-cta-anim { animation: ssPulse 1.35s ease-in-out infinite; }
-@keyframes ssPulse {
-  0%, 100% { opacity: 1; transform: skewX(-6deg) scale(1); }
-  50%      { opacity: 0.62; transform: skewX(-6deg) scale(0.985); }
+.ss-cta b {
+  color: var(--mm-amber); font-weight: 400; margin: 0 0.28em;
+  -webkit-text-stroke: 0;
+}
+.ss-cta-anim { animation: ssStrobe 1.05s steps(1) infinite; }
+@keyframes ssStrobe {
+  0%, 64% { opacity: 1; }
+  65%, 100% { opacity: 0.28; }
 }
 .ss-sub {
   margin-top: 20px;
@@ -645,10 +687,12 @@
 .am-logo {
   position: relative; display: inline-block; font-family: var(--mm-display);
   line-height: 0.82; letter-spacing: 0.006em; transform: skewX(-7deg);
-  background: linear-gradient(179deg, #FFF6D0 0%, #FFDA4A 24%, #FFB01E 48%, #FF7E10 72%, #E51D38 100%);
+  background: linear-gradient(178deg, #FFFBEA 0%, #FFE96B 19%, #FFC21F 41%, #FF8A12 64%, #F0431F 86%, #B90E2E 100%);
   -webkit-background-clip: text; background-clip: text; color: transparent;
-  -webkit-text-stroke: 2.5px rgba(6,3,14,0.95);
-  filter: drop-shadow(4px 5px 0 rgba(8,3,14,0.9)) drop-shadow(0 18px 30px rgba(0,0,0,0.6)) drop-shadow(0 0 48px rgba(255,150,40,0.38));
+  -webkit-text-stroke: 3px #0a0510;
+  filter:
+    drop-shadow(3px 3px 0 #0a0510) drop-shadow(6px 6px 0 #0a0510)
+    drop-shadow(8px 10px 0 rgba(0,0,0,0.5)) drop-shadow(0 16px 24px rgba(0,0,0,0.65));
 }
 .am-anim { animation: amLogoBreathe 3.4s ease-in-out infinite; }
 @keyframes amLogoBreathe {

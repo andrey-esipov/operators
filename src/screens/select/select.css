@@ -102,6 +102,50 @@
   0% { opacity: 0; transform: translateX(60px); }
   100% { opacity: 0.95; transform: translateX(0); }
 }
+/* Radial speed-lines burst out from behind the VS to sell the hype. */
+.sel-vsburst-rays {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 150vh;
+  height: 150vh;
+  z-index: 1;
+  transform: translate(-50%, -50%);
+  background: repeating-conic-gradient(from 0deg at 50% 50%,
+    rgba(255, 235, 170, 0.14) 0deg 1.1deg,
+    transparent 1.1deg 7deg);
+  -webkit-mask: radial-gradient(circle at 50% 50%, #000 6%, rgba(0, 0, 0, 0.7) 20%, transparent 52%);
+  mask: radial-gradient(circle at 50% 50%, #000 6%, rgba(0, 0, 0, 0.7) 20%, transparent 52%);
+  animation: selVsRays 700ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  pointer-events: none;
+}
+@keyframes selVsRays {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.25) rotate(-16deg); }
+  55% { opacity: 0.9; }
+  100% { opacity: 0.55; transform: translate(-50%, -50%) scale(1) rotate(0deg); }
+}
+/* Perspective floor grounds both combatants so they do not float in a void. */
+.sel-vsburst-floor {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: 150%;
+  height: 30%;
+  z-index: 0;
+  transform: translateX(-50%);
+  background:
+    radial-gradient(120% 140% at 50% 100%, rgba(255, 214, 10, 0.14) 0%, transparent 60%),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.05) 0 1px, transparent 1px 64px),
+    linear-gradient(0deg, rgba(0, 0, 0, 0.9), transparent);
+  -webkit-mask: linear-gradient(0deg, #000 0%, transparent 92%);
+  mask: linear-gradient(0deg, #000 0%, transparent 92%);
+  animation: selVsFloor 520ms ease both;
+  pointer-events: none;
+}
+@keyframes selVsFloor {
+  0% { opacity: 0; transform: translateX(-50%) translateY(20px); }
+  100% { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
 .sel-vsburst-slash {
   position: absolute;
   left: 50%;
@@ -459,7 +503,7 @@
 /* ── Roster grid ────────────────────────────────────────────────────── */
 .sel-grid {
   display: grid;
-  gap: 3px;
+  gap: 2px;
   align-content: center;
   justify-content: stretch;
   overflow-y: auto;
@@ -1119,16 +1163,23 @@
 @keyframes selLockIn { 0% { opacity: 0; transform: scale(1.3); } 100% { opacity: 1; transform: scale(1); } }
 
 /* Name lockup slab under the render. */
-.sel-standoff-name { position: relative; z-index: 5; padding: 10px 16px 13px; animation: selNameIn 300ms ease both; }
+/* Name lockup — pulled up to overlap the render's lower body and skewed hard so
+   it reads as a stamped fight-card logo, not a caption under a photo. */
+.sel-standoff-name { position: relative; z-index: 6; margin-top: -30px; padding: 10px 16px 13px; animation: selNameIn 300ms ease both; }
 .sel-standoff-b .sel-standoff-name { text-align: right; }
 .sel-standoff-plabel { font-size: 9px; font-weight: 700; letter-spacing: 0.2em; margin-bottom: 2px; }
 .sel-standoff-nametext {
   font-size: clamp(22px, 2.4vw, 42px);
-  line-height: 0.86;
-  transform: skewX(-5deg);
+  line-height: 0.8;
+  letter-spacing: -0.012em;
+  transform: skewX(-8deg);
   transform-origin: left bottom;
+  -webkit-text-stroke: 1.5px rgba(0, 0, 0, 0.92);
+  text-shadow:
+    4px 4px 0 rgba(0, 0, 0, 0.92),
+    0 0 30px color-mix(in srgb, var(--sel-side) 70%, transparent);
 }
-.sel-standoff-b .sel-standoff-nametext { transform: skewX(-5deg); transform-origin: right bottom; }
+.sel-standoff-b .sel-standoff-nametext { transform: skewX(-8deg); transform-origin: right bottom; }
 .sel-standoff-arch { margin-top: 3px; }
 .sel-standoff-hp { display: flex; align-items: center; gap: 8px; margin-top: 9px; }
 .sel-standoff-b .sel-standoff-hp { flex-direction: row-reverse; }

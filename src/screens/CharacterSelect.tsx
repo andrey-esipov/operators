@@ -456,6 +456,8 @@ export function CharacterSelect() {
       {/* Locked-in VS event — the grid recedes and a colossal VS slams in. */}
       {bothLocked && p1Fighter && p2Fighter && (
         <div className="sel-vsburst" aria-hidden>
+          <div className="sel-vsburst-floor" />
+          <div className="sel-vsburst-rays" />
           <div className="sel-vsburst-slash sel-vsburst-slash-a" />
           <div className="sel-vsburst-slash sel-vsburst-slash-b" />
           <div className="sel-vsburst-name sel-vsburst-name-a sel-name-face">{p1Fighter.shortName}</div>

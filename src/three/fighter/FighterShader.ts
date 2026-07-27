@@ -460,8 +460,14 @@ export const FIGHTER_FRAGMENT = /* glsl */ `
     // value range at true white (not the key's warm/tinted hue) — the AAA
     // "blown highlight" on cheekbones, knuckles, hair strands and prop hardware.
     // Biased toward white so a coloured stage key can't cap the range at orange.
-    float specWhite = pow(ndh, 96.0) * (skin * 0.55 + metal * 1.3 + dark * 0.35 + cloth * 0.12);
-    specular += mix(keyCol, vec3(1.0), 0.78) * specWhite * uKeyIntensity * 0.3 * selfShadow;
+    float specWhite = pow(ndh, 82.0) * (skin * 0.9 + metal * 2.2 + dark * 0.5 + cloth * 0.22);
+    specular += mix(keyCol, vec3(1.0), 0.9) * specWhite * uKeyIntensity * 0.3 * selfShadow;
+    // Razor pinpoint of PURE neutral white: guarantees a true blown highlight
+    // even on a heavily warm/red-lit stage (crisis), so the character's value
+    // range always tops at true white on knuckles / cheekbones / hardware — not
+    // a warm orange cap. Kept very tight so only the peak texel blows out.
+    float specPin = pow(ndh, 150.0) * (skin * 1.1 + metal * 3.0 + dark * 0.7);
+    specular += vec3(1.0) * specPin * uKeyIntensity * 0.3 * selfShadow;
     // Sweat sheen at low HP / exertion: extra broad wet highlight, skin only.
     specular += keyCol * pow(ndh, 40.0) * skin * uSweat * 0.6 * uKeyIntensity * 0.3;
     specular *= base.a;
@@ -517,10 +523,25 @@ export const FIGHTER_FRAGMENT = /* glsl */ `
     // Direct terms are fully occluded by cavity + contact AO; ambient is only
     // partly occluded so shadow cores keep the material's local colour (a purple
     // jacket stays purple in shadow) instead of crushing to muddy black.
+    // The additive rim SPILL (the part painted straight onto the figure, not
+    // modulated by albedo) is where a strongly-tinted stage rim — crisis' red
+    // 0xef233c at 3.2 — dumps its raw hue onto the character and crushes their
+    // identity to a single colour at the edges. Defend that spill's hue toward
+    // its own brightness so it still reads as a bright separation edge but stops
+    // repainting the fighter red. The albedo-modulated rim term below already
+    // tints toward the material, so it is left alone.
+    vec3 rimSpill = defendLight(rim, uIdentityDefense * 0.6);
     vec3 lit = albedo * (diffuse + flashL) * ao
              + albedo * ambient * mix(0.7, 1.0, ao)
              + subsurface * ao
-             + specular + rim * albedo * 0.5 + rim * 0.2;
+             + specular + rim * albedo * 0.5 + rimSpill * 0.24;
+    // Bright-neutral materials (white sneakers, chrome hardware) keep a small
+    // neutral value floor so a heavily-tinted arena (crisis red) can't crush a
+    // white prop to a dim single hue. Reserved to genuinely bright + desaturated
+    // albedo, so coloured clothing / skin identity is never washed. Doubles as a
+    // cheap neutral value-pop that helps the silhouette separate on same-hue
+    // backdrops.
+    lit += albedo * vec3(0.16) * metal * ao;
     vec3 color = lit;
 
     // ---- Hero grade: authored value range + defended colour identity ------

@@ -52,3 +52,4 @@ vfx-shots/
 # arena QA artifacts (untracked)
 .arena-qa/
 cap-arena.mjs
+review-shots/

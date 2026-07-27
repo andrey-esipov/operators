@@ -30,7 +30,7 @@ export {
   detectDoubleTap,
 } from './input/motion'
 
-export { FIGHTERS, getFighterDef, OPERATOR } from './fighters'
+export { FIGHTERS, getFighterDef, OPERATOR, VANGUARD } from './fighters'
 export type { FighterDef, SelectContext } from './def'
 
 export * as constants from './constants'

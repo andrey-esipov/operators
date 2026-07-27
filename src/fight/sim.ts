@@ -331,10 +331,10 @@ function processActions(
     f.vel.x = 0
   } else if (relDir === 6) {
     f.stance = 'walk-fwd'
-    f.vel.x = f.facing * WALK_FWD_SPEED
+    f.vel.x = f.facing * (def.walkFwd ?? WALK_FWD_SPEED)
   } else if (relDir === 4) {
     f.stance = 'walk-back'
-    f.vel.x = -f.facing * WALK_BACK_SPEED
+    f.vel.x = -f.facing * (def.walkBack ?? WALK_BACK_SPEED)
   } else {
     f.stance = 'idle'
     f.vel.x = 0

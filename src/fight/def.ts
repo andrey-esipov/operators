@@ -25,6 +25,12 @@ export interface FighterDef {
   id: string
   name: string
   health: number
+  /** Forward walk speed (cm/frame). Falls back to the global default when
+   *  unset, so mobility is a per-archetype knob: a rushdown grappler walks in
+   *  faster and retreats worse than a balanced shoto. */
+  walkFwd?: number
+  /** Backward walk speed (cm/frame). Falls back to the global default. */
+  walkBack?: number
   moves: Record<string, Move>
   /**
    * Given this frame's inputs, decide which move (if any) should start. Motion

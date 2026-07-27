@@ -156,9 +156,12 @@ vec3 finishValue(vec3 c) {
   vec3 toeP = vec3(1.0) + black * 3.0 * (1.0 - clamp(c, 0.0, 1.0));
   c = pow(max(c, 0.0), toeP);
 
-  // Confident highlight shoulder — roll the top end off so highlights bloom
-  // and compress instead of clipping to flat white.
-  c = c / (1.0 + max(c - 0.72, 0.0) * 0.55);
+  // Confident highlight shoulder — a filmic knee that starts earlier and
+  // compresses harder so bright practical lamps and specular hits roll off with
+  // a gradient instead of clipping to flat white discs. The knee asymptotes, so
+  // mid-tones and shadows are untouched while values above ~0.6 are progressively
+  // tamed (a former 1.0 tops out near 0.74, restoring rolloff below the clip).
+  c = c / (1.0 + max(c - 0.6, 0.0) * 0.9);
 
   // S-curve contrast around mid grey.
   c = clamp(0.5 + (c - 0.5) * contrast, 0.0, 1.0);

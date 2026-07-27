@@ -214,7 +214,7 @@ export const STAGE_GRADES: Record<ScenarioId, StageGrade> = {
     lookSat: 1.16,
     contrast: 1.2,
     black: 0.15,
-    blackPoint: 0.075,
+    blackPoint: 0.095,
     shadowTint: [0.22, 0.44, 0.66],
     highlightTint: [1.0, 0.86, 0.6],
     splitBalance: 0.48,
@@ -229,8 +229,8 @@ export const STAGE_GRADES: Record<ScenarioId, StageGrade> = {
     lensDirt: 0.42,
     anamorphic: 0.5,
     anamorphicTint: [0.5, 0.7, 1.0],
-    hazeColor: [0.34, 0.52, 0.6],
-    hazeAmount: 0.2,
+    hazeColor: [0.24, 0.4, 0.46],
+    hazeAmount: 0.14,
     // Teal/cyan-dominant arena light renders both fighters' SKIN green (the key
     // light on the characters is greener than the cyan floor/UI). The un-tint
     // axis must match the cast ON THE FIGHTERS, not the arena's cyan — so envTint
@@ -257,7 +257,9 @@ export const STAGE_GRADES: Record<ScenarioId, StageGrade> = {
     gain: [0.98, 1.0, 0.97],
     preSat: 0.82,
     lookSat: 0.82,
-    contrast: 0.96,
+    contrast: 1.06,
+    black: 0.09,
+    blackPoint: 0.055,
     shadowTint: [0.4, 0.46, 0.44],
     highlightTint: [0.92, 0.94, 0.86],
     splitStrength: 0.14,
@@ -272,7 +274,7 @@ export const STAGE_GRADES: Record<ScenarioId, StageGrade> = {
     anamorphic: 0.22,
     anamorphicTint: [0.5, 0.6, 0.7],
     hazeColor: [0.5, 0.53, 0.48],
-    hazeAmount: 0.42,
+    hazeAmount: 0.3,
     // Magenta/purple floor and blocks cast the fighters' lower halves violet, but
     // the fighters already carry distinct albedo here (grey vs grey-hat, blue vs
     // indigo jeans, red hair) — the arena is multi-hue enough to read them apart.

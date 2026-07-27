@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { Effect } from 'postprocessing'
+import { Effect, EffectAttribute } from 'postprocessing'
 import { whiteBalanceGain, type StageGrade } from './grades'
 
 /**
@@ -8,13 +8,31 @@ import { whiteBalanceGain, type StageGrade } from './grades'
  * This single pointwise pass is the show LUT: it takes the linear HDR scene
  * (with bloom already added), applies a per-stage colour script in scene-linear,
  * runs a proper AgX tone map with an authored log-space "look", then finishes
- * in display space with split toning, a tinted vignette and filmic mid-tone
- * grain. AgX gives the highlight rolloff modern fighters use — highlights bloom
- * and clip gracefully instead of turning to white mud.
+ * in display space with a true black point, a filmic highlight rolloff, split
+ * toning, a tinted vignette and filmic mid-tone grain.
+ *
+ * ── Character separation ─────────────────────────────────────────────────
+ * The per-stage grade is intentionally strong, but a strong ENVIRONMENT grade
+ * must not swallow the fighters — in SF6 / KOF XV the characters stay
+ * chromatically separate from the arena so they read as the subject. To get
+ * that here the pass grades every pixel twice: once with the full per-stage
+ * colour script ("environment") and once with a neutral, chroma-true look that
+ * keeps each fighter's own accent hue ("character"). A soft screen-space matte
+ * (built from the fighters' projected anchors, uploaded from the pipeline) then
+ * cross-fades to the character grade over the fighters. Both branches share the
+ * exact same tone map, black point and contrast, so the fighters stay tonally
+ * INTEGRATED (same lighting/value) while staying chromatically SEPARATE — the
+ * environment can red-shift as hard as it likes and two fighters still read as
+ * two distinct colours on every stage.
+ *
+ * ── Depth atmospherics ──────────────────────────────────────────────────
+ * The scene depth (via EffectAttribute.DEPTH) drives an aerial-perspective
+ * haze: far pixels lose contrast and lift toward a haze tint while near pixels
+ * keep their full punch, so the frame gains real depth instead of reading flat.
+ * The character matte is subtracted from the haze so the fighters never fog.
  *
  * Everything here is a per-texel operation, so crisp pixel-art edges pass
- * through untouched — the softening risks (CA, sharpen, AA) live in other
- * passes where they can be tuned carefully.
+ * through untouched.
  */
 
 const fragment = /* glsl */ `
@@ -30,6 +48,7 @@ uniform vec3  lookPower;
 uniform float lookSat;
 uniform float contrast;
 uniform float black;
+uniform float blackPoint;
 uniform vec3  shadowTint;
 uniform vec3  highlightTint;
 uniform float splitBalance;
@@ -43,6 +62,31 @@ uniform float desat;
 uniform vec3  dangerTint;
 uniform float dangerAmt;
 uniform float flash;
+
+// --- character matte (screen-space power windows over the two fighters) ---
+uniform vec2  charA;
+uniform vec2  charB;
+uniform vec2  charHalf;
+uniform float charFeather;
+uniform float charAmount;     // master strength of the character grade
+uniform float charChroma;     // how strongly the fighter's own chroma is kept
+uniform float charLumaFollow; // how much the char branch follows env lighting
+uniform float charPop;        // subject saturation pop inside the matte
+uniform float charKey;        // subject brightness key-lift (subject reads bright)
+uniform float charLift;       // subject shadow-lift gamma (<1 opens underlit fighters)
+uniform float charFill;       // subject fill floor (lifts near-black fighters off same-hue bg)
+uniform vec3  envTint;        // arena dominant hue direction (for chroma un-tint)
+uniform float charUntint;     // strength of removing env-aligned chroma from fighters
+uniform float charDepth;      // linear distance to the fighter plane
+uniform float charDepthWidth; // depth falloff past the fighter plane
+
+// --- depth-weighted aerial perspective ---
+uniform vec3  hazeColor;
+uniform float hazeAmount;
+uniform float hazeStart;
+uniform float hazeEnd;
+uniform float camNear;
+uniform float camFar;
 
 const mat3 LINEAR_SRGB_TO_LINEAR_REC2020 = mat3(
   0.6274, 0.0691, 0.0164,
@@ -76,7 +120,9 @@ vec3 agxContrast(vec3 x) {
        - 6.868 * x2 * x + 0.4298 * x2 + 0.1191 * x - 0.00232;
 }
 
-vec3 agx(vec3 color) {
+// Parameterised AgX so the same tone curve can be run with the per-stage look
+// (environment) or a neutral chroma-true look (characters).
+vec3 agx(vec3 color, vec3 slope, vec3 offset, vec3 power, float sat) {
   color = LINEAR_SRGB_TO_LINEAR_REC2020 * color;
   color = AgXInsetMatrix * color;
   color = max(color, 1e-10);
@@ -85,16 +131,36 @@ vec3 agx(vec3 color) {
   color = clamp(color, 0.0, 1.0);
   color = agxContrast(color);
 
-  // Authored look in the AgX log domain — this is where the per-stage
-  // personality lives (slope/offset/power tint + saturation).
   float l = luma(color);
-  color = pow(max(color * lookSlope + lookOffset, 0.0), lookPower);
-  color = clamp(l + lookSat * (color - l), 0.0, 1.0);
+  color = pow(max(color * slope + offset, 0.0), power);
+  color = clamp(l + sat * (color - l), 0.0, 1.0);
 
   color = AgXOutsetMatrix * color;
   color = pow(max(color, 0.0), vec3(2.2));
   color = LINEAR_REC2020_TO_LINEAR_SRGB * color;
   return clamp(color, 0.0, 1.0);
+}
+
+// Shared display-referred value finishing: a TRUE black point (clean 0), a
+// filmic shadow toe for density and a highlight shoulder for a confident
+// rolloff, then S-curve contrast. Run identically on both branches so the
+// fighters stay tonally locked to the scene.
+vec3 finishValue(vec3 c) {
+  // True black point — remap so the darkest authored value is a clean 0 and
+  // the frame is no longer sitting milky in the mids.
+  c = max(c - blackPoint, 0.0) / max(1.0 - blackPoint, 1e-3);
+
+  // Filmic shadow toe (density without a hard floor).
+  vec3 toeP = vec3(1.0) + black * 3.0 * (1.0 - clamp(c, 0.0, 1.0));
+  c = pow(max(c, 0.0), toeP);
+
+  // Confident highlight shoulder — roll the top end off so highlights bloom
+  // and compress instead of clipping to flat white.
+  c = c / (1.0 + max(c - 0.72, 0.0) * 0.55);
+
+  // S-curve contrast around mid grey.
+  c = clamp(0.5 + (c - 0.5) * contrast, 0.0, 1.0);
+  return c;
 }
 
 float hash21(vec2 p) {
@@ -103,44 +169,137 @@ float hash21(vec2 p) {
   return fract(p.x * p.y);
 }
 
-void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor) {
-  vec3 c = max(inputColor.rgb, 0.0);
+// Soft elliptical power window around a projected fighter.
+float windowMask(vec2 uv, vec2 c, vec2 halfExtent) {
+  vec2 n = (uv - c) / max(halfExtent, vec2(1e-3));
+  float r = length(n);
+  return 1.0 - smoothstep(1.0 - charFeather, 1.0, r);
+}
 
-  // --- scene-linear grade -------------------------------------------------
-  c *= exposure * wbGain;
-  c = c * gain + lift;
-  c = pow(max(c, 0.0), 1.0 / max(gammaC, vec3(1e-3)));
-  float lin = luma(c);
-  c = max(mix(vec3(lin), c, preSat), 0.0);
+float charMask(vec2 uv) {
+  return max(windowMask(uv, charA, charHalf), windowMask(uv, charB, charHalf));
+}
 
-  // --- filmic tone map ----------------------------------------------------
-  c = agx(c);
+// Perspective depth (0..1) → linear eye-space distance.
+float linearDepth(float d) {
+  float z = d * 2.0 - 1.0;
+  return (2.0 * camNear * camFar) / (camFar + camNear - z * (camFar - camNear));
+}
 
-  // --- display-referred finishing ----------------------------------------
-  // Filmic shadow toe for density: raise the darks to a higher power so
-  // shadows gain weight, while highlights (c->1) stay untouched. Unlike a
-  // subtract-and-clip this never flattens detail to a hard black floor, so
-  // dark clothing keeps its internal shading and shadow gradients don't band.
-  vec3 toeP = vec3(1.0) + black * 3.0 * (1.0 - clamp(c, 0.0, 1.0));
-  c = pow(max(c, 0.0), toeP);
+void mainImage(const in vec4 inputColor, const in vec2 uv, const in float depth, out vec4 outputColor) {
+  vec3 sceneLin = max(inputColor.rgb, 0.0);
 
-  // S-curve contrast around mid grey.
-  c = clamp(0.5 + (c - 0.5) * contrast, 0.0, 1.0);
+  // ── environment branch: full per-stage colour script ──────────────────
+  vec3 cEnv = sceneLin * exposure * wbGain;
+  cEnv = cEnv * gain + lift;
+  cEnv = pow(max(cEnv, 0.0), 1.0 / max(gammaC, vec3(1e-3)));
+  float linE = luma(cEnv);
+  cEnv = max(mix(vec3(linE), cEnv, preSat), 0.0);
+  cEnv = agx(cEnv, lookSlope, lookOffset, lookPower, lookSat);
+  cEnv = finishValue(cEnv);
 
-  // Split toning: hue-shift shadows and highlights while preserving luma.
+  // Split toning belongs to the environment (its stage colour identity).
+  {
+    float L = luma(cEnv);
+    vec3 shN = shadowTint / max(luma(shadowTint), 1e-3);
+    vec3 hiN = highlightTint / max(luma(highlightTint), 1e-3);
+    float shW = (1.0 - smoothstep(0.0, splitBalance, L)) * splitStrength;
+    float hiW = smoothstep(splitBalance, 1.0, L) * splitStrength;
+    cEnv *= mix(vec3(1.0), shN, shW);
+    cEnv *= mix(vec3(1.0), hiN, hiW);
+  }
+
+  float matte = clamp(charMask(uv) * charAmount, 0.0, 1.0);
+
+  // Depth-gate the matte: only pixels near the fighter plane get the character
+  // grade. This is what stops the elliptical power window from de-tinting the
+  // FAR background inside it (which showed as a grey halo around the fighters);
+  // the wall behind a fighter is farther than the fighter, so it is excluded
+  // and keeps the full arena grade. The character billboard (and the floor at
+  // their feet) sit at the fighter distance and pass.
+  float dist = linearDepth(depth);
+  float gate = 1.0 - smoothstep(charDepth, charDepth + charDepthWidth, dist);
+  matte *= gate;
+
+  // ── character branch: neutral look, fighter keeps its own hue ─────────
+  vec3 c;
+  if (matte > 0.001) {
+    // Only a gentle share of the white balance so the arena reads consistent,
+    // but the aggressive colour script is dropped entirely.
+    vec3 cChar = sceneLin * exposure * mix(vec3(1.0), wbGain, 0.28);
+    cChar = agx(cChar, vec3(1.0), vec3(0.0), vec3(1.0), 1.08);
+    cChar = finishValue(cChar);
+
+    // Partly follow the environment luminance (so the fighter sits in the same
+    // light) but keep a strong share of the fighter's own clean value, then a
+    // key-lift so the subject reads brighter than the arena — the AAA "the
+    // character is the brightest, most saturated thing in frame" separation.
+    float le = luma(cEnv);
+    float lc = luma(cChar);
+    vec3 charLit = cChar * mix(1.0, le / max(lc, 1e-3), charLumaFollow);
+    charLit *= charKey;
+
+    // Shadow-lift so an UNDERLIT fighter (dark, heavily-tinted stages such as
+    // ai-native / ipo-prep, where a bare 1.x multiply cannot rescue a near-black
+    // pixel) is opened up and reads as a lit subject rather than dissolving into
+    // the arena. A gamma < 1 lifts shadows hard while leaving highlights, so it
+    // only rescues where the fighter is dark and never blows out bright stages.
+    charLit = pow(clamp(charLit, 0.0, 1.0), vec3(charLift));
+
+    // Neutral fill floor: on a dark stage whose dominant tint matches the
+    // fighter (ai-native / ipo-prep blue, crisis red) a lift alone just makes a
+    // brighter version of the SAME hue, so the subject still dissolves. A small
+    // achromatic fill added ONLY to near-black fighter pixels pushes them toward
+    // neutral grey — which reads instantly against a saturated coloured arena —
+    // and self-limits to zero on already-lit fighters, so bright stages are
+    // untouched.
+    float dk = 1.0 - smoothstep(0.06, 0.42, luma(charLit));
+    charLit += charFill * dk;
+
+    // Environment-aligned chroma un-tint: remove the part of the fighter's
+    // chroma that points the SAME way as the arena's dominant hue. On a strongly
+    // monochrome stage (crisis/distribution red, ai-native/ipo-prep blue) this is
+    // what stops the fighter from being a "same tinted silhouette" — the shared
+    // cast is subtracted so the subject reads neutral/separate, while any chroma
+    // ORTHOGONAL to the arena hue (the fighter's own identity colour) is kept, so
+    // two fighters stay distinguishable. charUntint is 0 on multi-hue stages.
+    if (charUntint > 0.001) {
+      float lch = luma(charLit);
+      vec3 chroma = charLit - lch;                       // signed chroma about luma
+      vec3 tdir = normalize(envTint - luma(envTint) + 1e-5);
+      float align = dot(chroma, tdir);                   // fighter chroma along arena hue
+      charLit -= tdir * max(align, 0.0) * charUntint;    // subtract only the shared cast
+      charLit = max(charLit, 0.0);
+    }
+
+    // Subject pop so the characters read as the most saturated things in frame.
+    float cl = luma(charLit);
+    charLit = mix(vec3(cl), charLit, 1.0 + charPop);
+
+    // Blend how strongly we keep the character look vs the environment.
+    vec3 charFinal = mix(cEnv, charLit, charChroma);
+
+    c = mix(cEnv, charFinal, matte);
+  } else {
+    c = cEnv;
+  }
+
+  // ── depth-weighted aerial perspective (never touches the fighters) ─────
+  if (hazeAmount > 0.001) {
+    float fog = smoothstep(hazeStart, hazeEnd, dist) * hazeAmount * (1.0 - matte);
+    // Far → lifts toward the haze tint and loses local contrast, exactly the
+    // near/far separation that builds depth.
+    vec3 hazed = mix(c, hazeColor, 0.55);
+    float lo = luma(hazed);
+    hazed = mix(vec3(lo), hazed, 0.82);
+    c = mix(c, hazed, fog);
+  }
+
+  // Dynamic response: colour drain + danger cast (low HP / KO), keyed to the
+  // environment (1 - matte) so the centred fighters stay clear while the arena
+  // reddens and drains hard.
+  float envW = 1.0 - matte;
   float L = luma(c);
-  vec3 shN = shadowTint / max(luma(shadowTint), 1e-3);
-  vec3 hiN = highlightTint / max(luma(highlightTint), 1e-3);
-  float shW = (1.0 - smoothstep(0.0, splitBalance, L)) * splitStrength;
-  float hiW = smoothstep(splitBalance, 1.0, L) * splitStrength;
-  c *= mix(vec3(1.0), shN, shW);
-  c *= mix(vec3(1.0), hiN, hiW);
-
-  // Dynamic response: colour drain + danger cast (low HP / KO).
-  // Bias the danger grade toward the frame edges so the centred fighters
-  // stay readable — the environment reddens hard, the sprites stay clear.
-  float envW = mix(0.32, 1.25, smoothstep(0.1, 0.62, distance(uv, vec2(0.5))));
-  L = luma(c);
   c = mix(c, vec3(L), desat * envW);
   c = mix(c, c * dangerTint, dangerAmt * envW);
 
@@ -154,16 +313,13 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor)
   c *= vg;
   c += vigColor * (1.0 - vig);
 
-  // Filmic grain, weighted into the mid-tones so it never reads as a flat
-  // overlay on shadows or highlights.
+  // Filmic grain, weighted into the mid-tones.
   L = luma(c);
   float n = hash21(uv * 2048.0 + grainTime) - 0.5;
   float midW = 1.0 - pow(abs(L * 2.0 - 1.0), 1.5);
   c += n * grainAmount * midW;
 
-  // Triangular-PDF ordered dither: two independent hashes give a TPDF noise
-  // of ~+/-1 LSB that breaks 8-bit quantisation banding in smooth gradients
-  // (spotlight haze, sky falloff) without any visible texture.
+  // Triangular-PDF ordered dither: breaks 8-bit banding in smooth gradients.
   float d1 = hash21(uv * vec2(1234.5, 6789.1) + grainTime);
   float d2 = hash21(uv * vec2(4321.9, 9876.3) + grainTime * 1.37 + 7.0);
   c += (d1 + d2 - 1.0) * (1.6 / 255.0);
@@ -189,6 +345,7 @@ export class MasterGradeEffect extends Effect {
       ['lookSat', new THREE.Uniform(1)],
       ['contrast', new THREE.Uniform(1)],
       ['black', new THREE.Uniform(0.025)],
+      ['blackPoint', new THREE.Uniform(0.02)],
       ['shadowTint', new THREE.Uniform(new THREE.Vector3(0.5, 0.55, 0.7))],
       ['highlightTint', new THREE.Uniform(new THREE.Vector3(1, 0.95, 0.85))],
       ['splitBalance', new THREE.Uniform(0.5)],
@@ -202,8 +359,34 @@ export class MasterGradeEffect extends Effect {
       ['dangerTint', new THREE.Uniform(new THREE.Vector3(1, 0.5, 0.45))],
       ['dangerAmt', new THREE.Uniform(0)],
       ['flash', new THREE.Uniform(0)],
+      // character matte
+      ['charA', new THREE.Uniform(new THREE.Vector2(-1, -1))],
+      ['charB', new THREE.Uniform(new THREE.Vector2(-1, -1))],
+      ['charHalf', new THREE.Uniform(new THREE.Vector2(0.09, 0.24))],
+      ['charFeather', new THREE.Uniform(0.55)],
+      ['charAmount', new THREE.Uniform(1)],
+      ['charChroma', new THREE.Uniform(0.9)],
+      ['charLumaFollow', new THREE.Uniform(0.42)],
+      ['charPop', new THREE.Uniform(0.24)],
+      ['charKey', new THREE.Uniform(1.28)],
+      ['charLift', new THREE.Uniform(0.64)],
+      ['charFill', new THREE.Uniform(0.15)],
+      ['envTint', new THREE.Uniform(new THREE.Vector3(1, 1, 1))],
+      ['charUntint', new THREE.Uniform(0)],
+      ['charDepth', new THREE.Uniform(13.0)],
+      ['charDepthWidth', new THREE.Uniform(5.0)],
+      // depth haze
+      ['hazeColor', new THREE.Uniform(new THREE.Vector3(0.5, 0.55, 0.62))],
+      ['hazeAmount', new THREE.Uniform(0.35)],
+      ['hazeStart', new THREE.Uniform(16)],
+      ['hazeEnd', new THREE.Uniform(90)],
+      ['camNear', new THREE.Uniform(0.1)],
+      ['camFar', new THREE.Uniform(320)],
     ])
-    super('MasterGradeEffect', fragment, { uniforms })
+    super('MasterGradeEffect', fragment, {
+      attributes: EffectAttribute.DEPTH,
+      uniforms,
+    })
   }
 
   private u(name: string): THREE.Uniform {
@@ -229,6 +412,10 @@ export class MasterGradeEffect extends Effect {
     this.u('splitStrength').value = g.splitStrength
     this.u('black').value = g.black
     ;(this.u('vigColor').value as THREE.Vector3).set(...g.vigColor)
+    ;(this.u('hazeColor').value as THREE.Vector3).set(...g.hazeColor)
+    this.u('hazeAmount').value = g.hazeAmount
+    ;(this.u('envTint').value as THREE.Vector3).set(...g.envTint)
+    this.u('charUntint').value = g.charUntint
   }
 
   /** Uniforms that the pipeline animates every frame on top of the grade. */
@@ -256,5 +443,56 @@ export class MasterGradeEffect extends Effect {
   /** Runtime saturation punch on top of the stage look (supers/impacts). */
   setSatBoost(add: number) {
     this.u('lookSat').value = this.baseLookSat + add
+  }
+
+  /** Global black point (true 0 anchor). */
+  setBlackPoint(v: number) {
+    this.u('blackPoint').value = v
+  }
+
+  /** Camera near/far for depth linearisation. */
+  setCamera(near: number, far: number) {
+    this.u('camNear').value = near
+    this.u('camFar').value = far
+  }
+
+  /** Screen-space character matte, uploaded from the pipeline each frame. */
+  setCharMatte(a: THREE.Vector2, b: THREE.Vector2, half: THREE.Vector2) {
+    ;(this.u('charA').value as THREE.Vector2).copy(a)
+    ;(this.u('charB').value as THREE.Vector2).copy(b)
+    ;(this.u('charHalf').value as THREE.Vector2).copy(half)
+  }
+
+  /** Static tuning of the character-separation behaviour. */
+  setCharParams(opts: {
+    amount?: number
+    chroma?: number
+    lumaFollow?: number
+    pop?: number
+    feather?: number
+    key?: number
+    lift?: number
+    fill?: number
+  }) {
+    if (opts.amount !== undefined) this.u('charAmount').value = opts.amount
+    if (opts.chroma !== undefined) this.u('charChroma').value = opts.chroma
+    if (opts.lumaFollow !== undefined) this.u('charLumaFollow').value = opts.lumaFollow
+    if (opts.pop !== undefined) this.u('charPop').value = opts.pop
+    if (opts.feather !== undefined) this.u('charFeather').value = opts.feather
+    if (opts.key !== undefined) this.u('charKey').value = opts.key
+    if (opts.lift !== undefined) this.u('charLift').value = opts.lift
+    if (opts.fill !== undefined) this.u('charFill').value = opts.fill
+  }
+
+  /** Linear distance to the fighter plane + falloff, for the matte depth gate. */
+  setCharDepth(dist: number, width: number) {
+    this.u('charDepth').value = dist
+    this.u('charDepthWidth').value = width
+  }
+
+  /** Depth haze band tuning. */
+  setHaze(start: number, end: number) {
+    this.u('hazeStart').value = start
+    this.u('hazeEnd').value = end
   }
 }

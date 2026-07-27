@@ -129,7 +129,7 @@ export class PostPipeline implements Subsystem, RenderDriver {
     this.grade = new MasterGradeEffect()
     this.grade.applyGrade(this.currentGrade)
     this.grade.setCamera(camera.near, camera.far)
-    this.grade.setBlackPoint(0.03)
+    this.grade.setBlackPoint(this.currentGrade.blackPoint)
 
     // --- chromatic aberration + sharpen (own convolution pass) ----------
     this.finalize = new LensFinalizeEffect()
@@ -259,6 +259,9 @@ export class PostPipeline implements Subsystem, RenderDriver {
     // --- grade dynamics -------------------------------------------------
     const contrast = g.contrast + i * 0.18 + this.superPunch * 0.14
     this.grade.setContrast(contrast)
+    // Per-stage true black anchor (single-hue arenas flood coloured light into
+    // the shadows and need a firmer crush to reach a real black point).
+    this.grade.setBlackPoint(g.blackPoint)
 
     this.grade.setSatBoost(
       i * 0.35 + this.superPunch * 0.25 + (this.impactWarm > 0 ? i * this.impactWarm * 0.15 : 0),

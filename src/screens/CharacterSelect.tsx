@@ -484,7 +484,7 @@ function StandoffHero({
   singlePicker: boolean
 }) {
   const sideColor = SIDE_COLOR[side]
-  const basis = singlePicker ? 'clamp(360px, 33%, 520px)' : 'clamp(340px, 27.5%, 480px)'
+  const basis = singlePicker ? 'clamp(360px, 33%, 520px)' : 'clamp(350px, 29.5%, 540px)'
   const cls = [
     'sel-standoff',
     side === 'a' ? 'sel-standoff-a' : 'sel-standoff-b',

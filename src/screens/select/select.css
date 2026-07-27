@@ -22,12 +22,45 @@
 
 /* ── Root, palette, type tokens ─────────────────────────────────────── */
 /* ── Locked-in VS event ─────────────────────────────────────────────── */
+/* The roster does not just dim — it is wiped. Everything that reads as
+   "selection UI" (grid, filter strip, roster HUD, info dock) collapses to
+   near-black so the two combatants and the VS own the entire frame. */
 .sel-root.is-both-locked .sel-grid {
-  filter: blur(3px) brightness(0.4) saturate(0.7);
-  transform: scale(0.97);
-  transition: filter 260ms ease, transform 260ms ease;
+  filter: blur(9px) brightness(0.08) saturate(0.3);
+  transform: scale(0.86);
+  opacity: 0.1;
+  transition: filter 320ms ease, transform 320ms ease, opacity 320ms ease;
 }
-.sel-root.is-both-locked .sel-rostermod::before { opacity: 0.3; }
+.sel-root.is-both-locked .sel-rostermod::before { opacity: 0; }
+.sel-root.is-both-locked .sel-filterbar,
+.sel-root.is-both-locked .sel-rostermod > .sel-h,
+.sel-root.is-both-locked .sel-dock {
+  opacity: 0;
+  transition: opacity 220ms ease;
+  pointer-events: none;
+}
+/* Both fighters surge forward and hot up as the fight is sealed. */
+.sel-root.is-both-locked .sel-standoff {
+  z-index: 30;
+  filter: saturate(1.12) brightness(1.14) contrast(1.04);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--sel-side) 55%, transparent),
+    inset 0 0 180px color-mix(in srgb, var(--sel-side) 34%, transparent),
+    0 0 60px color-mix(in srgb, var(--sel-side) 42%, transparent),
+    0 18px 44px rgba(0, 0, 0, 0.7);
+}
+.sel-root.is-both-locked .sel-standoff-a { animation: selLockSurgeA 500ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+.sel-root.is-both-locked .sel-standoff-b { animation: selLockSurgeB 500ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+@keyframes selLockSurgeA {
+  0% { transform: translateX(-4%) scale(0.99); }
+  60% { transform: translateX(1.5%) scale(1.05); }
+  100% { transform: translateX(0) scale(1.03); }
+}
+@keyframes selLockSurgeB {
+  0% { transform: translateX(4%) scale(0.99); }
+  60% { transform: translateX(-1.5%) scale(1.05); }
+  100% { transform: translateX(0) scale(1.03); }
+}
 .sel-vsburst {
   position: absolute;
   inset: 0;
@@ -38,6 +71,37 @@
   pointer-events: none;
   overflow: hidden;
 }
+/* Red (P1) and cyan (P2) impact fields drive in from each edge, screen-blended
+   so they rim-light the two combatants instead of flatly tinting the frame. */
+.sel-vsburst::before,
+.sel-vsburst::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 64%;
+  z-index: 0;
+  pointer-events: none;
+  mix-blend-mode: screen;
+}
+.sel-vsburst::before {
+  left: 0;
+  background: linear-gradient(102deg, color-mix(in srgb, var(--sel-p1, #e63946) 60%, transparent) 0%, color-mix(in srgb, var(--sel-p1, #e63946) 14%, transparent) 40%, transparent 66%);
+  animation: selVsFieldA 460ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.sel-vsburst::after {
+  right: 0;
+  background: linear-gradient(258deg, color-mix(in srgb, var(--sel-p2, #00b4d8) 60%, transparent) 0%, color-mix(in srgb, var(--sel-p2, #00b4d8) 14%, transparent) 40%, transparent 66%);
+  animation: selVsFieldB 460ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes selVsFieldA {
+  0% { opacity: 0; transform: translateX(-60px); }
+  100% { opacity: 0.95; transform: translateX(0); }
+}
+@keyframes selVsFieldB {
+  0% { opacity: 0; transform: translateX(60px); }
+  100% { opacity: 0.95; transform: translateX(0); }
+}
 .sel-vsburst-slash {
   position: absolute;
   left: 50%;
@@ -45,6 +109,7 @@
   width: 220%;
   height: 78px;
   transform-origin: center;
+  z-index: 1;
 }
 .sel-vsburst-slash-a {
   background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--sel-p1, #e63946) 85%, transparent) 45%, var(--sel-p1, #e63946) 50%, transparent 55%);
@@ -66,6 +131,7 @@
 }
 .sel-vsburst-vs {
   position: relative;
+  z-index: 3;
   font-size: clamp(140px, 21vw, 340px);
   line-height: 0.72;
   letter-spacing: -0.02em;
@@ -87,6 +153,7 @@
 /* Oversized combatant names flanking the VS, in each player's colour. */
 .sel-vsburst-name {
   position: absolute;
+  z-index: 2;
   font-size: clamp(30px, 4.4vw, 76px);
   line-height: 0.82;
   letter-spacing: 0.01em;
@@ -938,7 +1005,7 @@
    the (narrow) figure fills it head-to-toe. Transparent side margins overflow
    the panel and are clipped — that is what makes the hero read as dominant. */
 .sel-standoff-figwrap {
-  height: 112%;
+  height: 120%;
   aspect-ratio: 1 / 1;
   flex: 0 0 auto;
 }

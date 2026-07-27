@@ -109,8 +109,8 @@ const RECIPES: Record<HitFlavor, Recipe> = {
   },
   crit: {
     core: 0xffffff, energy: 0xffd35a, ember: 0xff7a12, scale: 1.35,
-    flashSize: 2.6, flashDecay: 0.22, flashSpikes: 1.4, streak: 2.4,
-    flareSize: 2.9,
+    flashSize: 2.1, flashDecay: 0.2, flashSpikes: 1.4, streak: 2.4,
+    flareSize: 2.1,
     sparkCount: 140, sparkSpeed: 18.5, sparkLife: 0.8,
     shardCount: 30,
     debrisCount: 26, debrisSpeed: 9.5,
@@ -148,8 +148,8 @@ const RECIPES: Record<HitFlavor, Recipe> = {
   },
   ult: {
     core: 0xffffff, energy: 0xffcf4d, ember: 0xff6a00, scale: 1.5,
-    flashSize: 1.8, flashDecay: 0.24, flashSpikes: 1.4, streak: 2.6,
-    flareSize: 2.3,
+    flashSize: 1.3, flashDecay: 0.22, flashSpikes: 1.4, streak: 2.6,
+    flareSize: 1.5,
     sparkCount: 190, sparkSpeed: 19, sparkLife: 0.85,
     shardCount: 40,
     debrisCount: 20, debrisSpeed: 9,

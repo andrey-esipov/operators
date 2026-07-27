@@ -72,6 +72,26 @@ export interface StageGrade {
    */
   envTint: [number, number, number]
   charUntint: number
+  /**
+   * Bloom-cast recovery strength for the final pass. On stages where heavy
+   * single-hue bloom (teal) collapses a fighter's identity chroma toward zero,
+   * the orthogonal reveal gate stops firing and skin reads as the arena colour.
+   * This term strips the shared cast on bright, strongly-aligned pixels to
+   * recover them. It must stay 0 on stages with a bright, same-hue BACKGROUND
+   * (e.g. ipo-prep's blue wall) or it would desaturate that background into a
+   * visible box inside the character matte.
+   */
+  castRecover: number
+  /**
+   * Overall character-branch strength (scales charChroma: how strongly the
+   * neutralised/key-lifted character look replaces the plain arena grade on the
+   * fighters). 1 = full treatment (needed on monochrome stages where the fighter
+   * dissolves into the arena). Lower it on stages where the environment already
+   * lights the fighters with clean, separated albedo (e.g. ipo-prep) — there the
+   * aggressive branch only adds a milky wash and a matte halo, so a light touch
+   * lets the fighters' own colour read.
+   */
+  charStrength: number
 }
 
 const base: StageGrade = {
@@ -106,6 +126,8 @@ const base: StageGrade = {
   hazeAmount: 0.32,
   envTint: [1, 1, 1],
   charUntint: 0,
+  castRecover: 0,
+  charStrength: 1.0,
 }
 
 function grade(overrides: Partial<StageGrade>): StageGrade {
@@ -183,6 +205,7 @@ export const STAGE_GRADES: Record<ScenarioId, StageGrade> = {
     // purple denim and red hair (orthogonal to green) survive to read them apart.
     envTint: [0.5, 1.0, 0.55],
     charUntint: 0.9,
+    castRecover: 0.7,
   }),
 
   // Stalled, airless. Flat, faintly sickly green-grey — the grind of the
@@ -254,6 +277,7 @@ export const STAGE_GRADES: Record<ScenarioId, StageGrade> = {
     // warm hair and off-axis albedo read the fighters apart.
     envTint: [0.5, 1.0, 0.6],
     charUntint: 0.8,
+    castRecover: 0.7,
   }),
 
   // Money. Warm gold with rich green undertones, luxe and slightly opulent —
@@ -355,6 +379,7 @@ export const STAGE_GRADES: Record<ScenarioId, StageGrade> = {
     hazeAmount: 0.16,
     envTint: [0.34, 0.5, 1.0],
     charUntint: 0.6,
+    charStrength: 0.0,
   }),
 
   // Broadcast blockbuster. Wide warm sunset, saturated teal-and-orange with a
@@ -433,6 +458,8 @@ export function mixGrades(a: StageGrade, b: StageGrade, t: number): StageGrade {
     hazeAmount: lerp(a.hazeAmount, b.hazeAmount, t),
     envTint: lerp3(a.envTint, b.envTint, t),
     charUntint: lerp(a.charUntint, b.charUntint, t),
+    castRecover: lerp(a.castRecover, b.castRecover, t),
+    charStrength: lerp(a.charStrength, b.charStrength, t),
   }
 }
 

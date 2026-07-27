@@ -298,14 +298,17 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, const in float depth,
 
     // Subject gate: the elliptical matte also covers co-planar background at the
     // fighter depth, and applying the (brighter, key-lifted) character look to it
-    // reads as a rectangular box — worst on bright stages (ipo-prep) where the
-    // wall behind the fighters is milky and near-neutral. A real fighter pixel is
-    // either notably DARK (an underlit subject the key rescues) or carries its OWN
-    // identity chroma; flat bright near-neutral arena is neither, so fade the look
-    // out on it. Kills the matte box without a true silhouette matte.
-    float envDark = 1.0 - smoothstep(0.14, 0.62, luma(cEnv));
+    // reads as a rectangular box/glow — worst where the mid-ground around the
+    // fighters is dark (ipo-prep) so the key-lift balloons it into a soft halo.
+    // A real fighter pixel is either in genuine DEEP shadow (an underlit subject
+    // the key rescues) or carries its OWN identity chroma; a merely mid-dark
+    // floor is neither. Fire envDark only on near-black pixels so the mid-dark
+    // co-planar floor is left alone, and drop the old 0.2 blend floor so a pixel
+    // that reads as pure background (subj ~ 0) is untouched entirely. Kills the
+    // matte box/halo without a true silhouette matte.
+    float envDark = 1.0 - smoothstep(0.03, 0.22, luma(cEnv));
     float subj = clamp(max(envDark, smoothstep(0.02, 0.12, idChroma)), 0.0, 1.0);
-    c = mix(cEnv, charFinal, matte * mix(0.2, 1.0, subj));
+    c = mix(cEnv, charFinal, matte * subj);
   } else {
     c = cEnv;
   }
@@ -407,7 +410,7 @@ export class MasterGradeEffect extends Effect {
       ['charLumaFollow', new THREE.Uniform(0.42)],
       ['charPop', new THREE.Uniform(0.24)],
       ['charKey', new THREE.Uniform(1.28)],
-      ['charLift', new THREE.Uniform(0.64)],
+      ['charLift', new THREE.Uniform(0.70)],
       ['charFill', new THREE.Uniform(0.15)],
       ['envTint', new THREE.Uniform(new THREE.Vector3(1, 1, 1))],
       ['charUntint', new THREE.Uniform(0)],
@@ -454,6 +457,7 @@ export class MasterGradeEffect extends Effect {
     this.u('hazeAmount').value = g.hazeAmount
     ;(this.u('envTint').value as THREE.Vector3).set(...g.envTint)
     this.u('charUntint').value = g.charUntint
+    this.u('charChroma').value = 0.9 * g.charStrength
   }
 
   /** Uniforms that the pipeline animates every frame on top of the grade. */

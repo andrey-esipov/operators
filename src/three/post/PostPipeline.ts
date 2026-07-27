@@ -150,7 +150,7 @@ export class PostPipeline implements Subsystem, RenderDriver {
     this.finalize.setSharpen(0.32)
     this.grade.setCamera(camera.near, camera.far)
     this.finalize.setCamera(camera.near, camera.far)
-    this.finalize.setCharClarity(this.currentGrade.envTint, this.currentGrade.charUntint)
+    this.finalize.setCharClarity(this.currentGrade.envTint, this.currentGrade.charUntint, this.currentGrade.castRecover)
     this.composer.addPass(new EffectPass(camera, this.finalize))
 
     if (flags.aa === 'smaa') {
@@ -222,7 +222,7 @@ export class PostPipeline implements Subsystem, RenderDriver {
       const t = this.fade * this.fade * (3 - 2 * this.fade)
       this.currentGrade = mixGrades(this.fromGrade, this.targetGrade, t)
       this.grade.applyGrade(this.currentGrade)
-      this.finalize.setCharClarity(this.currentGrade.envTint, this.currentGrade.charUntint)
+      this.finalize.setCharClarity(this.currentGrade.envTint, this.currentGrade.charUntint, this.currentGrade.castRecover)
     }
     const g = this.currentGrade
 
@@ -331,7 +331,7 @@ export class PostPipeline implements Subsystem, RenderDriver {
       const hy = this.lastY
       this.projX(feetA)
       const fy = this.lastY
-      halfH = Math.max(0.16, Math.abs(hy - fy) * 0.5 * 1.18)
+      halfH = Math.max(0.14, Math.abs(hy - fy) * 0.5 * 1.06)
       this._charA.y = (hy + fy) * 0.5
     }
     const headB = anchors.get('fighter:b:head')
@@ -341,7 +341,7 @@ export class PostPipeline implements Subsystem, RenderDriver {
       const hy = this.lastY
       this.projX(feetB)
       const fy = this.lastY
-      halfH = Math.max(halfH, Math.abs(hy - fy) * 0.5 * 1.18)
+      halfH = Math.max(halfH, Math.abs(hy - fy) * 0.5 * 1.06)
       this._charB.y = (hy + fy) * 0.5
     }
 

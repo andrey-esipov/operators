@@ -40,6 +40,7 @@ uniform vec2  charHalf;     // ellipse half-extent (uv)
 uniform float charFeather;  // ellipse edge softness
 uniform vec3  envTint;      // arena dominant hue
 uniform float charClarity;  // strength of the final un-tint (0 on multi-hue stages)
+uniform float castRecover;  // bloom-cast recovery strength (0 unless a same-hue bloom stage)
 uniform float camNear;
 uniform float camFar;
 uniform float charDepth;      // linear distance to the fighter plane
@@ -131,9 +132,10 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, const in float depth,
       // a strong aligned cast: bloomed fighter skin/clothing is bright AND heavily
       // arena-tinted, whereas the co-planar background the ellipse also covers is
       // either dark floor (low L) or barely tinted (low align), so it is left
-      // alone and no desaturated box appears.
+      // alone and no desaturated box appears. Gated per-stage by castRecover so
+      // it stays OFF where a bright same-hue background would form a box.
       float castStrip = smoothstep(0.07, 0.22, max(align, 0.0)) * smoothstep(0.16, 0.44, L);
-      float reveal2 = max(reveal, castStrip * 0.7);
+      float reveal2 = max(reveal, castStrip * castRecover);
       float w = clamp(charClarity, 0.0, 1.0) * matte * reveal2;
       if (w > 0.001) {
         vec3 target = (vec3(L) + ortho) * charKeyFin;
@@ -158,6 +160,7 @@ export class LensFinalizeEffect extends Effect {
       ['charFeather', new THREE.Uniform(0.55)],
       ['envTint', new THREE.Uniform(new THREE.Vector3(1, 1, 1))],
       ['charClarity', new THREE.Uniform(0)],
+      ['castRecover', new THREE.Uniform(0)],
       ['camNear', new THREE.Uniform(0.1)],
       ['camFar', new THREE.Uniform(100)],
       ['charDepth', new THREE.Uniform(13.0)],
@@ -203,8 +206,9 @@ export class LensFinalizeEffect extends Effect {
   }
 
   /** Per-stage arena hue + clarity strength (0 on multi-hue stages). */
-  setCharClarity(envTint: [number, number, number], clarity: number) {
+  setCharClarity(envTint: [number, number, number], clarity: number, castRecover = 0) {
     ;(this.u('envTint').value as THREE.Vector3).set(...envTint)
     this.u('charClarity').value = clarity
+    this.u('castRecover').value = castRecover
   }
 }

@@ -141,7 +141,19 @@ export function ArcadeVictory() {
               <div style={{ width: 'min(calc(14 * var(--cer-u)), 130px)', height: 'min(calc(9.0 * var(--cer-u)), 130px)', filter: 'grayscale(0.6) brightness(0.7)' }}>
                 <Sprite fighter={lenny} side="b" state="lose" />
               </div>
-              <Kicker style={{ marginTop: 6, fontSize: 'clamp(9px,calc(1 * var(--cer-u)),12px)', color: 'rgba(255,255,255,0.5)' }}>LENNY · DEFEATED</Kicker>
+              <Kicker
+                style={{
+                  marginTop: 6,
+                  fontSize: 'clamp(11px,calc(1.15 * var(--cer-u)),13px)',
+                  color: '#F0E9DC',
+                  background: 'rgba(8,6,4,0.78)',
+                  padding: '3px 8px',
+                  border: '1px solid rgba(240,233,220,0.3)',
+                  textShadow: '0 1px 2px rgba(0,0,0,0.95)',
+                }}
+              >
+                LENNY · DEFEATED
+              </Kicker>
             </div>
           ) : null
         })()}
@@ -211,16 +223,18 @@ export function ArcadeVictory() {
       >
         <button
           onClick={() => { Sfx.menuSelect(); useGame.getState().setPhase('generate-fighter') }}
-          className="cer-btn cer-cond px-9 py-3.5"
+          className="cer-btn cer-cond cer-plate px-9 py-3.5"
           style={{
-            background: 'linear-gradient(180deg, rgba(24,16,4,0.92), rgba(10,7,3,0.94))',
             color: '#FFD60A',
             fontSize: 'clamp(14px,calc(1.6 * var(--cer-u)),19px)',
             fontWeight: 800,
             letterSpacing: '0.16em',
-            border: '2px solid #FFD60A',
-            clipPath: 'polygon(12px 0, 100% 0, calc(100% - 12px) 100%, 0 100%)',
-            boxShadow: '0 0 26px rgba(255,214,10,0.5), inset 0 0 20px rgba(255,214,10,0.16)',
+            ['--plate-clip' as string]: 'polygon(12px 0, 100% 0, calc(100% - 12px) 100%, 0 100%)',
+            ['--plate-frame' as string]: '#FFD60A',
+            ['--plate-fill' as string]:
+              'linear-gradient(180deg, rgba(60,38,4,0.94), rgba(24,14,2,0.94))',
+            ['--plate-w' as string]: '2px',
+            filter: 'drop-shadow(0 0 18px rgba(255,214,10,0.45))',
             textShadow: '0 0 12px rgba(247,127,0,0.6)',
             animation: 'cer-rise-fade 0.45s ease-out 0.8s both',
           }}
@@ -229,15 +243,17 @@ export function ArcadeVictory() {
         </button>
         <button
           onClick={() => { Sfx.menuSelect(); resetMatch() }}
-          className="cer-btn cer-cond px-6 py-3"
+          className="cer-btn cer-cond cer-plate px-6 py-3"
           style={{
-            background: 'transparent',
-            color: 'rgba(255,255,255,0.55)',
+            color: '#F2EFE6',
             fontSize: 'clamp(12px,calc(1.35 * var(--cer-u)),16px)',
             fontWeight: 700,
             letterSpacing: '0.2em',
-            border: '1.5px solid rgba(255,255,255,0.26)',
-            clipPath: 'polygon(10px 0, 100% 0, calc(100% - 10px) 100%, 0 100%)',
+            textShadow: '0 1px 3px rgba(0,0,0,0.9)',
+            ['--plate-clip' as string]: 'polygon(10px 0, 100% 0, calc(100% - 10px) 100%, 0 100%)',
+            ['--plate-frame' as string]: 'rgba(255,255,255,0.62)',
+            ['--plate-fill' as string]: 'rgba(10,8,6,0.82)',
+            ['--plate-w' as string]: '1.5px',
             animation: 'cer-rise-fade 0.45s ease-out 1s both',
           }}
         >

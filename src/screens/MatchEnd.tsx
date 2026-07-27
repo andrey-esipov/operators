@@ -190,14 +190,31 @@ export function MatchEnd() {
           }}>
             <Sprite fighter={foil.fighter} side={foil.side} state={foil.state} />
           </div>
+          {/* The foil is meant to read as subordinate, not as noise. Dimming it
+              by opacity alone put it at roughly 1.2:1 against a lit stage floor
+              -- visibly text, impossible to read. Sit it on a dark chip so it
+              stays quiet but legible. */}
           <Kicker style={{
-            marginTop: 2, fontSize: foil.litVictor ? 'clamp(11px,calc(1.35 * var(--cer-u)),17px)' : 'clamp(9px,calc(1 * var(--cer-u)),12px)',
-            color: foil.litVictor ? accent : 'rgba(255,255,255,0.5)',
+            marginTop: 3, fontSize: foil.litVictor ? 'clamp(11px,calc(1.35 * var(--cer-u)),17px)' : 'clamp(11px,calc(1.15 * var(--cer-u)),13px)',
+            color: foil.litVictor ? accent : '#F0E9DC',
             letterSpacing: '0.18em', fontWeight: 700,
-            textShadow: foil.litVictor ? `0 0 14px ${accent}` : undefined,
+            background: foil.litVictor ? undefined : 'rgba(8,6,4,0.78)',
+            padding: foil.litVictor ? undefined : '3px 8px',
+            border: foil.litVictor ? undefined : '1px solid rgba(240,233,220,0.3)',
+            textShadow: foil.litVictor ? `0 0 14px ${accent}` : '0 1px 2px rgba(0,0,0,0.95)',
           }}>{foil.label}</Kicker>
           {!foil.litVictor && (
-            <div className="cer-type cer-quote mt-1 max-w-[16ch] text-center leading-tight" style={{ fontStyle: 'italic', fontSize: 'clamp(12px,calc(1.3 * var(--cer-u)),15px)', color: 'rgba(255,255,255,0.4)' }}>“{loser.voiceLines.lose}”</div>
+            <div
+              className="cer-type cer-quote mt-1 max-w-[18ch] text-center leading-tight"
+              style={{
+                fontStyle: 'italic',
+                fontSize: 'clamp(12px,calc(1.3 * var(--cer-u)),15px)',
+                color: 'rgba(244,238,226,0.88)',
+                background: 'rgba(8,6,4,0.62)',
+                padding: '3px 7px',
+                textShadow: '0 1px 3px rgba(0,0,0,0.95)',
+              }}
+            >“{loser.voiceLines.lose}”</div>
           )}
         </div>
 
@@ -373,15 +390,17 @@ function ShareButton({
   return (
     <button
       onClick={tweet}
-      className="cer-btn cer-cond px-5 py-2.5"
+      className="cer-btn cer-cond cer-plate px-5 py-2.5"
       style={{
-        background: 'transparent',
-        color: 'rgba(255,255,255,0.5)',
+        color: '#F2EFE6',
         fontSize: 'clamp(11px,calc(1.2 * var(--cer-u)),14px)',
         fontWeight: 700,
         letterSpacing: '0.2em',
-        border: '1.5px solid rgba(255,255,255,0.22)',
-        clipPath: 'polygon(9px 0, 100% 0, calc(100% - 9px) 100%, 0 100%)',
+        textShadow: '0 1px 3px rgba(0,0,0,0.9)',
+        ['--plate-clip' as string]: 'polygon(9px 0, 100% 0, calc(100% - 9px) 100%, 0 100%)',
+        ['--plate-frame' as string]: 'rgba(255,255,255,0.58)',
+        ['--plate-fill' as string]: 'rgba(10,8,6,0.82)',
+        ['--plate-w' as string]: '1.5px',
         animation: 'cer-rise-fade 0.4s ease-out 1.75s both',
       }}
     >

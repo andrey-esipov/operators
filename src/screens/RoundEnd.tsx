@@ -177,7 +177,18 @@ export function RoundEnd() {
             <div style={{ width: 'min(calc(24 * var(--cer-u)), 235px)', height: 'min(calc(18.56 * var(--cer-u)), 265px)', filter: 'grayscale(0.6) brightness(0.7)' }}>
               <Sprite fighter={loser} side={loserSide} state="lose" />
             </div>
-            <Kicker style={{ marginTop: 2, fontSize: 'clamp(9px,calc(1 * var(--cer-u)),12px)', letterSpacing: '0.28em', color: 'rgba(255,255,255,0.5)' }}>
+            <Kicker
+              style={{
+                marginTop: 3,
+                fontSize: 'clamp(11px,calc(1.15 * var(--cer-u)),13px)',
+                letterSpacing: '0.28em',
+                color: '#F0E9DC',
+                background: 'rgba(8,6,4,0.78)',
+                padding: '3px 8px',
+                border: '1px solid rgba(240,233,220,0.3)',
+                textShadow: '0 1px 2px rgba(0,0,0,0.95)',
+              }}
+            >
               {loser.shortName} · DOWN
             </Kicker>
           </div>

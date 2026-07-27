@@ -441,3 +441,48 @@
 
 /* Thin top HUD rule + round pips for the VS header. */
 @keyframes cer-hud-in { 0% { transform: translateY(-120%); opacity: 0; } 100% { transform: translateY(0); opacity: 1; } }
+
+/* ── angled arcade plate ─────────────────────────────────────────────────
+   `clip-path` cuts the border BOX, so a plain `border` on a skewed button
+   loses its two diagonal edges and reads on screen as a half-drawn frame.
+   Paint the frame as a clipped backdrop layer and inset the fill on top, so
+   the outline follows the skew all the way round.
+
+   NOTE: `.cer-btn::after` is already the travelling sheen. Reusing it as the
+   fill layer inherits its translate/skew animation and drags the fill across
+   the button as a diagonal band. So the fill re-declares `animation` and
+   carries the sheen as a moving background layer instead.
+   Consumers set --plate-clip / --plate-frame / --plate-fill / --plate-w. */
+@keyframes cer-plate-sheen {
+  0%   { background-position: -90% 0, 0 0; }
+  100% { background-position: 190% 0, 0 0; }
+}
+.cer-plate {
+  position: relative;
+  border: 0 !important;
+  background: transparent !important;
+  clip-path: none;
+  overflow: visible;
+}
+.cer-plate::before,
+.cer-plate::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  clip-path: var(--plate-clip);
+  pointer-events: none;
+  width: auto;
+}
+.cer-plate::before {
+  inset: 0;
+  background: var(--plate-frame, transparent);
+  animation: none;
+}
+.cer-plate::after {
+  inset: var(--plate-w, 2px);
+  background:
+    linear-gradient(100deg, transparent 42%, rgba(255,255,255,0.26) 50%, transparent 58%)
+      -90% 0 / 240% 100% no-repeat,
+    var(--plate-fill, transparent);
+  animation: cer-plate-sheen 2.6s ease-in-out infinite;
+}

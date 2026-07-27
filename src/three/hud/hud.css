@@ -14,8 +14,13 @@
 }
 
 .fight-hud {
-  --hud-display: 'Saira', 'Arial Narrow', system-ui, sans-serif;
-  --hud-tech: 'Chakra Petch', 'Saira', system-ui, sans-serif;
+  /* The two authored faces this app actually loads (index.html): a chunky
+     pixel display face + a tall CRT numeric face. Everything else the HUD
+     asked for (Saira / Chakra Petch) was never loaded and silently fell back
+     to system-ui — which read as a generic web dashboard and broke the SF2
+     pixel soul. These are the arcade voice. */
+  --hud-display: 'Press Start 2P', 'Courier New', monospace;
+  --hud-tech: 'VT323', 'Courier New', monospace;
   --ink: #04050b;
 
   --hp-good-1: #5affb6; --hp-good-2: #0fbf82;
@@ -69,13 +74,13 @@
 .fh-side.mirror .fh-portrait img { transform: translateX(-50%) scaleX(-1); }
 .fh-portrait .letter {
   position: absolute; inset: 0; display: grid; place-items: center;
-  font-family: var(--hud-display); font-weight: 900; font-style: italic;
-  font-size: 33px; color: var(--acc);
+  font-family: var(--hud-display); font-weight: 400; font-style: normal;
+  font-size: 20px; color: var(--acc);
 }
 .fh-nametab {
   position: relative;
   display: flex; align-items: center; gap: 10px;
-  height: 34px; padding: 0 22px 0 16px;
+  height: 40px; padding: 0 22px 0 16px;
   margin: 0 0 5px -10px;
   background: linear-gradient(180deg, rgba(32,37,55,0.97), rgba(9,11,19,0.97));
   box-shadow: inset 0 2px 0 rgba(255,255,255,0.18), inset 0 0 0 1px rgba(255,255,255,0.06);
@@ -90,15 +95,15 @@
   background: var(--acc); box-shadow: 0 0 12px var(--acc);
 }
 .fh-nametab .n {
-  font-family: var(--hud-display); font-weight: 800; font-style: italic;
-  font-size: 26px; line-height: 0.9; letter-spacing: 0.004em;
+  font-family: var(--hud-display); font-weight: 400; font-style: normal;
+  font-size: 16px; line-height: 0.9; letter-spacing: 0.01em;
   text-transform: uppercase; color: #fff;
   text-shadow: 0 2px 0 rgba(0,0,0,0.9); white-space: nowrap;
 }
 .fh-nametab .tag {
-  font-family: var(--hud-tech); font-weight: 700;
-  font-size: 9px; letter-spacing: 0.28em; color: var(--ink);
-  background: var(--acc); padding: 2px 7px 1px;
+  font-family: var(--hud-display); font-weight: 400;
+  font-size: 11px; letter-spacing: 0.02em; color: var(--ink);
+  background: var(--acc); padding: 4px 7px 3px;
   clip-path: polygon(0 0, 100% 0, calc(100% - 4px) 100%, 0 100%);
 }
 .fh-side.mirror .fh-nametab .tag { clip-path: polygon(4px 0, 100% 0, 100% 100%, 0 100%); }
@@ -182,9 +187,9 @@
 }
 .fh-hp-danger-badge {
   position: absolute; top: 2px; right: 7px; z-index: 4;
-  font-family: var(--hud-tech); font-weight: 900; font-size: 14px; letter-spacing: 0.2em;
+  font-family: var(--hud-display); font-weight: 400; font-size: 11px; letter-spacing: 0.06em;
   color: #fff; background: linear-gradient(180deg, #ff4256, #b30a20);
-  padding: 4px 14px 3px; text-shadow: 0 1px 0 rgba(0,0,0,0.7);
+  padding: 5px 12px 4px; text-shadow: 0 1px 0 rgba(0,0,0,0.7);
   box-shadow: 0 0 16px rgba(255,46,70,0.95), inset 0 0 0 1px rgba(255,255,255,0.3);
   clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
   transform-origin: center; animation: fhDangerBadge 0.62s ease-in-out infinite;
@@ -245,10 +250,10 @@
 .fh-sm-tag {
   position: relative;
   display: flex; align-items: center; gap: 6px;
-  font-family: var(--hud-tech); font-weight: 800; font-size: 11px;
-  letter-spacing: 0.2em; color: #e4ecff;
+  font-family: var(--hud-display); font-weight: 400; font-size: 11px;
+  letter-spacing: 0.02em; color: #e4ecff;
   white-space: nowrap; min-width: 44px; text-align: center;
-  text-shadow: 0 1px 0 rgba(0,0,0,0.85), 0 0 4px rgba(0,0,0,0.9);
+  text-shadow: 0 2px 0 rgba(0,0,0,0.85), 0 0 4px rgba(0,0,0,0.9);
   -webkit-text-stroke: 0.5px rgba(0,0,0,0.6); paint-order: stroke fill;
 }
 .fh-sm-tag::before {
@@ -316,13 +321,13 @@
   background: linear-gradient(90deg, transparent, rgba(255,255,255,0.35), transparent);
 }
 .fh-round-label {
-  font-family: var(--hud-tech); font-weight: 800; font-size: 13px;
-  letter-spacing: 0.42em; padding-left: 0.42em; text-align: center;
-  color: #ffd88a; text-shadow: 0 1px 0 rgba(0,0,0,0.75); margin-bottom: 1px;
+  font-family: var(--hud-display); font-weight: 400; font-size: 12px;
+  letter-spacing: 0.14em; padding-left: 0.14em; text-align: center;
+  color: #ffd88a; text-shadow: 0 2px 0 rgba(0,0,0,0.75); margin-bottom: 8px;
 }
 .fh-timer {
-  font-family: var(--hud-tech); font-weight: 700; font-size: 80px; line-height: 0.88;
-  letter-spacing: 0.005em; color: #fff; font-variant-numeric: tabular-nums;
+  font-family: var(--hud-display); font-weight: 400; font-size: 46px; line-height: 0.9;
+  letter-spacing: 0.02em; color: #fff; font-variant-numeric: tabular-nums;
   -webkit-text-stroke: 2.5px var(--ink); paint-order: stroke fill;
   text-shadow: 0 4px 0 rgba(0,0,0,0.62), 0 0 26px rgba(255,255,255,0.24);
 }
@@ -361,15 +366,15 @@
   filter: blur(0.4px); pointer-events: none;
 }
 .fh-combo .num {
-  font-family: var(--hud-display); font-weight: 900; font-style: italic;
-  font-size: 132px; line-height: 0.72;
+  font-family: var(--hud-display); font-weight: 400; font-style: normal;
+  font-size: 84px; line-height: 0.8;
   background: linear-gradient(180deg, #fff 16%, #ffe14a 50%, #ff9420 100%);
   -webkit-background-clip: text; background-clip: text; color: transparent;
   -webkit-text-stroke: 3px var(--ink); paint-order: stroke fill;
   filter: drop-shadow(0 6px 0 rgba(0,0,0,0.42)) drop-shadow(0 0 24px rgba(255,170,50,0.65));
 }
 .fh-combo .stack { display: flex; flex-direction: column; margin-bottom: 18px; }
-.fh-combo .hits { font-family: var(--hud-display); font-weight: 800; font-style: italic; font-size: 40px; line-height: 0.8; color: #fff; -webkit-text-stroke: 2px var(--ink); paint-order: stroke fill; }
+.fh-combo .hits { font-family: var(--hud-display); font-weight: 400; font-style: normal; font-size: 22px; line-height: 0.9; color: #fff; -webkit-text-stroke: 2px var(--ink); paint-order: stroke fill; }
 .fh-combo .word { font-family: var(--hud-tech); font-weight: 700; font-size: 12px; letter-spacing: 0.42em; color: #ffd23c; text-shadow: 0 2px 0 #000; margin-top: 1px; }
 .fh-combo .dmgchip {
   align-self: flex-start; margin-top: 6px;
@@ -381,7 +386,7 @@
 }
 
 /* ============================ DAMAGE NUMBERS =========================== */
-.fh-dmg { position: absolute; pointer-events: none; font-family: var(--hud-display); font-weight: 900; font-style: italic; transform: translate(-50%, -50%); will-change: transform, opacity; }
+.fh-dmg { position: absolute; pointer-events: none; font-family: var(--hud-display); font-weight: 400; font-style: normal; transform: translate(-50%, -50%); will-change: transform, opacity; }
 .fh-dmg .v { display: block; -webkit-text-stroke: 3.5px var(--ink); paint-order: stroke fill; filter: drop-shadow(0 3px 2px rgba(0,0,0,0.9)) drop-shadow(0 0 4px rgba(0,0,0,0.95)) drop-shadow(0 0 16px rgba(0,0,0,0.85)); }
 
 /* ============================ ANNOUNCER ================================ */
@@ -403,7 +408,7 @@
 }
 .fh-letterbox.top { top: 0; border-bottom: 2px solid rgba(255,255,255,0.09); }
 .fh-letterbox.bot { bottom: 0; border-top: 2px solid rgba(255,255,255,0.09); }
-.fh-announce .big { font-family: var(--hud-display); font-weight: 900; font-style: italic; text-transform: uppercase; line-height: 0.82; text-align: center; letter-spacing: -0.01em; }
+.fh-announce .big { font-family: var(--hud-display); font-weight: 400; font-style: normal; text-transform: uppercase; line-height: 0.82; text-align: center; letter-spacing: -0.01em; }
 .fh-announce .sub {
   font-family: var(--hud-tech); font-weight: 900; font-size: clamp(15px, 2.1vw, 34px);
   letter-spacing: 0.5em; padding-left: 0.5em; margin-top: 16px;
@@ -433,7 +438,7 @@
 .fh-card:nth-child(4) { transform: rotate(1deg) translateY(1px); }
 .fh-card:nth-child(5) { transform: rotate(2.5deg) translateY(6px); }
 .fh-card .kind { font-family: var(--hud-tech); font-weight: 900; font-size: 11px; letter-spacing: 0.22em; color: var(--ck); text-shadow: 0 0 10px var(--ck); }
-.fh-card .title { font-family: var(--hud-display); font-weight: 800; font-style: italic; font-size: 19px; line-height: 0.96; text-transform: uppercase; margin-top: 8px; color: #fff; text-shadow: 0 2px 0 rgba(0,0,0,0.6); }
+.fh-card .title { font-family: var(--hud-display); font-weight: 400; font-style: normal; font-size: 19px; line-height: 0.96; text-transform: uppercase; margin-top: 8px; color: #fff; text-shadow: 0 2px 0 rgba(0,0,0,0.6); }
 .fh-card .spacer { flex: 1; }
 .fh-card .stat-row {
   display: flex; justify-content: space-between; align-items: flex-end;

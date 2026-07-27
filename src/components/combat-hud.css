@@ -1,0 +1,7 @@
+/* Combat-screen DOM HUD styles owned alongside CombatScreen.tsx.
+   Kept separate from the 3D hud.css (which only mounts in the WebGL path). */
+
+@keyframes turnPromptPulse {
+  0%, 100% { transform: translateY(0); filter: brightness(1); }
+  50% { transform: translateY(-1px); filter: brightness(1.12); }
+}

@@ -100,11 +100,12 @@ export function StageSelect() {
 
         {/* RIGHT: stage grid */}
         <div className="flex flex-col flex-1 min-w-0 min-h-0">
-          <div className="font-display text-[8px] tracking-widest text-white/40 mb-1 flex-shrink-0">
-            9 BATTLEGROUNDS
+          <div className="font-display text-[9px] tracking-widest text-white/55 mb-2 flex-shrink-0" style={{ textShadow: '1px 1px 0 #000' }}>
+            ▸ CHOOSE YOUR ARENA
           </div>
-          <div className="grid grid-cols-3 gap-2 pr-1" style={{ flex: '1 1 0', gridTemplateRows: 'repeat(3, minmax(0, 1fr))' }}>
-            {/* AUTO card */}
+          <div className="grid grid-cols-3 gap-2 pr-1 pt-1" style={{ flex: '1 1 0', gridTemplateRows: 'repeat(3, minmax(0, 1fr))' }}>
+            {/* AUTO card — a deliberate "special slot", not an empty hole:
+                scanline texture + ghost "?" + gold shimmer frame. */}
             <button
               onMouseEnter={() => { Sfx.menuMove(); setHovered(null) }}
               onMouseLeave={() => setHovered(null)}
@@ -112,17 +113,27 @@ export function StageSelect() {
               className={`sel-cell relative flex flex-col items-center justify-center text-center overflow-hidden ${picked === 'auto' ? 'sel-cell-cursor' : ''}`}
               style={{
                 minHeight: 118,
-                border: `${picked === 'auto' ? '2px' : '1px'} solid ${picked === 'auto' ? '#FFD60A' : 'rgba(255,255,255,0.14)'}`,
-                background: 'linear-gradient(180deg, rgba(60,48,20,0.7), rgba(14,9,22,0.92))',
+                border: `2px solid ${picked === 'auto' ? '#FFE27A' : '#FFD60A88'}`,
+                background:
+                  'repeating-linear-gradient(135deg, rgba(255,214,10,0.06) 0px, rgba(255,214,10,0.06) 2px, transparent 2px, transparent 7px),' +
+                  'radial-gradient(80% 70% at 50% 40%, rgba(90,70,20,0.85), rgba(12,8,20,0.95))',
                 boxShadow: picked === 'auto'
-                  ? '0 0 18px #FFD60Acc, inset 0 1px 0 rgba(255,255,255,0.15)'
-                  : 'inset -2px -2px 0 rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.08)',
+                  ? '0 0 22px #FFD60Acc, inset 0 0 0 1px #FFE27A, inset 0 1px 0 rgba(255,255,255,0.2)'
+                  : '0 0 12px #FFD60A44, inset 0 0 0 1px rgba(255,214,10,0.35), inset -2px -2px 0 rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.12)',
                 cursor: 'pointer',
               }}
             >
-              <span className="text-3xl mb-1" style={{ filter: 'drop-shadow(0 0 8px #FFD60A)' }}>🎲</span>
-              <span className="font-display text-[11px] tracking-widest text-white">RANDOM</span>
-              <span className="font-display text-[7px] tracking-widest mt-1" style={{ color: '#FFD60A' }}>AUTO-PICK</span>
+              {/* Ghost question-mark watermark */}
+              <span
+                aria-hidden
+                className="absolute font-display"
+                style={{ fontSize: 72, color: 'rgba(255,214,10,0.08)', lineHeight: 1, top: '50%', left: '50%', transform: 'translate(-50%,-52%)' }}
+              >
+                ?
+              </span>
+              <span className="text-4xl mb-1 relative" style={{ filter: 'drop-shadow(0 0 10px #FFD60A)' }}>🎲</span>
+              <span className="font-display text-[11px] tracking-widest text-white relative" style={{ textShadow: '1px 1px 0 #000' }}>RANDOM</span>
+              <span className="font-display text-[7px] tracking-widest mt-1 relative" style={{ color: '#FFE27A' }}>AUTO-PICK</span>
             </button>
 
             {SCENARIO_ORDER.map((id) => {
@@ -157,8 +168,9 @@ export function StageSelect() {
                       backgroundImage: `url(/stages/${id}.png)`,
                       backgroundSize: 'cover',
                       backgroundPosition: 'center',
-                      opacity: isActive ? 1 : 0.72,
-                      transition: 'opacity 130ms ease',
+                      opacity: isActive ? 1 : 0.5,
+                      filter: isActive ? 'none' : 'saturate(0.8) brightness(0.85)',
+                      transition: 'opacity 130ms ease, filter 130ms ease',
                     }}
                   />
                   {/* Legibility gradient */}

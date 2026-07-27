@@ -320,17 +320,6 @@ export function CharacterSelect() {
                   ▸ {SIDE_LABEL[side]}
                 </div>
               )}
-              {/* Era badge top-right */}
-              <div
-                className="absolute top-3 right-3 z-10 font-display text-[8px] tracking-widest px-2 py-1"
-                style={{
-                  color: '#FCBF49',
-                  background: 'rgba(0,0,0,0.5)',
-                  border: '1px solid #FCBF4988',
-                }}
-              >
-                {ERA_LABEL[getEra(hoveredFighter)].split(' · ')[0]}
-              </div>
             </div>
 
             {/* Nameplate + core identity — animates in on swap */}
@@ -410,23 +399,29 @@ export function CharacterSelect() {
             />
           ))}
           <div className="flex-1" />
-          <input
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="search…"
-            className="px-2 py-1 font-body text-base text-white placeholder:text-white/30 flex-shrink"
+          <div
+            className="flex items-center gap-1 px-2 py-1"
             style={{
-              background: 'rgba(0,0,0,0.45)',
-              border: `1px solid ${query ? sideColor : 'rgba(255,255,255,0.2)'}`,
+              background: 'rgba(0,0,0,0.55)',
+              border: `1px solid ${query ? sideColor : 'rgba(255,255,255,0.18)'}`,
               boxShadow: query
-                ? `inset 2px 2px 0 rgba(0,0,0,0.4), 0 0 10px ${sideColor}44`
-                : 'inset 2px 2px 0 rgba(0,0,0,0.4)',
+                ? `inset 2px 2px 0 rgba(0,0,0,0.55), 0 0 10px ${sideColor}44`
+                : 'inset 2px 2px 0 rgba(0,0,0,0.55)',
+              clipPath: 'polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%, 0 5px)',
               minWidth: 150,
               maxWidth: 220,
-              outline: 'none',
             }}
-          />
+          >
+            <span aria-hidden className="font-display text-[9px]" style={{ color: query ? sideColor : 'rgba(255,255,255,0.35)' }}>⌕</span>
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="search…"
+              className="flex-1 min-w-0 bg-transparent font-body text-base text-white placeholder:text-white/30"
+              style={{ outline: 'none', border: 'none' }}
+            />
+          </div>
           {anyFilterActive && (
             <button
               onClick={clearFilters}
@@ -446,10 +441,10 @@ export function CharacterSelect() {
 
       {/* ROSTER — dense, subordinate to the hero */}
       <div className="relative flex flex-col flex-1 min-w-0 min-h-0">
-        <div className="font-display text-[8px] tracking-widest text-white/40 mb-1 flex-shrink-0">
+        <div className="font-display text-[9px] tracking-widest text-white/55 mb-1.5 flex-shrink-0" style={{ textShadow: '1px 1px 0 #000' }}>
           {filteredRoster.length === totalRoster
-            ? `${totalRoster} OPERATORS`
-            : `${filteredRoster.length} / ${totalRoster} OPERATORS`}
+            ? '▸ CHOOSE YOUR OPERATOR'
+            : `▸ ${filteredRoster.length} MATCH`}
         </div>
         <div
           ref={gridRef}
@@ -457,7 +452,7 @@ export function CharacterSelect() {
           aria-label="Operator roster"
           tabIndex={0}
           onKeyDown={onRosterKey}
-          className="grid gap-2 content-start auto-rows-max overflow-y-auto pr-2 outline-none"
+          className="grid gap-2 content-start auto-rows-max overflow-y-auto pr-2 pt-1 outline-none"
           style={{
             gridTemplateColumns: 'repeat(auto-fill, minmax(84px, 1fr))',
             flex: '1 1 0',
@@ -516,8 +511,8 @@ export function CharacterSelect() {
                   className={`sel-cell relative aspect-square flex flex-col items-center justify-center overflow-hidden ${isCursor ? 'sel-cell-cursor' : ''} ${(selByA || selByB) ? 'sel-confirm-pop' : ''} ${marquee && !isCursor ? 'marquee-pulse' : ''}`}
                   style={{
                     background: marquee
-                      ? 'linear-gradient(180deg, rgba(60,48,20,0.75), rgba(16,10,26,0.9))'
-                      : 'linear-gradient(180deg, rgba(42,30,60,0.72), rgba(14,9,22,0.9))',
+                      ? 'linear-gradient(180deg, rgba(255,240,200,0.1) 0%, rgba(60,48,20,0.78) 14%, rgba(12,8,20,0.94) 100%)'
+                      : 'linear-gradient(180deg, rgba(255,255,255,0.09) 0%, rgba(46,33,66,0.78) 14%, rgba(11,7,18,0.95) 100%)',
                     border: `${(selByA || selByB || isCursor) ? '2px' : '1px'} solid ${borderCol}`,
                     boxShadow: (selByA || selByB)
                       ? `0 0 0 2px ${pickGlow}, 0 0 22px ${pickGlow}, inset 0 -14px 18px -12px ${f.accent}`
@@ -570,15 +565,16 @@ export function CharacterSelect() {
                     <Sprite fighter={f} side={selByB ? 'b' : 'a'} state="stance" />
                   </div>
                   <div
-                    className="absolute left-0 right-0 bottom-0 font-display text-[8px] text-center py-[3px] text-white truncate"
+                    className="absolute left-0 right-0 bottom-0 font-display text-center py-[3px] text-white truncate"
                     style={{
-                      background: 'rgba(0,0,0,0.8)',
-                      letterSpacing: '0.5px',
+                      background: 'rgba(0,0,0,0.82)',
+                      fontSize: f.shortName.length > 8 ? '6.5px' : '8px',
+                      letterSpacing: f.shortName.length > 8 ? '0' : '0.5px',
                       borderTop: `1px solid ${isCursor ? sideColor : 'transparent'}`,
                     }}
                     title={f.shortName}
                   >
-                    {f.shortName}
+                    {f.shortName.toUpperCase()}
                   </div>
                   {isLocked && (
                     <div
@@ -636,6 +632,7 @@ function FilterChip({
   return (
     <button
       onClick={onClick}
+      title={`${count} operators`}
       className="sel-chip font-display text-[8px] tracking-widest px-2 py-1"
       style={{
         background: active
@@ -657,9 +654,6 @@ function FilterChip({
         style={{ width: 6, height: 6, background: color, boxShadow: active ? `0 0 5px ${color}` : 'none', opacity: active ? 1 : 0.45 }}
       />
       {label}
-      <span className="ml-1.5" style={{ opacity: active ? 1 : 0.55 }}>
-        {count}
-      </span>
     </button>
   )
 }

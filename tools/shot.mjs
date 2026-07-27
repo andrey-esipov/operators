@@ -13,9 +13,9 @@
  *   pose:<side>:<pose>      setPose
  *   hp:<side>:<v>           setHp   e.g. hp:b:0.08
  *   super:<side>:<v>        setSuper e.g. super:a:1
- *   hit:<flavor>:<side>     trigger an impact
- *   ko:<side>               KO
- *   shatter:<side>          armour shatter
+ *   hit:<flavor>[:<side>[:<power>]]   trigger an impact (side is 'a'|'b', default 'b')
+ *   ko:<side>               KO         (side is 'a'|'b', default 'b')
+ *   shatter:<side>          armour shatter (side is 'a'|'b', default 'b')
  *   wait:<frames>           advance N frames
  */
 import { chromium } from 'playwright-core'
@@ -72,7 +72,8 @@ try {
 
   const url =
     `http://localhost:${port}/?lab=1&hud=0&quality=${quality}` +
-    `&stage=${encodeURIComponent(stage)}&a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}`
+    `&stage=${encodeURIComponent(stage)}&a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}` +
+    (arg('params', '') ? `&${arg('params', '')}` : '')
   await page.goto(url, { waitUntil: 'load', timeout: timeoutMs })
 
   await page.waitForFunction(() => window.__OPS3D__?.ready?.() === true, null, {
@@ -89,9 +90,9 @@ try {
           case 'pose': api.setPose(rest[0], rest[1]); break
           case 'hp': api.setHp(rest[0], n(rest[1])); break
           case 'super': api.setSuper(rest[0], n(rest[1])); break
-          case 'hit': api.hit(rest[0], rest[1] ?? 'right'); break
-          case 'ko': api.ko(rest[0] ?? 'right'); break
-          case 'shatter': api.shatter(rest[0] ?? 'right'); break
+          case 'hit': api.hit(rest[0], rest[1] ?? 'b', rest[2] ? n(rest[2]) : undefined); break
+          case 'ko': api.ko(rest[0] ?? 'b'); break
+          case 'shatter': api.shatter(rest[0] ?? 'b'); break
           case 'wait': api.settle(n(rest[0]) || 1); break
           case 'quality': api.quality(rest[0]); break
           case 'stage': api.setStage(rest[0]); break

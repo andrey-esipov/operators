@@ -302,7 +302,17 @@ function floorMaterial(): THREE.ShaderMaterial {
           jit.y += uRoughness * 0.004;
           vec3 r0 = texture2D(tDiffuse, ruv + jit).rgb;
           vec3 r1 = texture2D(tDiffuse, ruv + jit*1.5).rgb;
-          refl = mix(r0, r1, uRoughness*0.3) * uReflTint * 1.4;
+          // The reflection buffer is an HDR half-float target, so a sample can
+          // legitimately come back with a small NEGATIVE component (wide-gamut
+          // lobes, bilinear ringing around very bright emissives). pow() with a
+          // negative base is undefined in GLSL and returns NaN on ANGLE/Metal,
+          // and one NaN here poisons a 70x70 floor plane that covers the lower
+          // half of the frame: the composite clamped it to exactly 0, which read
+          // as a hard-edged horizontal band with a dead red channel (the whole
+          // lower frame went cyan on any bright impact). Clamp BEFORE the
+          // nonlinear lift, and cap the top so a runaway highlight can't reach
+          // Inf and come back as NaN through the square below.
+          refl = clamp(mix(r0, r1, uRoughness*0.3) * uReflTint * 1.4, 0.0, 32.0);
           // Lift mid-tones so the reflected FIGHTERS (dark clothing, denim, skin)
           // separate from the base and actually read as a mirror image, and
           // punch bright reflected emissives (screens, neon) harder still.

@@ -99,16 +99,16 @@ export function buildHypergrowth(b: StageBuild, cfg: StageConfig, flags: Quality
   // engine flame — a WHITE-HOT core inside an amber thruster plume. The warm fire
   // against the cool teal deck breaks the monochrome wash and gives the rocket a
   // motivated hero light (was a cold cyan disc that read as a static monument).
-  const flameOuter = new THREE.Mesh(new THREE.CircleGeometry(2.0, 28), glowMat(0xff7a1c, 0.6))
+  const flameOuter = new THREE.Mesh(new THREE.CircleGeometry(1.8, 28), glowMat(0xff7a1c, 0.5))
   flameOuter.position.set(0, 0.16, -13.5); flameOuter.rotation.x = -Math.PI / 2; b.add(flameOuter)
-  const glow = new THREE.Mesh(new THREE.CircleGeometry(1.35, 24), glowMat(0xffd24a, 0.7))
+  const glow = new THREE.Mesh(new THREE.CircleGeometry(1.1, 24), glowMat(0xffc24a, 0.52))
   glow.position.set(0, 0.2, -13.5); glow.rotation.x = -Math.PI / 2; b.add(glow)
-  const core = new THREE.Mesh(new THREE.CircleGeometry(1.0, 24), glowMat(0xffffff, 0.82))
+  const core = new THREE.Mesh(new THREE.CircleGeometry(0.62, 24), glowMat(0xfff0dc, 0.5))
   core.position.set(0, 0.24, -13.5); core.rotation.x = -Math.PI / 2; b.add(core)
   // a tight white-hot exhaust plume + a contained amber flame column above it
-  const plume = lightShaft(0.68, 1.4, 2.6, 0xffffff, 0.4)
-  plume.position.set(0, 1.5, -13.5); b.add(plume)
-  const shaft = lightShaft(1.05, 1.9, 3.4, 0xff8a2c, 0.2)
+  const plume = lightShaft(0.5, 1.1, 2.4, 0xffe9cc, 0.26)
+  plume.position.set(0, 1.4, -13.5); b.add(plume)
+  const shaft = lightShaft(0.95, 1.7, 3.2, 0xff8a2c, 0.17)
   shaft.position.set(0, 1.7, -13.5); b.add(shaft)
   // warm scorched-glow pool spilling forward onto the pad (motivated floor bounce)
   const scorch = new THREE.Mesh(new THREE.CircleGeometry(4.2, 32), glowMat(0xd9531a, 0.13))
@@ -130,9 +130,9 @@ export function buildHypergrowth(b: StageBuild, cfg: StageConfig, flags: Quality
   const EMH = 7.5
   b.onUpdate((t) => {
     const f = 0.74 + 0.26 * Math.abs(Math.sin(t * 5.5) * Math.sin(t * 2.3 + 1))
-    ;(glow.material as THREE.MeshBasicMaterial).opacity = 0.56 * f + 0.14
-    ;(core.material as THREE.MeshBasicMaterial).opacity = 0.66 * f + 0.12
-    ;(flameOuter.material as THREE.MeshBasicMaterial).opacity = 0.46 * f + 0.14
+    ;(glow.material as THREE.MeshBasicMaterial).opacity = 0.4 * f + 0.1
+    ;(core.material as THREE.MeshBasicMaterial).opacity = 0.42 * f + 0.08
+    ;(flameOuter.material as THREE.MeshBasicMaterial).opacity = 0.38 * f + 0.12
     ;(scorch.material as THREE.MeshBasicMaterial).opacity = 0.1 * f + 0.05
     ;(shaft.material as THREE.ShaderMaterial).uniforms.uTime.value = t
     ;(plume.material as THREE.ShaderMaterial).uniforms.uTime.value = t
@@ -183,7 +183,7 @@ export function buildHypergrowth(b: StageBuild, cfg: StageConfig, flags: Quality
   pipe.position.set(3.0, 1.1, 5.9); b.add(pipe)
   const elbow = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 1.0, 12), fgMetal(fgDark, 0.5, 0.72))
   elbow.position.set(2.65, 2.35, 5.85); elbow.rotation.z = Math.PI / 2 * 0.72; b.add(elbow)
-  const puff = radialGlow(1.25, 1.5, 0xcdeeff, 0x2ec6ff, 0.3)
+  const puff = radialGlow(1.1, 1.3, 0xcdeeff, 0x2ec6ff, 0.2)
   puff.mesh.position.set(2.4, 2.75, 5.82); b.add(puff.mesh)
   // foreground diagnostic terminal — a small lit screen tilted up toward camera
   const term = makeScreen(1.0, 0.66, 'data', cfg.screen.hue, cfg.screen.hue2, 1.35, 22)

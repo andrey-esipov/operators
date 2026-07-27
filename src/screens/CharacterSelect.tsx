@@ -201,7 +201,6 @@ export function CharacterSelect() {
   )
 
   const sideColor = SIDE_COLOR[side]
-  const sideGlow = SIDE_GLOW[side]
   const heroAccent = hoveredFighter?.accent ?? '#F72585'
   const heroDiscipline = hoveredFighter ? getDiscipline(hoveredFighter) : 'product'
 
@@ -257,11 +256,11 @@ export function CharacterSelect() {
           </button>
         </div>
         <h1
-          className="font-display text-lg tracking-widest relative"
+          className="font-display text-[11px] tracking-widest relative"
           style={{
-            color: '#C79216',
-            textShadow: `2px 2px 0 rgba(0,0,0,0.7), 0 0 12px ${sideGlow}44`,
-            opacity: 0.92,
+            color: 'rgba(199,146,22,0.7)',
+            textShadow: '1px 1px 0 rgba(0,0,0,0.7)',
+            opacity: 0.85,
           }}
         >
           {storyMode
@@ -290,7 +289,7 @@ export function CharacterSelect() {
         {hoveredFighter && (
           <div
             className="sel-hero flex-shrink-0 flex flex-col"
-            style={{ flex: '0 0 clamp(400px, 34%, 560px)' }}
+            style={{ flex: '0 0 clamp(440px, 38%, 600px)' }}
           >
             <div className="relative flex-1 min-h-0">
               <div className="sel-hero-slab" />
@@ -342,8 +341,12 @@ export function CharacterSelect() {
               <PickSlot side="a" id={selectedA} active={side === 'a'} />
               <div className="flex flex-col items-center justify-center px-1">
                 <span
-                  className="font-display text-lg"
-                  style={{ color: '#FFD60A', textShadow: '2px 2px 0 black' }}
+                  className="font-display text-3xl italic"
+                  style={{
+                    color: '#FFD60A',
+                    textShadow: '3px 3px 0 black, 0 0 18px rgba(255,214,10,0.5)',
+                    transform: 'skewX(-8deg)',
+                  }}
                 >
                   VS
                 </span>
@@ -789,9 +792,13 @@ function HeroNameplate({
           onClick={onToggleMoves}
           className="sel-chip flex-1 font-display text-[9px] tracking-widest px-3 py-1.5"
           style={{
-            background: expanded ? `${sideColor}33` : `${fighter.accent}22`,
+            background: expanded
+              ? `linear-gradient(180deg, ${sideColor}55, ${sideColor}20)`
+              : `linear-gradient(180deg, ${fighter.accent}3a, ${fighter.accent}12)`,
             color: '#fff',
             border: `1px solid ${expanded ? sideColor : fighter.accent}`,
+            boxShadow: `inset 0 1px 0 rgba(255,255,255,0.25), inset -1px -2px 0 rgba(0,0,0,0.5)`,
+            clipPath: 'polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%, 0 5px)',
             cursor: 'pointer',
           }}
         >
@@ -805,9 +812,11 @@ function HeroNameplate({
           }}
           className="sel-chip flex-1 font-display text-[9px] tracking-widest px-3 py-1.5"
           style={{
-            background: 'rgba(255,214,10,0.16)',
+            background: 'linear-gradient(180deg, rgba(255,214,10,0.28), rgba(255,214,10,0.08))',
             color: '#FFD60A',
             border: '1px solid #FFD60A',
+            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset -1px -2px 0 rgba(0,0,0,0.5)',
+            clipPath: 'polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%, 0 5px)',
             cursor: 'pointer',
           }}
         >

@@ -331,10 +331,10 @@ function StagePreview({
           </p>
         ) : (
           <>
-            <p className="font-body text-base text-white/85 leading-snug line-clamp-3">{scenario.longDescription}</p>
+            <p className="font-body text-lg text-white/90 leading-snug line-clamp-3" style={{ textShadow: '1px 1px 0 #000' }}>{scenario.longDescription}</p>
             <div
-              className="mt-2 px-3 py-1.5 italic font-body text-base text-white/90"
-              style={{ background: `${scenario.accent}1A`, borderLeft: `3px solid ${scenario.accent}` }}
+              className="mt-2 px-3 py-1.5 italic font-body text-lg text-white"
+              style={{ background: `${scenario.accent}22`, borderLeft: `3px solid ${scenario.accent}`, textShadow: '1px 1px 0 #000' }}
             >
               &ldquo;{scenario.flavorQuote}&rdquo;
             </div>

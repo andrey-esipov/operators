@@ -61,15 +61,19 @@ export function FightHarness() {
       const scenario: ScenarioId = STAGE_ORDER.includes(stageParam) ? stageParam : 'ipo-prep'
       renderer = new FightRenderer(canvas, { scenario })
       await renderer.init()
-      if (disposed) return
+      // Bail out *through* dispose, never around it. An early `return` here
+      // leaks a renderer that has already started its own rAF loop on this
+      // canvas, and a second loop silently overdraws the live one.
+      if (disposed) return renderer.dispose()
 
       setStatus('loading sprites')
       const accentA = getFighter(aId)?.accent ?? '#E63946'
       const accentB = getFighter(bId)?.accent ?? '#4361EE'
       const [atlasA, atlasB] = await Promise.all([buildMockAtlas(aId), buildMockAtlas(bId)])
+      if (disposed) return renderer.dispose()
       await renderer.setFighterAssets(0, atlasA.assets, atlasA.atlas, accentA)
       await renderer.setFighterAssets(1, atlasB.assets, atlasB.atlas, accentB)
-      if (disposed) return
+      if (disposed) return renderer.dispose()
 
       renderer.setInitialState(sim.step().state)
       renderer.setStep(() => sim.step())

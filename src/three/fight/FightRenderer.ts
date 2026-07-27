@@ -65,6 +65,17 @@ export class FightRenderer {
   private latest: FightState | null = null
   private prev: FightState | null = null
 
+  /**
+   * Set by dispose(). `init()` is async and interleaves with it: React's
+   * StrictMode mounts, unmounts and remounts, so a cleanup can land while the
+   * first init is still awaiting. Without this flag that init would run to
+   * completion and call engine.start(), resurrecting a renderer nobody holds a
+   * reference to — an invisible second rAF loop drawing over the live one on
+   * the same canvas. That is exactly the failure that made the fighters
+   * disappear: the orphan owned the canvas and its fighters had no atlas.
+   */
+  private disposed = false
+
   constructor(canvas: HTMLCanvasElement, opts: FightRendererOptions = {}) {
     this.engine = new Engine({ canvas, seed: opts.seed ?? 0xf16117 })
     this.scenario = opts.scenario ?? 'ipo-prep'
@@ -74,6 +85,7 @@ export class FightRenderer {
   async init() {
     const engine = this.engine
     await engine.add(this.lightRig)
+    if (this.disposed) return
 
     const budget = budgetFor(engine.quality)
     const pools = createPools(this.ctx(), budget)
@@ -93,6 +105,7 @@ export class FightRenderer {
 
     this.world = new FightWorld(this)
     await engine.add(new StageSubsystem(() => this.lightRig), this.world, this.post)
+    if (this.disposed) return
 
     engine.setRenderDriver(this.post)
     engine.scene.add(this.fighters[0].group, this.fighters[1].group)
@@ -140,6 +153,8 @@ export class FightRenderer {
   }
 
   dispose() {
+    this.disposed = true
+    this.engine.stop()
     this.fighters[0].dispose()
     this.fighters[1].dispose()
     this.engine.dispose()

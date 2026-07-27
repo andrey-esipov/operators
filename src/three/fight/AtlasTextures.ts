@@ -151,10 +151,10 @@ export function buildAtlasTextures(src: AtlasSource, anisotropy = 8): AtlasTextu
     t.anisotropy = anisotropy
     t.wrapS = THREE.ClampToEdgeWrapping
     t.wrapT = THREE.ClampToEdgeWrapping
-    // Mipmaps on an atlas bleed neighbouring frames at high mip levels; the
-    // frames sit on their own generous gutters, and we sample near-native
-    // resolution, so a linear (non-mip) magnify keeps the cel edge crisp
-    // without cross-frame smear.
+    // The sprite vertex shader maps the head to v = 0, which is only correct
+    // for an unflipped upload. Three defaults CanvasTexture to flipY = true,
+    // so leaving this alone samples every frame upside down.
+    t.flipY = false
     t.generateMipmaps = true
     t.minFilter = THREE.LinearMipmapLinearFilter
     t.magFilter = THREE.LinearFilter

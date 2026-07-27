@@ -271,11 +271,12 @@ export function foreground(b: StageBuild, style: OverheadStyle, cfg: StageConfig
       break
     }
     case 'atrium': {
-      // a grand marble balustrade — balusters + handrail framing the lower edge
-      for (const x of [-3.3, -2.5, -1.7, 1.7, 2.5, 3.3]) cyl(0.12, 2.4, x, 0.9, ZC, dark)
-      box(8.4, 0.3, 0.5, 0, 2.2, ZC, darker)
-      box(8.4, 0.2, 0.6, 0, -0.2, ZC, darker)
-      accent(8.2, 0.05, 0, 2.38, ZC, cfg.trim, 0.5)
+      // a grand marble balustrade framing the LOWER edge (balusters + handrail
+      // kept low so the rail never bisects the fighters at waist height)
+      for (const x of [-3.3, -2.5, -1.7, 1.7, 2.5, 3.3]) cyl(0.12, 1.7, x, 0.5, ZC, dark)
+      box(8.4, 0.26, 0.5, 0, 1.35, ZC, darker)
+      box(8.4, 0.18, 0.5, 0, -0.25, ZC, darker)
+      accent(8.2, 0.05, 0, 1.48, ZC, cfg.trim, 0.5)
       break
     }
     case 'yard': {

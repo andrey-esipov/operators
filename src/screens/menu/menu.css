@@ -323,16 +323,16 @@
 
 /* PRIMARY (Story) — bigger, hotter, wins the hierarchy. */
 .mm-item.mm-primary {
-  opacity: 0.74;
+  opacity: 0.82;
   padding: clamp(14px, 2.3vh, 22px) clamp(18px, 1.8vw, 26px) clamp(14px, 2.3vh, 22px) clamp(26px, 2.4vw, 36px);
   clip-path: polygon(0 0, 100% 0, calc(100% - 22px) 100%, 0 100%);
   background:
-    linear-gradient(180deg, rgba(26,12,22,0.92), rgba(12,6,16,0.95)),
-    linear-gradient(90deg, color-mix(in srgb, var(--accent) 15%, transparent), transparent 52%);
+    linear-gradient(180deg, rgba(20,12,18,0.92), rgba(10,7,13,0.95)),
+    linear-gradient(90deg, color-mix(in srgb, var(--accent) 7%, transparent), transparent 46%);
   box-shadow:
-    inset 5px 0 0 color-mix(in srgb, var(--accent) 76%, #2a2036),
+    inset 5px 0 0 color-mix(in srgb, var(--accent) 52%, #241d30),
     inset -1px -1px 0 rgba(0,0,0,0.6),
-    inset 1px 1px 0 rgba(255,255,255,0.10);
+    inset 1px 1px 0 rgba(255,255,255,0.08);
 }
 .mm-item.mm-primary .mm-item-label { font-size: clamp(22px, 3.6vh, 34px); }
 .mm-item.mm-primary .mm-item-sub  { font-size: clamp(11px, 1.6vh, 16px); margin-top: 4px; }
@@ -350,15 +350,15 @@
 /* STORY is active by default, so give the mouse hover its own extra pop so
    pointer feedback is never a no-op. */
 .mm-item.mm-primary:hover {
-  transform: translateX(16px) scale(1.02);
+  transform: translateX(16px) scale(1.03);
   background:
-    linear-gradient(180deg, rgba(46,18,34,0.96), rgba(22,10,22,0.96)),
-    linear-gradient(90deg, color-mix(in srgb, var(--accent) 32%, transparent), transparent 60%);
+    linear-gradient(180deg, rgba(58,22,42,0.97), rgba(28,12,26,0.97)),
+    linear-gradient(90deg, color-mix(in srgb, var(--accent) 48%, transparent), transparent 68%);
   box-shadow:
-    inset 12px 0 0 var(--accent),
-    0 0 62px color-mix(in srgb, var(--accent) 82%, transparent),
+    inset 14px 0 0 var(--accent),
+    0 0 74px color-mix(in srgb, var(--accent) 90%, transparent),
     inset -1px -1px 0 rgba(0,0,0,0.6),
-    inset 1px 1px 0 rgba(255,255,255,0.24);
+    inset 1px 1px 0 rgba(255,255,255,0.28);
 }
 .mm-item.mm-primary:hover .mm-item-label {
   color: #fff;

@@ -150,11 +150,11 @@ export function createFighterUniforms(): FighterUniforms {
     uExertion: { value: 0 },
 
     uIdentityDefense: { value: 0.62 },
-    uCharExposure: { value: 1.32 },
-    uContrast: { value: 1.17 },
+    uCharExposure: { value: 1.34 },
+    uContrast: { value: 1.23 },
     uSaturation: { value: 1.2 },
-    uKickColor: { value: new THREE.Color(0xddeeff) },
-    uKickIntensity: { value: 1.05 },
+    uKickColor: { value: new THREE.Color(0xdcecff) },
+    uKickIntensity: { value: 1.25 },
   }
 }
 
@@ -377,7 +377,7 @@ export const FIGHTER_FRAGMENT = /* glsl */ `
     wide += texture2D(uHeight, uvP + vec2(0.0,  6.0 * t)).r;
     wide += texture2D(uHeight, uvP + vec2(0.0, -6.0 * t)).r;
     wide *= 0.125;
-    float cavity = clamp((hC - wide) * 3.9 + 0.54, 0.0, 1.0);
+    float cavity = clamp((hC - wide) * 4.4 + 0.52, 0.0, 1.0);
     float ao = mix(1.0, cavity, uAO * 0.94);
     // Grounding: the lower body sits in floor contact occlusion.
     float footAO = mix(0.55, 1.0, smoothstep(0.0, 0.16, vHeightNorm));
@@ -437,10 +437,13 @@ export const FIGHTER_FRAGMENT = /* glsl */ `
     // Skin: broad soft sheen. Cotton: almost none. Denim: dead matte.
     // Metal/hair: tight bright glint. Kept far apart so materials never read as
     // one uniform "wet plastic" surface.
-    float specSkin  = pow(ndh, 22.0) * 0.20 * skin;
-    float specCloth = pow(ndh, 44.0) * 0.025 * cloth * (1.0 - denim);
-    float specMetal = pow(ndh, 95.0) * 1.25 * (metal + dark * 0.4);
-    vec3 specular = keyCol * (specSkin + specCloth + specMetal) * uKeyIntensity * 0.3 * selfShadow;
+    float specSkin  = pow(ndh, 20.0) * 0.26 * skin;
+    // A second, tighter skin/brow highlight so faces catch a real glint (the
+    // AAA "wet eye / cheekbone" pop) instead of one broad soft sheen.
+    float specSkinHot = pow(ndh, 60.0) * 0.5 * skin;
+    float specCloth = pow(ndh, 44.0) * 0.03 * cloth * (1.0 - denim);
+    float specMetal = pow(ndh, 95.0) * 1.45 * (metal + dark * 0.45);
+    vec3 specular = keyCol * (specSkin + specSkinHot + specCloth + specMetal) * uKeyIntensity * 0.3 * selfShadow;
     // Sweat sheen at low HP / exertion: extra broad wet highlight, skin only.
     specular += keyCol * pow(ndh, 40.0) * skin * uSweat * 0.6 * uKeyIntensity * 0.3;
     specular *= base.a;
@@ -502,7 +505,7 @@ export const FIGHTER_FRAGMENT = /* glsl */ `
     color = max(color, 0.0);
     float gLum = luma(color);
     color = mix(vec3(gLum), color, uSaturation);        // vivid identity
-    color = (color - 0.42) * uContrast + 0.42;          // pivot contrast
+    color = (color - 0.40) * uContrast + 0.40;          // pivot contrast
     color = max(color, 0.0);
 
     // ---- Damage state: grime, fatigue, flush, bruising & sweat ------------
@@ -529,10 +532,10 @@ export const FIGHTER_FRAGMENT = /* glsl */ `
       color *= mix(vec3(1.0), vec3(0.55, 0.48, 0.44), scuff * 0.5);
 
       // (3) Overall fatigue: heavier warm-biased darken + desaturation. A wrecked
-      //     fighter loses colour vibrancy.
-      color *= mix(vec3(1.0), vec3(0.84, 0.72, 0.68), dmg * 0.55);
+      //     fighter loses colour vibrancy, but keep enough so identity survives.
+      color *= mix(vec3(1.0), vec3(0.86, 0.75, 0.71), dmg * 0.5);
       float dlum = dot(color, vec3(0.299, 0.587, 0.114));
-      color = mix(color, vec3(dlum), dmg * 0.20);
+      color = mix(color, vec3(dlum), dmg * 0.13);
 
       // (4) Skin flush: exertion floods the face/arms with warm blood; throbs
       //     with the breathing pulse. Additive so it reads as heat, not paint.

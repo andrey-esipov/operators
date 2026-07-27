@@ -637,18 +637,18 @@ export class VfxSubsystem implements Subsystem {
     // Beat 1 (0ms): blinding contact — brief flash + massive light + a HERO gold
     // star sheared along the launch. The star (not a white sun) carries the read.
     this.lights.pop(p, white, 26, 0.5, 0.04, 22)
-    this.flashMat.uniforms.uColor.value.copy(white)
-    this.flashMat.uniforms.uColor2.value.copy(gold)
+    this.flashMat.uniforms.uColor.value.copy(C(0xffe6a3))
+    this.flashMat.uniforms.uColor2.value.copy(orange)
     this.flashMat.uniforms.uSpikes.value = 2.2
     this.flashMat.uniforms.uStreak.value = 3.0
     this.flash.position.copy(p)
-    this.flash.scale.setScalar(2.8)
+    this.flash.scale.setScalar(2.5)
     this.flash.visible = true
     this.flashMax = 0.18
     this.flashLife = 0.18
     this.additive.emit({
-      position: p, count: 1, speed: 0, color: white, color2: gold,
-      size: 2.4, life: 0.32, gravity: 0, drag: 0.001, shape: 'flare', intensity: 2.4,
+      position: p, count: 1, speed: 0, color: gold, color2: orange,
+      size: 2.4, life: 0.32, gravity: 0, drag: 0.001, shape: 'flare', intensity: 2.2,
     })
     // hero directional gold star — the defining KO silhouette (sized to leave the
     // launching fighter readable rather than swallowing the whole zoomed frame)

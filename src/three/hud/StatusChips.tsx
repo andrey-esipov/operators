@@ -9,7 +9,7 @@ interface Props {
   maxVisible?: number
 }
 
-export function StatusChips({ statuses, mirror = false, info = defaultMeta, maxVisible = 3 }: Props) {
+export function StatusChips({ statuses, mirror = false, info = defaultMeta, maxVisible = 2 }: Props) {
   const visible = statuses.slice(0, maxVisible)
   const overflow = statuses.length - visible.length
   return (

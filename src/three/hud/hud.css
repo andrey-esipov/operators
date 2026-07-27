@@ -224,9 +224,9 @@
   mix-blend-mode: overlay; opacity: 0.55;
 }
 .fh-sm .sm-notch {
-  position: absolute; top: 1px; bottom: 1px; width: 2px;
-  background: rgba(2,4,9,0.7); box-shadow: 1px 0 0 rgba(255,255,255,0.07);
-  transform: skewX(-16deg);
+  position: absolute; top: -1px; bottom: -1px; width: 5px; margin-left: -2.5px;
+  background: linear-gradient(90deg, rgba(255,255,255,0.14), rgba(2,4,9,0.94) 40% 60%, rgba(255,255,255,0.14));
+  transform: skewX(-16deg); z-index: 2;
 }
 .fh-sm.ready {
   border-color: #ffd24a;
@@ -328,10 +328,10 @@
 .fh-pips { display: flex; align-items: center; gap: 34px; margin-top: 11px; }
 .fh-pipset { display: flex; gap: 10px; }
 .fh-pip {
-  width: 27px; height: 24px;
+  width: 30px; height: 27px;
   clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
-  background: rgba(6,9,16,0.82);
-  box-shadow: inset 0 0 0 3px rgba(255,255,255,0.7), 0 0 0 1px rgba(0,0,0,0.85), 0 2px 7px rgba(0,0,0,0.7);
+  background: rgba(6,9,16,0.55);
+  box-shadow: inset 0 0 0 2.5px rgba(255,255,255,0.82), 0 0 0 1px rgba(0,0,0,0.9), 0 2px 8px rgba(0,0,0,0.75);
   transition: all 0.35s cubic-bezier(0.22,1,0.36,1);
 }
 .fh-pip.a.won { background: var(--acc-a); box-shadow: inset 0 0 0 3px rgba(255,255,255,0.98), 0 0 22px var(--acc-a), 0 0 0 1px rgba(0,0,0,0.8); }
@@ -369,7 +369,7 @@
 
 /* ============================ DAMAGE NUMBERS =========================== */
 .fh-dmg { position: absolute; pointer-events: none; font-family: var(--hud-display); font-weight: 900; font-style: italic; transform: translate(-50%, -50%); will-change: transform, opacity; }
-.fh-dmg .v { display: block; -webkit-text-stroke: 2.5px var(--ink); paint-order: stroke fill; filter: drop-shadow(0 4px 3px rgba(0,0,0,0.6)); }
+.fh-dmg .v { display: block; -webkit-text-stroke: 2.5px var(--ink); paint-order: stroke fill; filter: drop-shadow(0 4px 3px rgba(0,0,0,0.7)) drop-shadow(0 0 12px rgba(0,0,0,0.85)); }
 
 /* ============================ ANNOUNCER ================================ */
 .fh-announce { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; }
@@ -411,9 +411,14 @@
 .fh-card .kind { font-family: var(--hud-tech); font-weight: 900; font-size: 11px; letter-spacing: 0.22em; color: var(--ck); text-shadow: 0 0 10px var(--ck); }
 .fh-card .title { font-family: var(--hud-display); font-weight: 800; font-style: italic; font-size: 19px; line-height: 0.96; text-transform: uppercase; margin-top: 8px; color: #fff; text-shadow: 0 2px 0 rgba(0,0,0,0.6); }
 .fh-card .spacer { flex: 1; }
-.fh-card .stat-row { display: flex; justify-content: space-between; align-items: flex-end; }
+.fh-card .stat-row {
+  display: flex; justify-content: space-between; align-items: flex-end;
+  margin: 8px -14px -15px; padding: 9px 14px 12px;
+  background: linear-gradient(180deg, rgba(3,5,10,0.35), rgba(2,3,7,0.92));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
+}
 .fh-card .dmg-big { font-family: var(--hud-tech); font-weight: 800; font-size: 38px; line-height: 0.88; font-variant-numeric: tabular-nums; color: #fff; text-shadow: 0 2px 0 rgba(0,0,0,0.55); }
-.fh-card .dmg-lbl { font-family: var(--hud-tech); font-weight: 700; font-size: 8.5px; letter-spacing: 0.2em; opacity: 0.62; }
+.fh-card .dmg-lbl { font-family: var(--hud-tech); font-weight: 700; font-size: 8.5px; letter-spacing: 0.2em; opacity: 0.82; color: #cfd6e6; }
 .fh-card .cost { display: flex; gap: 3px; justify-content: flex-end; }
 .fh-card .pip { width: 8px; height: 8px; transform: rotate(45deg); background: rgba(255,255,255,0.18); }
 .fh-card .pip.on { background: var(--ck); box-shadow: 0 0 6px var(--ck); }

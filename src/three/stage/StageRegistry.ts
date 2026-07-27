@@ -171,7 +171,7 @@ export const STAGES: Record<ScenarioId, StageConfig> = {
     lighting: P(
       [0xcdfaff, 3.5, [-0.4, 0.82, 0.4]],
       [0x0f4f7a, 1.0, [0.72, 0.26, 0.5]],
-      [0x06d6a0, 3.2, [0.22, 0.4, -0.89]],
+      [0x2ee6b4, 2.5, [0.22, 0.4, -0.89]],
       [0x0a2836, 0.6],
       [0x04141f, 0.018],
       0x02101a,

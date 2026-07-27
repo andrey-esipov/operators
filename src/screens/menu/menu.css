@@ -119,13 +119,17 @@
   pointer-events: none;
   z-index: 0;
   background:
-    /* crisp horizon line where back wall meets the lit floor */
-    linear-gradient(180deg, transparent 66.4%, rgba(255,180,90,0.20) 67%, rgba(255,150,60,0.05) 68.4%, transparent 70%),
-    /* the lit floor plane itself — brighter toward the centre, receding to dark */
-    radial-gradient(90% 40% at 52% 100%, rgba(120,60,110,0.34) 0%, rgba(70,30,70,0.14) 40%, transparent 72%),
-    radial-gradient(52% 26% at 52% 96%, rgba(255,140,50,0.16) 0%, transparent 64%),
-    /* foreground floor tone so the ground reads solid, not a void */
-    linear-gradient(0deg, rgba(46,20,54,0.55) 0%, rgba(30,14,40,0.28) 16%, transparent 33%);
+    /* faint receding floor sheen lines below the horizon (tiled-stage read) */
+    repeating-linear-gradient(180deg, transparent 67%, transparent calc(67% + 7px), rgba(180,150,220,0.05) calc(67% + 7px), rgba(180,150,220,0.05) calc(67% + 8px)),
+    /* crisp horizon line where the back wall meets the lit floor */
+    linear-gradient(180deg, transparent 66.4%, rgba(255,185,95,0.24) 67%, rgba(255,150,60,0.05) 68.6%, transparent 70.4%),
+    /* the lit floor plane — brighter toward centre, receding to dark */
+    radial-gradient(88% 40% at 52% 100%, rgba(126,64,116,0.36) 0%, rgba(70,30,70,0.15) 40%, transparent 72%),
+    radial-gradient(50% 26% at 52% 96%, rgba(255,140,50,0.17) 0%, transparent 64%),
+    /* solid foreground floor tone */
+    linear-gradient(0deg, rgba(46,20,54,0.58) 0%, rgba(30,14,40,0.3) 16%, transparent 33%),
+    /* darker back wall above the horizon so wall/floor read as two planes */
+    linear-gradient(180deg, rgba(6,3,12,0.5) 0%, rgba(8,4,14,0.2) 40%, transparent 60%);
 }
 
 /* ── Title lockup ───────────────────────────────────────────────────── */
@@ -343,6 +347,16 @@
     inset -1px -1px 0 rgba(0,0,0,0.6),
     inset 1px 1px 0 rgba(255,255,255,0.16);
 }
+/* STORY is active by default, so give the mouse hover its own extra pop so
+   pointer feedback is never a no-op. */
+.mm-item.mm-primary:hover {
+  transform: translateX(16px) scale(1.012);
+  box-shadow:
+    inset 10px 0 0 var(--accent),
+    0 0 54px color-mix(in srgb, var(--accent) 74%, transparent),
+    inset -1px -1px 0 rgba(0,0,0,0.6),
+    inset 1px 1px 0 rgba(255,255,255,0.2);
+}
 /* "primary" ribbon tag */
 .mm-tag {
   position: absolute;
@@ -525,16 +539,17 @@
   height: clamp(250px, 49vh, 450px);
 }
 /* Contact shadow so the fighter is planted on a floor, not floating. Two
-   layers: a tight dark core right at the feet + a soft wide penumbra. */
+   layers: a tight dark core + a soft wide penumbra. The core is cast
+   directionally (down-right) to imply a key light from the upper-left. */
 .mm-fighter-art::after {
   content: "";
   position: absolute;
-  left: 50%;
-  bottom: 6.5%;
-  width: 66%;
-  height: 8%;
-  transform: translateX(-50%);
-  background: radial-gradient(ellipse at center, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.6) 40%, transparent 72%);
+  left: 55%;
+  bottom: 6%;
+  width: 64%;
+  height: 7.5%;
+  transform: translateX(-50%) skewX(-20deg);
+  background: radial-gradient(ellipse at center, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.58) 42%, transparent 74%);
   z-index: -1;
   pointer-events: none;
   filter: blur(1px);
@@ -544,13 +559,13 @@
   content: "";
   position: absolute;
   left: 50%;
-  bottom: 4%;
-  width: 92%;
+  bottom: 3.5%;
+  width: 94%;
   height: 11%;
   transform: translateX(-50%);
   background:
     radial-gradient(ellipse at center, rgba(0,0,0,0.5) 0%, transparent 70%),
-    radial-gradient(ellipse at center, color-mix(in srgb, var(--faccent, #FFD60A) 22%, transparent) 0%, transparent 62%);
+    radial-gradient(ellipse at center, color-mix(in srgb, var(--faccent, #FFD60A) 24%, transparent) 0%, transparent 60%);
   z-index: -1;
   pointer-events: none;
   filter: blur(2px);
@@ -643,7 +658,8 @@
 .mm-anim .mm-press { animation: mmBlink 1.1s steps(1) infinite; }
 @keyframes mmBlink { 0%,55% { opacity: 1; } 56%,100% { opacity: 0.18; } }
 
-/* Operator-of-the-day pill, top-right of the whole stage */
+/* Operator-of-the-day — styled as an in-world broadcast tag (live dot + thin
+   underline), not a boxed dashboard pill. */
 .mm-otd {
   position: absolute;
   top: clamp(12px, 2vh, 20px);
@@ -652,11 +668,17 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: clamp(6px, 0.95vh, 10px) clamp(11px, 1vw, 16px);
-  background: linear-gradient(180deg, rgba(12,7,20,0.97), rgba(5,3,10,0.98));
-  clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
-  box-shadow: inset 4px 0 0 var(--accent, #FFD60A), inset 0 0 0 1px rgba(255,255,255,0.08), 0 0 18px color-mix(in srgb, var(--accent, #FFD60A) 50%, transparent);
+  padding: clamp(5px, 0.8vh, 8px) clamp(6px, 0.6vw, 10px);
+  background: linear-gradient(180deg, rgba(10,6,16,0.55), rgba(6,3,12,0.35));
+  border-bottom: 2px solid color-mix(in srgb, var(--accent, #FFD60A) 80%, transparent);
 }
+.mm-otd::before {
+  content: "";
+  width: 7px; height: 7px; border-radius: 50%;
+  background: #FF3B5C;
+  box-shadow: 0 0 8px #FF3B5C, 0 0 2px #fff;
+}
+.mm-anim .mm-otd::before { animation: mmBlink 1.4s steps(1) infinite; }
 .mm-otd-k { font-family: var(--font-display); font-size: clamp(8.5px, 1.1vh, 10px); letter-spacing: 0.18em; color: #FFE9AE; text-shadow: 1px 1px 0 #000; }
 .mm-otd-v { font-family: var(--font-display); font-size: clamp(11px, 1.45vh, 14px); letter-spacing: 0.1em; color: #FFF6DA; text-shadow: 1px 1px 0 #000, 0 0 8px rgba(255,214,10,0.4); }
 

@@ -291,16 +291,20 @@ export function CharacterSelect() {
             className="sel-hero flex-shrink-0 flex flex-col"
             style={{ flex: '0 0 clamp(440px, 38%, 600px)' }}
           >
-            <div className="relative flex-1 min-h-0">
-              <div className="sel-hero-slab" />
-              <div className="sel-hero-halo" />
-              <div className="sel-hero-watermark">
-                {DISCIPLINE_LABEL[heroDiscipline]}
+            <div className="relative flex-1 min-h-0 sel-hero-stage">
+              {/* Background layers are clipped to the panel; the sprite is not,
+                  so the fighter can bleed past the top frame edge (SF6/Strive). */}
+              <div className="sel-hero-bg">
+                <div className="sel-hero-slab" />
+                <div className="sel-hero-halo" />
+                <div className="sel-hero-watermark">
+                  {DISCIPLINE_LABEL[heroDiscipline]}
+                </div>
+                <div className="sel-hero-floor" />
               </div>
-              <div className="sel-hero-floor" />
               {/* Keyed by id so the render snaps/re-animates on every swap */}
               <div className="sel-hero-figure" key={hoveredFighter.id}>
-                <div style={{ width: '86%', height: '96%' }}>
+                <div style={{ width: '92%', height: '104%' }}>
                   <Sprite fighter={hoveredFighter} side={side} state="stance" />
                 </div>
               </div>
@@ -533,8 +537,8 @@ export function CharacterSelect() {
                   className={`sel-cell relative aspect-square flex flex-col items-center justify-center overflow-hidden ${isCursor ? 'sel-cell-cursor' : ''} ${(selByA || selByB) ? 'sel-confirm-pop' : ''} ${marquee && !isCursor ? 'marquee-pulse' : ''}`}
                   style={{
                     background: marquee
-                      ? 'linear-gradient(180deg, rgba(255,240,200,0.1) 0%, rgba(60,48,20,0.78) 14%, rgba(12,8,20,0.94) 100%)'
-                      : `linear-gradient(180deg, rgba(255,255,255,0.09) 0%, ${discColor}66 13%, rgba(40,29,58,0.6) 46%, rgba(11,7,18,0.95) 100%)`,
+                      ? 'linear-gradient(180deg, rgba(255,240,200,0.12) 0%, rgba(90,72,28,0.82) 12%, rgba(52,40,14,0.7) 52%, rgba(12,8,20,0.94) 100%)'
+                      : `linear-gradient(180deg, rgba(255,255,255,0.10) 0%, ${discColor}aa 10%, ${discColor}55 48%, ${discColor}26 78%, rgba(9,6,16,0.92) 100%)`,
                     border: `${(selByA || selByB || isCursor) ? '2px' : '1px'} solid ${borderCol}`,
                     boxShadow: (selByA || selByB)
                       ? `0 0 0 2px ${pickGlow}, 0 0 22px ${pickGlow}, inset 0 -14px 18px -12px ${f.accent}`
@@ -551,7 +555,7 @@ export function CharacterSelect() {
                       ? 'brightness(1.14) saturate(1.06)'
                       : (selByA || selByB || marquee)
                       ? 'none'
-                      : 'brightness(0.66) saturate(0.95)',
+                      : 'brightness(0.74) saturate(0.98)',
                     minHeight: 84,
                   }}
                 >

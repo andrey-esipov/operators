@@ -408,6 +408,21 @@ function buildPrePmf(b: StageBuild, cfg: StageConfig, flags: QualityFlags) {
     b.add(up)
   }
 
+  // cardboard moving boxes on the floor — the unmistakable "we just moved into
+  // the garage" cue; stacked asymmetrically and low so they read as clutter and
+  // add a real mid-ground layer without blocking the fighters.
+  const cardboard = (w: number, h: number, d: number, x: number, y: number, z: number, ry: number) => {
+    const box = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), structureMat({ color: 0xc8a06a, roughness: 0.95, metalness: 0.02, emissive: 0x3a2a16, emissiveIntensity: 0.35 }))
+    box.position.set(x, y, z); box.rotation.y = ry; box.castShadow = true; box.receiveShadow = true; b.add(box)
+    // packing-tape seam across the lid
+    const tape = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.02, d * 0.98), structureMat({ color: 0x7a5a34, roughness: 0.6, metalness: 0.1 }))
+    tape.position.set(x, y + h / 2 + 0.005, z); tape.rotation.y = ry; b.add(tape)
+    return box
+  }
+  cardboard(1.6, 1.5, 1.6, -6.0, 0.77, -6.0, 0.26)
+  cardboard(1.25, 1.15, 1.25, -5.8, 2.08, -6.15, -0.12)
+  cardboard(1.5, 1.4, 1.4, 5.7, 0.72, -5.6, -0.32)
+
   // a workbench with a glowing monitor (cool practical to offset the warm dawn)
   const desk = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.2, 1.6), structureMat({ color: 0x3a2f28, roughness: 0.8, metalness: 0.3 }))
   desk.position.set(-7.6, 2.0, -10.5)
@@ -547,6 +562,18 @@ function buildPlateau(b: StageBuild, cfg: StageConfig, flags: QualityFlags) {
     hb.position.set(sx * 6.6, 4.8 + sy * 2.3, -14.68); b.add(hb)
     const vb = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.2, 0.06), glowMat(cfg.trim, 0.8))
     vb.position.set(sx * 7.2, 4.8 + sy * 1.9, -14.68); b.add(vb)
+  }
+  // continuous glowing bezel frame around the whole board so the growth curve
+  // unmistakably lives ON a wall-mounted big-board display, not floating in air
+  const bezelMat = () => glowMat(cfg.trim, 0.7)
+  const bzTop = new THREE.Mesh(new THREE.BoxGeometry(15.0, 0.14, 0.1), bezelMat()); bzTop.position.set(0, 7.35, -14.66); b.add(bzTop)
+  const bzBot = new THREE.Mesh(new THREE.BoxGeometry(15.0, 0.14, 0.1), bezelMat()); bzBot.position.set(0, 2.25, -14.66); b.add(bzBot)
+  const bzL = new THREE.Mesh(new THREE.BoxGeometry(0.14, 5.24, 0.1), bezelMat()); bzL.position.set(-7.43, 4.8, -14.66); b.add(bzL)
+  const bzR = new THREE.Mesh(new THREE.BoxGeometry(0.14, 5.24, 0.1), bezelMat()); bzR.position.set(7.43, 4.8, -14.66); b.add(bzR)
+  // faint vertical gridlines so it reads as a chart display, not a plain panel
+  for (let v = 1; v < 8; v++) {
+    const vl = new THREE.Mesh(new THREE.BoxGeometry(0.02, 4.9, 0.02), glowMat(0x4a2f6a, 0.22))
+    vl.position.set(-7.0 + v * 1.75, 4.8, -14.75); b.add(vl)
   }
   for (let g = 0; g < 5; g++) {
     const gl = new THREE.Mesh(new THREE.BoxGeometry(14.2, 0.03, 0.03), glowMat(0x5a3a7a, 0.32))

@@ -366,7 +366,7 @@ function floorMaterial(): THREE.ShaderMaterial {
         vec3 col = diff + grid + trim + sheen + flash + uTrimColor*ring*2.0;
         // Contact shadow: darken the surface (and grid) under each fighter, with
         // a strong tight AO core at the feet so they read as grounded, not lit.
-        col *= 1.0 - core*0.86 - skirt*skirt*0.28;
+        col *= 1.0 - core*0.9 - skirt*skirt*0.32;
         col = mix(col, refl, reflAmt);
         col += sheen*0.35 + trim*0.4;
 

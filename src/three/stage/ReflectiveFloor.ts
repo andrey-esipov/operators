@@ -334,10 +334,10 @@ function floorMaterial(): THREE.ShaderMaterial {
         float core = 0.0;
         {
           vec2 da = P - (uContactA + castDir * 0.12);
-          vec2 ca = vec2(dot(da, castDir) / 0.62, dot(da, castPerp) / 0.4);
+          vec2 ca = vec2(dot(da, castDir) / 0.74, dot(da, castPerp) / 0.5);
           core = max(core, 1.0 - smoothstep(0.0, 1.0, length(ca)));
           vec2 db = P - (uContactB + castDir * 0.12);
-          vec2 cb = vec2(dot(db, castDir) / 0.62, dot(db, castPerp) / 0.4);
+          vec2 cb = vec2(dot(db, castDir) / 0.74, dot(db, castPerp) / 0.5);
           core = max(core, 1.0 - smoothstep(0.0, 1.0, length(cb)));
         }
         core = smoothstep(0.0, 0.85, core);
@@ -370,7 +370,7 @@ function floorMaterial(): THREE.ShaderMaterial {
         vec3 col = diff + grid + trim + sheen + flash + uTrimColor*ring*2.0;
         // Contact shadow: darken the surface (and grid) under each fighter, with
         // a strong dense AO core at the feet so they read as firmly grounded.
-        col *= 1.0 - core*0.94 - skirt*skirt*0.42;
+        col *= 1.0 - core*0.97 - skirt*skirt*0.5;
         col = mix(col, refl, reflAmt);
         col += sheen*0.35 + trim*0.4;
 

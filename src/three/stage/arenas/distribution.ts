@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import type { QualityFlags } from '../../core/QualityManager'
 import type { StageConfig } from '../StageRegistry'
 import { StageBuild, structureMat, glowMat, trussBeam, mulberry } from '../StageKit'
-import { overhead, screenWall, foreground, shippingContainer } from './StageSet'
+import { overhead, screenWall, foreground, shippingContainer, containerField, type ContainerSpec } from './StageSet'
 
 export function buildDistribution(b: StageBuild, cfg: StageConfig, flags: QualityFlags) {
   // THE CHANNEL — logistics megahub: stacked shipping containers, gantry crane,
@@ -11,7 +11,9 @@ export function buildDistribution(b: StageBuild, cfg: StageConfig, flags: Qualit
   const containerColors = [0xc0562c, 0x2c6ac0, 0x2ca05a, 0xc0a02c, 0x8a3ca0]
   const stencils = [0xffd27a, 0xdfeaff, 0xbfffd0, 0xfff0a8, 0xe6c8ff]
   const rnd = mulberry(31)
-  // container stacks (back)
+  // container stacks (back) — collected into instance specs so the whole field
+  // renders as two draw calls instead of ~20 Groups of 31 meshes each.
+  const specs: ContainerSpec[] = []
   for (let i = 0; i < 10; i++) {
     const side = i % 2 === 0 ? -1 : 1
     const stack = Math.floor(rnd() * 3) + 1
@@ -19,12 +21,11 @@ export function buildDistribution(b: StageBuild, cfg: StageConfig, flags: Qualit
     const bz = -11 - rnd() * 6
     for (let j = 0; j < stack; j++) {
       const ci = Math.floor(rnd() * containerColors.length)
-      const c = shippingContainer(containerColors[ci], stencils[ci])
-      c.position.set(bx, 0.7 + j * 1.45, bz)
-      c.rotation.y = (rnd() - 0.5) * 0.14
-      b.add(c)
+      const ry = (rnd() - 0.5) * 0.14
+      specs.push({ x: bx, y: 0.7 + j * 1.45, z: bz, ry, color: containerColors[ci], stencil: stencils[ci] })
     }
   }
+  containerField(b, specs)
   // gantry crane overhead
   const crane = trussBeam(26, 1.1, s)
   crane.position.set(0, 8.5, -9)
@@ -67,5 +68,5 @@ export function buildDistribution(b: StageBuild, cfg: StageConfig, flags: Qualit
     b.add(glow)
   }
   overhead(b, cfg, flags, 'yard')
-  foreground(b, 'yard')
+  foreground(b, 'yard', cfg)
 }

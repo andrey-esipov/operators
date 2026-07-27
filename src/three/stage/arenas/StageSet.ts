@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import type { QualityFlags } from '../../core/QualityManager'
 import type { StageConfig } from '../StageRegistry'
 import {
@@ -8,7 +9,6 @@ import {
   makeScreen,
   trussBeam,
   lightShaft,
-  fgBar,
   mulberry,
   type ScreenMode,
 } from '../StageKit'
@@ -184,55 +184,128 @@ export function screenWall(
   }
 }
 
-/** Foreground occluders — dark shapes close to camera, blurred into bokeh by
- *  DOF. Distinct per stage (kept to the frame edges/top so they frame rather
- *  than block the fighters) so the foreground stops being the same rail+cable. */
-export function foreground(b: StageBuild, style: OverheadStyle) {
-  const D = 0x05060a
-  const bar = (w: number, h: number, d: number, x: number, y: number, z: number, rz = 0) => {
-    const m = fgBar(w, h, d, D); m.position.set(x, y, z); m.rotation.z = rz; b.add(m); return m
+/** Foreground occluders — the third depth plane a fighting-game frame needs.
+ *
+ *  The camera sits at z=+11.4 with a 32° FOV, so the visible frame at a given
+ *  depth is narrow: at z=4.8 only ~±3.4 of x reads. Earlier framing lived at
+ *  x=±6..7 / z=7.2 — entirely OUTSIDE the frustum, which is why the foreground
+ *  was dead. These sit at the true in-frame edges (x≈±3.2, z≈4.8) and in the
+ *  bottom corners (z≈6.3, heavy DOF bokeh), themed per stage, dark but rim-lit
+ *  with a thin emissive accent so they frame without covering the fighters. */
+export function foreground(b: StageBuild, style: OverheadStyle, cfg: StageConfig) {
+  const dark = new THREE.Color(cfg.structure).multiplyScalar(0.72).getHex()
+  const darker = new THREE.Color(cfg.structure).multiplyScalar(0.52).getHex()
+  const Z = 4.8   // edge-pylon depth (in-frame, moderate bokeh)
+  const ZC = 6.4  // corner-mass depth (closer, heavy bokeh)
+
+  const box = (w: number, h: number, d: number, x: number, y: number, z: number, col: number, rz = 0, ry = 0) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), structureMat({ color: col, roughness: 0.82, metalness: 0.28 }))
+    m.position.set(x, y, z); m.rotation.z = rz; m.rotation.y = ry
+    b.add(m); return m
   }
-  const arc = (pts: [number, number, number][], r: number) => {
-    const geo = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts.map((p) => new THREE.Vector3(p[0], p[1], p[2]))), 24, r, 6, false)
-    b.add(new THREE.Mesh(geo, structureMat({ color: D, roughness: 1, metalness: 0 })))
+  // thin self-lit accent strip (the rim-light read that says "authored framing")
+  const accent = (w: number, h: number, x: number, y: number, z: number, color: number, op = 0.7) => {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), glowMat(color, op))
+    m.position.set(x, y, z + 0.06); b.add(m); return m
   }
+  const cyl = (r: number, h: number, x: number, y: number, z: number, col: number, rz = 0) => {
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, h, 12), structureMat({ color: col, roughness: 0.7, metalness: 0.5 }))
+    m.position.set(x, y, z); m.rotation.z = rz; b.add(m); return m
+  }
+
   switch (style) {
-    case 'garage': // a hanging cord loop + a workshop stool silhouette
-      bar(0.42, 6, 0.42, -7.6, 2.2, 7.2)
-      arc([[-8.4, 6.4, 7], [-6.8, 4.2, 7.4], [-8.6, 2.6, 7]], 0.06)
-      bar(1.3, 0.24, 1.3, 7.5, 1.0, 7.4); bar(0.12, 2.0, 0.12, 7.0, 0.0, 7.4); bar(0.12, 2.0, 0.12, 8.0, 0.0, 7.4)
+    case 'gantry': {
+      // launch-deck safety railing + a heavy tower leg framing left, a slim
+      // umbilical strut right; warning-striped handrail across the lower lip.
+      box(0.62, 4.6, 0.62, -3.25, 1.9, Z, darker)
+      accent(0.1, 4.2, -2.98, 1.9, Z, cfg.trim, 0.6)
+      for (let i = 0; i < 3; i++) box(0.7, 0.16, 0.6, -3.25, 0.4 + i * 1.5, Z, dark)
+      box(0.34, 3.8, 0.34, 3.3, 1.5, Z, darker)
+      accent(0.08, 3.4, 3.08, 1.5, Z, cfg.trim, 0.55)
+      // lower handrail + posts hugging the bottom edge
+      box(9.5, 0.16, 0.3, 0, 0.35, ZC, dark)
+      for (const x of [-2.6, 0, 2.6]) box(0.16, 1.1, 0.24, x, -0.1, ZC, darker)
+      accent(9.2, 0.05, 0, 0.42, ZC, 0x66e6ff, 0.5)
       break
-    case 'gantry': // launch railing across the top with posts
-      bar(15, 0.36, 0.36, 0, 6.6, 7.2)
-      for (const x of [-6, -2, 2, 6]) bar(0.18, 2.6, 0.18, x, 5.3, 7.1)
-      bar(15, 0.13, 0.13, 0, 4.0, 7.1)
+    }
+    case 'garage': {
+      // a hanging chain + shelving upright left, a stacked-crate corner mass right
+      box(0.5, 5.0, 0.5, -3.2, 2.0, Z, darker)
+      for (let i = 0; i < 5; i++) box(0.6, 0.14, 0.5, -3.2, 0.4 + i * 1.0, Z, dark)
+      cyl(0.05, 3.0, 3.2, 3.0, Z, 0x0a0a0a)
+      box(1.9, 1.7, 1.5, 2.7, 0.5, ZC, dark, 0.04, 0.2)
+      box(1.5, 1.3, 1.3, -2.5, 0.35, ZC, darker, -0.03, -0.15)
+      accent(1.4, 0.05, 2.7, 1.36, ZC, 0xffb968, 0.4)
       break
-    case 'plateau': // a low abandoned desk edge + a drooping banner cord
-      bar(9, 0.3, 0.5, -3, 1.3, 7.3, 0.05)
-      arc([[-2, 3.4, 7.2], [1.5, 2.9, 7.4], [4.5, 3.2, 7.2]], 0.05)
+    }
+    case 'server': {
+      // rack uprights both edges with cable bundles + a low blade-server mass
+      box(0.55, 5.2, 0.6, -3.25, 2.1, Z, darker)
+      box(0.55, 5.2, 0.6, 3.25, 2.1, Z, darker)
+      accent(0.09, 4.6, -2.98, 2.1, Z, cfg.trim, 0.5)
+      accent(0.09, 4.6, 2.98, 2.1, Z, cfg.trim, 0.5)
+      for (let i = 0; i < 4; i++) { accent(0.5, 0.05, -3.25, 0.6 + i * 1.1, Z, 0x59d8ff, 0.4); accent(0.5, 0.05, 3.25, 0.6 + i * 1.1, Z, 0x59d8ff, 0.4) }
+      box(2.4, 1.4, 1.4, 2.5, 0.4, ZC, dark, 0, 0.12)
       break
-    case 'server': // rack uprights + cable drops at the frame edges
-      for (const x of [-7.4, 7.4]) bar(0.5, 9, 0.5, x, 2.5, 7.2)
-      arc([[-7.2, 6.2, 7], [-4, 4.6, 7.3], [-1.2, 5.0, 7]], 0.05)
-      arc([[7.2, 6.2, 7], [4, 4.4, 7.3], [1.2, 4.9, 7]], 0.05)
+    }
+    case 'gold': {
+      // fluted stanchions at both edges + short velvet ropes draping into the
+      // bottom CORNERS (never across the centre, so nothing crosses the
+      // fighters) + gilded corner plinths on both sides.
+      cyl(0.22, 4.4, -3.25, 2.0, Z, 0x2a2010)
+      cyl(0.22, 4.4, 3.25, 2.0, Z, 0x2a2010)
+      accent(0.12, 3.8, -3.02, 2.0, Z, cfg.trim, 0.7)
+      accent(0.12, 3.8, 3.02, 2.0, Z, cfg.trim, 0.7)
+      const ropeMat = structureMat({ color: 0x4a1414, roughness: 0.9, metalness: 0.1 })
+      const ropeL = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([new THREE.Vector3(-3.25, 2.5, Z), new THREE.Vector3(-2.5, 1.0, ZC - 0.4), new THREE.Vector3(-1.6, 1.7, ZC)]), 20, 0.075, 8, false), ropeMat)
+      b.add(ropeL)
+      const ropeR = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([new THREE.Vector3(3.25, 2.5, Z), new THREE.Vector3(2.5, 1.0, ZC - 0.4), new THREE.Vector3(1.6, 1.7, ZC)]), 20, 0.075, 8, false), ropeMat)
+      b.add(ropeR)
+      box(1.6, 1.2, 1.4, 2.7, 0.35, ZC, darker)
+      box(1.6, 1.2, 1.4, -2.7, 0.35, ZC, darker)
+      accent(1.5, 0.06, 2.7, 1.02, ZC, cfg.trim, 0.6)
+      accent(1.5, 0.06, -2.7, 1.02, ZC, cfg.trim, 0.6)
       break
-    case 'gold': // stanchion posts + a velvet-rope swag
-      bar(0.3, 7, 0.3, -7.0, 3.0, 7.2); bar(0.3, 7, 0.3, 7.0, 3.0, 7.2)
-      arc([[-7, 4.6, 7.2], [0, 5.4, 7.6], [7, 4.6, 7.2]], 0.07)
+    }
+    case 'alarm': {
+      // angular command-console wings low at both edges + a conduit riser
+      box(3.0, 1.5, 0.9, -2.9, 0.7, ZC, dark, 0.08, 0.22)
+      box(3.0, 1.5, 0.9, 2.9, 0.7, ZC, dark, -0.08, -0.22)
+      accent(2.6, 0.06, -2.9, 1.45, ZC, 0xef233c, 0.7)
+      accent(2.6, 0.06, 2.9, 1.45, ZC, 0xef233c, 0.7)
+      cyl(0.13, 5.0, -3.3, 2.2, Z, darker)
+      accent(0.09, 4.2, -3.06, 2.2, Z, 0xef233c, 0.6)
       break
-    case 'alarm': // angular console blocks low at the edges
-      bar(5.4, 1.3, 0.6, -6.0, 1.3, 7.2); bar(5.4, 1.3, 0.6, 6.0, 1.3, 7.2)
-      bar(0.4, 1.2, 0.4, -7.2, 2.6, 7.4); bar(0.4, 1.2, 0.4, 7.2, 2.6, 7.4)
+    }
+    case 'atrium': {
+      // a grand marble balustrade framing the LOWER edge (balusters + handrail
+      // kept low so the rail never bisects the fighters at waist height)
+      for (const x of [-3.3, -2.5, -1.7, 1.7, 2.5, 3.3]) cyl(0.12, 1.7, x, 0.5, ZC, dark)
+      box(8.4, 0.26, 0.5, 0, 1.35, ZC, darker)
+      box(8.4, 0.18, 0.5, 0, -0.25, ZC, darker)
+      accent(8.2, 0.05, 0, 1.48, ZC, cfg.trim, 0.5)
       break
-    case 'atrium': // a grand balustrade — balusters framing the edges + handrail
-      for (const x of [-7, -5.2, -4.2, 4.2, 5.2, 7]) bar(0.16, 3.0, 0.16, x, 1.4, 7.3)
-      bar(15, 0.26, 0.5, 0, 3.05, 7.3)
+    }
+    case 'yard': {
+      // chain-link fence posts + a dock bollard corner mass
+      for (const x of [-3.3, -2.7, -2.1]) cyl(0.08, 5.0, x, 2.2, Z, darker)
+      const mesh = structureMat({ color: darker, roughness: 0.8, metalness: 0.4 })
+      for (let i = 0; i < 4; i++) { const w = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.03, 0.03), mesh); w.position.set(-2.7, 0.6 + i * 1.1, Z); b.add(w) }
+      cyl(0.4, 1.4, 3.0, 0.5, ZC, dark)
+      box(1.0, 0.2, 1.0, 3.0, 1.2, ZC, darker)
       break
-    case 'yard': // chain-link fence edge + a dock bollard
-      for (const x of [-7.6, -6.8, -6.0]) bar(0.1, 7, 0.1, x, 2.5, 7.2)
-      arc([[-8, 6, 7], [8, 6, 7]], 0.04)
-      bar(0.6, 1.4, 0.6, 6.9, 0.7, 7.4)
+    }
+    case 'plateau': {
+      // a stalled monolith edge left + a drooping banner cable kept high on the
+      // RIGHT so it frames the top corner without crossing the fighter's head
+      box(0.9, 5.4, 0.8, -3.3, 2.2, Z, darker)
+      accent(0.1, 4.6, -2.9, 2.2, Z, cfg.trim, 0.5)
+      const cable = structureMat({ color: darker, roughness: 0.9, metalness: 0.1 })
+      const droop = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([new THREE.Vector3(0.8, 4.4, Z), new THREE.Vector3(2.4, 3.5, Z + 0.2), new THREE.Vector3(3.5, 4.2, Z)]), 20, 0.06, 6, false), cable)
+      b.add(droop)
+      box(1.7, 1.0, 1.3, 2.7, 0.3, ZC, dark, 0.03)
       break
+    }
   }
 }
 
@@ -301,4 +374,107 @@ export function shippingContainer(color: number, stencil: number): THREE.Group {
   badge.position.set(-w / 2 + 0.7, 0.15, d / 2 + 0.03)
   g.add(badge)
   return g
+}
+
+// ---------------------------------------------------------------------------
+// Instanced container field.
+//
+// A single shippingContainer() is a Group of ~31 meshes (body + 26 corrugation
+// ribs + 2 rails + seam + badge). A yard of ~20 of them minted ~650 meshes and,
+// doubled by the planar-reflection pass, ~1600 draw calls — the whole reason
+// `distribution` blew its budget. containerField() collapses the entire static
+// field into TWO instanced draws: one InstancedMesh for the merged container
+// shell (body+ribs+rails+seam baked into one geometry, with the per-part
+// dark/light shading carried as a grayscale vertex-colour multiplier so a single
+// PBR material still reads corrugated), and one for the additive stencil badges.
+// Per-instance colour supplies each container's paint via `instanceColor`, which
+// the shader multiplies against the vertex-colour part mask — so ribs still read
+// 0.6× and rails 1.25× of the body paint, exactly as the per-mesh version did.
+// ---------------------------------------------------------------------------
+
+export interface ContainerSpec {
+  x: number; y: number; z: number; ry: number; color: number; stencil: number
+}
+
+const _CONT_W = 3.2, _CONT_H = 1.4, _CONT_D = 1.6
+const _CONT_UP = new THREE.Vector3(0, 1, 0)
+// paintedMetal bakery mean-luma compensation (matches structureMat's internal
+// brightness comp) so instanced paint lands at the same value as the per-mesh
+// containers did before instancing.
+const _CONT_COMP = Math.min(2.6, Math.max(1, 0.66 / 0.26))
+
+function buildContainerGeo(): THREE.BufferGeometry {
+  const w = _CONT_W, h = _CONT_H, d = _CONT_D
+  const parts: THREE.BufferGeometry[] = []
+  const push = (geo: THREE.BufferGeometry, mul: number) => {
+    const n = geo.attributes.position.count
+    const col = new Float32Array(n * 3)
+    col.fill(mul)
+    geo.setAttribute('color', new THREE.BufferAttribute(col, 3))
+    parts.push(geo)
+  }
+  push(new THREE.BoxGeometry(w, h, d), 1.0)
+  for (let i = 0; i < 13; i++) {
+    const rx = -w / 2 + 0.18 + i * ((w - 0.36) / 12)
+    for (const fz of [d / 2 + 0.015, -d / 2 - 0.015]) {
+      const rib = new THREE.BoxGeometry(0.07, h - 0.16, 0.03)
+      rib.translate(rx, 0, fz)
+      push(rib, 0.6)
+    }
+  }
+  for (const ry of [h / 2 - 0.06, -h / 2 + 0.06]) {
+    const rail = new THREE.BoxGeometry(w + 0.03, 0.12, d + 0.03)
+    rail.translate(0, ry, 0)
+    push(rail, 1.25)
+  }
+  const seam = new THREE.BoxGeometry(0.05, h - 0.12, 0.02)
+  seam.translate(0, 0, d / 2 + 0.02)
+  push(seam, 0.6)
+  const merged = mergeGeometries(parts, false)
+  if (!merged) throw new Error('containerField: geometry merge failed')
+  return merged
+}
+
+/** Render a static field of shipping containers as two instanced draw calls. */
+export function containerField(b: StageBuild, specs: ContainerSpec[]): void {
+  if (specs.length === 0) return
+  const geo = buildContainerGeo()
+  const mat = structureMat({ color: 0xffffff, roughness: 0.82, metalness: 0.28 }).clone()
+  mat.vertexColors = true
+  const bodies = new THREE.InstancedMesh(geo, mat, specs.length)
+  bodies.castShadow = true
+  bodies.receiveShadow = true
+
+  const badgeGeo = new THREE.PlaneGeometry(0.7, 0.32)
+  const badgeMat = glowMat(0xffffff, 0.5)
+  const badges = new THREE.InstancedMesh(badgeGeo, badgeMat, specs.length)
+
+  const m4 = new THREE.Matrix4()
+  const q = new THREE.Quaternion()
+  const pos = new THREE.Vector3()
+  const scl = new THREE.Vector3(1, 1, 1)
+  const off = new THREE.Vector3()
+  const paint = new THREE.Color()
+  const ink = new THREE.Color()
+
+  specs.forEach((s, i) => {
+    q.setFromAxisAngle(_CONT_UP, s.ry)
+    pos.set(s.x, s.y, s.z)
+    m4.compose(pos, q, scl)
+    bodies.setMatrixAt(i, m4)
+    paint.setHex(s.color).multiplyScalar(_CONT_COMP)
+    paint.r = Math.min(1, paint.r); paint.g = Math.min(1, paint.g); paint.b = Math.min(1, paint.b)
+    bodies.setColorAt(i, paint)
+    off.set(-_CONT_W / 2 + 0.7, 0.15, _CONT_D / 2 + 0.03).applyQuaternion(q).add(pos)
+    m4.compose(off, q, scl)
+    badges.setMatrixAt(i, m4)
+    badges.setColorAt(i, ink.setHex(s.stencil))
+  })
+  bodies.instanceMatrix.needsUpdate = true
+  if (bodies.instanceColor) bodies.instanceColor.needsUpdate = true
+  badges.instanceMatrix.needsUpdate = true
+  if (badges.instanceColor) badges.instanceColor.needsUpdate = true
+
+  b.add(bodies)
+  b.add(badges)
 }

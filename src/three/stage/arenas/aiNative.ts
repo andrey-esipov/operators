@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import type { QualityFlags } from '../../core/QualityManager'
 import type { StageConfig } from '../StageRegistry'
-import { StageBuild, structureMat, glowMat, makeScreen, lightShaft } from '../StageKit'
+import { StageBuild, structureMat, glowMat, makeScreen, lightShaft, mulberry, type ScreenMode } from '../StageKit'
 import { overhead, foreground } from './StageSet'
 
 export function buildAiNative(b: StageBuild, cfg: StageConfig, flags: QualityFlags) {
@@ -118,5 +118,90 @@ export function buildAiNative(b: StageBuild, cfg: StageConfig, flags: QualityFla
     ;(projShaft.material as THREE.ShaderMaterial).uniforms.uTime.value = t
   })
   overhead(b, cfg, flags, 'server')
-  foreground(b, 'server')
+  foreground(b, 'server', cfg)
+
+  // -------------------------------------------------------------------------
+  // Depth-fill pass: the hall was reading as a dark corridor because the band
+  // directly behind the play plane (and the floor) was pure black. Fill it with
+  // a lit server bank, flowing floor data and suspended particulate so the set
+  // reads as a live datacenter with three depth planes, not a void.
+  // -------------------------------------------------------------------------
+  const rndA = mulberry(77)
+
+  // Mid-ground server bank: camera-facing scrolling LED cabinets flanking the
+  // play plane. A center gap keeps the holo/backdrop sightline open.
+  const bankModes: ScreenMode[] = ['data', 'grid', 'equalizer']
+  for (const sign of [-1, 1]) {
+    for (let i = 0; i < 3; i++) {
+      const cx = sign * (2.35 + i * 1.78)
+      const cz = -5.2 - i * 0.4
+      const ch = 2.25 - i * 0.22
+      const cab = new THREE.Mesh(new THREE.BoxGeometry(1.5, ch, 1.2), structureMat({ color: 0x151c26, roughness: 0.5, metalness: 0.62 }))
+      cab.position.set(cx, ch / 2, cz); cab.castShadow = true; b.add(cab)
+      const scr = makeScreen(1.3, ch - 0.5, bankModes[i % 3], cfg.screen.hue, cfg.screen.hue2, 0.85, i * 7 + sign * 5)
+      scr.mesh.position.set(cx, ch / 2 + 0.08, cz + 0.62)
+      b.add(scr.mesh)
+      b.onUpdate((t) => (scr.mat.uniforms.uTime.value = t))
+      const strip = new THREE.Mesh(new THREE.BoxGeometry(1.42, 0.08, 0.08), glowMat(0x59ffe0, 0.7))
+      strip.position.set(cx, ch + 0.02, cz + 0.52); b.add(strip)
+    }
+  }
+
+  // Floor data conduits: emissive lanes carrying sliding data packets from the
+  // foreground into the hall, so the black floor reads as an active grid.
+  const laneXs = [-6, -3.6, -1.35, 1.35, 3.6, 6]
+  for (const lx of laneXs) {
+    const lane = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.02, 17), glowMat(0x1d6773, 0.5))
+    lane.position.set(lx, 0.02, -4); b.add(lane)
+  }
+  const packets: THREE.Mesh[] = []
+  for (let p = 0; p < 12; p++) {
+    const lx = laneXs[p % laneXs.length]
+    const pk = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.03, 0.85), glowMat(0x9dfbff, 0.9))
+    pk.position.set(lx, 0.03, -4)
+    packets.push(pk); b.add(pk)
+  }
+  b.onUpdate((t) => {
+    for (let p = 0; p < packets.length; p++) {
+      const sp = 3.4 + (p % 3) * 1.5
+      packets[p].position.z = ((t * sp + p * 3.1) % 18) - 12
+    }
+  })
+
+  // Overhead cyan conduits: thin flowing light bars filling the black ceiling band.
+  for (let i = 0; i < 3; i++) {
+    const bar = new THREE.Mesh(new THREE.BoxGeometry(15, 0.09, 0.09), glowMat(0x2f9fb0, 0.5))
+    bar.position.set(0, 6.6 + i * 0.85, -6 - i * 1.2); b.add(bar)
+  }
+
+  // Drifting data motes: cyan particulate suspended in the hall's light.
+  const moteN = 90
+  const mBase = new Float32Array(moteN * 3)
+  const mSeed = new Float32Array(moteN)
+  const mPos = new Float32Array(moteN * 3)
+  for (let i = 0; i < moteN; i++) {
+    mBase[i * 3] = (rndA() - 0.5) * 16
+    mBase[i * 3 + 1] = rndA() * 6 + 0.5
+    mBase[i * 3 + 2] = -2 - rndA() * 9
+    mSeed[i] = rndA() * 10
+    mPos[i * 3] = mBase[i * 3]; mPos[i * 3 + 1] = mBase[i * 3 + 1]; mPos[i * 3 + 2] = mBase[i * 3 + 2]
+  }
+  const mGeo = new THREE.BufferGeometry()
+  mGeo.setAttribute('position', new THREE.BufferAttribute(mPos, 3))
+  const mMat = new THREE.PointsMaterial({
+    color: 0x8ff0ff, size: 0.07, transparent: true, opacity: 0.7,
+    blending: THREE.AdditiveBlending, depthWrite: false, sizeAttenuation: true,
+    fog: false, toneMapped: false,
+  })
+  const motes = new THREE.Points(mGeo, mMat)
+  b.add(motes)
+  b.track(mGeo); b.track(mMat)
+  b.onUpdate((t) => {
+    const a = mGeo.attributes.position as THREE.BufferAttribute
+    for (let i = 0; i < moteN; i++) {
+      const y = ((mBase[i * 3 + 1] + t * 0.25 + mSeed[i]) % 6.2) + 0.4
+      a.setXYZ(i, mBase[i * 3] + Math.sin(t * 0.3 + mSeed[i]) * 0.35, y, mBase[i * 3 + 2])
+    }
+    a.needsUpdate = true
+  })
 }

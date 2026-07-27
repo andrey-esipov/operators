@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import type { QualityFlags } from '../../core/QualityManager'
 import type { StageConfig } from '../StageRegistry'
-import { StageBuild, structureMat, glowMat, makeScreen, radialGlow, lightShaft } from '../StageKit'
+import { StageBuild, structureMat, glowMat, makeScreen, radialGlow, lightShaft, mulberry } from '../StageKit'
 import { SHAFT_ON, overhead, foreground } from './StageSet'
 
 export function buildPrePmf(b: StageBuild, cfg: StageConfig, flags: QualityFlags) {
@@ -92,7 +92,7 @@ export function buildPrePmf(b: StageBuild, cfg: StageConfig, flags: QualityFlags
   const wbFrame = new THREE.Mesh(new THREE.BoxGeometry(6.4, 4.2, 0.18), structureMat({ color: 0xd8d2c4, roughness: 0.45, metalness: 0.1 }))
   wbFrame.position.set(-8.4, 5.0, -13.6); wbFrame.rotation.y = 0.32
   b.add(wbFrame)
-  const wbSurf = new THREE.Mesh(new THREE.PlaneGeometry(5.9, 3.7), structureMat({ color: 0xeceadf, roughness: 0.5, metalness: 0.0 }))
+  const wbSurf = new THREE.Mesh(new THREE.PlaneGeometry(5.9, 3.7), structureMat({ color: 0xeceadf, roughness: 0.5, metalness: 0.0, emissive: 0xb8b09a, emissiveIntensity: 0.5 }))
   wbSurf.position.set(-8.32, 5.0, -13.5); wbSurf.rotation.y = 0.32
   b.add(wbSurf)
   // marker scribble: rising line (drawn as small dark segments on the board)
@@ -188,5 +188,99 @@ export function buildPrePmf(b: StageBuild, cfg: StageConfig, flags: QualityFlags
     })
   }
   overhead(b, cfg, flags, 'garage')
-  foreground(b, 'garage')
+  foreground(b, 'garage', cfg)
+
+  // -------------------------------------------------------------------------
+  // Atmosphere + depth pass: the room read as an empty warm shaft because every
+  // prop is BACK-lit by the dawn door and falls into silhouette. Add particulate
+  // suspended in the god-rays, a sag of Edison string-lights across the dead
+  // upper-mid, sticky-note colour pops, and a second cool practical on the right
+  // so both flanks read and the warm void gains texture and life.
+  // -------------------------------------------------------------------------
+  const rndP = mulberry(414)
+
+  // Warm dust motes drifting up through the sunrise god-rays.
+  const moteN = 110
+  const mBase = new Float32Array(moteN * 3)
+  const mPos = new Float32Array(moteN * 3)
+  for (let i = 0; i < moteN; i++) {
+    mBase[i * 3] = (rndP() - 0.5) * 13
+    mBase[i * 3 + 1] = rndP() * 8 + 0.4
+    mBase[i * 3 + 2] = -14 + rndP() * 11
+    mPos[i * 3] = mBase[i * 3]; mPos[i * 3 + 1] = mBase[i * 3 + 1]; mPos[i * 3 + 2] = mBase[i * 3 + 2]
+  }
+  const mGeo = new THREE.BufferGeometry()
+  mGeo.setAttribute('position', new THREE.BufferAttribute(mPos, 3))
+  const mMat = new THREE.PointsMaterial({
+    color: 0xffd9a4, size: 0.055, transparent: true, opacity: 0.6,
+    blending: THREE.AdditiveBlending, depthWrite: false, sizeAttenuation: true,
+    fog: false, toneMapped: false,
+  })
+  const motes = new THREE.Points(mGeo, mMat)
+  b.add(motes)
+  b.track(mGeo); b.track(mMat)
+  b.onUpdate((t) => {
+    const a = mGeo.attributes.position as THREE.BufferAttribute
+    for (let i = 0; i < moteN; i++) {
+      const y = mBase[i * 3 + 1] + ((t * 0.22 + i * 0.11) % 8)
+      a.setY(i, 0.4 + ((y - 0.4) % 8))
+      a.setX(i, mBase[i * 3] + Math.sin(t * 0.35 + i) * 0.28)
+    }
+    a.needsUpdate = true
+  })
+
+  // Edison string-lights: a sag of warm bulbs across the upper-mid dead zone.
+  const strandN = 13
+  const strandMat = glowMat(0xffcf8a, 0.95)
+  const bulbGeo = new THREE.SphereGeometry(0.12, 8, 8)
+  const strandBulbs = new THREE.InstancedMesh(bulbGeo, strandMat, strandN)
+  const mtx = new THREE.Matrix4()
+  const bulbXY: [number, number][] = []
+  for (let i = 0; i < strandN; i++) {
+    const xn = (i / (strandN - 1)) * 2 - 1
+    const x = xn * 9.2
+    const y = 7.2 - 1.9 * (1 - xn * xn)
+    bulbXY.push([x, y])
+    mtx.makeTranslation(x, y, -7.4)
+    strandBulbs.setMatrixAt(i, mtx)
+  }
+  strandBulbs.instanceMatrix.needsUpdate = true
+  b.add(strandBulbs)
+  b.track(bulbGeo)
+  // faint drooping cord connecting the bulbs
+  for (let i = 0; i < strandN - 1; i++) {
+    const [x0, y0] = bulbXY[i]; const [x1, y1] = bulbXY[i + 1]
+    const dx = x1 - x0, dy = y1 - y0
+    const len = Math.hypot(dx, dy)
+    const cord = new THREE.Mesh(new THREE.BoxGeometry(len, 0.02, 0.02), structureMat({ color: 0x120d0a, roughness: 1 }))
+    cord.position.set((x0 + x1) / 2, (y0 + y1) / 2, -7.42)
+    cord.rotation.z = Math.atan2(dy, dx)
+    b.add(cord)
+  }
+  b.onUpdate((t) => {
+    ;(strandMat as THREE.MeshBasicMaterial).opacity = 0.8 + 0.18 * Math.sin(t * 2.3)
+  })
+
+  // Sticky-note colour pops on the wall beside the whiteboard.
+  const noteCols = [0xffd23a, 0xff5aa0, 0x46d0ff, 0xff8a3a, 0x9be25a, 0xffd23a]
+  const notePos: [number, number][] = [[-6.9, 7.6], [-6.1, 6.9], [-7.2, 6.6], [-5.7, 7.9], [-6.5, 7.2], [-5.4, 6.6]]
+  for (let i = 0; i < notePos.length; i++) {
+    const [nx, ny] = notePos[i]
+    const note = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.5), new THREE.MeshBasicMaterial({ color: noteCols[i], fog: false, toneMapped: false, transparent: true, opacity: 0.92 }))
+    note.position.set(nx, ny, -15.25); note.rotation.z = (i - 3) * 0.06
+    b.add(note)
+  }
+
+  // Second cool practical: a laptop on a low crate, right of centre, facing
+  // camera so the right flank reads and the palette gets a cool counterpoint.
+  const crate = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.3, 1.3), structureMat({ color: 0xb8905e, roughness: 0.95, metalness: 0.02, emissive: 0x3a2a16, emissiveIntensity: 0.35 }))
+  crate.position.set(6.4, 0.66, -7.4); crate.rotation.y = -0.35; crate.castShadow = true
+  b.add(crate)
+  const lap = makeScreen(1.3, 0.85, 'data', 0x46b4ff, 0x8fffe0, 0.85, 27)
+  lap.mesh.position.set(6.4, 1.75, -7.2); lap.mesh.rotation.y = -0.38; lap.mesh.rotation.x = -0.14
+  b.add(lap.mesh)
+  b.onUpdate((t) => (lap.mat.uniforms.uTime.value = t))
+  const lapGlow = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 1.0), glowMat(0x3aa0ff, 0.28))
+  lapGlow.position.set(6.4, 1.9, -7.6); lapGlow.rotation.y = -0.38
+  b.add(lapGlow)
 }

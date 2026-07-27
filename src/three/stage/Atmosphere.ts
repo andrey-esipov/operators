@@ -120,18 +120,28 @@ export class DustField {
 export function groundFog(color: number, extent: number): { group: THREE.Group; update: (t: number) => void } {
   const group = new THREE.Group()
   const mats: THREE.ShaderMaterial[] = []
-  for (let i = 0; i < 3; i++) {
+  // Rolling luminous steam banks that fill the mid-ground (the dead black band a
+  // fighting stage must never have). Additive so they GLOW with the scene neon
+  // ("particulate in the light"), ground-hugging, drifting horizontally with an
+  // upward billow. Biased behind the play plane so they never veil the fighters.
+  const near = [
+    { z: 2.2, op: 0.05, h: 3.8, y: 1.05, seed: 0.4 },
+    { z: -1.8, op: 0.16, h: 4.6, y: 1.2, seed: 3.1 },
+    { z: -5.4, op: 0.24, h: 5.4, y: 1.4, seed: 6.7 },
+    { z: -9.0, op: 0.21, h: 6.4, y: 1.7, seed: 9.9 },
+  ]
+  for (const spec of near) {
     const mat = new THREE.ShaderMaterial({
       transparent: true,
       depthWrite: false,
-      blending: THREE.NormalBlending,
+      blending: THREE.AdditiveBlending,
       fog: false,
       toneMapped: false,
       uniforms: {
         uColor: { value: new THREE.Color(color) },
         uTime: { value: 0 },
-        uSeed: { value: i * 4.1 },
-        uOpacity: { value: 0.3 - i * 0.05 },
+        uSeed: { value: spec.seed },
+        uOpacity: { value: spec.op },
       },
       vertexShader: `varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
       fragmentShader: /* glsl */ `
@@ -140,21 +150,22 @@ export function groundFog(color: number, extent: number): { group: THREE.Group; 
         float hash(vec2 p){ p=fract(p*vec2(233.34,851.73)); p+=dot(p,p+23.45); return fract(p.x*p.y); }
         float n(vec2 p){ vec2 i=floor(p),f=fract(p); f=f*f*(3.-2.*f);
           return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x),f.y);}
-        float fbm(vec2 p){ float a=.5,s=0.; for(int i=0;i<4;i++){s+=a*n(p);p*=2.02;a*=.5;} return s; }
+        float fbm(vec2 p){ float a=.5,s=0.; for(int i=0;i<5;i++){s+=a*n(p);p*=2.02;a*=.5;} return s; }
         void main(){
-          vec2 p = vUv*vec2(4.0,2.0) + vec2(uTime*0.03+uSeed, uSeed);
+          vec2 p = vUv*vec2(3.5,2.2) + vec2(uTime*0.06+uSeed, -uTime*0.045);
           float f = fbm(p);
-          f *= fbm(p*2.0 - vec2(uTime*0.05,0.0));
-          float band = smoothstep(0.0,0.45,vUv.y)*smoothstep(1.0,0.55,vUv.y);
+          f *= fbm(p*1.9 + vec2(-uTime*0.05, uTime*0.03));
+          f = pow(f, 0.8);
+          float band = smoothstep(0.0,0.5,vUv.y)*smoothstep(1.0,0.38,vUv.y);
           float a = f * band * uOpacity;
-          gl_FragColor = vec4(uColor, a);
+          gl_FragColor = vec4(uColor * (0.55 + 0.9*f), a);
         }
       `,
     })
     mats.push(mat)
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(extent, 5.5), mat)
-    m.position.set(0, 1.4, -6 + i * 4.5)
-    m.renderOrder = 4 + i
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(extent, spec.h), mat)
+    m.position.set(0, spec.y, spec.z)
+    m.renderOrder = 4
     group.add(m)
   }
   // Far atmospheric haze bands — tall, faint, ADDITIVE glow sheets standing at

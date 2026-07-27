@@ -120,7 +120,7 @@ export function buildIpoPrep(b: StageBuild, cfg: StageConfig, flags: QualityFlag
     })
   }
   overhead(b, cfg, flags, 'atrium')
-  foreground(b, 'atrium')
+  foreground(b, 'atrium', cfg)
 }
 
 // A corrugated shipping container: base box + vertical rib detail on the long

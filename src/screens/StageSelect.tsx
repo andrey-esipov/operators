@@ -117,7 +117,7 @@ export function StageSelect() {
       {/* MAIN */}
       <div className="relative z-10 flex gap-4 flex-1 min-h-0">
         {/* LEFT: dominant cinematic arena render */}
-        <div className="sel-hero flex-shrink-0 flex flex-col" style={{ flex: '0 0 clamp(430px, 40%, 620px)' }}>
+        <div className="sel-hero flex-shrink-0 flex flex-col" style={{ flex: '0 0 clamp(520px, 52%, 780px)' }}>
           <StagePreview
             key={featuredScenario.id + '-' + previewMode}
             scenario={featuredScenario}

@@ -31,7 +31,6 @@ type EraFilter = Era | 'all'
 const DISCIPLINE_FILTER_ORDER: DisciplineFilter[] = [
   'all', 'product', 'design', 'engineering', 'growth', 'ai', 'capital', 'ops', 'host',
 ]
-const ERA_FILTER_ORDER: EraFilter[] = ['all', 'early', 'mid', 'recent']
 
 // Player-side identity. Warm = P1, cool = P2. This is the ONLY saturated colour
 // that carries meaning across the whole screen; the operator accent is used
@@ -76,17 +75,6 @@ export function CharacterSelect() {
       if (!f) continue
       const d = getDiscipline(f)
       out[d] = (out[d] ?? 0) + 1
-    }
-    return out
-  }, [])
-
-  const eraCounts = useMemo(() => {
-    const out: Partial<Record<Era, number>> = {}
-    for (const id of ROSTER_ORDER) {
-      const f = getFighter(id)
-      if (!f) continue
-      const e = getEra(f)
-      out[e] = (out[e] ?? 0) + 1
     }
     return out
   }, [])
@@ -355,18 +343,6 @@ export function CharacterSelect() {
                 onClick={() => { Sfx.menuMove(); setDisciplineFilter(d) }}
               />
             ))}
-            <span className="sel-filterbar-div" />
-            {ERA_FILTER_ORDER.map((e) => (
-              <FilterTab
-                key={e}
-                label={e === 'all' ? 'ERA' : ERA_LABEL[e].split(' · ')[0]}
-                count={e === 'all' ? 0 : (eraCounts[e] ?? 0)}
-                color={sideColor}
-                showDot={false}
-                active={eraFilter === e}
-                onClick={() => { Sfx.menuMove(); setEraFilter(e) }}
-              />
-            ))}
             <div className="flex-1" />
             <div className="sel-search">
               <span aria-hidden className="sel-h" style={{ fontSize: 12, color: query ? sideColor : 'rgba(255,255,255,0.45)', textShadow: query ? `0 0 6px ${sideColor}` : 'none' }}>⌕</span>
@@ -386,9 +362,9 @@ export function CharacterSelect() {
 
           {/* Roster */}
           <div className="sel-rostermod relative flex flex-col flex-1 min-w-0 min-h-0">
-            <div className="sel-h flex-shrink-0 flex items-center justify-between" style={{ fontSize: 9, letterSpacing: '0.18em', color: 'rgba(255,255,255,0.42)', marginBottom: 5, textShadow: '1px 1px 0 #000' }}>
+            <div className="sel-h flex-shrink-0 flex items-center justify-between" style={{ fontSize: 11, letterSpacing: '0.18em', color: 'rgba(255,255,255,0.6)', marginBottom: 5, textShadow: '1px 1px 0 #000' }}>
               <span>{filteredRoster.length === totalRoster ? `${totalRoster} OPERATORS` : `${filteredRoster.length} / ${totalRoster} MATCH`}</span>
-              <span style={{ color: 'rgba(255,255,255,0.3)' }}>◄ ► ▲ ▼ MOVE · ENTER LOCK</span>
+              <span style={{ color: 'rgba(255,255,255,0.28)', fontSize: 9 }}>◄ ► ▲ ▼ MOVE · ENTER LOCK</span>
             </div>
 
             <div
@@ -456,6 +432,8 @@ export function CharacterSelect() {
       {/* Locked-in VS event — the grid recedes and a colossal VS slams in. */}
       {bothLocked && p1Fighter && p2Fighter && (
         <div className="sel-vsburst" aria-hidden>
+          <div className="sel-vsburst-floor" />
+          <div className="sel-vsburst-rays" />
           <div className="sel-vsburst-slash sel-vsburst-slash-a" />
           <div className="sel-vsburst-slash sel-vsburst-slash-b" />
           <div className="sel-vsburst-name sel-vsburst-name-a sel-name-face">{p1Fighter.shortName}</div>
@@ -582,27 +560,13 @@ function CenterDock({
   onToggleMoves: () => void
 }) {
   const sideColor = SIDE_COLOR[side]
-  const bestIn = (() => {
-    const tops = Object.entries(fighter.scenarioBonus)
-      .filter(([, v]) => v >= 1.3)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 2)
-      .map(([k]) => SCENARIOS[k as ScenarioId].tag)
-    return tops.length > 0 ? tops : ['ALL-ROUNDER']
-  })()
 
   return (
     <div className="sel-dock flex-shrink-0 flex items-center gap-2.5" key={fighter.id}>
       <div className="sel-dock-ult flex items-center gap-2.5" style={{ borderLeft: `3px solid ${fighter.accent}` }}>
-        <span className="sel-h" style={{ fontSize: 10, letterSpacing: '0.12em', color: fighter.accent }}>⚡ ULT</span>
-        <span className="sel-cond truncate" style={{ fontSize: 15, color: '#fff', fontWeight: 700, letterSpacing: '0.02em' }} title={fighter.ult.name}>{fighter.ult.name}</span>
-        <span className="tabular-nums" style={{ fontFamily: 'VT323, monospace', fontSize: 16, color: 'rgba(255,255,255,0.9)' }}>{fighter.ult.baseDamage}</span>
-      </div>
-      <div className="flex items-center gap-1.5 flex-shrink-0">
-        <span className="sel-h" style={{ fontSize: 9, letterSpacing: '0.14em', color: 'rgba(255,255,255,0.42)' }}>BEST IN</span>
-        {bestIn.map((t) => (
-          <span key={t} className="sel-h" style={{ fontSize: 9, letterSpacing: '0.08em', color: '#FFD60A', padding: '2px 7px', background: '#FFD60A16', boxShadow: 'inset 0 0 0 1px #FFD60A55' }}>{t}</span>
-        ))}
+        <span className="sel-h" style={{ fontSize: 11, letterSpacing: '0.12em', color: fighter.accent }}>⚡ ULT</span>
+        <span className="sel-cond truncate" style={{ fontSize: 17, color: '#fff', fontWeight: 700, letterSpacing: '0.02em' }} title={fighter.ult.name}>{fighter.ult.name}</span>
+        <span className="tabular-nums" style={{ fontFamily: 'VT323, monospace', fontSize: 18, color: 'rgba(255,255,255,0.9)' }}>{fighter.ult.baseDamage}</span>
       </div>
       <div className="flex-1" />
       <button

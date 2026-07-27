@@ -445,8 +445,8 @@ class FighterRig {
     // Wounded fighters breathe harder and sag — quadratic so it only really
     // kicks in when badly hurt, leaving healthy idles untouched.
     const hurt = lowHp * lowHp
-    const breathAmp = 0.022 + hurt * 0.072
-    const sag = hurt * 0.11
+    const breathAmp = 0.022 + hurt * 0.088
+    const sag = hurt * 0.15
 
     // Idle weight-shift: the body sways gently foot-to-foot when at rest, and
     // that sway fades out while a strike/knockback is playing.
@@ -480,7 +480,7 @@ class FighterRig {
       c.squashY * scSquashY * koSquash * (1 - breath * 0.008 - sag * 0.12),
     )
     this.uniforms.uLean.value =
-      (c.lean * 0.032 + scLean * 0.032 + this.hairLag + breath * 0.004 + sway * 0.01 + hurt * 0.03) * dir
+      (c.lean * 0.032 + scLean * 0.032 + this.hairLag + breath * 0.004 + sway * 0.01 + hurt * 0.05) * dir
     this.uniforms.uWobble.value = c.wobble + Math.abs(this.hairLagVel) * 0.04
     this.uniforms.uHitFlash.value = c.flash
     this.uniforms.uTime.value = time

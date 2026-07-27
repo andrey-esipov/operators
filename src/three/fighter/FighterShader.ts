@@ -448,9 +448,9 @@ export const FIGHTER_FRAGMENT = /* glsl */ `
       // (1) Grime / scuffs: dirt that settles into cavities and the lower body.
       //     Stronger + wider coverage so a beaten fighter is filthy, not tidy.
       float grime = noise(uvP * 6.0) * 0.6 + noise(uvP * 13.0) * 0.4;
-      float lowBody = smoothstep(0.72, 0.10, vUv.y);
-      float grimeMask = clamp(grime * (0.42 + 0.72 * (1.0 - cavity)) * (0.55 + 0.85 * lowBody) * dmg, 0.0, 1.0);
-      color *= mix(vec3(1.0), vec3(0.40, 0.33, 0.28), grimeMask * 0.92);
+      float lowBody = smoothstep(0.82, 0.08, vUv.y);
+      float grimeMask = clamp(grime * (0.50 + 0.80 * (1.0 - cavity)) * (0.60 + 0.95 * lowBody) * dmg, 0.0, 1.0);
+      color *= mix(vec3(1.0), vec3(0.37, 0.30, 0.25), grimeMask * 0.98);
 
       // (2) Edge scuffs: the silhouette rim gets scuffed & darkened (torn cloth,
       //     road rash) so the damage reads right on the outline too.
@@ -466,22 +466,28 @@ export const FIGHTER_FRAGMENT = /* glsl */ `
 
       // (4) Skin flush: exertion floods the face/arms with warm blood; throbs
       //     with the breathing pulse. Additive so it reads as heat, not paint.
-      color += vec3(0.16, 0.02, 0.0) * skin * uExertion * (0.45 + 0.55 * breathP);
+      //     Boosted + higher floor so a wrecked fighter is visibly flushed even
+      //     between breaths.
+      color += vec3(0.23, 0.03, 0.0) * skin * uExertion * (0.6 + 0.4 * breathP);
 
       // (5) Bruising: cool blotches on skin — larger & earlier than before so a
       //     battered face reads clearly by mid damage.
       float bruise = smoothstep(0.66, 0.9, noise(uvP * 7.0 + 3.1)) * skin;
       color = mix(color, color * vec3(0.60, 0.55, 0.82), bruise * smoothstep(0.28, 0.9, dmg) * 0.7);
 
-      // (6) Clammy sweat SHEEN: a broad wet specular film over the upper-body
-      //     skin, not just sparse dots — the single biggest "exhausted" read.
-      float upper = smoothstep(0.28, 0.86, vUv.y);
+      // (6) Clammy sweat SHEEN: a wet specular film over the exhausted fighter.
+      //     Two layers — a BROAD low-gloss film across the whole upper body
+      //     (sweat-soaked shirt + slick skin, the biggest at-a-glance read) and
+      //     a sharper, brighter highlight concentrated on bare skin.
+      float upper = smoothstep(0.24, 0.86, vUv.y);
       vec3 Hs = normalize(normalize(uKeyDir) + V);
+      float sheenBroad = pow(max(dot(N, Hs), 0.0), 3.5);
+      color += uKeyColor * sheenBroad * upper * uSweat * 1.25 * uKeyIntensity * 0.3 * selfShadow;
       float sheen = pow(max(dot(N, Hs), 0.0), 6.0);
-      color += uKeyColor * sheen * skin * upper * uSweat * 2.8 * uKeyIntensity * 0.3 * selfShadow;
+      color += uKeyColor * sheen * skin * upper * uSweat * 3.6 * uKeyIntensity * 0.3 * selfShadow;
       // Sparse bright beads riding on top of the sheen.
       float bead = smoothstep(0.9, 0.99, noise(uvP * 46.0));
-      color += uKeyColor * bead * skin * upper * uSweat * 1.5 * uKeyIntensity * 0.3;
+      color += uKeyColor * bead * skin * upper * uSweat * 1.7 * uKeyIntensity * 0.3;
     }
 
     // ---- Super charge: rising energy that visibly builds over the body ----
@@ -499,15 +505,16 @@ export const FIGHTER_FRAGMENT = /* glsl */ `
       color += uAccent * edgeBand * g * (1.6 + 0.8 * pulse);
       color += vec3(1.0) * edgeBand * g * 0.45 * pulse;
       // Rising energy bands crawling UP the body (charging read) — bright accents
-      // riding over the form, not a flood that erases it.
+      // riding over the form, kept restrained so the character's own materials
+      // still read through the aura (charging, not a solid decal).
       float band = sin((vUv.y * 22.0) - uTime * 9.0) * 0.5 + 0.5;
       band = pow(band, 3.0);
-      color += uAccent * band * g * 0.8 * interior * base.a * (0.45 + 0.55 * wrapKey);
+      color += uAccent * band * g * 0.42 * interior * base.a * (0.45 + 0.55 * wrapKey);
       // Fast upward streaks add motion energy on top of the slow bands.
       float streak = pow(0.5 + 0.5 * sin(vUv.y * 60.0 - uTime * 22.0), 6.0);
-      color += uAccent * streak * g * 0.45 * interior * base.a;
+      color += uAccent * streak * g * 0.26 * interior * base.a;
       // Hot inner core where the energy is densest.
-      color += vec3(1.0) * band * g * 0.28 * interior * base.a * wrapKey;
+      color += vec3(1.0) * band * g * 0.16 * interior * base.a * wrapKey;
     }
 
     // ---- Shattered: cracked-glass chroma split ---------------------------

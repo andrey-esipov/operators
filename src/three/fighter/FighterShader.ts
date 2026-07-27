@@ -471,10 +471,18 @@ export const FIGHTER_FRAGMENT = /* glsl */ `
     // reads as a light from behind-above.
     float kickF = pow(1.0 - clamp(dot(N, V), 0.0, 1.0), 3.4);
     float kickTop = clamp(Nbroad.y * 0.5 + 0.65, 0.0, 1.0);
-    vec3 kicker = uKickColor * uKickIntensity * kickF * kickTop * mix(0.6, 1.0, 1.0 - matte * 0.5);
-    // Ease off the very outer ink pixel so it sits just inside the linework, and
-    // clamp to the sprite alpha so it can never spill past the silhouette.
-    kicker *= mix(0.4, 1.0, interior) * base.a;
+    // Stage-rim-aware separation: when the stage's OWN rim is warm and/or dim it
+    // gives the silhouette almost no cool back-edge (e.g. warm office/loft
+    // stages), so lean harder on the neutral kicker to keep the fighter carved
+    // off the backdrop. Cool, strong stage rims (teal server floors) already
+    // separate well, so this leaves them essentially untouched.
+    float stageRimSep = uRimIntensity * clamp(uRimColor.b - uRimColor.r * 0.6, 0.0, 1.0);
+    float kickBoost = 1.0 + (1.0 - smoothstep(0.35, 1.5, stageRimSep)) * 0.5;
+    vec3 kicker = uKickColor * uKickIntensity * kickBoost * kickF * kickTop * mix(0.6, 1.0, 1.0 - matte * 0.5);
+    // Hold the kicker just inside the linework (so it never haloes the ink
+    // outline) but keep enough of it right at the back edge to actually read as
+    // separation, and clamp to sprite alpha so it can't spill past the silhouette.
+    kicker *= mix(0.52, 1.0, interior) * base.a;
     rim += kicker;
 
     // Accent corona: the fighter's identity colour, reserved for super state.

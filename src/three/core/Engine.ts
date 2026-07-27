@@ -65,6 +65,12 @@ export class Engine {
   private targetTimeScale = 1
   private timeScaleSnap = false
 
+  // Hitstop. Tracked in unscaled wall time so a freeze can't extend itself.
+  private hitstopUntil = 0
+  private hitstopScale = 1
+  private hitstopTotal = 0
+  private hitstopEnv = 0
+
   private state: FightRenderState | null = null
   private pendingEvents: FightEvent[] = []
   private eventListeners = new Set<(e: FightEvent) => void>()
@@ -171,6 +177,9 @@ export class Engine {
         return () => this.lateUpdates.delete(fn)
       },
       anchors: this.anchors,
+      requestHitstop: (ms: number, scale?: number) => this.requestHitstop(ms, scale),
+      timeScale: () => this.timeScale,
+      hitstop: () => this.hitstopEnv,
     }
   }
 
@@ -212,6 +221,25 @@ export class Engine {
     this.targetTimeScale = v
     this.timeScaleSnap = snap
     if (snap) this.timeScale = v
+  }
+
+  /**
+   * Freeze the world on impact. Snaps to `scale` immediately, holds for
+   * `durationMs` of wall time, then releases. Overlapping requests take the
+   * harder freeze and the later release, so a crit landing inside a combo
+   * hitstop deepens it rather than cutting it short.
+   */
+  requestHitstop(durationMs: number, scale = 0.02) {
+    const now = performance.now()
+    const end = now + Math.max(0, durationMs)
+    if (end > this.hitstopUntil) {
+      this.hitstopUntil = end
+      this.hitstopTotal = Math.max(1, end - now)
+    }
+    this.hitstopScale = Math.min(this.hitstopScale, Math.max(0, scale))
+    this.hitstopEnv = 1
+    this.timeScale = this.hitstopScale
+    this.timeScaleSnap = true
   }
 
   setQuality(q: QualityTier) {
@@ -266,15 +294,57 @@ export class Engine {
     cancelAnimationFrame(this.rafId)
   }
 
+  /**
+   * Impact freeze is engine-owned so every subsystem rides the identical
+   * curve. Durations follow fighting-game convention: light hits barely
+   * register, supers and KOs stop the world.
+   */
+  private applyImpactHitstop(e: FightEvent) {
+    if (e.kind === 'hit') {
+      const base: Record<string, [number, number]> = {
+        light: [45, 0.12],
+        heavy: [80, 0.06],
+        ex: [95, 0.05],
+        crit: [130, 0.02],
+        combo: [110, 0.04],
+        signature: [150, 0.02],
+        ult: [180, 0.015],
+      }
+      const [ms, scale] = base[e.flavor] ?? base.light
+      // Bigger damage bites harder, but never past the next tier's feel.
+      const k = 0.75 + 0.45 * Math.min(1, e.power)
+      this.requestHitstop(ms * k, scale)
+      if (e.shattered) this.requestHitstop(220, 0.01)
+      return
+    }
+    if (e.kind === 'shatter') this.requestHitstop(220, 0.01)
+    else if (e.kind === 'ko') this.requestHitstop(320, 0.008)
+    else if (e.kind === 'signature') this.requestHitstop(180, 0.015)
+  }
+
   private frame(now: number) {
     const rawDt = Math.min(0.1, (now - this.lastTime) / 1000)
     this.lastTime = now
-
-    // Ease the time scale unless a snap was requested.
-    if (!this.timeScaleSnap) {
-      this.timeScale += (this.targetTimeScale - this.timeScale) * Math.min(1, rawDt * 12)
-    } else {
+    // Hitstop overrides the eased time scale while it's active. Measured in
+    // unscaled wall time so the freeze can't stretch itself.
+    if (now < this.hitstopUntil) {
+      this.hitstopEnv = (this.hitstopUntil - now) / this.hitstopTotal
+      this.timeScale = this.hitstopScale
       this.timeScaleSnap = false
+    } else {
+      if (this.hitstopEnv > 0) {
+        // Release: decay the envelope so shake/pacing can ride the recovery.
+        this.hitstopEnv = Math.max(0, this.hitstopEnv - rawDt * 6)
+        this.hitstopScale = 1
+        // Snap back hard. The freeze is the effect; a slow ramp out of it
+        // just reads as mushy slow-motion and kills the impact.
+        this.timeScale += (this.targetTimeScale - this.timeScale) * Math.min(1, rawDt * 45)
+        this.timeScaleSnap = false
+      } else if (!this.timeScaleSnap) {
+        this.timeScale += (this.targetTimeScale - this.timeScale) * Math.min(1, rawDt * 12)
+      } else {
+        this.timeScaleSnap = false
+      }
     }
     const dt = rawDt * this.timeScale
     this.accumulatedDt += dt
@@ -285,6 +355,7 @@ export class Engine {
       const batch = this.pendingEvents
       this.pendingEvents = []
       for (const e of batch) {
+        this.applyImpactHitstop(e)
         for (const s of this.subsystems) s.onEvent?.(e)
         for (const fn of this.eventListeners) fn(e)
       }

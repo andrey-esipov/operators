@@ -32,6 +32,8 @@ declare global {
       settle(n?: number): Promise<void>
       /** True once the scene has drawn and every queued asset has landed. */
       ready(): boolean
+      /** Live engine handle — for QA harnesses that need to inspect internals. */
+      engine: import('../core/Engine').Engine
     }
   }
 }
@@ -125,6 +127,7 @@ export function ThreeLab() {
           requestAnimationFrame(tick)
         }),
       ready: () => h.engine.frameCount > 4 && h.engine.assets.pending() === 0,
+      engine: h.engine,
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])

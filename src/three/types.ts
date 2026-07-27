@@ -135,6 +135,21 @@ export interface EngineContext {
    * without depending on the fighter subsystem's internals.
    */
   anchors: AnchorRegistry
+  /**
+   * Freeze-frame on impact. Snaps the engine time scale to `scale` for
+   * `durationMs` (unscaled wall time), then eases back to 1. Overlapping
+   * requests take the harder freeze and the later end time, so a crit landing
+   * during a combo hitstop extends rather than truncates it.
+   */
+  requestHitstop: (durationMs: number, scale?: number) => void
+  /** Live engine time scale (1 = realtime, <1 = hitstop/slow-mo). */
+  timeScale: () => number
+  /**
+   * 0..1 hitstop envelope: 1 the instant a freeze starts, decaying to 0 as it
+   * releases. Lets shake and beat pacing lock to the actual freeze curve
+   * instead of re-deriving it from event timing.
+   */
+  hitstop: () => number
 }
 
 /** Named world-space points other subsystems can query. */

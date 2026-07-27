@@ -58,6 +58,39 @@ export function buildHypergrowth(b: StageBuild, cfg: StageConfig, flags: Quality
   nose.position.set(0, 15.5, -13.5)
   nose.castShadow = true
   b.add(nose)
+  // --- self-lit industrial detailing: this is what makes machinery read against
+  // a dark deck without flooding the fighters with ambient. Aviation beacons,
+  // safety strips and lit rocket windows carve the silhouette out of the black.
+  const beacons: THREE.Mesh[] = []
+  const addBeacon = (x: number, y: number, z: number, color: number) => {
+    const m = new THREE.Mesh(new THREE.SphereGeometry(0.17, 10, 8), glowMat(color, 0.9))
+    m.position.set(x, y, z); b.add(m); beacons.push(m)
+  }
+  addBeacon(-7.9, 15.4, -12, 0xff3524); addBeacon(-7.9, 10.9, -12, 0xff3524)
+  addBeacon(8.3, 11.6, -12, 0xff3524)
+  // cyan safety-light strips running up the two tower legs
+  for (const x of [-7.4, 8.0]) {
+    const strip = new THREE.Mesh(new THREE.PlaneGeometry(0.14, 13), glowMat(0x33e0ff, 0.42))
+    strip.position.set(x, 8, -11.5); b.add(strip)
+  }
+  // rocket panel windows — two vertical ladders of small emissive rects on the
+  // body's front face (z = body centre + radius) so the hull stops reading flat.
+  for (let i = 0; i < 6; i++) {
+    for (const x of [-0.85, 0.85]) {
+      const w = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.2), glowMat(0x9ff0ff, 0.62))
+      w.position.set(x, 5.4 + i * 1.35, -12.0); b.add(w)
+    }
+  }
+  // brighter mission stripe already exists (stripe); add a second lower band
+  const stripe2 = new THREE.Mesh(new THREE.CylinderGeometry(1.66, 1.66, 0.32, 28), glowMat(0x66e6ff, 0.6))
+  stripe2.position.set(0, 6.0, -13.5); b.add(stripe2)
+  b.onUpdate((t) => {
+    const bl = 0.35 + 0.6 * (0.5 + 0.5 * Math.sin(t * 4.0))
+    const bl2 = 0.35 + 0.6 * (0.5 + 0.5 * Math.sin(t * 4.0 + 2.1))
+    ;(beacons[0].material as THREE.MeshBasicMaterial).opacity = bl
+    ;(beacons[1].material as THREE.MeshBasicMaterial).opacity = bl
+    ;(beacons[2].material as THREE.MeshBasicMaterial).opacity = bl2
+  })
   // engine flame — a WHITE-HOT core inside an amber thruster plume. The warm fire
   // against the cool teal deck breaks the monochrome wash and gives the rocket a
   // motivated hero light (was a cold cyan disc that read as a static monument).
@@ -101,5 +134,5 @@ export function buildHypergrowth(b: StageBuild, cfg: StageConfig, flags: Quality
     b.onUpdate(update)
   }
   overhead(b, cfg, flags, 'gantry')
-  foreground(b, 'gantry')
+  foreground(b, 'gantry', cfg)
 }

@@ -1,0 +1,556 @@
+/* ─────────────────────────────────────────────────────────────────────
+   MainMenu — bespoke styles (owned by the menu agent).
+   Not shared: only imported from MainMenu.tsx. Keeps the front-door look
+   isolated from src/index.css so other agents' screens are unaffected.
+   ───────────────────────────────────────────────────────────────────── */
+
+.mm-root {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #0B0713;
+}
+
+/* ── Background depth-of-field ──────────────────────────────────────── */
+/* The hero art is reused from AttractMode, but here it is pushed back:
+   blurred, darkened and desaturated so it becomes ambient depth instead
+   of a flat image competing with the UI. A slow parallax drift gives the
+   menu idle life without ever moving under the text. */
+.mm-bg-art {
+  position: absolute;
+  inset: -6%;
+  width: 112%;
+  height: 112%;
+  object-fit: cover;
+  image-rendering: pixelated;
+  filter: brightness(0.42) saturate(0.72) blur(5px);
+  transform: scale(1.06);
+  will-change: transform;
+}
+.mm-bg-art.mm-anim {
+  animation: mmParallax 46s ease-in-out infinite alternate;
+}
+@keyframes mmParallax {
+  0%   { transform: scale(1.06) translate3d(0, 0, 0); }
+  100% { transform: scale(1.12) translate3d(-2.4%, -1.6%, 0); }
+}
+
+/* Left-anchored scrim: near-solid on the menu side, transparent on the
+   right so the art breathes. This is what makes the small text legible. */
+.mm-scrim-left {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(100deg,
+      rgba(6,4,12,0.97) 0%,
+      rgba(8,5,16,0.90) 28%,
+      rgba(10,6,20,0.62) 46%,
+      rgba(10,6,20,0.20) 66%,
+      rgba(10,6,20,0.30) 100%);
+}
+/* Cinematic top/bottom bars + vignette to frame the scene. */
+.mm-scrim-frame {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(0,0,0,0.55) 0%, transparent 16%, transparent 82%, rgba(0,0,0,0.72) 100%),
+    radial-gradient(120% 90% at 62% 42%, transparent 46%, rgba(0,0,0,0.66) 100%);
+}
+/* A single warm rake of light coming from upper-right, motivated by the
+   sunset in the art — gives the flat scrim some atmosphere. */
+.mm-godray {
+  position: absolute;
+  top: -20%;
+  right: -6%;
+  width: 62%;
+  height: 130%;
+  pointer-events: none;
+  background: radial-gradient(ellipse at top right, rgba(247,127,0,0.20) 0%, rgba(247,37,133,0.08) 34%, transparent 62%);
+  mix-blend-mode: screen;
+}
+.mm-godray.mm-anim { animation: mmGodray 9s ease-in-out infinite; }
+@keyframes mmGodray {
+  0%, 100% { opacity: 0.7; }
+  50%      { opacity: 1; }
+}
+
+/* Faint scanline texture — arcade CRT soul, kept very subtle. */
+.mm-scan {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(0deg, rgba(0,0,0,0.16) 0px, transparent 2px, transparent 4px);
+  opacity: 0.35;
+  mix-blend-mode: multiply;
+}
+
+/* ── Layout shell ───────────────────────────────────────────────────── */
+.mm-stage {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: stretch;
+}
+.mm-left {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  width: min(54%, 720px);
+  padding: clamp(20px, 3.2vh, 40px) clamp(24px, 3vw, 56px);
+  gap: clamp(10px, 1.6vh, 20px);
+}
+.mm-right {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ── Title lockup ───────────────────────────────────────────────────── */
+.mm-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-display);
+  font-size: clamp(7px, 1.05vh, 9px);
+  letter-spacing: 0.42em;
+  color: #FCBF49;
+  text-shadow: 1px 1px 0 #000;
+}
+.mm-eyebrow::before {
+  content: "";
+  width: clamp(18px, 3vw, 34px);
+  height: 2px;
+  background: linear-gradient(90deg, #F72585, #FCBF49);
+  box-shadow: 0 0 8px rgba(252,191,73,0.7);
+}
+.mm-title {
+  font-family: var(--font-display);
+  font-weight: 400;
+  line-height: 0.92;
+  color: #FFD60A;
+  font-size: clamp(56px, 9.6vh, 104px);
+  letter-spacing: 0.02em;
+  transform: skewX(-4deg);
+  text-shadow:
+    5px 5px 0 #000,
+    0 0 26px rgba(247,127,0,0.55),
+    0 0 60px rgba(230,57,70,0.40);
+  margin: clamp(6px, 1.2vh, 12px) 0 0;
+}
+.mm-title .mm-title-under {
+  display: block;
+  height: clamp(4px, 0.7vh, 7px);
+  width: clamp(180px, 30vw, 340px);
+  margin-top: clamp(6px, 1vh, 12px);
+  transform: skewX(-4deg);
+  background: linear-gradient(90deg, #F72585 0%, #F77F00 55%, transparent 100%);
+  box-shadow: 0 0 14px rgba(247,127,0,0.6);
+}
+.mm-subtitle {
+  font-family: var(--font-display);
+  font-size: clamp(8px, 1.15vh, 11px);
+  letter-spacing: 0.34em;
+  color: rgba(255,255,255,0.82);
+  text-shadow: 2px 2px 0 #000;
+  margin-top: clamp(8px, 1.4vh, 16px);
+}
+.mm-subtitle b { color: #FCBF49; font-weight: 400; }
+
+/* Title entrance */
+.mm-anim .mm-title-in { animation: mmRise 0.7s cubic-bezier(0.2,0.9,0.3,1) both; }
+.mm-anim .mm-title-in.d1 { animation-delay: 0.05s; }
+.mm-anim .mm-title-in.d2 { animation-delay: 0.14s; }
+.mm-anim .mm-title-in.d3 { animation-delay: 0.22s; }
+@keyframes mmRise {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+/* title's own skew must be preserved through the rise */
+.mm-anim .mm-title.mm-title-in { animation-name: mmRiseSkew; }
+@keyframes mmRiseSkew {
+  from { opacity: 0; transform: translateY(16px) skewX(-4deg); }
+  to   { opacity: 1; transform: translateY(0) skewX(-4deg); }
+}
+
+/* ── Primary nav list ───────────────────────────────────────────────── */
+.mm-nav {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(7px, 1.15vh, 13px);
+}
+
+.mm-item {
+  --accent: #FFD60A;
+  position: relative;
+  display: block;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  padding: clamp(9px, 1.5vh, 15px) clamp(16px, 1.6vw, 24px) clamp(9px, 1.5vh, 15px) clamp(22px, 2vw, 30px);
+  color: #fff;
+  border: 0;
+  /* Angular parallelogram cut on the trailing edge. */
+  clip-path: polygon(0 0, 100% 0, calc(100% - 16px) 100%, 0 100%);
+  background:
+    linear-gradient(180deg, rgba(12,8,20,0.86), rgba(6,4,12,0.92));
+  box-shadow:
+    inset 3px 0 0 var(--accent),
+    inset -1px -1px 0 rgba(0,0,0,0.6),
+    inset 1px 1px 0 rgba(255,255,255,0.06);
+  transition: transform 0.14s cubic-bezier(0.2,0.9,0.3,1), box-shadow 0.16s ease, background 0.16s ease;
+  outline: none;
+}
+.mm-item:hover,
+.mm-item:focus-visible,
+.mm-item.mm-active {
+  transform: translateX(10px);
+  background:
+    linear-gradient(180deg, rgba(20,12,30,0.92), rgba(10,6,18,0.95)),
+    linear-gradient(90deg, color-mix(in srgb, var(--accent) 40%, transparent), transparent 70%);
+  box-shadow:
+    inset 6px 0 0 var(--accent),
+    0 0 26px color-mix(in srgb, var(--accent) 46%, transparent),
+    inset -1px -1px 0 rgba(0,0,0,0.6),
+    inset 1px 1px 0 rgba(255,255,255,0.12);
+}
+.mm-item-label {
+  font-family: var(--font-display);
+  letter-spacing: 0.08em;
+  line-height: 1.1;
+  text-shadow: 2px 2px 0 #000;
+}
+.mm-item-sub {
+  font-family: var(--font-body);
+  color: rgba(255,255,255,0.72);
+  line-height: 1;
+  text-shadow: 1px 1px 0 #000;
+}
+
+/* Selection caret — sits just left of the active row and slides in. */
+.mm-caret {
+  position: absolute;
+  left: clamp(6px, 0.7vw, 10px);
+  top: 50%;
+  transform: translateY(-50%) translateX(-6px);
+  color: var(--accent);
+  font-family: var(--font-display);
+  font-size: clamp(9px, 1.3vh, 13px);
+  opacity: 0;
+  text-shadow: 0 0 8px var(--accent);
+  transition: opacity 0.14s ease, transform 0.14s ease;
+  pointer-events: none;
+}
+.mm-item:hover .mm-caret,
+.mm-item:focus-visible .mm-caret,
+.mm-item.mm-active .mm-caret {
+  opacity: 1;
+  transform: translateY(-50%) translateX(0);
+  animation: mmCaret 0.9s steps(1) infinite;
+}
+@keyframes mmCaret {
+  0%, 60% { opacity: 1; }
+  61%,100% { opacity: 0.35; }
+}
+
+/* PRIMARY (Story) — bigger, hotter, wins the hierarchy. */
+.mm-item.mm-primary {
+  padding: clamp(14px, 2.3vh, 22px) clamp(18px, 1.8vw, 26px) clamp(14px, 2.3vh, 22px) clamp(26px, 2.4vw, 36px);
+  clip-path: polygon(0 0, 100% 0, calc(100% - 22px) 100%, 0 100%);
+  background:
+    linear-gradient(180deg, rgba(30,10,26,0.90), rgba(14,5,16,0.94)),
+    linear-gradient(90deg, color-mix(in srgb, var(--accent) 30%, transparent), transparent 62%);
+  box-shadow:
+    inset 5px 0 0 var(--accent),
+    0 0 22px color-mix(in srgb, var(--accent) 32%, transparent),
+    inset -1px -1px 0 rgba(0,0,0,0.6),
+    inset 1px 1px 0 rgba(255,255,255,0.10);
+}
+.mm-item.mm-primary .mm-item-label { font-size: clamp(22px, 3.6vh, 34px); }
+.mm-item.mm-primary .mm-item-sub  { font-size: clamp(11px, 1.6vh, 16px); margin-top: 4px; }
+.mm-item.mm-primary:hover,
+.mm-item.mm-primary:focus-visible,
+.mm-item.mm-primary.mm-active {
+  transform: translateX(12px);
+  box-shadow:
+    inset 8px 0 0 var(--accent),
+    0 0 40px color-mix(in srgb, var(--accent) 60%, transparent),
+    inset -1px -1px 0 rgba(0,0,0,0.6),
+    inset 1px 1px 0 rgba(255,255,255,0.16);
+}
+/* "primary" ribbon tag */
+.mm-tag {
+  position: absolute;
+  top: clamp(8px, 1.3vh, 12px);
+  right: clamp(16px, 1.6vw, 26px);
+  font-family: var(--font-display);
+  font-size: clamp(6px, 0.9vh, 8px);
+  letter-spacing: 0.28em;
+  color: #0B0713;
+  background: var(--accent);
+  padding: 3px 7px;
+  box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 60%, transparent);
+}
+
+/* SECONDARY rows */
+.mm-item.mm-secondary .mm-item-label { font-size: clamp(14px, 2.1vh, 20px); }
+.mm-item.mm-secondary .mm-item-sub  { font-size: clamp(9px, 1.25vh, 13px); margin-top: 2px; }
+.mm-item.mm-secondary .mm-item-key {
+  position: absolute;
+  right: clamp(20px, 1.8vw, 30px);
+  top: 50%;
+  transform: translateY(-50%);
+  font-family: var(--font-display);
+  font-size: clamp(8px, 1.1vh, 11px);
+  color: var(--accent);
+  opacity: 0.6;
+  text-shadow: 1px 1px 0 #000;
+}
+
+/* nav entrance stagger */
+.mm-anim .mm-nav > * { animation: mmNavIn 0.5s cubic-bezier(0.2,0.9,0.3,1) both; }
+.mm-anim .mm-nav > *:nth-child(1) { animation-delay: 0.22s; }
+.mm-anim .mm-nav > *:nth-child(2) { animation-delay: 0.30s; }
+.mm-anim .mm-nav > *:nth-child(3) { animation-delay: 0.38s; }
+.mm-anim .mm-nav > *:nth-child(4) { animation-delay: 0.46s; }
+@keyframes mmNavIn {
+  from { opacity: 0; transform: translateX(-26px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+/* ── Lower cluster: quote + utility bar ─────────────────────────────── */
+.mm-lower {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(8px, 1.4vh, 14px);
+}
+.mm-quote {
+  position: relative;
+  font-family: var(--font-body);
+  font-style: italic;
+  font-size: clamp(13px, 1.9vh, 18px);
+  line-height: 1.3;
+  color: #fff;
+  padding: clamp(7px, 1.1vh, 12px) clamp(12px, 1.2vw, 18px);
+  background: rgba(6,4,12,0.72);
+  border-left: 3px solid #FFD60A;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06);
+  text-shadow: 1px 1px 0 #000;
+  min-height: clamp(40px, 6vh, 54px);
+  display: flex;
+  align-items: center;
+}
+.mm-quote cite {
+  font-family: var(--font-display);
+  font-style: normal;
+  font-size: clamp(7px, 0.95vh, 9px);
+  letter-spacing: 0.14em;
+  color: #FFD60A;
+}
+.mm-anim .mm-quote-in { animation: mmFade 0.6s ease-out both; }
+@keyframes mmFade { from { opacity: 0; } to { opacity: 1; } }
+
+/* Utility bar: library + settings, clearly a lower tier. */
+.mm-util {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(5px, 0.8vh, 9px);
+}
+.mm-util-row {
+  display: flex;
+  align-items: center;
+  gap: clamp(5px, 0.5vw, 8px);
+  flex-wrap: wrap;
+}
+.mm-util-label {
+  font-family: var(--font-display);
+  font-size: clamp(7px, 0.95vh, 9px);
+  letter-spacing: 0.24em;
+  color: rgba(255,255,255,0.5);
+  min-width: clamp(56px, 6vw, 78px);
+  text-shadow: 1px 1px 0 #000;
+}
+.mm-chip {
+  font-family: var(--font-display);
+  font-size: clamp(7px, 1vh, 9.5px);
+  letter-spacing: 0.08em;
+  color: #D8C7F0;
+  padding: clamp(5px, 0.8vh, 8px) clamp(8px, 0.8vw, 12px);
+  background: rgba(10,6,20,0.7);
+  border: 1px solid rgba(157,134,196,0.4);
+  cursor: pointer;
+  text-shadow: 1px 1px 0 #000;
+  transition: transform 0.12s ease, border-color 0.14s ease, color 0.14s ease, box-shadow 0.14s ease, background 0.14s ease;
+  outline: none;
+}
+.mm-chip:hover,
+.mm-chip:focus-visible {
+  transform: translateY(-1px);
+  color: #fff;
+  border-color: #FCBF49;
+  background: rgba(20,12,30,0.85);
+  box-shadow: 0 0 14px rgba(252,191,73,0.35);
+}
+/* toggles read as state, not navigation */
+.mm-chip.mm-toggle { color: #FCBF49; border-color: rgba(252,191,73,0.45); }
+.mm-chip.mm-toggle .mm-toggle-on  { color: #06D6A0; }
+.mm-chip.mm-toggle .mm-toggle-off { color: #9D86C4; }
+
+/* ── Right showcase ─────────────────────────────────────────────────── */
+.mm-showcase {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(6px, 1.2vw, 22px);
+  padding-right: clamp(10px, 3vw, 40px);
+}
+.mm-fighter {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.mm-fighter-art {
+  width: clamp(150px, 20vw, 250px);
+  height: clamp(210px, 40vh, 340px);
+}
+.mm-fighter-name {
+  font-family: var(--font-display);
+  font-size: clamp(12px, 1.9vh, 18px);
+  letter-spacing: 0.12em;
+  text-shadow: 2px 2px 0 #000;
+  margin-top: clamp(2px, 0.6vh, 6px);
+}
+.mm-fighter-arch {
+  font-family: var(--font-display);
+  font-size: clamp(6px, 0.9vh, 8px);
+  letter-spacing: 0.22em;
+  color: rgba(255,255,255,0.55);
+  text-shadow: 1px 1px 0 #000;
+  margin-top: 2px;
+}
+.mm-vs {
+  font-family: var(--font-display);
+  font-size: clamp(26px, 5vh, 48px);
+  color: #FFD60A;
+  text-shadow: 4px 4px 0 #000, 0 0 18px #F77F00;
+  transform: skewX(-4deg);
+  flex-shrink: 0;
+}
+.mm-anim .mm-vs { animation: mmVsPulse 1.8s ease-in-out infinite; }
+@keyframes mmVsPulse {
+  0%,100% { transform: skewX(-4deg) scale(1); }
+  50%     { transform: skewX(-4deg) scale(1.09); }
+}
+/* soft platform glow under the pair */
+.mm-showcase-floor {
+  position: absolute;
+  bottom: clamp(4%, 6vh, 12%);
+  left: 50%;
+  width: clamp(280px, 34vw, 460px);
+  height: clamp(30px, 6vh, 60px);
+  transform: translateX(-50%);
+  background: radial-gradient(ellipse at center, rgba(247,37,133,0.28) 0%, transparent 70%);
+  pointer-events: none;
+}
+/* label above the showcase */
+.mm-showcase-tag {
+  position: absolute;
+  top: clamp(10px, 3vh, 34px);
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--font-display);
+  font-size: clamp(7px, 1vh, 10px);
+  letter-spacing: 0.34em;
+  color: #FCBF49;
+  text-shadow: 2px 2px 0 #000;
+  white-space: nowrap;
+}
+.mm-showcase-entry { animation: none; }
+.mm-anim .mm-showcase-entry { animation: mmPopIn 0.45s cubic-bezier(0.34,1.56,0.64,1) both; }
+@keyframes mmPopIn {
+  from { opacity: 0; transform: translateY(10px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* blinking press-start under the showcase */
+.mm-press {
+  position: absolute;
+  bottom: clamp(14px, 4vh, 40px);
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--font-display);
+  font-size: clamp(8px, 1.1vh, 11px);
+  letter-spacing: 0.2em;
+  color: #FFD60A;
+  text-shadow: 2px 2px 0 #000, 0 0 8px #F77F00;
+  white-space: nowrap;
+}
+.mm-anim .mm-press { animation: mmBlink 1.1s steps(1) infinite; }
+@keyframes mmBlink { 0%,55% { opacity: 1; } 56%,100% { opacity: 0.18; } }
+
+/* Operator-of-the-day pill, top-right of the whole stage */
+.mm-otd {
+  position: absolute;
+  top: clamp(12px, 2vh, 20px);
+  right: clamp(14px, 1.6vw, 26px);
+  z-index: 12;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: clamp(4px, 0.7vh, 7px) clamp(8px, 0.8vw, 13px);
+  background: rgba(6,4,12,0.78);
+  border: 1px solid var(--accent, #FFD60A);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--accent, #FFD60A) 40%, transparent);
+}
+.mm-otd-k { font-family: var(--font-display); font-size: clamp(6px, 0.85vh, 8px); letter-spacing: 0.22em; color: var(--accent, #FFD60A); }
+.mm-otd-v { font-family: var(--font-display); font-size: clamp(7px, 1vh, 9px); letter-spacing: 0.12em; color: #fff; }
+
+/* footer credit */
+.mm-foot {
+  position: absolute;
+  bottom: clamp(4px, 0.8vh, 8px);
+  left: 0;
+  right: 0;
+  text-align: center;
+  z-index: 12;
+  font-family: var(--font-display);
+  font-size: clamp(6px, 0.85vh, 8px);
+  letter-spacing: 0.2em;
+  color: rgba(255,255,255,0.34);
+}
+
+/* Menu-out transition when a destination is chosen. */
+.mm-root.mm-leaving { animation: mmLeave 0.34s ease-in forwards; }
+@keyframes mmLeave {
+  from { opacity: 1; transform: scale(1); }
+  to   { opacity: 0; transform: scale(1.03); }
+}
+
+/* ── Reduced motion ─────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .mm-bg-art.mm-anim,
+  .mm-godray.mm-anim,
+  .mm-anim .mm-vs,
+  .mm-anim .mm-press,
+  .mm-item:hover .mm-caret,
+  .mm-item:focus-visible .mm-caret,
+  .mm-item.mm-active .mm-caret {
+    animation: none !important;
+  }
+  .mm-anim .mm-title-in,
+  .mm-anim .mm-nav > *,
+  .mm-anim .mm-quote-in,
+  .mm-anim .mm-showcase-entry {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  .mm-root.mm-leaving { animation: none; opacity: 0; }
+}

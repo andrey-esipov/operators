@@ -161,10 +161,18 @@ vec3 finishValue(vec3 c) {
   // a gradient instead of clipping to flat white discs. The knee asymptotes, so
   // mid-tones and shadows are untouched while values above ~0.6 are progressively
   // tamed (a former 1.0 tops out near 0.74, restoring rolloff below the clip).
-  c = c / (1.0 + max(c - 0.6, 0.0) * 0.9);
+  c = c / (1.0 + max(c - 0.56, 0.0) * 1.0);
 
   // S-curve contrast around mid grey.
   c = clamp(0.5 + (c - 0.5) * contrast, 0.0, 1.0);
+
+  // Neutral black anchor: desaturate ONLY the deepest shadows toward their own
+  // luma so the true black point reads neutral instead of carrying the stage's
+  // shadow tint (red on monetization, warm on distribution, teal on ipo-prep).
+  // Coloured shadows and mids above ~0.11 luma keep their graded tint fully.
+  float bl = luma(c);
+  float nb = smoothstep(0.11, 0.0, bl);
+  c = mix(c, vec3(bl), nb * 0.7);
   return c;
 }
 

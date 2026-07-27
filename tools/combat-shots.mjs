@@ -99,5 +99,26 @@ await page.evaluate(() => {
 await sleep(1400)
 await shot('06-fight-danger')
 
+// Force an ultimate so we can see whether the super flash still lands after
+// the fighters were excluded from bloom.
+const ultCast = await page.evaluate(async () => {
+  const { getFighter } = await import('/src/data/fighters.ts')
+  const s = window.__game.getState()
+  window.__game.setState({
+    fighterA: { ...s.fighterA, superMeter: 100, momentum: 10, cooldowns: {} },
+    activeSide: 'a',
+  })
+  const st = window.__game.getState()
+  const ult = getFighter(st.selectedA).ult
+  if (!ult) return 'no-ultimate'
+  st.castMove(ult)
+  return ult.name
+})
+console.log('  ult:', ultCast)
+await sleep(300)
+await shot('07-ult-flash')
+await sleep(620)
+await shot('08-ult-peak')
+
 await browser.close()
 console.log('done')

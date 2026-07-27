@@ -156,7 +156,7 @@ const RECIPES: Record<HitFlavor, Recipe> = {
     shock: true, shockSize: 4.6,
     groundRing: 2.4, scorch: 1.4, dust: 13,
     smokeCount: 16, emberCount: 18,
-    lightPeak: 11, lightDecay: 0.34, lightRange: 10,
+    lightPeak: 7, lightDecay: 0.34, lightRange: 8,
     radial: true,
   },
   signature: {
@@ -169,7 +169,7 @@ const RECIPES: Record<HitFlavor, Recipe> = {
     shock: true, shockSize: 4.5,
     groundRing: 2.4, scorch: 1.3, dust: 13,
     smokeCount: 12, emberCount: 18,
-    lightPeak: 11, lightDecay: 0.38, lightRange: 11,
+    lightPeak: 7, lightDecay: 0.38, lightRange: 8,
     radial: false, beam: true,
   },
 }
@@ -380,15 +380,15 @@ export class VfxSubsystem implements Subsystem {
     // that swallows the structured wave silhouette behind it.
     this.additive.emit({
       position: p, count: 1, speed: 0, color: core, color2: energy,
-      size: r.flareSize * scale, life: 0.6, gravity: 0, drag: 0.001,
-      shape: 'flare', intensity: 1.9,
+      size: r.flareSize * scale * 0.68, life: 0.6, gravity: 0, drag: 0.001,
+      shape: 'flare', intensity: 1.5,
     })
     // secondary smaller offset flares for a busier contact
     if (r.flareSize > 1.4) {
       this.additive.emit({
         position: p, count: 4, speed: 4.0, speedVariance: 0.8, color: core, color2: energy,
-        size: r.flareSize * 0.42 * scale, sizeVariance: 0.5, life: 0.5, gravity: -2, drag: 3,
-        shape: 'flare', intensity: 1.5, jitter: 0.35,
+        size: r.flareSize * 0.34 * scale, sizeVariance: 0.5, life: 0.5, gravity: -2, drag: 3,
+        shape: 'flare', intensity: 1.3, jitter: 0.35,
       })
     }
 
@@ -445,28 +445,28 @@ export class VfxSubsystem implements Subsystem {
     } else if (r.starBurst) {
       // CRIT: the hard impact star dominates — only a faint halo for depth.
       this.waves.spawn('star', p, r.shockSize * 1.5 * scale, 0.92, C(0xffffff), energy, 2.4 * mult)
-      this.waves.spawn('halo', p, r.shockSize * 0.4 * scale, 0.5, core, energy, 0.5 * mult)
+      this.waves.spawn('halo', p, r.shockSize * 0.42 * scale, 0.5, core, energy, 0.42 * mult)
     } else if (r.beam) {
       // SIGNATURE: anime super-flash pillar. Bright magenta pillar owns the frame;
       // only a small tinted core behind it (a big halo here is what bloomed to a
       // pink blob) so the vertical structure survives the bloom. Narrowed in x
       // (stretchX 0.7) so it reads as a tall column, not a square burst.
-      this.waves.spawn('beam', p, r.shockSize * 1.4 * scale, 1.05, C(0xffffff), energy, 2.4 * mult, 0.66)
-      this.waves.spawn('halo', p, r.shockSize * 0.28 * scale, 0.44, core, energy, 0.42 * mult)
+      this.waves.spawn('beam', p, r.shockSize * 1.4 * scale, 1.05, C(0xffffff), energy, 2.0 * mult, 0.66)
+      this.waves.spawn('halo', p, r.shockSize * 0.26 * scale, 0.44, core, energy, 0.34 * mult)
     } else if (r.combo) {
       // COMBO: violet multi-hit flurry rosette + a compact energy core. Snaps to
       // full size instantly so even the opening micro-hit reads on capture.
       this.waves.spawn('flurry', p, r.shockSize * 1.5 * scale, 0.9, C(0xffffff), energy, 2.2 * mult)
-      this.waves.spawn('halo', p, r.shockSize * 0.4 * scale, 0.46, core, energy, 0.5 * mult)
+      this.waves.spawn('halo', p, r.shockSize * 0.4 * scale, 0.46, core, energy, 0.4 * mult)
     } else if (r.shock && !r.radial) {
       const shockPos = p.clone().add(away.clone().multiplyScalar(0.35 * scale))
       this.waves.spawn('shock', shockPos, r.shockSize * scale, 0.86, core, energy, 1.7 * mult, 1.18)
       // small tinted core behind the ring so the centre has mass (kills the donut)
-      this.waves.spawn('halo', p, r.shockSize * 0.5 * scale, 0.5, core, energy, 1.1 * mult)
+      this.waves.spawn('halo', p, r.shockSize * 0.5 * scale, 0.5, core, energy, 0.75 * mult)
     } else {
       // LIGHT: a compact but crisp snap — small energy bloom + a tiny sharp star.
       // Kept alive ~0.9s so even the weakest hit reads on capture, not a bloom dot.
-      this.waves.spawn('halo', p, 2.4 * scale, 0.9, core, energy, 1.6 * mult)
+      this.waves.spawn('halo', p, 2.4 * scale, 0.9, core, energy, 1.1 * mult)
       this.waves.spawn('star', p, 3.4 * scale, 0.9, C(0xffffff), energy, 1.9 * mult)
     }
     if (r.radial) {
@@ -474,8 +474,8 @@ export class VfxSubsystem implements Subsystem {
       // overlaid star was removed: it piled a second radial burst onto the centre
       // and helped bloom it into a ball. Rays now own the silhouette; a thin gold
       // shaft of light adds a vertical accent that survives bloom.
-      this.waves.spawn('radial', p, r.shockSize * 1.0 * scale, 0.95, C(0xffffff), energy, 1.65)
-      this.waves.spawn('beam', p, r.shockSize * 1.05 * scale, 0.8, C(0xffffff), energy, 1.3, 0.42)
+      this.waves.spawn('radial', p, r.shockSize * 1.0 * scale, 0.95, C(0xffffff), energy, 1.15)
+      this.waves.spawn('beam', p, r.shockSize * 1.05 * scale, 0.8, C(0xffffff), energy, 0.85, 0.42)
       this.waves.spawn('shock', p, r.shockSize * 1.0 * scale, 0.9, core, ember, 0.55, 1.0)
     }
 
@@ -545,7 +545,7 @@ export class VfxSubsystem implements Subsystem {
       }
       // rising ground ring + swelling light
       this.decals.spawn('ring', p.clone().setY(WORLD.GROUND_Y), 2.2, 0.5, c2, c1, 1.2)
-      this.lights.pop(p, c2, 8, 0.5, 0.2, 12)
+      this.lights.pop(p, c2, 8, 0.5, 0.2, 9)
     } else if (flavor === 'heavy' || flavor === 'crit') {
       // A brief wind-up glow so the swing has anticipation.
       this.lights.pop(p, C(0xffb060), 3, 0.16, 0, 7)
@@ -568,7 +568,7 @@ export class VfxSubsystem implements Subsystem {
     // Central emission is kept lean so the CRYSTAL FACET lines are the brightest
     // feature and survive bloom as a shard shell (instead of a soft cyan orb) even
     // on dark, low-key stages.
-    this.lights.pop(p, C(0xbfe9ff), 13, 0.3, 0.05, 13)
+    this.lights.pop(p, C(0xbfe9ff), 11, 0.3, 0.05, 10)
     // crystalline contact flash — cold, brief, so the CRYSTAL silhouette reads
     this.flashMat.uniforms.uColor.value.copy(white)
     this.flashMat.uniforms.uColor2.value.copy(cyan)
@@ -583,10 +583,10 @@ export class VfxSubsystem implements Subsystem {
     // hot white contact flare core
     this.additive.emit({
       position: p, count: 1, speed: 0, color: white, color2: cyan,
-      size: 1.3, life: 0.4, gravity: 0, drag: 0.001, shape: 'flare', intensity: 1.1,
+      size: 1.0, life: 0.4, gravity: 0, drag: 0.001, shape: 'flare', intensity: 0.8,
     })
     // sharp white impact star — the instant CRACK read (lean so it doesn't dome)
-    this.waves.spawn('star', p, 5.2, 0.72, white, cyan, 1.3, 1.0)
+    this.waves.spawn('star', p, 4.6, 0.72, white, cyan, 1.3, 1.0)
     // the big faceted glass pane — shatter's identity, snaps to full size, bright
     // facet shell so the crystal reads as the dominant structure.
     this.waves.spawn('crystal', p, 7.8, 0.95, white, cyan, 3.2)
@@ -598,7 +598,7 @@ export class VfxSubsystem implements Subsystem {
     // ── Beat 2 (55ms): the pane EXPLODES into flying glass — hard angular
     // splinters bursting out and skittering on the floor, plus a secondary ring.
     this.schedule(0.055, () => {
-      this.lights.pop(p, cyan, 10, 0.28, 0.05, 13)
+      this.lights.pop(p, cyan, 9, 0.28, 0.05, 10)
       // dense icy splinters bursting outward, stretched & spinning
       this.additive.emit({
         position: p, count: 130, speed: 16, speedVariance: 0.85, color: white, color2: cyan,
@@ -645,7 +645,7 @@ export class VfxSubsystem implements Subsystem {
     // star sheared along the launch. The star (not a white sun) carries the read.
     // Light range kept below full-arena so the blast reads as a bright fireball
     // with dark frame edges, not a flat full-screen colour wash on bright stages.
-    this.lights.pop(p, white, 11, 0.42, 0.04, 10)
+    this.lights.pop(p, white, 7, 0.42, 0.04, 8)
     this.flashMat.uniforms.uColor.value.copy(C(0xffe6a3))
     this.flashMat.uniforms.uColor2.value.copy(orange)
     this.flashMat.uniforms.uSpikes.value = 2.2
@@ -663,12 +663,12 @@ export class VfxSubsystem implements Subsystem {
     // spikes punch out well past the central hot mass (otherwise bloom fills the
     // gaps and the money shot reads as a blob instead of a star) — but not so large
     // or bright it overruns the frame into a flat colour wash on graded stages.
-    this.waves.spawn('star', p, 7.6, 1.0, gold, orange, 1.7, 1.5)
+    this.waves.spawn('star', p, 7.6, 1.0, gold, orange, 1.3, 1.5)
     // vertical eruption shaft — a tall gold pillar of light bursting up from the
     // impact. A radial star alone rounds into a ball under heavy bloom; a strong
     // vertical column keeps a hard, unmistakable KO silhouette that reads through
     // bloom and colour grade, making this the most structured frame in the game.
-    this.waves.spawn('beam', p, 8.0, 0.9, C(0xffffff), gold, 1.9, 0.42)
+    this.waves.spawn('beam', p, 8.0, 0.9, C(0xffffff), gold, 1.3, 0.42)
     // directional compression front punched along the launch vector — kept dim so
     // it adds a sheared edge without piling another bright disc onto the centre
     // (three bright waves stacked at one point saturate into a featureless dome).
@@ -686,7 +686,7 @@ export class VfxSubsystem implements Subsystem {
     // Beat 2 (60ms): the blast — spark storm + debris + ground rupture, all
     // sheared along the launch vector so the force reads as directional.
     this.schedule(0.06, () => {
-      this.lights.pop(p, gold, 11, 0.36, 0.08, 10)
+      this.lights.pop(p, gold, 7, 0.36, 0.08, 8)
       this.additive.emit({
         position: p, count: 170, speed: 21, speedVariance: 0.85, direction: launch, spread: 1.15,
         color: white, color2: orange, size: 0.13, sizeVariance: 0.9, life: 1.1, lifeVariance: 0.4,

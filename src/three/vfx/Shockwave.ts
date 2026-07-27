@@ -210,42 +210,52 @@ const WAVE_FRAG = /* glsl */ `
       // expanding gold ring marks the super's shock front.
       float grow = smoothstep(0.0, 0.03, uAge);
       float fade = 1.0 - smoothstep(0.30, 1.0, uAge);
-      // primary long rays (12) + sharp secondary rays (24) with per-spoke length
-      float rays = pow(0.5 + 0.5 * sin(ang * 12.0 + uSeed * 6.0), 14.0);
-      rays += pow(0.5 + 0.5 * sin(ang * 24.0 + 1.7 + uSeed), 22.0) * 0.5;
-      float rayLen = 0.55 + 0.45 * hash(floor((ang + 3.14159) / 6.2831 * 12.0) + uSeed);
+      // primary long rays (10) + sharp secondary rays (20), both kept DELIBERATELY
+      // sparse and high-exponent so they read as distinct god-ray shafts with wide
+      // DARK gaps between them — not a dense filled sunburst. The wide dark gaps are
+      // what keep the total bright AREA small so this never blooms the whole frame
+      // milky (a dense filled disc did exactly that regardless of how dim it was).
+      float rays = pow(0.5 + 0.5 * sin(ang * 10.0 + uSeed * 6.0), 26.0);
+      rays += pow(0.5 + 0.5 * sin(ang * 20.0 + 1.7 + uSeed), 34.0) * 0.4;
+      float rayLen = 0.55 + 0.45 * hash(floor((ang + 3.14159) / 6.2831 * 10.0) + uSeed);
       // rays reach outward from just past the core and taper to nothing
       float along = smoothstep(rayLen, 0.12, r) * smoothstep(0.07, 0.2, r);
       rays *= along;
       rays *= 0.7 + 0.55 * fbm(vec2(ang * 5.0, r * 3.0 - uAge * 3.0) + uSeed);
       // crisp expanding golden ring — the super's shock front
       float ringR = 0.28 + 0.58 * (1.0 - pow(1.0 - uAge, 2.0));
-      float goldRing = ring(r, ringR, 0.055) * (1.0 - smoothstep(0.55, 1.0, uAge));
+      float goldRing = ring(r, ringR, 0.05) * (1.0 - smoothstep(0.55, 1.0, uAge));
       // small, defined churning core (never a big flat disc)
-      vec3 core = hotCore(r, ang, uColor2, 0.16, uSeed);
-      float coreA = smoothstep(0.16, 0.0, r);
-      float body = rays + goldRing * 0.9;
-      float a = clamp((body + coreA * 0.32) * grow * fade, 0.0, 1.0);
-      // Rays own the frame; the central core is kept very dim so it never blooms
-      // into a solid dome that swallows the god-ray silhouette. Rays boosted so the
-      // long spokes punch out past the hot centre on bright, heavily-graded stages.
-      vec3 col = uColor2 * (body * 2.9) + vec3(1.0) * goldRing * 0.3 + core * 0.25;
+      vec3 core = hotCore(r, ang, uColor2, 0.14, uSeed);
+      float coreA = smoothstep(0.14, 0.0, r);
+      float body = rays + goldRing * 0.85;
+      float a = clamp((body + coreA * 0.28) * grow * fade, 0.0, 1.0);
+      // Sharp sparse rays own the frame; the central core is kept very dim so it
+      // never blooms into a solid dome that swallows the god-ray silhouette.
+      vec3 col = uColor2 * (body * 2.6) + vec3(1.0) * goldRing * 0.28 + core * 0.22;
       col *= uIntensity;
       if (a < 0.004) discard;
       gl_FragColor = vec4(col, a);
     } else if (uMode < 2.5) {
-      // HALO: turbulent energy bloom — flavour-tinted, eroded so it churns.
+      // HALO: a soft energy bloom that gives the contact point MASS without
+      // engulfing the fighter. Deliberately kept as a thin annular glow — bright
+      // at a mid radius, punched HOLLOW at the very centre — so the fighter and
+      // the structured wave in front always read THROUGH it instead of being
+      // swallowed by a solid additive dome. This was the single biggest "cheap
+      // additive blob" tell in the whole system.
       float grow = smoothstep(0.0, 0.1, uAge);
       float fade = 1.0 - smoothstep(0.15, 1.0, uAge);
-      float body = smoothstep(1.0, 0.0, r);
+      float body = smoothstep(1.0, 0.12, r);          // fade to nothing at rim
+      float hollow = smoothstep(0.0, 0.34, r);         // carve the centre open
+      float shell = body * mix(0.35, 1.0, hollow);     // annular, brightest mid-out
       float churn = 0.55 + 0.7 * fbm(vec2(cos(ang), sin(ang)) * 3.0 + vec2(uSeed, -uAge * 2.0));
-      float a = pow(body, 1.7) * grow * fade * churn;
-      // hot white only at the very core; the disc body is saturated identity colour
-      float hotcore = smoothstep(0.24, 0.0, r);
-      vec3 col = uColor2 * (0.9 + body * 2.2) + vec3(1.0) * hotcore * 0.45;
+      float a = pow(shell, 1.9) * grow * fade * churn * 0.72;
+      // a single tiny hot pip at the very core for a contact spark, nothing more
+      float hotcore = smoothstep(0.10, 0.0, r);
+      vec3 col = uColor2 * (shell * 1.6) + vec3(1.0) * hotcore * 0.35;
       col *= uIntensity;
-      if (a < 0.005) discard;
-      gl_FragColor = vec4(col, a * 0.9);
+      if (a < 0.004) discard;
+      gl_FragColor = vec4(col, a);
     } else if (uMode < 3.5) {
       // STAR: a hard 6-point impact star (CRIT signature) — sharp, thin spikes
       // that narrow to a razor tip, with a bright core line down each one. The
@@ -286,7 +296,7 @@ const WAVE_FRAG = /* glsl */ `
       float fade = 1.0 - smoothstep(0.32, 1.0, uAge);
       // SNAP open — the armour pane cracks to full size instantly, then holds
       // as a flash-frozen shatter before it fades.
-      float ease = smoothstep(0.0, 0.045, uAge) * (1.0 + 0.10 * (1.0 - smoothstep(0.045, 0.16, uAge)));
+      float ease = smoothstep(0.0, 0.028, uAge) * (1.0 + 0.10 * (1.0 - smoothstep(0.045, 0.16, uAge)));
       float N = 7.0;
       float sector = 6.28318 / N;
       float rot = uSeed * 1.7;
@@ -308,7 +318,7 @@ const WAVE_FRAG = /* glsl */ `
       float coreA = smoothstep(0.16, 0.0, r) * 0.3;
       float a = clamp((shell + shell2 + crack * 0.9 + chip + coreA) * grow * fade, 0.0, 1.0);
       // bright glassy rim (white) on the shell crest, flavour colour in the body
-      vec3 col = uColor2 * (shell * 2.3 + shell2 * 1.5 + crack * 2.4 + chip * 1.8 + 0.09)
+      vec3 col = uColor2 * (shell * 2.9 + shell2 * 1.7 + crack * 2.9 + chip * 2.0 + 0.09)
                  + vec3(1.0) * (shell * 1.15 + crack * 0.5) + core;
       col *= uIntensity;
       if (a < 0.005) discard;
@@ -371,23 +381,23 @@ const WAVE_FRAG = /* glsl */ `
       // vertical pillar — narrow in x, tall in y, feathered edges + churn.
       // A dark seam is carved down the very centre so the pillar reads as two
       // bright rails (structure) instead of one solid slab that blooms to white.
-      float pillarW = 0.11 + 0.045 * fbm(vec2(d.y * 6.0, uSeed));
-      float pillar = smoothstep(pillarW, 0.0, abs(d.x)) * smoothstep(1.0, 0.1, abs(d.y) * 0.9);
-      float rails = smoothstep(0.028, pillarW * 0.55, abs(d.x)); // carve centre seam
+      float pillarW = 0.10 + 0.04 * fbm(vec2(d.y * 6.0, uSeed));
+      float pillar = smoothstep(pillarW, 0.0, abs(d.x)) * smoothstep(0.78, 0.1, abs(d.y) * 0.9);
+      float rails = smoothstep(0.026, pillarW * 0.55, abs(d.x)); // carve centre seam
       pillar *= 0.35 + 0.65 * rails;
       // thin horizontal lens crossbar
-      float bar = smoothstep(0.03, 0.0, abs(d.y)) * smoothstep(1.0, 0.0, abs(d.x) * 0.85);
+      float bar = smoothstep(0.028, 0.0, abs(d.y)) * smoothstep(0.85, 0.0, abs(d.x) * 0.85);
       // secondary radial spokes so the centre still bursts
-      float spokes = pow(0.5 + 0.5 * sin(ang * 16.0 + uSeed * 6.0), 9.0) * smoothstep(0.9, 0.15, r) * 0.6;
+      float spokes = pow(0.5 + 0.5 * sin(ang * 16.0 + uSeed * 6.0), 12.0) * smoothstep(0.9, 0.15, r) * 0.55;
       float grid = grow * ease;
       pillar *= grid; bar *= grid; spokes *= grid;
       // small, tight core — a big soft core is exactly what blooms into a blob
-      vec3 core = hotCore(r, ang, uColor2, 0.20, uSeed);
-      float coreA = smoothstep(0.20, 0.0, r);
-      float a = clamp((pillar + bar + spokes + coreA * 0.8) * fade, 0.0, 1.0);
+      vec3 core = hotCore(r, ang, uColor2, 0.18, uSeed);
+      float coreA = smoothstep(0.18, 0.0, r);
+      float a = clamp((pillar + bar + spokes + coreA * 0.5) * fade, 0.0, 1.0);
       // saturated magenta owns the body; white confined to the thin crossbar/spine
-      vec3 col = uColor2 * (pillar * 1.7 + bar * 1.5 + spokes * 1.9 + 0.2)
-                 + vec3(1.0) * (bar * 0.45 + pillar * 0.16) + core * 0.85;
+      vec3 col = uColor2 * (pillar * 1.6 + bar * 1.4 + spokes * 1.8 + 0.16)
+                 + vec3(1.0) * (bar * 0.42 + pillar * 0.14) + core * 0.7;
       col *= uIntensity;
       if (a < 0.005) discard;
       gl_FragColor = vec4(col, a);

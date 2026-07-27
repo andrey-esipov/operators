@@ -449,14 +449,16 @@ const PARTICLE_FRAG = /* glsl */ `
       a = 1.0 - smoothstep(0.30, 0.36, dm);
       coreBoost = 0.4;
     } else if (vShape < 7.5) {
-      // flare: 4-point + 8-point star burst (the "hit spark")
+      // flare: 4-point + 8-point star burst (the "hit spark"). Kept SHARP — a
+      // tight hot pin plus long thin spikes, NOT a fat soft disc, so it reads as
+      // a crisp spark under heavy bloom instead of fusing into a blown-out ball.
       float ang = atan(d.y, d.x);
-      float star4 = pow(max(0.0, cos(ang * 2.0)), 20.0) + pow(max(0.0, sin(ang * 2.0)), 20.0);
-      float star8 = pow(max(0.0, cos(ang * 4.0)), 16.0) * 0.5;
-      float core = smoothstep(0.5, 0.0, r);
-      float spikes = (star4 + star8) * smoothstep(0.5, 0.0, r) ;
-      a = clamp(core * 0.9 + spikes * 1.4, 0.0, 3.0);
-      coreBoost = 3.0;
+      float star4 = pow(max(0.0, cos(ang * 2.0)), 14.0) + pow(max(0.0, sin(ang * 2.0)), 14.0);
+      float star8 = pow(max(0.0, cos(ang * 4.0)), 12.0) * 0.6;
+      float core = smoothstep(0.32, 0.0, r);            // tight hot pin, not a disc
+      float spikes = (star4 + star8) * smoothstep(0.66, 0.0, r); // spikes reach further out
+      a = clamp(core * 0.55 + spikes * 1.75, 0.0, 3.0);
+      coreBoost = 2.3;
     } else {
       // dust (ground): soft, grainy, flat
       float n = noise(vUv * 5.0 + vSeed);

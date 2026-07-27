@@ -544,7 +544,7 @@ export const FIGHTER_FRAGMENT = /* glsl */ `
     float kickBoost = 1.18 + (1.0 - smoothstep(0.35, 1.5, stageRimSep)) * 0.5;
     // Dark materials (black suits, dark denim) have the least internal value
     // range to separate on, so give them a touch more of the carving edge.
-    float kickMat = mix(0.6, 1.0, 1.0 - matte * 0.5) + dark * 0.16;
+    float kickMat = mix(0.6, 1.0, 1.0 - matte * 0.5) + dark * 0.26;
     vec3 kicker = uKickColor * uKickIntensity * kickBoost * kickF * kickTop * kickMat;
     // Lower-body separation rim: dark trousers merge into a same-luminance floor
     // because the only cue was trouser-vs-floor value contrast. Drive a distinctly

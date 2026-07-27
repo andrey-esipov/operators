@@ -97,6 +97,37 @@ export function RoundEnd() {
 
         {/* The word IS the design. Enormous, chromatic, lands in ~130ms. */}
         <div className="relative">
+          {/* KO IMPACT BURST — detonates behind the word at t0: a blinding
+              white-hot core plus radial shards, so the first frame reads as the
+              moment a punch connects, not a static red overlay. */}
+          {!isDraw && (
+            <div className="absolute pointer-events-none" style={{ left: '50%', top: '50%', width: 0, height: 0, zIndex: 0 }}>
+              <div
+                className="absolute"
+                style={{
+                  left: 0, top: 0, width: 'clamp(320px,44vw,640px)', height: 'clamp(320px,44vw,640px)',
+                  transform: 'translate(-50%,-50%)',
+                  background: `radial-gradient(circle at center, #fff 0%, #FFE7C2 16%, ${accent}cc 34%, transparent 62%)`,
+                  animation: 'cer-ko-burst 0.4s cubic-bezier(0.1,0.8,0.3,1) both',
+                }}
+              />
+              {[0, 30, 62, 90, 122, 150].map((rot, i) => (
+                <div
+                  key={rot}
+                  className="absolute"
+                  style={{
+                    left: 0, top: 0,
+                    width: 'clamp(280px,52vw,760px)', height: i % 2 ? 5 : 8,
+                    transformOrigin: 'center',
+                    background: `linear-gradient(90deg, transparent, #fff 46%, #fff 54%, transparent)`,
+                    boxShadow: `0 0 14px ${accent}`,
+                    ['--rot' as string]: `${rot}deg`,
+                    animation: `cer-ko-shard ${0.42 + (i % 3) * 0.05}s cubic-bezier(0.1,0.85,0.3,1) both`,
+                  }}
+                />
+              ))}
+            </div>
+          )}
           {/* angular energy slashes flanking the KO */}
           <span className="absolute top-1/2 -left-[6%] pointer-events-none" style={{
             width: 'clamp(60px,10vw,150px)', height: 8, transform: 'translateY(-50%) skewX(-30deg)',
@@ -120,6 +151,7 @@ export function RoundEnd() {
             entrance="ko"
             live
             idle
+            style={{ position: 'relative', zIndex: 3 }}
           >
             {isDraw ? 'DRAW' : 'K.O.'}
           </PowerWord>

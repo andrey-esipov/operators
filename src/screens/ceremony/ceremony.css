@@ -100,6 +100,21 @@
   100% { opacity: 0; }
 }
 
+/* KO impact burst — a blinding white-hot core that detonates at the point of
+   impact and collapses in ~220ms, so the first frame reads as a punch landing
+   rather than a flat colour wash. */
+@keyframes cer-ko-burst {
+  0%   { transform: translate(-50%, -50%) scale(0.15); opacity: 1; }
+  40%  { opacity: 0.95; }
+  100% { transform: translate(-50%, -50%) scale(2.8); opacity: 0; }
+}
+/* Radial impact shards — thin spikes that fire outward from the KO centre. */
+@keyframes cer-ko-shard {
+  0%   { transform: translate(-50%, -50%) rotate(var(--rot)) scaleX(0.1); opacity: 0.95; }
+  45%  { opacity: 0.9; }
+  100% { transform: translate(-50%, -50%) rotate(var(--rot)) scaleX(1); opacity: 0; }
+}
+
 /* Hard, short camera shake used on impacts. */
 @keyframes cer-shake-hard {
   0%, 100% { transform: translate(0, 0); }

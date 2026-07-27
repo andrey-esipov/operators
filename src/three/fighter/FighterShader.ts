@@ -530,10 +530,17 @@ export const FIGHTER_FRAGMENT = /* glsl */ `
     // range to separate on, so give them a touch more of the carving edge.
     float kickMat = mix(0.6, 1.0, 1.0 - matte * 0.5) + dark * 0.16;
     vec3 kicker = uKickColor * uKickIntensity * kickBoost * kickF * kickTop * kickMat;
+    // Lower-body separation rim: dark trousers merge into a same-luminance floor
+    // because the only cue was trouser-vs-floor value contrast. Drive a distinctly
+    // BRIGHTER carving edge onto the legs/feet so the rim's luminance clearly
+    // exceeds the floor's regardless of hue (survives even a monochrome red grade),
+    // and lift the very-edge floor there so the leg contour isn't half-dimmed.
+    float lowerBody = 1.0 - smoothstep(0.0, 0.46, vHeightNorm);
+    kicker *= 1.0 + lowerBody * 0.7;
     // Hold the kicker just inside the linework (so it never haloes the ink
     // outline) but keep enough of it right at the back edge to actually read as
     // separation, and clamp to sprite alpha so it can't spill past the silhouette.
-    kicker *= mix(0.52, 1.0, interior) * base.a;
+    kicker *= mix(mix(0.52, 0.72, lowerBody), 1.0, interior) * base.a;
     rim += kicker;
 
     // Accent corona: the fighter's identity colour, reserved for super state.
@@ -575,6 +582,18 @@ export const FIGHTER_FRAGMENT = /* glsl */ `
     // cheap neutral value-pop that helps the silhouette separate on same-hue
     // backdrops.
     lit += albedo * vec3(0.16) * metal * ao;
+    // Dark-suit form light: charcoal cloth has near-zero albedo, so albedo*diffuse
+    // leaves its planes invisible even when lit and the suit reads as a flat black
+    // cutout with the face/hands floating on it (worst on a smooth, un-patterned
+    // suit). Add a small NON-albedo-modulated, key-driven term on dark materials so
+    // the broad body curvature carried in Nbroad (shoulders, chest, knees) paints a
+    // rounded lit gradient directly onto the black mass — sculpted form, not a
+    // sticker — while shadowed planes and cavities stay near-black. Self-limiting:
+    // it only fills where the suit is ACTUALLY crushed toward black (dim rigs like
+    // crisis), and fades out as the suit already catches value on a bright rig, so
+    // it never grays out a dark top that is already reading as lit cloth.
+    float darkNeed = 1.0 - smoothstep(0.035, 0.11, luma(lit));
+    lit += keyCol * dark * wrapKey * selfShadow * ao * uKeyIntensity * 0.1 * darkNeed;
     vec3 color = lit;
 
     // ---- Hero grade: authored value range + defended colour identity ------

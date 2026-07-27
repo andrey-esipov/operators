@@ -8,7 +8,7 @@ export { FPS, DT } from './types'
 
 export { step, createFight, makeFighter, fighterCanAct } from './sim'
 export { scaleDamage } from './combat'
-export { FighterAI, makeAI, type AIOptions } from './ai'
+export { FighterAI, makeAI, type AIOptions, type Difficulty } from './ai'
 export { makeRng, type Rng } from './rng'
 
 export {

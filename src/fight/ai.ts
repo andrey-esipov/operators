@@ -1,12 +1,19 @@
 /**
- * A basic but competent CPU opponent. It is not part of the deterministic sim —
- * it only produces InputFrames the sim consumes — but it is itself deterministic
- * given a seed, so AI-vs-AI matches replay identically.
+ * A CPU opponent with genuine difficulty tiers. It is not part of the
+ * deterministic sim — it only produces InputFrames the sim consumes — but it is
+ * itself deterministic given a seed, so AI-vs-AI matches replay identically.
  *
- * Behaviours, in priority order: anti-air a jumping opponent, block a close
- * attack, whiff-punish a move caught in recovery, and otherwise walk into range
- * and poke. That is enough that it defends itself and takes its turn rather than
- * standing still as a punching bag.
+ * What separates the tiers is not a bigger damage number, it is *reaction time*
+ * and *decision quality*. A human can't see a jump-in and anti-air it on the
+ * same frame; neither should the AI. Each tier reads a delayed snapshot of the
+ * opponent (reactionFrames old) and only reacts to that, so a jab it "didn't
+ * see coming" lands, exactly as against a person. Harder tiers see fresher
+ * state, block/punish/tech more reliably, and press their turn harder. An AI
+ * that reacts on frame 1 or never blocks both feel fake; these sit in between.
+ *
+ * Behaviours, in priority order: tech a read throw, anti-air a jumping opponent,
+ * block a committed attack, whiff-punish a move caught in recovery, and
+ * otherwise walk into range and poke.
  */
 
 import type { Button, Direction, FightState, InputFrame } from './types'
@@ -23,7 +30,7 @@ function frame(dir: Direction, buttons?: Button[]): InputFrame {
   return { dir, held: set, pressed: set }
 }
 
-/** Relative → absolute for the AI: forward means "toward the opponent". */
+/** Relative -> absolute for the AI: forward means "toward the opponent". */
 function toward(dir: Direction, facing: 1 | -1): Direction {
   if (facing === 1) return dir
   const flip: Record<Direction, Direction> = {
@@ -32,26 +39,89 @@ function toward(dir: Direction, facing: 1 | -1): Direction {
   return flip[dir]
 }
 
+export type Difficulty = 'easy' | 'medium' | 'hard'
+
+interface Tier {
+  /** How many frames stale the opponent read is — the human reaction lag. */
+  reactionFrames: number
+  /** Probability of blocking a committed attack it has "seen". */
+  blockChance: number
+  /** Probability of whiff-punishing a move caught in recovery. */
+  punishChance: number
+  /** Probability of teching a throw it reads coming. */
+  techChance: number
+  /** 0..1 offensive pressure. */
+  aggression: number
+}
+
+const TIERS: Record<Difficulty, Tier> = {
+  // Slow to react, drops most blocks, barely techs — a beginner punching bag
+  // that still occasionally defends itself.
+  easy: { reactionFrames: 22, blockChance: 0.30, punishChance: 0.20, techChance: 0.10, aggression: 0.30 },
+  // Competent: blocks the obvious, punishes the slow, techs some throws.
+  medium: { reactionFrames: 14, blockChance: 0.65, punishChance: 0.55, techChance: 0.40, aggression: 0.55 },
+  // Sharp but still human-shaped: an 8-frame read is fast, not frame-perfect.
+  hard: { reactionFrames: 8, blockChance: 0.92, punishChance: 0.85, techChance: 0.70, aggression: 0.78 },
+}
+
+/** What the AI reacts to — the opponent's state, snapshotted so we can react to
+ *  a delayed copy and never with inhuman immediacy. */
+interface Obs {
+  grounded: boolean
+  posY: number
+  dist: number
+  attacking: boolean
+  inRecovery: boolean
+  throwStartup: boolean
+}
+
 export interface AIOptions {
   seed?: number
-  /** 0..1. Higher presses buttons more often and blocks a touch less. */
+  difficulty?: Difficulty
+  /** Optional override of the tier's aggression (kept for back-compat). */
   aggression?: number
 }
 
 export class FighterAI {
   private queue: Step[] = []
   private readonly rng: Rng
+  private readonly tier: Tier
   private readonly aggression: number
+  private readonly obs: Obs[] = []
 
   constructor(opts: AIOptions = {}) {
     this.rng = makeRng(opts.seed ?? 0x51ac)
-    this.aggression = opts.aggression ?? 0.5
+    this.tier = TIERS[opts.difficulty ?? 'medium']
+    this.aggression = opts.aggression ?? this.tier.aggression
+  }
+
+  /** Snapshot the opponent this frame and return the read from reactionFrames
+   *  ago — the freshest state this tier is allowed to have noticed. */
+  private observe(state: FightState, me: 0 | 1): Obs {
+    const meF = state.fighters[me]
+    const opp = state.fighters[1 - me]
+    const oppMove = opp.move ? getFighterDef(opp.id).moves[opp.move.id] : undefined
+    const cur: Obs = {
+      grounded: opp.grounded,
+      posY: opp.pos.y,
+      dist: Math.abs(opp.pos.x - meF.pos.x),
+      attacking: opp.stance === 'attack',
+      inRecovery: !!oppMove && !!opp.move && opp.move.frame > oppMove.active[1],
+      throwStartup:
+        !!oppMove && !!opp.move && oppMove.hit.guard === 'throw' &&
+        opp.move.frame <= oppMove.active[1],
+    }
+    this.obs.push(cur)
+    const idx = this.obs.length - 1 - this.tier.reactionFrames
+    return idx >= 0 ? this.obs[idx] : this.obs[0]
   }
 
   decide(state: FightState, i: 0 | 1): InputFrame {
     const me = state.fighters[i]
-    const opp = state.fighters[1 - i]
     const facing = me.facing
+    // Always advance the observation ring, even when replaying a queued motion,
+    // so reaction timing stays honest.
+    const o = this.observe(state, i)
 
     // Play out a queued motion (a special takes several frames to input).
     if (this.queue.length > 0) {
@@ -61,58 +131,67 @@ export class FighterAI {
 
     if (state.phase !== 'fight') return frame(5)
 
-    const dist = Math.abs(opp.pos.x - me.pos.x)
-    const back: Direction = 4 // relative back → toward() converts to absolute
+    const back: Direction = 4
     const downBack: Direction = 1
     const fwd: Direction = 6
 
-    // Can't act (stun / recovery / hitstop): hold down-back so we block the
-    // instant we recover, low by default.
+    // Reading own state (stun/recovery) is instant — you always know your own
+    // situation. Only the opponent read is delayed.
     const canAct = state.hitstop === 0 && me.stunRemaining === 0 &&
       (me.stance === 'idle' || me.stance === 'walk-fwd' || me.stance === 'walk-back' ||
         me.stance === 'crouch')
     if (!canAct) return frame(toward(downBack, facing))
 
-    // Anti-air: opponent airborne and in range → rising uppercut (cr.HP).
-    if (!opp.grounded && opp.pos.y > 55 && dist < 175) {
-      return frame(toward(2, facing), ['hp'])
+    // Throw defence: read a close throw startup and roll the tier's tech chance,
+    // pressing LP+LK to break it (option-selected with a down-back block).
+    if (o.throwStartup && o.dist < 75 && this.rng.next() < this.tier.techChance) {
+      return frame(toward(downBack, facing), ['lp', 'lk'])
     }
 
-    // Block a committed close attack. A little randomness so it isn't a wall.
-    if (opp.stance === 'attack' && dist < 150) {
-      const oppMove = opp.move ? getFighterDef(opp.id).moves[opp.move.id] : undefined
-      const inRecovery = !!oppMove && !!opp.move && opp.move.frame > oppMove.active[1]
-      if (inRecovery && dist < 120) {
+    // Anti-air: opponent airborne and in range -> rising uppercut (cr.HP). Gated
+    // by the tier so easy whiffs it more often.
+    if (!o.grounded && o.posY > 55 && o.dist < 175) {
+      if (this.rng.next() < 0.4 + this.tier.blockChance * 0.6) {
+        return frame(toward(2, facing), ['hp'])
+      }
+      return frame(toward(back, facing)) // otherwise just retreat-guard
+    }
+
+    // React to a committed close attack.
+    if (o.attacking && o.dist < 150) {
+      if (o.inRecovery && o.dist < 120 && this.rng.next() < this.tier.punishChance) {
         // Whiff punish: quarter-circle Surge Palm for a real reward.
         this.queue = [{ rel: 3 }, { rel: 6, buttons: ['hp'] }]
         return frame(toward(2, facing))
       }
-      if (this.rng.next() > this.aggression * 0.35) {
-        return frame(toward(opp.pos.y > 20 ? back : downBack, facing))
+      if (this.rng.next() < this.tier.blockChance) {
+        return frame(toward(o.posY > 20 ? back : downBack, facing))
       }
     }
 
-    // Spacing.
-    if (dist > 165) {
-      // Approach, occasionally hop in.
-      if (this.rng.next() < 0.03 + this.aggression * 0.03) {
+    // Spacing (uses the delayed distance too, so the AI commits to approaches).
+    if (o.dist > 165) {
+      if (this.rng.next() < 0.02 + this.aggression * 0.04) {
         return frame(toward(9, facing)) // jump toward
       }
       return frame(toward(fwd, facing))
     }
-    if (dist > 95) {
-      if (this.rng.next() < 0.06 + this.aggression * 0.08) {
+    if (o.dist > 95) {
+      if (this.rng.next() < 0.05 + this.aggression * 0.1) {
         return frame(toward(2, facing), ['mk']) // cr.MK poke
       }
       return frame(toward(fwd, facing))
     }
-    // Point blank: press a light or convert into a special.
+    // Point blank: press a light, throw, or convert into a special.
     const r = this.rng.next()
-    if (r < 0.18 + this.aggression * 0.25) {
-      this.queue = [{ rel: 3 }, { rel: 6, buttons: ['lp'] }] // cr.LK-ish into palm feint
+    if (r < 0.08 + this.aggression * 0.12) {
+      return frame(toward(5, facing), ['lp', 'lk']) // go for a throw in the scramble
+    }
+    if (r < 0.22 + this.aggression * 0.25) {
+      this.queue = [{ rel: 3 }, { rel: 6, buttons: ['lp'] }] // stagger into a special
       return frame(toward(2, facing), ['lk'])
     }
-    if (r < 0.5) return frame(toward(2, facing), ['lp'])
+    if (r < 0.55) return frame(toward(2, facing), ['lp'])
     return frame(toward(downBack, facing)) // hold defense
   }
 }

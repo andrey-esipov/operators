@@ -131,7 +131,7 @@ export function groundFog(color: number, extent: number): { group: THREE.Group; 
         uColor: { value: new THREE.Color(color) },
         uTime: { value: 0 },
         uSeed: { value: i * 4.1 },
-        uOpacity: { value: 0.26 - i * 0.05 },
+        uOpacity: { value: 0.3 - i * 0.05 },
       },
       vertexShader: `varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
       fragmentShader: /* glsl */ `
@@ -160,7 +160,7 @@ export function groundFog(color: number, extent: number): { group: THREE.Group; 
   // Far atmospheric haze bands — tall, faint, ADDITIVE glow sheets standing at
   // the background-architecture depth so the far layer dissolves into luminous
   // fog instead of butting hard against the backdrop (atmospheric perspective).
-  for (let i = 0; i < 2; i++) {
+  for (let i = 0; i < 3; i++) {
     const mat = new THREE.ShaderMaterial({
       transparent: true,
       depthWrite: false,
@@ -171,7 +171,7 @@ export function groundFog(color: number, extent: number): { group: THREE.Group; 
         uColor: { value: new THREE.Color(color) },
         uTime: { value: 0 },
         uSeed: { value: 7.3 + i * 3.7 },
-        uOpacity: { value: 0.12 - i * 0.04 },
+        uOpacity: { value: 0.19 - i * 0.045 },
       },
       vertexShader: `varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
       fragmentShader: /* glsl */ `

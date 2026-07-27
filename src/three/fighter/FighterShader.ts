@@ -79,6 +79,21 @@ export interface FighterUniforms {
   /** Breathing exertion 0..1 (drives subtle warmth + sheen at low HP). */
   uExertion: { value: number }
 
+  // --- hero grade (AAA focal-point pass) ---
+  /** 0..1: how much the stage's coloured key/fill/ambient light is neutralised
+   *  toward its own luma before it touches the character, so a heavily-tinted
+   *  arena (crisis red) can't wash the albedo to a single hue. */
+  uIdentityDefense: { value: number }
+  /** Overall exposure multiplier so the fighter stays the brightest element. */
+  uCharExposure: { value: number }
+  /** Pivot contrast applied to the final lit colour (true black ↔ spec white). */
+  uContrast: { value: number }
+  /** Saturation multiplier so the character's colour identity stays vivid. */
+  uSaturation: { value: number }
+  /** Always-on neutral separation kicker that carves the silhouette. */
+  uKickColor: { value: THREE.Color }
+  uKickIntensity: { value: number }
+
   [key: string]: THREE.IUniform
 }
 
@@ -133,6 +148,13 @@ export function createFighterUniforms(): FighterUniforms {
     uTexel: { value: 1 / 1024 },
     uSweat: { value: 0 },
     uExertion: { value: 0 },
+
+    uIdentityDefense: { value: 0.62 },
+    uCharExposure: { value: 1.32 },
+    uContrast: { value: 1.17 },
+    uSaturation: { value: 1.2 },
+    uKickColor: { value: new THREE.Color(0xddeeff) },
+    uKickIntensity: { value: 1.05 },
   }
 }
 
@@ -223,6 +245,13 @@ export const FIGHTER_FRAGMENT = /* glsl */ `
   uniform float uSweat;
   uniform float uExertion;
 
+  uniform float uIdentityDefense;
+  uniform float uCharExposure;
+  uniform float uContrast;
+  uniform float uSaturation;
+  uniform vec3  uKickColor;
+  uniform float uKickIntensity;
+
   varying vec2  vUv;
   varying vec3  vWorldPos;
   varying vec3  vViewDir;
@@ -242,6 +271,13 @@ export const FIGHTER_FRAGMENT = /* glsl */ `
   }
 
   float luma(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
+
+  // Neutralise a coloured stage light toward its own luminance so it lights the
+  // character without staining the albedo to a single hue. Keeps the light's
+  // brightness (and thus the stage's mood/exposure) but defends colour identity.
+  vec3 defendLight(vec3 c, float amount) {
+    return mix(c, vec3(max(luma(c), 1e-3)), amount);
+  }
 
   // Classify skin from albedo: warm, ordered r>=g>=b, mid-bright, moderate sat.
   // Returns 0..1 mask. Robust enough to separate faces/hands/arms from denim,
@@ -364,6 +400,14 @@ export const FIGHTER_FRAGMENT = /* glsl */ `
     }
 
     // ---- Direct lighting --------------------------------------------------
+    // Defend the character's colour identity: neutralise the stage's coloured
+    // key/fill/ambient toward their own luma before they touch the albedo, then
+    // give the character its own exposure so it stays the brightest, most
+    // saturated element in frame (AAA focal-point rule).
+    vec3 keyCol = defendLight(uKeyColor, uIdentityDefense) * uCharExposure;
+    vec3 fillCol = defendLight(uFillColor, uIdentityDefense * 0.85);
+    vec3 ambCol = defendLight(uAmbientColor, uIdentityDefense * 0.7);
+
     vec3 Lkey = normalize(uKeyDir);
     float ndlKey = dot(Nbroad, Lkey);
     // Skin scatters light so its terminator is soft & warm; cloth/metal keep a
@@ -371,14 +415,14 @@ export const FIGHTER_FRAGMENT = /* glsl */ `
     float wrapAmt = mix(0.32, 0.62, skin);
     float wrapKey = clamp((ndlKey + wrapAmt) / (1.0 + wrapAmt), 0.0, 1.0);
     wrapKey = pow(wrapKey, mix(1.25, 1.0, skin));
-    vec3 diffuse = uKeyColor * uKeyIntensity * wrapKey * selfShadow;
+    vec3 diffuse = keyCol * uKeyIntensity * wrapKey * selfShadow;
 
     // Subsurface: on skin, the shadowed side glows warm (translucency).
     float sss = pow(clamp(1.0 - abs(ndlKey), 0.0, 1.0), 2.0) * (1.0 - wrapKey);
-    vec3 subsurface = uKeyColor * vec3(1.0, 0.42, 0.32) * sss * skin * uKeyIntensity * 0.62;
+    vec3 subsurface = keyCol * vec3(1.0, 0.42, 0.32) * sss * skin * uKeyIntensity * 0.62;
 
     float ndlFill = dot(Nbroad, normalize(uFillDir));
-    diffuse += uFillColor * uFillIntensity * (ndlFill * 0.5 + 0.5);
+    diffuse += fillCol * uFillIntensity * (ndlFill * 0.5 + 0.5);
 
     // Floor bounce: soft up-from-below light on the lower body, stage-tinted.
     float bounce = clamp(-Nbroad.y * 0.5 + 0.5, 0.0, 1.0) * (1.0 - smoothstep(0.0, 0.5, vHeightNorm));
@@ -396,9 +440,9 @@ export const FIGHTER_FRAGMENT = /* glsl */ `
     float specSkin  = pow(ndh, 22.0) * 0.20 * skin;
     float specCloth = pow(ndh, 44.0) * 0.025 * cloth * (1.0 - denim);
     float specMetal = pow(ndh, 95.0) * 1.25 * (metal + dark * 0.4);
-    vec3 specular = uKeyColor * (specSkin + specCloth + specMetal) * uKeyIntensity * 0.3 * selfShadow;
+    vec3 specular = keyCol * (specSkin + specCloth + specMetal) * uKeyIntensity * 0.3 * selfShadow;
     // Sweat sheen at low HP / exertion: extra broad wet highlight, skin only.
-    specular += uKeyColor * pow(ndh, 40.0) * skin * uSweat * 0.6 * uKeyIntensity * 0.3;
+    specular += keyCol * pow(ndh, 40.0) * skin * uSweat * 0.6 * uKeyIntensity * 0.3;
     specular *= base.a;
 
     // ---- Rim / back light -------------------------------------------------
@@ -409,6 +453,21 @@ export const FIGHTER_FRAGMENT = /* glsl */ `
     vec3 rim = uRimColor * uRimIntensity * fres * rimTerm * mix(1.0, 0.4, matte);
     // Neutral rim is held off the ink outline so flat frames never halo.
     rim *= mix(0.12, 1.0, interior);
+
+    // Always-on separation kicker: a bright, near-neutral back-light that carves
+    // the whole silhouette away from the backdrop no matter how weak (or how
+    // colour-clashing) the stage rim is. This is the single biggest thing that
+    // makes the fighter POP off the stage as the focal point. A tight fresnel
+    // keeps it a crisp edge line (not a bloomy halo), biased to the top so it
+    // reads as a light from behind-above.
+    float kickF = pow(1.0 - clamp(dot(N, V), 0.0, 1.0), 3.4);
+    float kickTop = clamp(Nbroad.y * 0.5 + 0.65, 0.0, 1.0);
+    vec3 kicker = uKickColor * uKickIntensity * kickF * kickTop * mix(0.6, 1.0, 1.0 - matte * 0.5);
+    // Ease off the very outer ink pixel so it sits just inside the linework, and
+    // clamp to the sprite alpha so it can never spill past the silhouette.
+    kicker *= mix(0.4, 1.0, interior) * base.a;
+    rim += kicker;
+
     // Accent corona: the fighter's identity colour, reserved for super state.
     // It is ALLOWED to ride the silhouette edge (that reading IS the charged
     // energy corona), only lightly eased in from the outline, then masked by
@@ -424,7 +483,7 @@ export const FIGHTER_FRAGMENT = /* glsl */ `
     float atten = uFlashIntensity / (1.0 + dist * dist * 1.6);
     vec3 flashL = uFlashColor * atten * max(dot(N, normalize(toFlash)) * 0.5 + 0.5, 0.0);
 
-    vec3 ambient = uAmbientColor * uAmbientIntensity;
+    vec3 ambient = ambCol * uAmbientIntensity;
 
     // Direct terms are fully occluded by cavity + contact AO; ambient is only
     // partly occluded so shadow cores keep the material's local colour (a purple
@@ -434,6 +493,17 @@ export const FIGHTER_FRAGMENT = /* glsl */ `
              + subsurface * ao
              + specular + rim * albedo * 0.5 + rim * 0.2;
     vec3 color = lit;
+
+    // ---- Hero grade: authored value range + defended colour identity ------
+    // Push a true black-to-specular-white response and keep the character's own
+    // hues vivid, so the fighter is the brightest, highest-contrast, most
+    // saturated element in frame (the AAA focal-point rule). Applied as the
+    // material's tonal response so the damage/super passes below layer on top.
+    color = max(color, 0.0);
+    float gLum = luma(color);
+    color = mix(vec3(gLum), color, uSaturation);        // vivid identity
+    color = (color - 0.42) * uContrast + 0.42;          // pivot contrast
+    color = max(color, 0.0);
 
     // ---- Damage state: grime, fatigue, flush, bruising & sweat ------------
     // All terms are multiplies or warm additives (never a mix to flat grey), so
@@ -482,12 +552,12 @@ export const FIGHTER_FRAGMENT = /* glsl */ `
       float upper = smoothstep(0.24, 0.86, vUv.y);
       vec3 Hs = normalize(normalize(uKeyDir) + V);
       float sheenBroad = pow(max(dot(N, Hs), 0.0), 3.5);
-      color += uKeyColor * sheenBroad * upper * uSweat * 1.25 * uKeyIntensity * 0.3 * selfShadow;
+      color += keyCol * sheenBroad * upper * uSweat * 1.25 * uKeyIntensity * 0.3 * selfShadow;
       float sheen = pow(max(dot(N, Hs), 0.0), 6.0);
-      color += uKeyColor * sheen * skin * upper * uSweat * 3.6 * uKeyIntensity * 0.3 * selfShadow;
+      color += keyCol * sheen * skin * upper * uSweat * 3.6 * uKeyIntensity * 0.3 * selfShadow;
       // Sparse bright beads riding on top of the sheen.
       float bead = smoothstep(0.9, 0.99, noise(uvP * 46.0));
-      color += uKeyColor * bead * skin * upper * uSweat * 1.7 * uKeyIntensity * 0.3;
+      color += keyCol * bead * skin * upper * uSweat * 1.7 * uKeyIntensity * 0.3;
     }
 
     // ---- Super charge: rising energy that visibly builds over the body ----

@@ -219,6 +219,18 @@ const palmBarrage = mkMove({
     kbx: 4, kby: 4, pushback: 0, hitstop: 16, meterGain: 0, meterGainOnBlock: 0, scaling: 0.5 },
 })
 
+// ── Throw ───────────────────────────────────────────────────────────────────
+// Unblockable, short-range, and techable (see combat). Big reward, but whiffs
+// into 20 frames of recovery so a fished throw is a full punish. Damage/knockdown
+// are applied by the throw path in combat; the Hit here supplies the numbers.
+const seismicToss = mkMove({
+  id: 'throw.f', name: 'Seismic Toss', tag: 'command', sprite: nextSprite(),
+  startup: 3, active: 2, recovery: 20,
+  hitbox: [{ x: 18, y: 40, w: 44, h: 130 }],
+  hit: { damage: 140, blockstun: 0, hitstun: 0, guard: 'throw', level: 'heavy',
+    kbx: 6, pushback: 0, hitstop: 12, meterGain: 14, meterGainOnBlock: 0 },
+})
+
 const MOVES: Record<string, Move> = {
   [stLP.id]: stLP, [stMP.id]: stMP, [stHP.id]: stHP,
   [stLK.id]: stLK, [stMK.id]: stMK, [stHK.id]: stHK,
@@ -229,6 +241,7 @@ const MOVES: Record<string, Move> = {
   [surgePalm.id]: surgePalm, [risingDragon.id]: risingDragon,
   [tornadoKick.id]: tornadoKick, [cannon.id]: cannon,
   [palmBarrage.id]: palmBarrage,
+  [seismicToss.id]: seismicToss,
 }
 
 const PUNCHES: Button[] = ['lp', 'mp', 'hp']
@@ -277,6 +290,10 @@ function select(ctx: SelectContext): Move | null {
     if (pressed.has('lp') || pressed.has('lk')) return jLP
     return null
   }
+
+  // Throw — the universal LP+LK. Above normals so the punch/kick don't eat it,
+  // below motions so a buffered special still wins. Combat decides range/tech.
+  if (grounded && pressed.has('lp') && pressed.has('lk')) return seismicToss
 
   // Command normals — only on a forward hold, so they don't eat the standing
   // version while you're neutral.

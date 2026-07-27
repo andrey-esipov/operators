@@ -97,6 +97,19 @@ export const MIN_DAMAGE = 5
  *  further hits whiff, which is what makes infinite air combos impossible. */
 export const JUGGLE_ALLOWANCE = 4
 
+/**
+ * Throws. A throw is unblockable but has short range and can be *teched*: if the
+ * victim attempts their own throw within THROW_TECH_WINDOW frames of being
+ * grabbed, both fighters break apart instead. That window is the whole game of
+ * throw/tech — too wide and throws never land, too tight and they're
+ * un-escapable. TECH_PUSH is how far the break shoves each fighter; TECH_FRAMES
+ * is the shared recovery so a tech resets to neutral rather than giving either
+ * side a turn.
+ */
+export const THROW_TECH_WINDOW = 5
+export const THROW_TECH_PUSH = 5.0
+export const THROW_TECH_FRAMES = 14
+
 /** Input buffer depth kept per fighter, in frames. Covers the longest motion
  *  window plus charge detection. */
 export const INPUT_LOG_LEN = 60

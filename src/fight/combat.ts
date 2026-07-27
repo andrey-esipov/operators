@@ -10,6 +10,7 @@
 import type { Box, Direction, FightEvent, FightState, FighterState, Hit } from './types'
 import type { FighterDef } from './def'
 import { anyOverlap, contactPoint, placeBox } from './geometry'
+import { hasButton, pressedOf } from './input/motion'
 import {
   AIR_HURT,
   CROUCH_HURT,
@@ -24,6 +25,9 @@ import {
   MAX_METER,
   MIN_DAMAGE,
   MIN_SCALE,
+  THROW_TECH_FRAMES,
+  THROW_TECH_PUSH,
+  THROW_TECH_WINDOW,
 } from './constants'
 
 /** Progressive combo scaling with a floor — long combos taper, never vanish. */
@@ -108,6 +112,21 @@ export function resolveCombat(
     const D = s.fighters[di]
     const defD = defs[di]
 
+    // Throws resolve on their own path: unblockable, grounded-only, techable,
+    // and immediate (they never "trade" in the pending pass). Doing this before
+    // the strike logic keeps a grab from being gated by juggle/strike-invuln.
+    if (move.hit.guard === 'throw') {
+      if (!throwable(D)) continue
+      const invD = invulnOf(D, defD)
+      if (invD === 'full' || invD === 'throw') continue
+      const hb = fr.hitboxes.map((b) => placeBox(b, A.pos, A.facing))
+      const hu = hurtboxesOf(D, defD)
+      if (!anyOverlap(hb, hu)) continue
+      const at = contactPoint(hb, hu) ?? { x: A.pos.x, y: A.pos.y + 90 }
+      resolveThrow(s, ai, di, move.hit, at, events)
+      continue
+    }
+
     // Juggle gating: an airborne defender out of allowance can't be hit.
     if (!D.grounded && D.juggleLeft <= 0) continue
 
@@ -142,6 +161,82 @@ export function resolveCombat(
     if (p.blocked) applyBlock(A, D, p.hit, p.at, p.ai, events)
     else applyHit(A, D, p.hit, p.at, p.ai, events)
   }
+}
+
+// ── Throws ───────────────────────────────────────────────────────────────────
+
+/** Can this fighter be grabbed right now? Grounded, not stunned (throws don't
+ *  work through hitstun/blockstun — that's throw protection), and not already on
+ *  the floor, airborne, KO'd or mid-tech. Attacking/walking/crouching is fair
+ *  game: throws beat buttons. */
+function throwable(d: FighterState): boolean {
+  if (!d.grounded || d.stunRemaining > 0) return false
+  switch (d.stance) {
+    case 'juggle':
+    case 'knockdown':
+    case 'wakeup':
+    case 'throw-tech':
+    case 'ko':
+      return false
+    default:
+      return true
+  }
+}
+
+/** Did the fighter mash a throw (LP+LK on one frame) within `window` frames?
+ *  That is the tech: a throw attempt of one's own while being grabbed breaks it. */
+function attemptedThrow(log: number[], window: number): boolean {
+  const start = Math.max(0, log.length - window)
+  for (let i = log.length - 1; i >= start; i--) {
+    const p = pressedOf(log[i])
+    if (hasButton(p, 'lp') && hasButton(p, 'lk')) return true
+  }
+  return false
+}
+
+function resolveThrow(
+  s: FightState, ai: 0 | 1, di: 0 | 1, hit: Hit, at: { x: number; y: number }, events: FightEvent[],
+): void {
+  const A = s.fighters[ai]
+  const D = s.fighters[di]
+  A.attackConnected = true
+  s.hitstop = Math.max(s.hitstop, hit.hitstop)
+
+  const log = s.inputLog?.[di] ?? []
+  if (attemptedThrow(log, THROW_TECH_WINDOW)) {
+    // Teched: both break out to neutral, no damage, shared recovery. Both moves
+    // are aborted so neither can grab again on the next frame.
+    A.move = undefined
+    A.attackConnected = false
+    A.stance = 'throw-tech'
+    A.stunRemaining = THROW_TECH_FRAMES
+    A.vel.x = -A.facing * THROW_TECH_PUSH
+    D.move = undefined
+    D.attackConnected = false
+    D.stance = 'throw-tech'
+    D.stunRemaining = THROW_TECH_FRAMES
+    D.vel.x = A.facing * THROW_TECH_PUSH
+    D.lastHitAt = at
+    // No dedicated tech event exists in the frozen contract, and inventing one
+    // would hand the renderer a type it can't switch on. The paired transition
+    // to the 'throw-tech' stance is the signal; the renderer reads that.
+    return
+  }
+
+  // Clean throw: unscaled damage, hard knockdown, meter to the thrower only.
+  A.meter = Math.min(MAX_METER, A.meter + hit.meterGain)
+  D.health = Math.max(0, D.health - hit.damage)
+  D.move = undefined
+  D.attackConnected = false
+  D.comboCount = 0
+  D.grounded = true
+  D.vel.x = A.facing * hit.knockback.x
+  D.vel.y = 0
+  D.stance = 'knockdown'
+  D.stunRemaining = KNOCKDOWN_FRAMES
+  D.lastHitAt = at
+  events.push({ type: 'throw', at, attacker: ai })
+  events.push({ type: 'knockdown', at, who: di })
 }
 
 function applyBlock(

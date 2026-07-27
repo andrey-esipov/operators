@@ -314,8 +314,8 @@ const WAVE_FRAG = /* glsl */ `
       // fine secondary chip cracks
       float chip = smoothstep(0.008, 0.0, abs(mod(ang * 3.0 + uSeed, sector) - sector * 0.5))
                    * smoothstep(edge, edge2, r) * 0.5;
-      vec3 core = hotCore(r, ang, uColor2, 0.16, uSeed) * 0.28;
-      float coreA = smoothstep(0.16, 0.0, r) * 0.3;
+      vec3 core = hotCore(r, ang, uColor2, 0.12, uSeed) * 0.14;
+      float coreA = smoothstep(0.11, 0.0, r) * 0.14;
       float a = clamp((shell + shell2 + crack * 0.9 + chip + coreA) * grow * fade, 0.0, 1.0);
       // bright glassy rim (white) on the shell crest, flavour colour in the body
       vec3 col = uColor2 * (shell * 2.9 + shell2 * 1.7 + crack * 2.9 + chip * 2.0 + 0.09)
@@ -421,21 +421,27 @@ const WAVE_FRAG = /* glsl */ `
       // spark cloud (like the crit star) instead of being swallowed by its bloom.
       float len = 0.68 + 0.32 * hash(idx + uSeed * 3.0);
       float reach = len * ease;
-      float along = smoothstep(reach, 0.0, r);
-      float halfw = 0.19 * clamp(1.0 - r / max(reach, 0.001), 0.0, 1.0); // narrows to tip
+      // HOLLOW rosette: each blade is a detached slash floating in a RING, dark at
+      // the hub. Because the combo fires three overlapping micro-hits, blades that
+      // were brightest at the centre stacked into one solid ball; pushing the bright
+      // part out to mid-radius leaves a dark core so the spinning slashes read as
+      // distinct hits even when three impacts overlap.
+      float along = smoothstep(0.0, reach * 0.34, r) * smoothstep(reach, reach * 0.44, r);
+      float halfw = 0.072 * clamp(1.0 - r / max(reach, 0.001), 0.12, 1.0); // narrows to tip
       float blade = along * smoothstep(halfw, halfw * 0.1, abs(da));
       float coreline = along * smoothstep(halfw * 0.4, 0.0, abs(da));    // bright spine
-      // two expanding hit-rings — the combo count rising
+      // two expanding hit-rings — the combo count rising. Kept THIN + dim: bright
+      // rings bunched near the hub early bloomed together into a filled cyan disc
+      // that swallowed the blades, so they now read only as fine travelling lines.
       float g = 1.0 - pow(1.0 - uAge, 2.0);
-      float r1 = 0.30 * g;
-      float r2 = 0.60 * g;
-      float rings = ring(r, r1, 0.03) + ring(r, r2, 0.024) * 0.7;
+      float r1 = 0.34 * g;
+      float r2 = 0.66 * g;
+      float rings = ring(r, r1, 0.016) + ring(r, r2, 0.012) * 0.6;
       rings *= (1.0 - smoothstep(0.4, 1.0, uAge));
-      vec3 core = hotCore(r, ang, uColor2, 0.16, uSeed);
-      float coreA = smoothstep(0.16, 0.0, r) * 0.32;
-      float a = clamp((blade * 0.95 + coreline + rings + coreA) * grow * fade, 0.0, 1.0);
-      vec3 col = uColor2 * (blade * 2.9 + rings * 2.0)
-                 + vec3(1.0) * (coreline * 0.55 + rings * 0.25) + core * 0.4;
+      float coreA = smoothstep(0.09, 0.0, r) * 0.02;
+      float a = clamp((blade * 0.98 + coreline + rings * 0.7 + coreA) * grow * fade, 0.0, 1.0);
+      vec3 col = uColor2 * (blade * 3.4 + rings * 0.55)
+                 + vec3(1.0) * (coreline * 0.5 + rings * 0.05);
       col *= uIntensity;
       if (a < 0.004) discard;
       gl_FragColor = vec4(col, a);

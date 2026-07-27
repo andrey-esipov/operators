@@ -121,16 +121,16 @@ const RECIPES: Record<HitFlavor, Recipe> = {
     radial: false, starBurst: true,
   },
   combo: {
-    core: 0xf3e8ff, energy: 0xc77dff, ember: 0x8a2be2, scale: 1.05,
-    flashSize: 1.7, flashDecay: 0.16, flashSpikes: 1.0, streak: 1.2,
-    flareSize: 1.6,
-    sparkCount: 70, sparkSpeed: 15, sparkLife: 0.62,
+    core: 0xd7a6ff, energy: 0xc77dff, ember: 0x8a2be2, scale: 1.05,
+    flashSize: 1.5, flashDecay: 0.15, flashSpikes: 1.0, streak: 1.2,
+    flareSize: 1.0,
+    sparkCount: 58, sparkSpeed: 15, sparkLife: 0.62,
     shardCount: 16,
     debrisCount: 8, debrisSpeed: 7,
     shock: true, shockSize: 3.2,
     groundRing: 1.5, scorch: 0.6, dust: 11,
     smokeCount: 8, emberCount: 18,
-    lightPeak: 15, lightDecay: 0.13, lightRange: 10,
+    lightPeak: 6, lightDecay: 0.13, lightRange: 9,
     radial: false, combo: true,
   },
   ex: {
@@ -329,25 +329,67 @@ export class VfxSubsystem implements Subsystem {
     const r = RECIPES.combo
     const p0 = this.ctx.anchors.fighter(target).clone()
     p0.z += 0.35
+    const core = C(r.core)
+    const energy = C(r.energy)
+    const ember = C(r.ember)
+    const away = new THREE.Vector3(attacker === 'a' ? 1 : -1, 0.16, 0.28).normalize()
+    const feet = this.ctx.anchors.get(`fighter:${target}:feet`)?.clone() ?? p0.clone().setY(WORLD.GROUND_Y)
+    const scale = (0.7 + power * 0.6) * r.scale
+
+    // ONE violet flurry rosette owns the silhouette. Firing the full strike() 3×
+    // (as before) stacked three flurries + three spark clouds + three light pops
+    // into a single featureless cyan ball that swallowed the fighter. Instead the
+    // signature rosette is spawned once, then three LIGHT staggered contacts sell
+    // the rapid multi-hit without piling mass onto the centre.
+    this.waves.spawn('flurry', p0, r.shockSize * 2.5 * scale, 0.94, core, energy, 1.7)
+
     const offsets = [0, 0.07, 0.15]
-    const scales = [0.95, 0.85, 1.25]
+    const beat = [0.85, 0.72, 1.05]
     offsets.forEach((dt, i) => {
       this.schedule(dt, () => {
-        const jx = (Math.random() - 0.5) * 0.5
-        const jy = (Math.random() - 0.5) * 0.5
-        this.strike(target, attacker, r, power, scales[i], new THREE.Vector3(jx, jy, 0))
-        // stacked expanding echo ring per hit — sells the rising combo count
-        this.waves.spawn(
-          'shock',
-          p0.clone().add(new THREE.Vector3(jx, jy, 0)),
-          (2.6 + i * 1.3) * r.scale,
-          0.66 + i * 0.06,
-          C(r.core),
-          C(r.energy),
-          1.3,
-          1.0,
-        )
+        const jx = (Math.random() - 0.5) * 0.8
+        const jy = (Math.random() - 0.5) * 0.7
+        const p = p0.clone().add(new THREE.Vector3(jx, jy, 0))
+        const s = beat[i] * scale
+        // world illumination — kept low so the three staggered pops sum to about
+        // one heavy hit rather than blowing the fighter to a white ball.
+        this.lights.pop(p, energy.clone().lerp(new THREE.Color(0xffffff), 0.4), 5.5, 0.12, 0.02, 8)
+        // compact contact flash
+        this.popFlash(p, r, 0.7 * beat[i])
+        // violet spark burst — few, fast, dim so it clears the hub instantly
+        this.additive.emit({
+          position: p, count: Math.round(20 * s), speed: r.sparkSpeed * 1.5,
+          speedVariance: 0.7, color: core, color2: energy, size: 0.1, sizeVariance: 0.75,
+          life: 0.5, gravity: -13, drag: 2.4, shape: 'spark', stretch: 4.6,
+          intensity: 1.8, jitter: 0.16, spin: 5,
+        })
+        // hard directional slash along the hit vector — the shear of each blow
+        this.additive.emit({
+          position: p, count: Math.round(9 * s), speed: r.sparkSpeed * 2.0,
+          speedVariance: 0.4, direction: away, spread: 0.26, color: C(0xffffff), color2: energy,
+          size: 0.13, sizeVariance: 0.6, life: 0.34, gravity: -4, drag: 1.4,
+          shape: 'spark', stretch: 8.0, intensity: 2.6, jitter: 0.05,
+        })
+        // stacked expanding echo ring — the rising combo counter
+        this.waves.spawn('shock', p0.clone().add(new THREE.Vector3(jx, jy, 0)),
+          (2.6 + i * 1.3) * r.scale, 0.62 + i * 0.06, core, energy, 1.05, 1.0)
       })
+    })
+
+    // ground reaction + dust + embers fire ONCE for the whole combo, not per beat.
+    this.decals.spawn('ring', feet, r.groundRing * scale, 0.46, energy, ember, 1.4)
+    if (r.scorch > 0) this.decals.spawn('scorch', feet, r.scorch * scale, 1.6, energy, ember, 1.0)
+    this.alpha.emit({
+      position: feet.clone().add(new THREE.Vector3(0, 0.05, 0.15)),
+      count: Math.round(r.dust * scale), speed: 3.4, speedVariance: 0.7,
+      direction: new THREE.Vector3(away.x * 0.8, 0.5, 0.3), spread: 1.0, flatten: 0.5,
+      color: C(0x4a3a45), color2: C(0x18101c), size: 0.45, sizeVariance: 0.6,
+      life: 1.0, gravity: -2.0, drag: 2.4, shape: 'dust', intensity: 0.9, jitter: 0.25, spin: 1,
+    })
+    this.additive.emit({
+      position: p0, count: Math.round(8 * scale), speed: 5.4, speedVariance: 0.9,
+      color: energy, color2: C(0x3a0d05), size: 0.05, sizeVariance: 0.8, life: 1.2,
+      gravity: -3.0, drag: 1.7, shape: 'ember', intensity: 1.3, jitter: 0.4, spin: 2,
     })
   }
 
@@ -377,11 +419,14 @@ export class VfxSubsystem implements Subsystem {
 
     // 2. hit-spark flare (bright polygon star) — front-loaded, long glow tail.
     // Intensity kept moderate: a too-bright flare blooms into a soft central ball
-    // that swallows the structured wave silhouette behind it.
+    // that swallows the structured wave silhouette behind it. Combo fires strike()
+    // 3× overlapping, so its flare is kept short + dim + small — otherwise the
+    // three near-white cores stack into one persistent soft ball that bloom+grade
+    // turn into a cyan blob that swallows the violet flurry rosette.
     this.additive.emit({
       position: p, count: 1, speed: 0, color: core, color2: energy,
-      size: r.flareSize * scale * 0.68, life: 0.6, gravity: 0, drag: 0.001,
-      shape: 'flare', intensity: 1.5,
+      size: r.flareSize * scale * (r.combo ? 0.42 : 0.68), life: r.combo ? 0.26 : 0.6,
+      gravity: 0, drag: 0.001, shape: 'flare', intensity: r.combo ? 0.85 : 1.5,
     })
     // secondary smaller offset flares for a busier contact
     if (r.flareSize > 1.4) {
@@ -392,12 +437,15 @@ export class VfxSubsystem implements Subsystem {
       })
     }
 
-    // 3. radial spark tracers — stretched, high-velocity
+    // 3. radial spark tracers — stretched, high-velocity. Combo fires 3× so its
+    // sparks are fewer + faster + dimmer: they must clear the hub instantly rather
+    // than pile into a persistent central cloud that bloom+grade fuse into a ball.
     this.additive.emit({
-      position: p, count: Math.round(r.sparkCount * scale), speed: r.sparkSpeed,
+      position: p, count: Math.round(r.sparkCount * scale * (r.combo ? 0.5 : 1)),
+      speed: r.sparkSpeed * (r.combo ? 1.35 : 1),
       speedVariance: 0.65, color: core, color2: energy, size: 0.11, sizeVariance: 0.75,
       life: r.sparkLife, gravity: -13, drag: 2.2, shape: 'spark', stretch: 4.2,
-      intensity: 2.6, jitter: 0.16, spin: 5,
+      intensity: r.combo ? 1.9 : 2.6, jitter: 0.16, spin: 5,
     })
 
     // 3b. directional impact slash — a few very fast, hard-stretched tracers
@@ -455,11 +503,11 @@ export class VfxSubsystem implements Subsystem {
       this.waves.spawn('halo', p, r.shockSize * 0.26 * scale, 0.44, core, energy, 0.34 * mult)
     } else if (r.combo) {
       // COMBO: violet multi-hit flurry rosette + a compact energy core. Snaps to
-      // full size instantly so even the opening micro-hit reads on capture. Sized
-      // up + brighter, with the central halo trimmed, so the violet blades own the
-      // silhouette instead of drowning inside the contact bloom.
-      this.waves.spawn('flurry', p, r.shockSize * 2.35 * scale, 0.9, C(0xffffff), energy, 2.8 * mult)
-      this.waves.spawn('halo', p, r.shockSize * 0.34 * scale, 0.46, core, energy, 0.26 * mult)
+      // full size instantly so even the opening micro-hit reads on capture. The
+      // blade intensity is kept MODERATE (like the crystal shell) because a bright
+      // filled rosette blooms into one solid violet ball — the hollow core + wide
+      // dark gaps between blades are what let it read as a spinning flurry.
+      this.waves.spawn('flurry', p, r.shockSize * 2.35 * scale, 0.9, core, energy, 2.0 * mult)
     } else if (r.shock && !r.radial) {
       const shockPos = p.clone().add(away.clone().multiplyScalar(0.35 * scale))
       this.waves.spawn('shock', shockPos, r.shockSize * scale, 0.86, core, energy, 1.7 * mult, 1.18)
@@ -570,7 +618,7 @@ export class VfxSubsystem implements Subsystem {
     // Central emission is kept lean so the CRYSTAL FACET lines are the brightest
     // feature and survive bloom as a shard shell (instead of a soft cyan orb) even
     // on dark, low-key stages.
-    this.lights.pop(p, C(0xbfe9ff), 13, 0.13, 0.03, 8)
+    this.lights.pop(p, C(0xbfe9ff), 12, 0.13, 0.03, 7)
     // crystalline contact flash — cold, brief, so the CRYSTAL silhouette reads
     this.flashMat.uniforms.uColor.value.copy(white)
     this.flashMat.uniforms.uColor2.value.copy(cyan)
@@ -582,10 +630,11 @@ export class VfxSubsystem implements Subsystem {
     this.flashMax = 0.12
     this.flashLife = 0.12
 
-    // hot white contact flare core
+    // hot white contact flare core — kept small + brief so it punches without
+    // leaving a soft ball that bloom inflates into a dome.
     this.additive.emit({
       position: p, count: 1, speed: 0, color: white, color2: cyan,
-      size: 0.7, life: 0.35, gravity: 0, drag: 0.001, shape: 'flare', intensity: 0.7,
+      size: 0.34, life: 0.2, gravity: 0, drag: 0.001, shape: 'flare', intensity: 0.6,
     })
     // sharp white impact star — the instant CRACK read (lean so it doesn't dome)
     this.waves.spawn('star', p, 3.4, 0.72, white, cyan, 1.0, 1.0)
@@ -594,17 +643,19 @@ export class VfxSubsystem implements Subsystem {
     // whose bright rim blooms inward into one flat cyan disc. The read is carried
     // by the OUTWARD splinter spray below, the way the crit star's spikes punch
     // into dark space rather than filling a lit ball.
-    this.waves.spawn('crystal', p, 4.4, 0.9, white, cyan, 1.9)
+    this.waves.spawn('crystal', p, 4.4, 0.9, white, cyan, 0.62)
     // a second inner crimson-conviction pane for the two-tone armour rupture
-    this.waves.spawn('crystal', p, 2.9, 0.82, C(0xffd9dd), red, 1.4)
-    // INSTANT splinter shell — a violent wide burst of icy glass shards thrown on
-    // the very first frame so shatter reads as fracturing armour from settle 0 and
-    // the sparse shards fly out into DARK space (structure that survives bloom),
-    // instead of a soft pane that only explodes at beat 2.
+    this.waves.spawn('crystal', p, 2.9, 0.82, C(0xffd9dd), red, 0.5)
+    // INSTANT splinter shell — a CLEAN, fast-expanding ring of long glass slivers.
+    // The tight speedVariance is the key: every shard leaves the impact at nearly
+    // the same speed, so instead of a dense slow core (which bloom fuses into a
+    // solid cyan dome) they form a hollow expanding shell with a DARK centre by
+    // settle 2 — reading as fracturing armour flung outward, the way the crit
+    // star's spikes punch into dark space. Low drag keeps them flying out.
     this.additive.emit({
-      position: p, count: 96, speed: 24, speedVariance: 0.95, color: white, color2: cyan,
-      size: 0.24, sizeVariance: 0.9, life: 0.75, gravity: -10, drag: 0.6, shape: 'shard',
-      intensity: 3.2, jitter: 0.6, spin: 22, stretch: 4.6,
+      position: p, count: 58, speed: 32, speedVariance: 0.28, color: white, color2: cyan,
+      size: 0.22, sizeVariance: 0.7, life: 0.66, gravity: -11, drag: 0.32, shape: 'shard',
+      intensity: 2.2, jitter: 0.25, spin: 22, stretch: 5.4,
     })
     this.decals.spawn('ring', feet, 2.6, 0.5, cyan, deep, 1.5)
     this.decals.spawn('scorch', feet, 1.2, 1.4, deep, C(0x08202e), 0.7)
@@ -613,11 +664,14 @@ export class VfxSubsystem implements Subsystem {
     // splinters bursting out and skittering on the floor, plus a secondary ring.
     this.schedule(0.055, () => {
       this.lights.pop(p, cyan, 9, 0.16, 0.04, 9)
-      // dense icy splinters bursting outward, stretched & spinning
+      // dense icy splinters bursting outward as a second clean shell — tight
+      // speedVariance + low drag so they keep the hollow expanding-glass read.
+      // Fired faster so they clear the centre quickly instead of stacking a second
+      // bright disc on top of the crystal shell.
       this.additive.emit({
-        position: p, count: 130, speed: 16, speedVariance: 0.85, color: white, color2: cyan,
-        size: 0.3, sizeVariance: 0.9, life: 1.15, gravity: -16, drag: 0.5, shape: 'shard',
-        intensity: 2.8, jitter: 0.5, spin: 18, stretch: 3.6,
+        position: p, count: 56, speed: 27, speedVariance: 0.35, color: white, color2: cyan,
+        size: 0.26, sizeVariance: 0.8, life: 1.0, gravity: -16, drag: 0.32, shape: 'shard',
+        intensity: 2.0, jitter: 0.3, spin: 18, stretch: 4.4,
       })
       // heavier glass chunks with real ballistic bounce
       this.alpha.emit({
@@ -625,14 +679,16 @@ export class VfxSubsystem implements Subsystem {
         size: 0.18, sizeVariance: 0.8, life: 1.6, lifeVariance: 0.4, gravity: -18, drag: 0.4,
         shape: 'debris', bounce: true, restitution: 0.5, intensity: 0.9, spin: 16,
       })
-      // crimson conviction shards snapping through the ice
+      // crimson conviction shards snapping through the ice — pushed out faster so
+      // they streak through the shell instead of pooling into a red core
       this.additive.emit({
-        position: p, count: 46, speed: 8, speedVariance: 0.8, color: red, color2: C(0x7a0d16),
-        size: 0.14, sizeVariance: 0.7, life: 0.8, gravity: -9, drag: 1.3, shape: 'shard',
-        stretch: 2.8, intensity: 2.8, jitter: 0.3, spin: 8,
+        position: p, count: 40, speed: 16, speedVariance: 0.45, color: red, color2: C(0x7a0d16),
+        size: 0.14, sizeVariance: 0.7, life: 0.7, gravity: -9, drag: 0.6, shape: 'shard',
+        stretch: 3.4, intensity: 2.4, jitter: 0.25, spin: 8,
       })
-      // secondary expanding glass ring
-      this.waves.spawn('shock', p, 5.5, 0.7, white, cyan, 1.6, 1.0)
+      // secondary expanding glass ring — dim so it reads as a thin travelling
+      // shock edge, not a second bright disc re-flooding the centre
+      this.waves.spawn('shock', p, 5.8, 0.7, white, cyan, 0.7, 1.0)
       // frost dust settling along the floor plane
       this.alpha.emit({
         position: feet.clone().add(new THREE.Vector3(0, 0.03, 0)), count: 30, speed: 6,

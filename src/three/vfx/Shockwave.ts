@@ -225,10 +225,11 @@ const WAVE_FRAG = /* glsl */ `
       vec3 core = hotCore(r, ang, uColor2, 0.16, uSeed);
       float coreA = smoothstep(0.16, 0.0, r);
       float body = rays + goldRing * 0.9;
-      float a = clamp((body + coreA * 0.5) * grow * fade, 0.0, 1.0);
-      // Rays own the frame; the central core is kept dim so it never blooms into a
-      // solid dome that swallows the god-ray silhouette on dark, low-key stages.
-      vec3 col = uColor2 * (body * 3.1) + vec3(1.0) * goldRing * 0.5 + core * 0.4;
+      float a = clamp((body + coreA * 0.32) * grow * fade, 0.0, 1.0);
+      // Rays own the frame; the central core is kept very dim so it never blooms
+      // into a solid dome that swallows the god-ray silhouette. Rays boosted so the
+      // long spokes punch out past the hot centre on bright, heavily-graded stages.
+      vec3 col = uColor2 * (body * 3.5) + vec3(1.0) * goldRing * 0.5 + core * 0.25;
       col *= uIntensity;
       if (a < 0.004) discard;
       gl_FragColor = vec4(col, a);

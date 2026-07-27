@@ -149,27 +149,27 @@ const RECIPES: Record<HitFlavor, Recipe> = {
   ult: {
     core: 0xffffff, energy: 0xffcf4d, ember: 0xff6a00, scale: 1.5,
     flashSize: 1.3, flashDecay: 0.22, flashSpikes: 1.4, streak: 2.6,
-    flareSize: 1.5,
-    sparkCount: 130, sparkSpeed: 19, sparkLife: 0.85,
-    shardCount: 40,
+    flareSize: 1.2,
+    sparkCount: 92, sparkSpeed: 20, sparkLife: 0.85,
+    shardCount: 28,
     debrisCount: 20, debrisSpeed: 9,
     shock: true, shockSize: 6.0,
-    groundRing: 3.0, scorch: 1.6, dust: 26,
-    smokeCount: 22, emberCount: 26,
-    lightPeak: 15, lightDecay: 0.34, lightRange: 14,
+    groundRing: 3.0, scorch: 1.6, dust: 18,
+    smokeCount: 16, emberCount: 18,
+    lightPeak: 11, lightDecay: 0.34, lightRange: 10,
     radial: true,
   },
   signature: {
     core: 0xffffff, energy: 0xff3ba0, ember: 0xf72585, scale: 1.55,
     flashSize: 1.5, flashDecay: 0.15, flashSpikes: 1.4, streak: 3.0,
-    flareSize: 1.7,
-    sparkCount: 240, sparkSpeed: 23, sparkLife: 0.95,
-    shardCount: 56,
+    flareSize: 1.2,
+    sparkCount: 150, sparkSpeed: 24, sparkLife: 0.95,
+    shardCount: 40,
     debrisCount: 30, debrisSpeed: 11,
     shock: true, shockSize: 6.4,
-    groundRing: 3.6, scorch: 2.2, dust: 36,
-    smokeCount: 32, emberCount: 54,
-    lightPeak: 23, lightDecay: 0.38, lightRange: 17,
+    groundRing: 3.6, scorch: 2.2, dust: 24,
+    smokeCount: 20, emberCount: 30,
+    lightPeak: 15, lightDecay: 0.38, lightRange: 13,
     radial: false, beam: true,
   },
 }
@@ -375,18 +375,20 @@ export class VfxSubsystem implements Subsystem {
     // 1. contact flash
     this.popFlash(p, r, mult)
 
-    // 2. hit-spark flare (bright polygon star) — front-loaded, long glow tail
+    // 2. hit-spark flare (bright polygon star) — front-loaded, long glow tail.
+    // Intensity kept moderate: a too-bright flare blooms into a soft central ball
+    // that swallows the structured wave silhouette behind it.
     this.additive.emit({
       position: p, count: 1, speed: 0, color: core, color2: energy,
       size: r.flareSize * scale, life: 0.6, gravity: 0, drag: 0.001,
-      shape: 'flare', intensity: 3.6,
+      shape: 'flare', intensity: 2.6,
     })
     // secondary smaller offset flares for a busier contact
     if (r.flareSize > 1.4) {
       this.additive.emit({
         position: p, count: 4, speed: 4.0, speedVariance: 0.8, color: core, color2: energy,
         size: r.flareSize * 0.42 * scale, sizeVariance: 0.5, life: 0.5, gravity: -2, drag: 3,
-        shape: 'flare', intensity: 2.8, jitter: 0.35,
+        shape: 'flare', intensity: 2.0, jitter: 0.35,
       })
     }
 
@@ -449,8 +451,8 @@ export class VfxSubsystem implements Subsystem {
       // only a small tinted core behind it (a big halo here is what bloomed to a
       // pink blob) so the vertical structure survives the bloom. Narrowed in x
       // (stretchX 0.7) so it reads as a tall column, not a square burst.
-      this.waves.spawn('beam', p, r.shockSize * 1.4 * scale, 1.05, C(0xffffff), energy, 2.3 * mult, 0.7)
-      this.waves.spawn('halo', p, r.shockSize * 0.3 * scale, 0.46, core, energy, 0.6 * mult)
+      this.waves.spawn('beam', p, r.shockSize * 1.7 * scale, 1.05, C(0xffffff), energy, 3.0 * mult, 0.66)
+      this.waves.spawn('halo', p, r.shockSize * 0.28 * scale, 0.44, core, energy, 0.42 * mult)
     } else if (r.combo) {
       // COMBO: violet multi-hit flurry rosette + a compact energy core. Snaps to
       // full size instantly so even the opening micro-hit reads on capture.
@@ -468,11 +470,13 @@ export class VfxSubsystem implements Subsystem {
       this.waves.spawn('star', p, 3.4 * scale, 0.9, C(0xffffff), energy, 1.9 * mult)
     }
     if (r.radial) {
-      // ULT: divine golden sunburst (sharp god-rays + shock ring) crowned with a
-      // hard star-flare cross so the centre reads as structured light, not a ball.
-      this.waves.spawn('radial', p, r.shockSize * 1.25 * scale, 0.95, C(0xffffff), energy, 1.5)
-      this.waves.spawn('star', p, r.shockSize * 0.95 * scale, 0.6, C(0xffffff), energy, 1.4, 1.0)
-      this.waves.spawn('shock', p, r.shockSize * 1.9 * scale, 0.9, core, ember, 1.1, 1.0)
+      // ULT: divine golden sunburst — long sharp god-rays over a dim core. The
+      // overlaid star was removed: it piled a second radial burst onto the centre
+      // and helped bloom it into a ball. Rays now own the silhouette; a thin gold
+      // shaft of light adds a vertical accent that survives bloom.
+      this.waves.spawn('radial', p, r.shockSize * 1.4 * scale, 0.95, C(0xffffff), energy, 1.9)
+      this.waves.spawn('beam', p, r.shockSize * 1.15 * scale, 0.8, C(0xffffff), energy, 1.3, 0.42)
+      this.waves.spawn('shock', p, r.shockSize * 1.2 * scale, 0.9, core, ember, 0.6, 1.0)
     }
 
     // 7. ground reaction
@@ -641,16 +645,16 @@ export class VfxSubsystem implements Subsystem {
     // star sheared along the launch. The star (not a white sun) carries the read.
     // Light range kept below full-arena so the blast reads as a bright fireball
     // with dark frame edges, not a flat full-screen colour wash on bright stages.
-    this.lights.pop(p, white, 20, 0.42, 0.04, 15)
+    this.lights.pop(p, white, 11, 0.42, 0.04, 10)
     this.flashMat.uniforms.uColor.value.copy(C(0xffe6a3))
     this.flashMat.uniforms.uColor2.value.copy(orange)
     this.flashMat.uniforms.uSpikes.value = 2.2
     this.flashMat.uniforms.uStreak.value = 3.0
     this.flash.position.copy(p)
-    this.flash.scale.setScalar(1.35)
+    this.flash.scale.setScalar(1.15)
     this.flash.visible = true
-    this.flashMax = 0.08
-    this.flashLife = 0.08
+    this.flashMax = 0.07
+    this.flashLife = 0.07
     this.additive.emit({
       position: p, count: 1, speed: 0, color: gold, color2: orange,
       size: 1.3, life: 0.3, gravity: 0, drag: 0.001, shape: 'flare', intensity: 1.4,
@@ -659,9 +663,16 @@ export class VfxSubsystem implements Subsystem {
     // spikes punch out well past the central hot mass (otherwise bloom fills the
     // gaps and the money shot reads as a blob instead of a star) — but not so large
     // or bright it overruns the frame into a flat colour wash on graded stages.
-    this.waves.spawn('star', p, 8.5, 1.0, gold, orange, 1.7, 1.5)
-    // directional compression front punched along the launch vector
-    this.waves.spawn('shock', p.clone().add(launch.clone().multiplyScalar(0.7)), 8.0, 0.95, white, orange, 0.85, 1.4)
+    this.waves.spawn('star', p, 7.6, 1.0, gold, orange, 1.7, 1.5)
+    // vertical eruption shaft — a tall gold pillar of light bursting up from the
+    // impact. A radial star alone rounds into a ball under heavy bloom; a strong
+    // vertical column keeps a hard, unmistakable KO silhouette that reads through
+    // bloom and colour grade, making this the most structured frame in the game.
+    this.waves.spawn('beam', p, 8.0, 0.9, C(0xffffff), gold, 1.9, 0.42)
+    // directional compression front punched along the launch vector — kept dim so
+    // it adds a sheared edge without piling another bright disc onto the centre
+    // (three bright waves stacked at one point saturate into a featureless dome).
+    this.waves.spawn('shock', p.clone().add(launch.clone().multiplyScalar(0.7)), 6.5, 0.95, white, orange, 0.55, 1.4)
     // immediate impact crater on the floor so the ground registers the finish
     this.decals.spawn('scorch', feet, 3.0, 2.4, orange, C(0x180402), 1.1)
     this.decals.spawn('ring', feet, 3.4, 0.5, gold, orange, 1.6)
@@ -675,7 +686,7 @@ export class VfxSubsystem implements Subsystem {
     // Beat 2 (60ms): the blast — spark storm + debris + ground rupture, all
     // sheared along the launch vector so the force reads as directional.
     this.schedule(0.06, () => {
-      this.lights.pop(p, gold, 15, 0.36, 0.08, 13)
+      this.lights.pop(p, gold, 11, 0.36, 0.08, 10)
       this.additive.emit({
         position: p, count: 170, speed: 21, speedVariance: 0.85, direction: launch, spread: 1.15,
         color: white, color2: orange, size: 0.13, sizeVariance: 0.9, life: 1.1, lifeVariance: 0.4,

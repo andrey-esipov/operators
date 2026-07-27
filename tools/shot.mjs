@@ -11,8 +11,8 @@
  *
  * --do accepts a semicolon-separated list of commands:
  *   pose:<side>:<pose>      setPose
- *   hp:<a>:<b>              setHp (0..1)
- *   super:<a>:<b>           setSuper (0..1)
+ *   hp:<side>:<v>           setHp   e.g. hp:b:0.08
+ *   super:<side>:<v>        setSuper e.g. super:a:1
  *   hit:<flavor>:<side>     trigger an impact
  *   ko:<side>               KO
  *   shatter:<side>          armour shatter
@@ -87,8 +87,8 @@ try {
         const n = (v) => Number(v)
         switch (cmd) {
           case 'pose': api.setPose(rest[0], rest[1]); break
-          case 'hp': api.setHp(n(rest[0]), n(rest[1])); break
-          case 'super': api.setSuper(n(rest[0]), n(rest[1])); break
+          case 'hp': api.setHp(rest[0], n(rest[1])); break
+          case 'super': api.setSuper(rest[0], n(rest[1])); break
           case 'hit': api.hit(rest[0], rest[1] ?? 'right'); break
           case 'ko': api.ko(rest[0] ?? 'right'); break
           case 'shatter': api.shatter(rest[0] ?? 'right'); break

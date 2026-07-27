@@ -103,6 +103,16 @@ export interface StageGrade {
    */
   charTone: [number, number, number]
   charToneAmt: number
+  /**
+   * Vertical padding of the character matte (multiplies the head→feet half-
+   * height). The matte is a soft ellipse, not a true silhouette, so any padding
+   * beyond the body catches co-planar background and reads as a faint box at the
+   * ellipse edge. Keep it TIGHT (~1.05, hug the body) on stages that only strip
+   * the shared cast (charToneAmt 0). Only the complementary-accent stages need it
+   * TALL (~1.20) so the warm/cool push reaches the heavily-bloomed faces — there
+   * the accent is what kills the green/red skin, worth the slightly larger window.
+   */
+  mattePad: number
 }
 
 const base: StageGrade = {
@@ -141,6 +151,7 @@ const base: StageGrade = {
   charStrength: 1.0,
   charTone: [1, 1, 1],
   charToneAmt: 0,
+  mattePad: 1.06,
 }
 
 function grade(overrides: Partial<StageGrade>): StageGrade {
@@ -194,7 +205,7 @@ export const STAGE_GRADES: Record<ScenarioId, StageGrade> = {
     lookSlope: [1.04, 1.0, 0.97],
     lookSat: 1.16,
     contrast: 1.14,
-    black: 0.06,
+    black: 0.11,
     shadowTint: [0.22, 0.44, 0.66],
     highlightTint: [1.0, 0.86, 0.6],
     splitBalance: 0.48,
@@ -210,7 +221,7 @@ export const STAGE_GRADES: Record<ScenarioId, StageGrade> = {
     anamorphic: 0.5,
     anamorphicTint: [0.5, 0.7, 1.0],
     hazeColor: [0.34, 0.52, 0.6],
-    hazeAmount: 0.32,
+    hazeAmount: 0.2,
     // Teal/cyan-dominant arena light renders both fighters' SKIN green (the key
     // light on the characters is greener than the cyan floor/UI). The un-tint
     // axis must match the cast ON THE FIGHTERS, not the arena's cyan — so envTint
@@ -218,11 +229,12 @@ export const STAGE_GRADES: Record<ScenarioId, StageGrade> = {
     // purple denim and red hair (orthogonal to green) survive to read them apart.
     envTint: [0.5, 1.0, 0.55],
     charUntint: 0.9,
-    castRecover: 0.7,
+    castRecover: 0.9,
     // Cyan-green arena → push neutralised fighters WARM (amber/peach) so skin
     // reads warm not green and the subjects separate from the teal field.
-    charTone: [1.0, 0.45, 0.35],
-    charToneAmt: 0.9,
+    charTone: [1.0, 0.42, 0.32],
+    charToneAmt: 0.95,
+    mattePad: 1.2,
   }),
 
   // Stalled, airless. Flat, faintly sickly green-grey — the grind of the
@@ -255,7 +267,8 @@ export const STAGE_GRADES: Record<ScenarioId, StageGrade> = {
     // Magenta/purple floor and blocks cast the fighters' lower halves violet so
     // the legs dissolve into the arena; strip the shared magenta cast.
     envTint: [0.85, 0.35, 1.0],
-    charUntint: 0.64,
+    charUntint: 0.52,
+    mattePad: 1.05,
   }),
 
   // Neon future. Cyan/magenta bi-chromatic, cool and high-contrast with hot
@@ -271,7 +284,7 @@ export const STAGE_GRADES: Record<ScenarioId, StageGrade> = {
     lookSlope: [1.0, 0.99, 1.05],
     lookSat: 1.14,
     contrast: 1.16,
-    black: 0.065,
+    black: 0.09,
     shadowTint: [0.18, 0.3, 0.6],
     highlightTint: [0.85, 0.75, 1.0],
     splitBalance: 0.46,
@@ -294,11 +307,12 @@ export const STAGE_GRADES: Record<ScenarioId, StageGrade> = {
     // warm hair and off-axis albedo read the fighters apart.
     envTint: [0.5, 1.0, 0.6],
     charUntint: 0.8,
-    castRecover: 0.7,
+    castRecover: 0.88,
     // Blue-teal arena → push neutralised fighters WARM so skin de-greens and the
     // subjects read as a warm accent against the cold field.
-    charTone: [1.0, 0.44, 0.34],
-    charToneAmt: 0.9,
+    charTone: [1.0, 0.42, 0.32],
+    charToneAmt: 0.95,
+    mattePad: 1.2,
   }),
 
   // Money. Warm gold with rich green undertones, luxe and slightly opulent —
@@ -333,7 +347,8 @@ export const STAGE_GRADES: Record<ScenarioId, StageGrade> = {
     // A hot magenta mid-band washes both fighters' torsos violet; strip the
     // shared magenta cast so their own garment/skin chroma reads them apart.
     envTint: [0.9, 0.32, 0.95],
-    charUntint: 0.66,
+    charUntint: 0.54,
+    mattePad: 1.05,
   }),
 
   // Crisis. Smouldering red/orange danger, crushed cool shadows, high
@@ -368,12 +383,14 @@ export const STAGE_GRADES: Record<ScenarioId, StageGrade> = {
     hazeAmount: 0.3,
     envTint: [1.0, 0.34, 0.22],
     charUntint: 0.9,
+    castRecover: 0.55,
     // Red-orange arena → push neutralised fighters COOL (teal). In an all-red room
     // the subject can carry almost no surviving albedo, so a firm complementary
     // accent is the strongest separation lever post has: the fighters read as cool
     // silhouettes against the red field (the value split still tells them apart).
-    charTone: [0.4, 0.72, 1.0],
-    charToneAmt: 0.6,
+    charTone: [0.32, 0.68, 1.0],
+    charToneAmt: 0.9,
+    mattePad: 1.2,
   }),
 
   // Prestige. Clean, bright, cool corporate glass — champagne highlights, low
@@ -405,7 +422,7 @@ export const STAGE_GRADES: Record<ScenarioId, StageGrade> = {
     hazeColor: [0.62, 0.66, 0.72],
     hazeAmount: 0.16,
     envTint: [0.34, 0.5, 1.0],
-    charUntint: 0.6,
+    charUntint: 0.0,
     charStrength: 0.0,
   }),
 
@@ -441,6 +458,7 @@ export const STAGE_GRADES: Record<ScenarioId, StageGrade> = {
     hazeAmount: 0.36,
     envTint: [1.0, 0.5, 0.28],
     charUntint: 0.78,
+    mattePad: 1.05,
   }),
 }
 
@@ -489,6 +507,7 @@ export function mixGrades(a: StageGrade, b: StageGrade, t: number): StageGrade {
     charStrength: lerp(a.charStrength, b.charStrength, t),
     charTone: lerp3(a.charTone, b.charTone, t),
     charToneAmt: lerp(a.charToneAmt, b.charToneAmt, t),
+    mattePad: lerp(a.mattePad, b.mattePad, t),
   }
 }
 

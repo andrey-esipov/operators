@@ -323,6 +323,10 @@ export class PostPipeline implements Subsystem, RenderDriver {
     this._charB.set(cbx, cby)
 
     // Vertical extent + a stable centre from each fighter's head/feet anchors.
+    // Per-stage padding: TIGHT on cast-strip-only stages (hug the body so the
+    // soft ellipse doesn't halo the background), TALL only where a complementary
+    // accent must reach the bloomed faces.
+    const pad = this.currentGrade.mattePad
     let halfH = 0.28
     const headA = anchors.get('fighter:a:head')
     const feetA = anchors.get('fighter:a:feet')
@@ -331,7 +335,7 @@ export class PostPipeline implements Subsystem, RenderDriver {
       const hy = this.lastY
       this.projX(feetA)
       const fy = this.lastY
-      halfH = Math.max(0.14, Math.abs(hy - fy) * 0.5 * 1.20)
+      halfH = Math.max(0.14, Math.abs(hy - fy) * 0.5 * pad)
       this._charA.y = (hy + fy) * 0.5
     }
     const headB = anchors.get('fighter:b:head')
@@ -341,7 +345,7 @@ export class PostPipeline implements Subsystem, RenderDriver {
       const hy = this.lastY
       this.projX(feetB)
       const fy = this.lastY
-      halfH = Math.max(halfH, Math.abs(hy - fy) * 0.5 * 1.20)
+      halfH = Math.max(halfH, Math.abs(hy - fy) * 0.5 * pad)
       this._charB.y = (hy + fy) * 0.5
     }
 

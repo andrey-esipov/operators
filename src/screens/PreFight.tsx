@@ -156,6 +156,36 @@ export function PreFight() {
         <div className="absolute inset-y-0 left-0 w-[10px] pointer-events-none" style={{ background: warm, opacity: beat >= 1 ? 0.9 : 0, boxShadow: `0 0 30px ${warm}`, transition: 'opacity 0.4s' }} />
         <div className="absolute inset-y-0 right-0 w-[10px] pointer-events-none" style={{ background: cool, opacity: beat >= 1 ? 0.9 : 0, boxShadow: `0 0 30px ${cool}`, transition: 'opacity 0.4s' }} />
 
+        {/* Bold two-tone VS split — warm and cool wedges meet along the seam so
+            the centre reads as an authored graphic divide (SF/KOF style) instead
+            of dead floor. Screen-blended so it energises the arena without
+            hiding the fighters, and wipes in on the slam. */}
+        <div
+          className="absolute inset-0 pointer-events-none z-0"
+          style={{ opacity: beat >= 1 ? 1 : 0, transition: 'opacity 0.5s' }}
+        >
+          <div
+            className="absolute inset-0"
+            style={{
+              background: `linear-gradient(102deg, transparent 34%, ${warm}66 100%)`,
+              clipPath: 'polygon(0 0, 57% 0, 45% 100%, 0 100%)',
+              mixBlendMode: 'screen',
+              animation: beat >= 1 ? 'cer-wipe-left 0.5s cubic-bezier(0.16,0.9,0.3,1) both' : undefined,
+              transformOrigin: 'left center',
+            }}
+          />
+          <div
+            className="absolute inset-0"
+            style={{
+              background: `linear-gradient(258deg, transparent 34%, ${cool}66 100%)`,
+              clipPath: 'polygon(57% 0, 100% 0, 100% 100%, 45% 100%)',
+              mixBlendMode: 'screen',
+              animation: beat >= 1 ? 'cer-wipe-right 0.5s cubic-bezier(0.16,0.9,0.3,1) 0.08s both' : undefined,
+              transformOrigin: 'right center',
+            }}
+          />
+        </div>
+
         {/* Bold diagonal energy slash that physically cuts the frame in two. */}
         <div
           className="absolute inset-y-[-14%] left-1/2 pointer-events-none"

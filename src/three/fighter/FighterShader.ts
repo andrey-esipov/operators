@@ -573,10 +573,43 @@ export const FIGHTER_FRAGMENT = /* glsl */ `
 
 
     // ---- Impact point light ----------------------------------------------
+    // Soft-ceilinged AND directionally shaped on purpose. This light is
+    // positioned AT the fighter being hit, so 1.0 / (1.0 + d*d*1.6) barely
+    // attenuates anywhere on their body: a crit requesting 72 arrived as ~50 at
+    // the chest, multiplied albedo to ~25x over white, and flattened the entire
+    // character to a featureless white shape.
+    //
+    // Measured chain (hypergrowth, crit, defender bounding box, pure-white %):
+    //   at rest                        0.0%   <- the frame is clean until a hit
+    //   on impact, composed           43.9%
+    //   on impact, ?nobloom            0.0%   <- bloom is the amplifier
+    //   on impact, fighter hidden     13.5%   <- ...but the FIGHTER is the source
+    //   on impact, all VFX hidden     41.0%   <- sparks/waves contribute ~3 points
+    // So: the flash overdrives the fighter's surface, bloom's threshold then
+    // treats the whole character as an emitter, and a HUGE-kernel SCREEN blend
+    // paints them back over themselves. Fixing the light fixes both.
+    //
+    // Two ceilings, not one:
+    //  - FLASH_MAX caps total flash contribution near the key light's own scale,
+    //    so the brightest possible hit roughly doubles the fighter's lighting
+    //    rather than multiplying it 25x. Soft knee, not a clamp, so distance
+    //    falloff still reads between a near hit and a far one.
+    //  - The N.L term is only lightly wrapped. A half-Lambert wrap (d*0.5+0.5)
+    //    hands 50% of the flash to surfaces facing directly AWAY from the
+    //    contact, which is what erases form: every plane gets lit equally and
+    //    the silhouette fills in. A 0.32 wrap keeps the far side dark, so the
+    //    hit reads as a hot directional flare off the point of contact and the
+    //    character's shape survives the brightest frame of the game.
     vec3 toFlash = uFlashPos.xyz - vWorldPos;
     float dist = length(toFlash);
-    float atten = uFlashIntensity / (1.0 + dist * dist * 1.6);
-    vec3 flashL = uFlashColor * atten * max(dot(N, normalize(toFlash)) * 0.5 + 0.5, 0.0);
+    float rawAtten = uFlashIntensity / (1.0 + dist * dist * 1.6);
+    const float FLASH_MAX = 1.15;
+    const float FLASH_KNEE = FLASH_MAX * 0.55;
+    float atten = rawAtten <= FLASH_KNEE
+      ? rawAtten
+      : FLASH_KNEE + (FLASH_MAX - FLASH_KNEE) * (1.0 - exp(-(rawAtten - FLASH_KNEE) / (FLASH_MAX - FLASH_KNEE)));
+    float flashWrap = max(dot(N, normalize(toFlash)) * 0.68 + 0.32, 0.0);
+    vec3 flashL = uFlashColor * atten * flashWrap;
 
     vec3 ambient = ambCol * uAmbientIntensity;
 
@@ -756,7 +789,25 @@ export const FIGHTER_FRAGMENT = /* glsl */ `
     }
 
     // ---- Hit flash --------------------------------------------------------
-    color = mix(color, uHitColor * 2.4, clamp(uHitFlash, 0.0, 1.0));
+    // The contact white-out. This used to be a straight replacement --
+    // mix(color, uHitColor * 2.4, flash) -- which at full strength painted the
+    // entire character one flat colour at 2.4x over white. Every lighting term
+    // above it became irrelevant, the silhouette filled in solid, and bloom
+    // (threshold ~0.4, HUGE kernel) then smeared that solid block back over
+    // itself. It was the single largest contributor to the fighter being
+    // erased on impact.
+    //
+    // Now the flash target is modulated by the character's own luminance, so
+    // their value structure survives it: lit planes flash hard, shadowed
+    // planes stay comparatively dark, and the form still reads at peak. The
+    // mix is capped below 1.0 so some of the original colour always shows
+    // through -- a fighter is never 100% replaced by the flash colour.
+    float hf = clamp(uHitFlash, 0.0, 1.0);
+    if (hf > 0.001) {
+      float hfLuma = dot(color, vec3(0.2126, 0.7152, 0.0722));
+      float hfShape = 0.42 + 0.58 * smoothstep(0.0, 0.55, hfLuma);
+      color = mix(color, uHitColor * 1.5 * hfShape, hf * 0.72);
+    }
 
     // ---- Ink outline ------------------------------------------------------
     // Sample the alpha ring around the fragment; where the sprite is about to

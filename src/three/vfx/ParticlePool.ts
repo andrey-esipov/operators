@@ -59,6 +59,12 @@ export interface EmitOptions {
   intensity?: number
   /** Initial spatial jitter around `position`. */
   jitter?: number
+  /**
+   * Push each particle out along its own velocity direction at spawn, in world
+   * units. Makes a burst read as already-expanding on frame 0, which is what
+   * keeps an impact from being a solid ball during hitstop. See ParticlePool.emit.
+   */
+  spawnRadius?: number
   /** Spin rate, radians/sec. */
   spin?: number
   /** Velocity-aligned stretch (tracer look). 0 = round. */
@@ -184,10 +190,6 @@ export class ParticlePool {
       const i3 = i * 3
       const i4 = i * 4
 
-      this.aOrigin.array[i3] = o.position.x + (Math.random() - 0.5) * jitter
-      this.aOrigin.array[i3 + 1] = o.position.y + (Math.random() - 0.5) * jitter
-      this.aOrigin.array[i3 + 2] = o.position.z + (Math.random() - 0.5) * jitter
-
       let vx: number, vy: number, vz: number
       if (dir) {
         // Sample inside a cone around `dir`.
@@ -214,6 +216,24 @@ export class ParticlePool {
       this.aVelocity.array[i3] = vx * sp
       this.aVelocity.array[i3 + 1] = vy * sp
       this.aVelocity.array[i3 + 2] = vz * sp
+
+      // Pre-dispersed spawn shell. Every particle starts pushed out along its own
+      // travel direction rather than all of them starting at one point.
+      //
+      // This exists because of hitstop. A hit freezes time scale to ~0.02 for
+      // 100-300ms, which is exactly the window the player is looking at the
+      // impact -- and during it the particles do not move. A burst of 250
+      // additive tracers all sitting on the emission point integrates to a solid
+      // white ball, which is what was erasing the defending fighter on every
+      // heavy hit. Offsetting along the velocity vector (not randomly) means the
+      // cloud reads as an expanding burst on the very first frame, and when time
+      // resumes each particle continues along the line it was already on instead
+      // of visibly jumping.
+      const sr = o.spawnRadius ?? 0
+      const off = sr > 0 ? sr * (0.3 + 0.7 * Math.random()) : 0
+      this.aOrigin.array[i3] = o.position.x + vx * off + (Math.random() - 0.5) * jitter
+      this.aOrigin.array[i3 + 1] = o.position.y + vy * off + (Math.random() - 0.5) * jitter
+      this.aOrigin.array[i3 + 2] = o.position.z + vz * off + (Math.random() - 0.5) * jitter
 
       this.aBirth.array[i] = this.time
       this.aLife.array[i] = Math.max(0.02, o.life * (1 + (Math.random() - 0.5) * 2 * (o.lifeVariance ?? 0.35)))

@@ -173,17 +173,25 @@ export class LightRig implements Subsystem {
   onEvent(e: FightEvent) {
     if (e.kind === 'hit') {
       const pos = this.ctx.anchors.fighter(e.target)
+      // Halved from the original values. These feed a 1/(1+d*d) falloff on a
+      // light sitting inside the fighter, so the old numbers were saturating the
+      // near field by an order of magnitude. The shader ceiling now guarantees
+      // readability, but keeping the raw values sane means the distance falloff
+      // still does real work instead of everything pinning to the ceiling.
       const strength =
-        e.flavor === 'signature' ? 90 :
-        e.flavor === 'ult' ? 70 :
-        e.flavor === 'crit' ? 52 :
-        e.flavor === 'combo' ? 42 :
-        e.flavor === 'ex' ? 46 :
-        e.flavor === 'heavy' ? 30 : 18
+        e.flavor === 'signature' ? 42 :
+        e.flavor === 'ult' ? 34 :
+        e.flavor === 'crit' ? 26 :
+        e.flavor === 'combo' ? 21 :
+        e.flavor === 'ex' ? 23 :
+        e.flavor === 'heavy' ? 16 : 10
+      // Crit used to fire a pure white light, which guaranteed that whatever it
+      // over-lit resolved to colourless paper white. Warm gold saturates as hot
+      // gold instead, which still reads as the crit's identity colour.
       const color =
         e.flavor === 'ult' || e.flavor === 'signature' ? 0xff5fc8 :
         e.flavor === 'ex' ? 0x4fe8ff :
-        e.flavor === 'crit' ? 0xffffff :
+        e.flavor === 'crit' ? 0xfff0cc :
         e.flavor === 'combo' ? 0xffd166 : 0xffe9b8
       this.flash.position.set(pos.x, pos.y, pos.z + 0.9)
       this.flash.color.setHex(color)
@@ -194,7 +202,7 @@ export class LightRig implements Subsystem {
       this.flashLife = this.flashMax
     }
     if (e.kind === 'ko') {
-      this.flashPeak = 120
+      this.flashPeak = 60
       this.flashMax = 0.7
       this.flashLife = this.flashMax
       this.flash.color.setHex(0xffffff)
@@ -215,7 +223,9 @@ export class LightRig implements Subsystem {
     }
 
     if (this.flashLife > 0) {
-      this.flashLife = Math.max(0, this.flashLife - dt)
+      // Real dt: the impact pop is a presentation accent and must not be held
+      // for the length of the hitstop freeze. See EngineContext.realDt.
+      this.flashLife = Math.max(0, this.flashLife - this.ctx.realDt())
       // Sharp attack, exponential decay — reads as a real impact pop.
       const t = this.flashLife / this.flashMax
       const v = this.flashPeak * t * t

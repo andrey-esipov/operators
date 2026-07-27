@@ -150,6 +150,24 @@ export interface EngineContext {
    * instead of re-deriving it from event timing.
    */
   hitstop: () => number
+  /**
+   * Unscaled wall-clock delta for the frame currently being updated, in
+   * seconds. `Subsystem.update` receives `rawDt * timeScale`, which is correct
+   * for anything that should freeze with the world -- poses, physics, particle
+   * motion. It is wrong for short-lived *presentation* accents.
+   *
+   * A hit sets timeScale to ~0.02 for 100-320ms. Anything decaying on the
+   * scaled dt therefore does not decay at all for the duration of the freeze.
+   * A contact white-out authored as "a brief 2-3 frame spike" becomes a solid
+   * blob held for a third of a second -- and that held frame is exactly the one
+   * the player is staring at. This was measured as the largest single cause of
+   * the defending fighter being erased on impact.
+   *
+   * Rule of thumb: if it represents something IN the world, use `dt`. If it is
+   * a flash, a bloom kick or any accent whose whole design is "brief", use
+   * `realDt()`.
+   */
+  realDt: () => number
 }
 
 /** Named world-space points other subsystems can query. */

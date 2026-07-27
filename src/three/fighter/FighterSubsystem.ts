@@ -388,7 +388,16 @@ class FighterRig {
     ;[c.squashY, c.squashVelY] = spring(c.squashY, c.squashVelY, 1, 260, 22, adt)
     ;[c.yaw, c.yawVel] = spring(c.yaw, c.yawVel, 0, 150, 16, adt)
     c.wobble *= Math.exp(-adt * 7.5)
-    c.flash *= Math.exp(-adt * 13)
+    // Hit flash decays on REAL time, not animation time. Everything else in
+    // this block is deliberately frozen by hitstop -- that is what gives the
+    // impact its weight. The white flash must not be: it is a 2-3 frame
+    // contact accent, and freezing it holds the character as a flat white
+    // silhouette for the entire 100-320ms hitstop, which is precisely the
+    // frame the player is staring at. Measured before this fix: the defender's
+    // bounding box was 43% pure white on a crit and the character had no
+    // readable form at all. Decay rate is tuned so the flash is effectively
+    // gone by ~70ms regardless of how long the freeze runs.
+    c.flash *= Math.exp(-dt * 38)
 
     // --- Scripted attack: anticipation → contact → follow-through ----------
     // A pure spring can't do a proper wind-up (pull back before you punch), so

@@ -80,13 +80,62 @@ interface Recipe {
 
 const C = (hex: number) => new THREE.Color(hex)
 
+/**
+ * Impact silhouette budget, in world units, measured against the fighter.
+ *
+ * Every wave was previously sized as shockSize * k * scale with no ceiling, and
+ * scale compounds power, the recipe scale and the combo multiplier. A crit at
+ * full power produced a 14.2-unit star -- over four times the fighter's height --
+ * so the effect covered the entire defender and most of the arena behind them.
+ *
+ * A hit spark in a shipped fighting game is roughly the size of the character it
+ * lands on, never a multiple of it. Power is expressed through hitstop, screen
+ * shake, spark count, sound and the reaction animation, NOT by growing the
+ * effect until it eats the frame. These two caps encode that rule:
+ *
+ *   CONTACT_CAP  the total footprint of anything that sits on the defender
+ *   CORE_CAP     the bright central mass inside that footprint
+ *
+ * Deliberately excluded: the signature pillar and the ult sunburst, which are
+ * meant to own the frame for a few frames as a super cut-in would.
+ */
+const CONTACT_CAP = WORLD.FIGHTER_HEIGHT * 1.45
+const CORE_CAP = WORLD.FIGHTER_HEIGHT * 0.34
+
+/**
+ * How far the contact flare sits from the defender's centre, toward whoever hit
+ * them, in world units.
+ *
+ * Everything at the contact used to spawn at `anchors.fighter(target)` -- the
+ * defender's centre of mass. That means the brightest object in the frame was
+ * drawn on the exact middle of the person whose reaction the player is trying
+ * to read, and no amount of hollowing the sprite fixes that: bloom's kernel is
+ * far wider than any hole you can open, so it fills the middle back in.
+ *
+ * A fist lands on the near surface of the body, not inside it. Pushing the
+ * flare out to the leading edge is what actually un-covers the character, and
+ * it is also just more correct -- the spark appears where the blow connects.
+ */
+const CONTACT_OFFSET = WORLD.FIGHTER_HEIGHT * 0.17
+
+/**
+ * Soft-knee ceiling: linear response up to 65% of the cap, then asymptotic. Keeps
+ * light hits genuinely smaller than heavy ones while making it impossible for any
+ * combination of power, recipe scale and multiplier to blow past the budget.
+ */
+const capSize = (units: number, cap: number) => {
+  const knee = cap * 0.65
+  if (units <= knee) return units
+  return knee + (cap - knee) * (1 - Math.exp(-(units - knee) / (cap - knee)))
+}
+
 const RECIPES: Record<HitFlavor, Recipe> = {
   light: {
     core: 0xfff2d8, energy: 0xffd27a, ember: 0xff9b3d, scale: 0.72,
     flashSize: 2.4, flashDecay: 0.16, flashSpikes: 0.6, streak: 0.7,
     flareSize: 1.2,
-    sparkCount: 34, sparkSpeed: 10.5, sparkLife: 0.72,
-    shardCount: 8,
+    sparkCount: 24, sparkSpeed: 10.5, sparkLife: 0.72,
+    shardCount: 6,
     debrisCount: 0, debrisSpeed: 0,
     shock: false, shockSize: 0,
     groundRing: 0.9, scorch: 0, dust: 6,
@@ -98,8 +147,8 @@ const RECIPES: Record<HitFlavor, Recipe> = {
     core: 0xfff0cf, energy: 0xff6a1e, ember: 0xd81e0a, scale: 1.05,
     flashSize: 3.4, flashDecay: 0.2, flashSpikes: 1.2, streak: 1.4,
     flareSize: 1.7,
-    sparkCount: 70, sparkSpeed: 13.5, sparkLife: 0.66,
-    shardCount: 16,
+    sparkCount: 44, sparkSpeed: 13.5, sparkLife: 0.66,
+    shardCount: 11,
     debrisCount: 12, debrisSpeed: 7.5,
     shock: true, shockSize: 3.6,
     groundRing: 1.7, scorch: 0.9, dust: 14,
@@ -111,8 +160,8 @@ const RECIPES: Record<HitFlavor, Recipe> = {
     core: 0xffe9bc, energy: 0xffd35a, ember: 0xff7a12, scale: 1.35,
     flashSize: 1.6, flashDecay: 0.2, flashSpikes: 1.4, streak: 2.4,
     flareSize: 1.3,
-    sparkCount: 140, sparkSpeed: 18.5, sparkLife: 0.8,
-    shardCount: 30,
+    sparkCount: 66, sparkSpeed: 18.5, sparkLife: 0.8,
+    shardCount: 19,
     debrisCount: 26, debrisSpeed: 9.5,
     shock: true, shockSize: 5.4,
     groundRing: 2.6, scorch: 1.4, dust: 22,
@@ -124,8 +173,8 @@ const RECIPES: Record<HitFlavor, Recipe> = {
     core: 0xd7a6ff, energy: 0xc77dff, ember: 0x8a2be2, scale: 1.05,
     flashSize: 1.5, flashDecay: 0.15, flashSpikes: 1.0, streak: 1.2,
     flareSize: 1.0,
-    sparkCount: 58, sparkSpeed: 15, sparkLife: 0.62,
-    shardCount: 16,
+    sparkCount: 38, sparkSpeed: 15, sparkLife: 0.62,
+    shardCount: 11,
     debrisCount: 8, debrisSpeed: 7,
     shock: true, shockSize: 3.2,
     groundRing: 1.5, scorch: 0.6, dust: 11,
@@ -137,8 +186,8 @@ const RECIPES: Record<HitFlavor, Recipe> = {
     core: 0xeafffb, energy: 0x22d3ee, ember: 0x2a7bd8, scale: 1.1,
     flashSize: 2.3, flashDecay: 0.2, flashSpikes: 0.7, streak: 1.8,
     flareSize: 1.0,
-    sparkCount: 74, sparkSpeed: 16.5, sparkLife: 0.72,
-    shardCount: 24,
+    sparkCount: 46, sparkSpeed: 16.5, sparkLife: 0.72,
+    shardCount: 16,
     debrisCount: 10, debrisSpeed: 8,
     shock: true, shockSize: 4.0,
     groundRing: 1.9, scorch: 0.7, dust: 12,
@@ -150,8 +199,8 @@ const RECIPES: Record<HitFlavor, Recipe> = {
     core: 0xffe8b0, energy: 0xffcf4d, ember: 0xff6a00, scale: 1.1,
     flashSize: 1.3, flashDecay: 0.22, flashSpikes: 1.4, streak: 2.6,
     flareSize: 1.2,
-    sparkCount: 70, sparkSpeed: 20, sparkLife: 0.85,
-    shardCount: 28,
+    sparkCount: 44, sparkSpeed: 20, sparkLife: 0.85,
+    shardCount: 19,
     debrisCount: 20, debrisSpeed: 9,
     shock: true, shockSize: 4.6,
     groundRing: 2.4, scorch: 1.4, dust: 13,
@@ -163,8 +212,8 @@ const RECIPES: Record<HitFlavor, Recipe> = {
     core: 0xffe0f2, energy: 0xff3ba0, ember: 0xf72585, scale: 1.2,
     flashSize: 1.5, flashDecay: 0.15, flashSpikes: 1.4, streak: 3.0,
     flareSize: 1.2,
-    sparkCount: 85, sparkSpeed: 18, sparkLife: 0.95,
-    shardCount: 40,
+    sparkCount: 52, sparkSpeed: 18, sparkLife: 0.95,
+    shardCount: 25,
     debrisCount: 30, debrisSpeed: 11,
     shock: true, shockSize: 4.5,
     groundRing: 2.4, scorch: 1.3, dust: 13,
@@ -251,19 +300,34 @@ export class VfxSubsystem implements Subsystem {
         void main(){
           vec2 d = vUv - 0.5;
           float r = length(d) * 2.0;
-          float core = pow(max(0.0, 1.0 - r), 3.0);
-          float hot  = pow(max(0.0, 1.0 - r * 1.7), 6.0);
+          // HOLLOW contact shell. This used to be a filled disc
+          // (core = pow(1.0 - r, 3.0)) plus a second filled hot disc on top, which
+          // meant the brightest, most opaque part of the contact flash landed
+          // exactly on the defending fighter's torso and erased them from the
+          // frame. In a fighting game that is fatal: the whole point of the hit
+          // is the reaction, and you cannot read a reaction you cannot see.
+          //
+          // The first attempt at hollowing this only opened a hole inside
+          // r < 0.28 and still reached half brightness by r = 0.14, so in
+          // practice it stayed a filled disc and still ate the torso. This is a
+          // genuine ring: exactly zero at the hub, peaking at r = 0.62, falling
+          // off again at the rim. The defender's chest sits in the hole.
+          float shell = smoothstep(0.20, 0.62, r) * smoothstep(1.0, 0.66, r);
+          // A small contact pinpoint is all that is allowed at the centre.
+          float hot  = pow(max(0.0, 1.0 - r * 3.2), 5.0);
           float ang = atan(d.y, d.x);
           // 4-point anamorphic star
           float star = pow(max(0.0, cos(ang * 2.0)), 22.0) + pow(max(0.0, cos(ang * 2.0 + 1.5707)), 22.0);
           star *= pow(max(0.0, 1.0 - r * 0.6), 2.2) * uSpikes;
           // horizontal lens streak
           float streak = smoothstep(0.5, 0.0, abs(d.y) * 8.0) * smoothstep(1.0, 0.0, abs(d.x)) * uStreak;
-          float a = (core * 1.1 + hot * 1.3 + star * 0.9 + streak * 1.1) * uAlpha;
+          // Thin structure (spikes, streak) carries the punch now, because thin
+          // structure reads over a silhouette without occluding it.
+          float a = (shell * 0.85 + hot * 0.30 + star * 1.15 + streak * 1.25) * uAlpha;
           if (a < 0.003) discard;
-          vec3 col = mix(uColor2, uColor, clamp(core * 0.55 + hot * 0.8, 0.0, 1.0));
-          col += uColor2 * hot * 1.1 + vec3(1.0) * hot * 0.22;
-          gl_FragColor = vec4(col * (1.0 + core * 0.7), a);
+          vec3 col = mix(uColor2, uColor, clamp(shell * 0.45 + hot * 0.8, 0.0, 1.0));
+          col += uColor2 * hot * 0.7 + vec3(1.0) * hot * 0.18;
+          gl_FragColor = vec4(col * (1.0 + shell * 0.5), a);
         }
       `,
     })
@@ -307,7 +371,11 @@ export class VfxSubsystem implements Subsystem {
     this.flashMat.uniforms.uSpikes.value = r.flashSpikes
     this.flashMat.uniforms.uStreak.value = r.streak
     this.flash.position.copy(pos)
-    this.flash.scale.setScalar(r.flashSize * r.scale * mult)
+    // The contact flash plane sits directly over the defender, so it lives under
+    // the same core budget as everything else at the contact point. Heavy used to
+    // request 3.6 world units here -- larger than crit -- which is why a heavy hit
+    // covered more of the fighter than a critical did.
+    this.flash.scale.setScalar(capSize(r.flashSize * r.scale * mult, CORE_CAP))
     this.flash.visible = true
     this.flashMax = r.flashDecay
     this.flashLife = r.flashDecay
@@ -329,6 +397,7 @@ export class VfxSubsystem implements Subsystem {
     const r = RECIPES.combo
     const p0 = this.ctx.anchors.fighter(target).clone()
     p0.z += 0.35
+    p0.x += (attacker === 'a' ? -1 : 1) * CONTACT_OFFSET
     const core = C(r.core)
     const energy = C(r.energy)
     const ember = C(r.ember)
@@ -403,6 +472,8 @@ export class VfxSubsystem implements Subsystem {
   ) {
     const p = this.ctx.anchors.fighter(target).clone()
     p.z += 0.35
+    // Sit on the surface the blow lands on, not in the middle of the defender.
+    p.x += (attacker === 'a' ? -1 : 1) * CONTACT_OFFSET
     if (jitter) p.add(jitter)
     const scale = (0.7 + power * 0.6) * r.scale * mult
     const core = C(r.core)
@@ -440,12 +511,15 @@ export class VfxSubsystem implements Subsystem {
     // 3. radial spark tracers — stretched, high-velocity. Combo fires 3× so its
     // sparks are fewer + faster + dimmer: they must clear the hub instantly rather
     // than pile into a persistent central cloud that bloom+grade fuse into a ball.
+    // spawnRadius is what makes this read as a burst during hitstop rather than a
+    // white ball sitting on the defender's chest.
     this.additive.emit({
       position: p, count: Math.round(r.sparkCount * scale * (r.combo ? 0.5 : 1)),
       speed: r.sparkSpeed * (r.combo ? 1.35 : 1),
-      speedVariance: 0.65, color: core, color2: energy, size: 0.11, sizeVariance: 0.75,
+      speedVariance: 0.65, color: energy, color2: ember, size: 0.1, sizeVariance: 0.75,
       life: r.sparkLife, gravity: -13, drag: 2.2, shape: 'spark', stretch: 4.2,
-      intensity: r.combo ? 1.9 : 2.6, jitter: 0.16, spin: 5,
+      intensity: r.combo ? 1.5 : 2.0, jitter: 0.16, spin: 5,
+      spawnRadius: 0.9 * scale,
     })
 
     // 3b. directional impact slash — a few very fast, hard-stretched tracers
@@ -453,16 +527,22 @@ export class VfxSubsystem implements Subsystem {
     this.additive.emit({
       position: p, count: Math.round((6 + r.shardCount * 0.4) * scale), speed: r.sparkSpeed * 1.7,
       speedVariance: 0.4, direction: away, spread: 0.28, color: C(0xffffff), color2: energy,
-      size: 0.14, sizeVariance: 0.6, life: r.sparkLife * 0.7, gravity: -4, drag: 1.4,
-      shape: 'spark', stretch: 7.5, intensity: 2.9, jitter: 0.05, spin: 0,
+      size: 0.13, sizeVariance: 0.6, life: r.sparkLife * 0.7, gravity: -4, drag: 1.4,
+      shape: 'spark', stretch: 7.5, intensity: 2.6, jitter: 0.05, spin: 0,
+      spawnRadius: 1.5 * scale,
     })
 
     // 4. directional shard spray along the hit vector
+    // High drag + short life on purpose: shards must die close to the contact.
+    // With low drag they coasted a third of the way across the arena and settled
+    // as slow bright diamonds, which read as floating litter rather than as
+    // debris thrown off an impact.
     this.additive.emit({
       position: p, count: Math.round(r.shardCount * scale), speed: r.sparkSpeed * 1.35,
-      speedVariance: 0.5, direction: away, spread: 0.8, color: core, color2: energy,
-      size: 0.17, sizeVariance: 0.7, life: r.sparkLife * 1.25, gravity: -9, drag: 1.4,
-      shape: 'shard', intensity: 2.6, jitter: 0.12, spin: 12,
+      speedVariance: 0.5, direction: away, spread: 0.8, color: energy, color2: ember,
+      size: 0.15, sizeVariance: 0.7, life: r.sparkLife * 0.72, gravity: -14, drag: 3.4,
+      shape: 'shard', intensity: 2.0, jitter: 0.12, spin: 12,
+      spawnRadius: 1.2 * scale,
     })
 
     // 5. bouncing debris chunks
@@ -488,36 +568,37 @@ export class VfxSubsystem implements Subsystem {
     // distinct silhouette instead of one recoloured ring.
     if (r.bolt) {
       // EX: forked electric discharge owns the frame — NO halo washing it out.
-      // Sized large + bright so the bolts dominate over spark fuzz + bloom.
-      this.waves.spawn('bolt', p, r.shockSize * 1.6 * scale, 0.95, C(0xffffff), energy, 2.9 * mult)
+      this.waves.spawn('bolt', p, capSize(r.shockSize * 0.82 * scale, CONTACT_CAP), 0.95, C(0xffffff), energy, 2.9 * mult)
     } else if (r.starBurst) {
       // CRIT: the hard impact star dominates — only a faint halo for depth.
-      this.waves.spawn('star', p, r.shockSize * 1.5 * scale, 0.92, C(0xffffff), energy, 2.4 * mult)
-      this.waves.spawn('halo', p, r.shockSize * 0.42 * scale, 0.5, core, energy, 0.42 * mult)
+      this.waves.spawn('star', p, capSize(r.shockSize * 0.46 * scale, CONTACT_CAP), 0.92, C(0xffffff), energy, 2.4 * mult)
+      this.waves.spawn('halo', p, capSize(r.shockSize * 0.16 * scale, CORE_CAP), 0.5, core, energy, 0.42 * mult)
     } else if (r.beam) {
       // SIGNATURE: anime super-flash pillar. Bright magenta pillar owns the frame;
       // only a small tinted core behind it (a big halo here is what bloomed to a
       // pink blob) so the vertical structure survives the bloom. Narrowed in x
       // (stretchX 0.7) so it reads as a tall column, not a square burst.
+      // Exempt from CONTACT_CAP on purpose: a super pillar is allowed to own the
+      // frame, because it is vertical structure the fighters still read against.
       this.waves.spawn('beam', p, r.shockSize * 1.4 * scale, 1.05, C(0xffffff), energy, 2.0 * mult, 0.66)
-      this.waves.spawn('halo', p, r.shockSize * 0.26 * scale, 0.44, core, energy, 0.34 * mult)
+      this.waves.spawn('halo', p, capSize(r.shockSize * 0.26 * scale, CORE_CAP), 0.44, core, energy, 0.34 * mult)
     } else if (r.combo) {
       // COMBO: violet multi-hit flurry rosette + a compact energy core. Snaps to
       // full size instantly so even the opening micro-hit reads on capture. The
       // blade intensity is kept MODERATE (like the crystal shell) because a bright
       // filled rosette blooms into one solid violet ball — the hollow core + wide
       // dark gaps between blades are what let it read as a spinning flurry.
-      this.waves.spawn('flurry', p, r.shockSize * 2.35 * scale, 0.9, core, energy, 2.0 * mult)
+      this.waves.spawn('flurry', p, capSize(r.shockSize * 1.15 * scale, CONTACT_CAP), 0.9, core, energy, 2.0 * mult)
     } else if (r.shock && !r.radial) {
       const shockPos = p.clone().add(away.clone().multiplyScalar(0.35 * scale))
-      this.waves.spawn('shock', shockPos, r.shockSize * scale, 0.86, core, energy, 1.7 * mult, 1.18)
+      this.waves.spawn('shock', shockPos, capSize(r.shockSize * 0.78 * scale, CONTACT_CAP), 0.86, core, energy, 1.7 * mult, 1.18)
       // small tinted core behind the ring so the centre has mass (kills the donut)
-      this.waves.spawn('halo', p, r.shockSize * 0.5 * scale, 0.5, core, energy, 0.75 * mult)
+      this.waves.spawn('halo', p, capSize(r.shockSize * 0.28 * scale, CORE_CAP), 0.5, core, energy, 0.75 * mult)
     } else {
       // LIGHT: a compact but crisp snap — small energy bloom + a tiny sharp star.
       // Kept alive ~0.9s so even the weakest hit reads on capture, not a bloom dot.
-      this.waves.spawn('halo', p, 2.4 * scale, 0.9, core, energy, 1.1 * mult)
-      this.waves.spawn('star', p, 3.4 * scale, 0.9, C(0xffffff), energy, 1.9 * mult)
+      this.waves.spawn('halo', p, capSize(1.5 * scale, CORE_CAP), 0.9, core, energy, 1.1 * mult)
+      this.waves.spawn('star', p, capSize(2.6 * scale, CONTACT_CAP), 0.9, C(0xffffff), energy, 1.9 * mult)
     }
     if (r.radial) {
       // ULT: divine golden sunburst — long sharp god-rays over a dim core. The
@@ -846,7 +927,13 @@ export class VfxSubsystem implements Subsystem {
     this.ambient(dt, state.scenario)
 
     if (this.flashLife > 0) {
-      this.flashLife = Math.max(0, this.flashLife - dt)
+      // Real dt, not the hitstop-scaled dt. This envelope is authored as a
+      // 2-3 frame spike; on the scaled clock a crit's 320ms freeze held it at
+      // full alpha for the entire freeze, and because bloom's kernel is far
+      // wider than the flash's hollow hub, that held disc bloomed into a solid
+      // blob over the defender's torso. Measured: this plane alone accounted
+      // for 6 of the 10 remaining points of defender blow-out.
+      this.flashLife = Math.max(0, this.flashLife - this.ctx.realDt())
       const t = this.flashLife / this.flashMax
       // Punchy: a brief opening spike (2-3 frames) then a fast decay. Kept short
       // and dim on purpose so the STRUCTURED silhouette waves — which live ~0.9s —

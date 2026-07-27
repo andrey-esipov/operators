@@ -30,6 +30,13 @@ declare global {
       state(): FightRenderState
       /** Resolves when the renderer has drawn at least `n` frames. */
       settle(n?: number): Promise<void>
+      /**
+       * Advance exactly `n` frames of exactly `dtMs` each, RAF paused. Use this
+       * instead of settle() for any capture you intend to compare against
+       * another capture — settle() rides wall-clock dt, so the same frame index
+       * lands on a different effect age every run.
+       */
+      step(n: number, dtMs?: number): void
       /** True once the scene has drawn and every queued asset has landed. */
       ready(): boolean
       /** Live engine handle — for QA harnesses that need to inspect internals. */
@@ -126,6 +133,7 @@ export function ThreeLab() {
           }
           requestAnimationFrame(tick)
         }),
+      step: (n: number, dtMs = 1000 / 60) => h.engine.stepFixed(n, dtMs),
       ready: () => h.engine.frameCount > 4 && h.engine.assets.pending() === 0,
       engine: h.engine,
     }

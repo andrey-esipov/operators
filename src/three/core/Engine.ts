@@ -53,6 +53,8 @@ export class Engine {
   private running = false
   private lastTime = 0
   private accumulatedDt = 0
+  /** Non-null only while stepFixed is driving the engine. See stepFixed. */
+  private virtualNow: number | null = null
 
   private _quality: QualityTier
   private maxPixelRatio: number
@@ -70,6 +72,8 @@ export class Engine {
   private hitstopScale = 1
   private hitstopTotal = 0
   private hitstopEnv = 0
+  /** Unscaled dt of the frame being updated; surfaced as ctx.realDt(). */
+  private lastRawDt = 0
 
   private state: FightRenderState | null = null
   private pendingEvents: FightEvent[] = []
@@ -180,6 +184,7 @@ export class Engine {
       requestHitstop: (ms: number, scale?: number) => this.requestHitstop(ms, scale),
       timeScale: () => this.timeScale,
       hitstop: () => this.hitstopEnv,
+      realDt: () => this.lastRawDt,
     }
   }
 
@@ -230,7 +235,7 @@ export class Engine {
    * hitstop deepens it rather than cutting it short.
    */
   requestHitstop(durationMs: number, scale = 0.02) {
-    const now = performance.now()
+    const now = this.now()
     const end = now + Math.max(0, durationMs)
     if (end > this.hitstopUntil) {
       this.hitstopUntil = end
@@ -280,7 +285,7 @@ export class Engine {
   start() {
     if (this.running) return
     this.running = true
-    this.lastTime = performance.now()
+    this.lastTime = this.now()
     const loop = (now: number) => {
       if (!this.running) return
       this.rafId = requestAnimationFrame(loop)
@@ -292,6 +297,49 @@ export class Engine {
   stop() {
     this.running = false
     cancelAnimationFrame(this.rafId)
+  }
+
+  /**
+   * Advance the simulation by exactly n frames of exactly dtMs each, with the
+   * RAF loop stopped.
+   *
+   * Screenshot QA was previously done by counting RAF frames and letting each
+   * one take whatever wall time it took. That is not reproducible: the frames
+   * right after an impact are exactly the frames that compile new shaders and
+   * allocate new particles, so their dt spikes to tens of milliseconds. Two
+   * captures of "the same" moment could differ by more than 100ms of effect
+   * age, which made every frame-by-frame visual comparison in this project a
+   * coin flip -- including comparisons used to accept or reject work.
+   *
+   * The virtual clock is threaded through this.now() rather than
+   * performance.now() so hitstop, which is measured in wall time on purpose,
+   * advances in lockstep with dt instead of expiring instantly.
+   */
+  stepFixed(n: number, dtMs = 1000 / 60) {
+    const wasRunning = this.running
+    this.stop()
+    if (this.virtualNow === null) this.virtualNow = performance.now()
+    this.lastTime = this.virtualNow
+    for (let i = 0; i < n; i++) {
+      this.virtualNow += dtMs
+      this.frame(this.virtualNow)
+    }
+    if (wasRunning) {
+      // Rebase any in-flight hitstop from the virtual clock back onto the wall
+      // clock, otherwise a freeze scheduled during stepping either expires
+      // instantly or hangs, depending on which way the two clocks drifted.
+      const real = performance.now()
+      if (this.hitstopUntil > 0) this.hitstopUntil += real - (this.virtualNow ?? real)
+      this.virtualNow = null
+      this.start()
+    }
+  }
+
+  /**
+   * Wall clock, or the virtual clock while stepFixed is driving the engine.
+   */
+  private now() {
+    return this.virtualNow ?? performance.now()
   }
 
   /**
@@ -347,6 +395,7 @@ export class Engine {
       }
     }
     const dt = rawDt * this.timeScale
+    this.lastRawDt = rawDt
     this.accumulatedDt += dt
 
     // Drain the event queue before updating so subsystems see events on the

@@ -16,7 +16,11 @@
  *   hit:<flavor>[:<side>[:<power>]]   trigger an impact (side is 'a'|'b', default 'b')
  *   ko:<side>               KO         (side is 'a'|'b', default 'b')
  *   shatter:<side>          armour shatter (side is 'a'|'b', default 'b')
- *   wait:<frames>           advance N frames
+ *   wait:<frames>           advance N frames (fixed 60Hz steps)
+ *
+ * Frames are advanced with a FIXED timestep so two captures of the same moment
+ * are directly comparable. Pass --realtime to fall back to wall-clock RAF
+ * frames, and --dt <ms> to change the step size.
  */
 import { chromium } from 'playwright-core'
 import { mkdirSync } from 'node:fs'
@@ -80,6 +84,12 @@ try {
     timeout: timeoutMs,
   })
 
+  // Freeze the RAF loop before the script runs so the ENTIRE capture -- the hit
+  // itself and every frame after it -- advances on the virtual clock. Without
+  // this, one or two real frames slip in between api.hit() and the first step,
+  // and those are exactly the expensive frames that spike dt.
+  if (!flag('realtime')) await page.evaluate(() => window.__OPS3D__.engine.stop())
+
   for (const raw of script.split(';').map((s) => s.trim()).filter(Boolean)) {
     const parts = raw.split(':')
     await page.evaluate(
@@ -93,7 +103,7 @@ try {
           case 'hit': api.hit(rest[0], rest[1] ?? 'b', rest[2] ? n(rest[2]) : undefined); break
           case 'ko': api.ko(rest[0] ?? 'b'); break
           case 'shatter': api.shatter(rest[0] ?? 'b'); break
-          case 'wait': api.settle(n(rest[0]) || 1); break
+          case 'wait': api.step(n(rest[0]) || 1); break
           case 'quality': api.quality(rest[0]); break
           case 'stage': api.setStage(rest[0]); break
           default: throw new Error('unknown shot command: ' + cmd)
@@ -103,7 +113,19 @@ try {
     )
   }
 
-  await page.evaluate((n) => window.__OPS3D__.settle(n), settle)
+  // Deterministic settle. --settle used to ride wall-clock RAF frames, so the
+  // same frame index landed on a wildly different effect age each run (the
+  // frames right after an impact are the ones that compile shaders and spike
+  // dt). Fixed stepping makes two captures of the same moment comparable, which
+  // is the whole premise of before/after visual QA. Pass --realtime to opt out.
+  if (flag('realtime')) {
+    await page.evaluate((n) => window.__OPS3D__.settle(n), settle)
+  } else {
+    await page.evaluate(
+      ([n, dt]) => window.__OPS3D__.step(n, dt),
+      [settle, Number(arg('dt', 1000 / 60))],
+    )
+  }
   const canvas = page.locator('canvas').first()
   await canvas.screenshot({ path: out, animations: 'disabled' })
   if (flag('json')) {

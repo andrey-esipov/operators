@@ -37,6 +37,20 @@ import { gradeFor, mixGrades, NEUTRAL_GRADE, type StageGrade } from './grades'
  * and saturation; KO desaturates the frame.
  */
 export class PostPipeline implements Subsystem, RenderDriver {
+  /**
+   * Reads the ?nobloom / ?nolens / ?nograde / ?nofinalize QA bisect switches.
+   * Static because the pipeline shape is fixed at construction (see the comment
+   * at the addPass site). Returns all-false outside a browser.
+   */
+  static qaFlags() {
+    const q = typeof location !== 'undefined' ? new URLSearchParams(location.search) : new URLSearchParams()
+    return {
+      bloom: q.has('nobloom'),
+      lens: q.has('nolens'),
+      grade: q.has('nograde'),
+      finalize: q.has('nofinalize'),
+    }
+  }
   readonly name = 'post'
 
   private ctx!: EngineContext
@@ -134,13 +148,21 @@ export class PostPipeline implements Subsystem, RenderDriver {
     // --- chromatic aberration + sharpen (own convolution pass) ----------
     this.finalize = new LensFinalizeEffect()
 
+    // QA bisect switches. `postprocessing` compiles every effect of an
+    // EffectPass into a single shader, so a runtime blendFunction = SKIP is a
+    // no-op -- the only way to remove a stage is to leave it out at construction.
+    // Hence URL params: ?nobloom&nolens&nograde&nofinalize. These exist so a
+    // "the frame is blown out / wrong hue" report can be bisected across post
+    // in one capture run instead of by editing source. Do not remove.
+    const off = PostPipeline.qaFlags()
+
     const gradeEffects: Effect[] = []
-    if (flags.bloom) {
+    if (flags.bloom && !off.bloom) {
       gradeEffects.push(this.bloom)
-      gradeEffects.push(this.lens)
+      if (!off.lens) gradeEffects.push(this.lens)
     }
-    gradeEffects.push(this.grade)
-    this.composer.addPass(new EffectPass(camera, ...gradeEffects))
+    if (!off.grade) gradeEffects.push(this.grade)
+    if (gradeEffects.length) this.composer.addPass(new EffectPass(camera, ...gradeEffects))
 
     // Chromatic aberration + sharpen + FINAL character clarity. This pass runs
     // after bloom, so it is the authoritative last word on the fighters: it
@@ -151,7 +173,7 @@ export class PostPipeline implements Subsystem, RenderDriver {
     this.grade.setCamera(camera.near, camera.far)
     this.finalize.setCamera(camera.near, camera.far)
     this.finalize.setCharClarity(this.currentGrade.envTint, this.currentGrade.charUntint, this.currentGrade.castRecover, this.currentGrade.charTone, this.currentGrade.charToneAmt)
-    this.composer.addPass(new EffectPass(camera, this.finalize))
+    if (!off.finalize) this.composer.addPass(new EffectPass(camera, this.finalize))
 
     if (flags.aa === 'smaa') {
       this.smaa = new SMAAEffect({ preset: SMAAPreset.HIGH })
@@ -206,8 +228,21 @@ export class PostPipeline implements Subsystem, RenderDriver {
     this.updateCharMatte()
 
     // --- decays ---------------------------------------------------------
-    this.impact = Math.max(0, this.impact - dt * 3.4)
-    this.flash = Math.max(0, this.flash - dt * 2.6)
+    // The impact envelope is deliberately front-loaded: it falls fastest while
+    // it is high, so the hit glare reads as a SNAP (gone in ~5 frames) and then
+    // leaves a short afterglow tail. A flat linear decay held the flare near
+    // peak for a sixth of a second, which is what made a crit look like a
+    // sustained supernova rather than a hit spark. Modern fighting games spike
+    // and clear inside 8-10 frames; anything longer erases the hit reaction.
+    //
+    // Real dt, not the hitstop-scaled dt. The impact grade and the full-frame
+    // flash are presentation accents, not world state: on the scaled clock they
+    // barely decayed at all for the 100-320ms of the freeze, so the boosted
+    // bloom and lifted exposure were held across exactly the frame the player
+    // stares at. See EngineContext.realDt.
+    const rdt = this.ctx.realDt()
+    this.impact = Math.max(0, this.impact - rdt * (3.2 + this.impact * 6.5))
+    this.flash = Math.max(0, this.flash - rdt * 5.0)
     const i = this.impact
 
     // --- stage grade cross-fade ----------------------------------------
@@ -245,10 +280,26 @@ export class PostPipeline implements Subsystem, RenderDriver {
     const dangerPulse = danger * (0.6 + 0.4 * Math.sin(this.time * 6.0))
 
     // --- bloom ----------------------------------------------------------
-    this.bloom.intensity = g.bloomIntensity + i * 1.5 + this.superPunch * 0.5
+    // Impact drive is deliberately small. The VFX sprites already emit at
+    // intensity 1.5-2.9 in linear HDR, so they are well above the bloom
+    // threshold before any impact boost at all. Adding i * 1.5 on top of a base
+    // of ~1.1 nearly tripled the bloom gain on every hit, and with a HUGE kernel
+    // that turned a torso-sized hit spark into a full-frame white blowout that
+    // erased the fighter being hit. The hit needs to feel like it PUNCHES, which
+    // is what the fast impact envelope above delivers -- it does not need the
+    // frame to go white. Threshold is nudged rather than crushed for the same
+    // reason: dropping it to 0.42 pulled the fighters' lit skin into the bloom
+    // and blew out their faces. Threshold is now RAISED slightly on impact
+    // instead of lowered. That is deliberate and counter-intuitive: on the
+    // frame of a hit the fighter is already flash-lit and the VFX cores are
+    // already far above threshold, so the only thing a lower threshold recruits
+    // is the character's own lit skin -- exactly the pixels that must stay
+    // readable. Lifting it keeps the bloom on the genuinely hot stuff (the
+    // spark, the flare, the arena neon) and off the face.
+    this.bloom.intensity = g.bloomIntensity + i * 0.5 + this.superPunch * 0.35
     this.bloom.luminanceMaterial.threshold = Math.max(
-      0.24,
-      g.bloomThreshold - i * 0.28 - this.superPunch * 0.12,
+      0.34,
+      g.bloomThreshold + i * 0.05 - this.superPunch * 0.08,
     )
 
     // --- lens dirt / anamorphic ----------------------------------------

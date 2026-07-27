@@ -375,8 +375,22 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, const in float depth,
   c = mix(c, vec3(L), desat * envW);
   c = mix(c, c * dangerTint, dangerAmt * envW);
 
-  // Super / impact full-frame flash (kept subtle, warm).
-  c += flash * vec3(0.9, 0.85, 0.7);
+  // Super / impact full-frame flash, as an EXPOSURE lift rather than a flat add.
+  //
+  // This used to be a straight "c += flash * warmTint". A flat add moves the
+  // black point with it, so a signature at flash=0.55 lifted every pixel in the
+  // frame by ~0.5 -- the arena went milk-grey, the stage lost its blacks, and the
+  // whole shot read as a washed-out veil instead of a bright flash.
+  //
+  // A real bright light does not add a constant to the sensor, it multiplies the
+  // exposure: highlights blow out, blacks stay black. Multiplying preserves 0
+  // exactly, so the arena keeps its contrast while the hit core and the fighters'
+  // lit sides slam into the shoulder. The small additive term is gated on
+  // luminance so it only fills areas that already carry light (a bounce), and
+  // cannot touch true black.
+  float flashL = luma(c);
+  c *= 1.0 + flash * 2.4;
+  c += flash * 0.22 * vec3(0.9, 0.85, 0.7) * smoothstep(0.02, 0.30, flashL);
 
   // Tinted vignette with a natural falloff.
   float d = distance(uv, vec2(0.5));

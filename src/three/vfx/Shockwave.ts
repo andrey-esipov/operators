@@ -273,17 +273,22 @@ const WAVE_FRAG = /* glsl */ `
       float reach = 0.98 * ease;
       float along = smoothstep(reach, 0.0, r);                 // full near centre → tip
       float halfw = 0.30 * clamp(1.0 - r / max(reach, 0.001), 0.0, 1.0); // narrows to tip
-      float spike = along * smoothstep(halfw, halfw * 0.08, da);
-      float coreline = along * smoothstep(halfw * 0.35, 0.0, da); // bright white spine
+      // Punch the hub open. Every spoke converges at r = 0, so without this the
+      // six spikes and their bright spines pile into a solid bright disc right on
+      // the defender's chest. Dimming the innermost radius lets the body read
+      // through the middle of the star while the spikes still radiate off it.
+      float hub = smoothstep(0.0, 0.17, r);
+      float spike = along * smoothstep(halfw, halfw * 0.08, da) * mix(0.18, 1.0, hub);
+      float coreline = along * smoothstep(halfw * 0.35, 0.0, da) * mix(0.10, 1.0, hub);
       // small crisp impact ring at the base
       float baseRing = ring(r, 0.30 * ease, 0.04 * ease + 0.01);
-      vec3 core = hotCore(r, ang, uColor2, 0.20, uSeed);
-      float coreA = smoothstep(0.20, 0.0, r);
+      vec3 core = hotCore(r, ang, uColor2, 0.11, uSeed);
+      float coreA = smoothstep(0.11, 0.0, r);
       // Spikes own the silhouette; the centre is only a small churning core (not a
       // filled disc) so under heavy bloom the STAR shape survives instead of
       // melting into a solid bright ball.
-      float a = clamp((spike * 0.95 + coreline + baseRing + coreA * 0.32) * grow * fade, 0.0, 1.0);
-      vec3 col = uColor2 * (spike * 2.6 + baseRing * 2.0) + vec3(1.0) * coreline * 0.6 + core * 0.9;
+      float a = clamp((spike * 0.95 + coreline + baseRing + coreA * 0.16) * grow * fade, 0.0, 1.0);
+      vec3 col = uColor2 * (spike * 2.6 + baseRing * 2.0) + vec3(1.0) * coreline * 0.6 + core * 0.55;
       col *= uIntensity;
       if (a < 0.005) discard;
       gl_FragColor = vec4(col, a);

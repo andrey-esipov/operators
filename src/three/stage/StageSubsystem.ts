@@ -209,14 +209,16 @@ export class StageSubsystem implements Subsystem {
     }
     this.floor.applyLook(look)
 
-    // Atmosphere colours. Near fog planes take the (dark) fog colour; the two
-    // far additive haze bands (last children) take the brighter accent so they
+    // Atmosphere colours. Near steam banks glow with a luminous per-stage tint
+    // (fog colour lifted toward the mote colour) so they read as particulate in
+    // the light; the far additive haze bands take the brighter accent so they
     // read as luminous atmospheric depth behind the set.
     this.dust.setColor(cfg.motes.color)
+    const steamColor = new THREE.Color(cfg.lighting.fog.color).lerp(new THREE.Color(cfg.motes.color), 0.6)
     const fogKids = this.fog.group.children as THREE.Mesh[]
     fogKids.forEach((m, i) => {
-      const isFar = i >= fogKids.length - 2
-      ;(m.material as THREE.ShaderMaterial).uniforms.uColor.value.setHex(isFar ? cfg.accent : cfg.lighting.fog.color)
+      const isFar = i >= fogKids.length - 3
+      ;(m.material as THREE.ShaderMaterial).uniforms.uColor.value.copy(isFar ? new THREE.Color(cfg.accent) : steamColor)
     })
 
     // Rebuild the mid-ground architecture.

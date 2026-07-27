@@ -338,16 +338,21 @@
   pointer-events: none;
 }
 
-/* Thin discipline underline — the single scannable colour cue. */
+/* Thin discipline underline — a quiet scannable cue at rest, ignites on focus. */
 .sel-cell-disc {
   position: absolute;
   left: 0;
   right: 0;
   bottom: 0;
-  height: 3px;
+  height: 2px;
   z-index: 3;
-  opacity: 0.85;
+  opacity: 0.32;
+  transition: opacity 120ms ease, height 120ms ease, box-shadow 120ms ease;
 }
+.sel-cell:hover .sel-cell-disc,
+.sel-cell.is-cursor .sel-cell-disc,
+.sel-cell.is-p1 .sel-cell-disc,
+.sel-cell.is-p2 .sel-cell-disc { opacity: 1; height: 3px; }
 
 /* Cursor cell — dramatic emphasis + hard snap. */
 .sel-cell.is-cursor {
@@ -483,7 +488,21 @@
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
 }
 
-/* ── Filter rail — angular segmented switches, not SaaS pills ───────── */
+/* ── Filter bar — compact arcade segmented switches, low-key ────────── */
+.sel-filterbar {
+  gap: 3px;
+  padding: 5px 7px;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.34), rgba(0, 0, 0, 0.14));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), inset 0 -1px 0 rgba(0, 0, 0, 0.4);
+  clip-path: polygon(6px 0, 100% 0, calc(100% - 6px) 100%, 0 100%);
+  overflow: hidden;
+}
+.sel-filterbar-div {
+  width: 1px;
+  align-self: stretch;
+  margin: 2px 5px;
+  background: rgba(255, 255, 255, 0.12);
+}
 .sel-tabrail {
   display: flex;
   flex-wrap: wrap;
@@ -493,43 +512,43 @@
 .sel-tab {
   font-family: var(--sel-font-head);
   font-weight: 600;
-  font-size: 11px;
-  letter-spacing: 0.12em;
+  font-size: 10px;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.6);
-  padding: 5px 11px;
-  background: linear-gradient(180deg, #211b2e, #14101d);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), inset 0 -2px 0 rgba(0, 0, 0, 0.55);
-  clip-path: polygon(6px 0, 100% 0, calc(100% - 6px) 100%, 0 100%);
+  color: rgba(255, 255, 255, 0.5);
+  padding: 4px 8px;
+  background: linear-gradient(180deg, rgba(33, 27, 46, 0.55), rgba(20, 16, 29, 0.55));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  clip-path: polygon(5px 0, 100% 0, calc(100% - 5px) 100%, 0 100%);
   cursor: pointer;
   transition: color 120ms ease, background 120ms ease, box-shadow 120ms ease, transform 120ms ease;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   white-space: nowrap;
 }
 .sel-tab:hover { color: #fff; transform: translateY(-1px); }
 .sel-tab.is-active {
   color: #0a0810;
   background: linear-gradient(180deg, color-mix(in srgb, var(--tab-c, #fff) 96%, white), var(--tab-c, #fff));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), 0 0 16px color-mix(in srgb, var(--tab-c, #fff) 60%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), 0 0 14px color-mix(in srgb, var(--tab-c, #fff) 55%, transparent);
   text-shadow: none;
 }
 .sel-tab-count {
   font-family: 'VT323', monospace;
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1;
-  opacity: 0.7;
+  opacity: 0.65;
 }
-.sel-tab-dot { width: 8px; height: 8px; box-shadow: 0 0 6px var(--tab-c); }
+.sel-tab-dot { width: 7px; height: 7px; box-shadow: 0 0 5px var(--tab-c); }
 
 .sel-search {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 4px 10px;
-  background: linear-gradient(180deg, rgba(0, 0, 0, 0.66), rgba(0, 0, 0, 0.46));
-  box-shadow: inset 2px 2px 5px rgba(0, 0, 0, 0.7), inset -1px -1px 0 rgba(255, 255, 255, 0.1);
+  gap: 7px;
+  padding: 3px 9px;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.32));
+  box-shadow: inset 2px 2px 5px rgba(0, 0, 0, 0.6), inset -1px -1px 0 rgba(255, 255, 255, 0.08);
   clip-path: polygon(0 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%);
 }
 
@@ -559,6 +578,196 @@
   0%, 100% { box-shadow: 0 0 0 2px rgba(255, 214, 10, 0.5), 0 0 18px rgba(255, 214, 10, 0.4), inset 0 2px 0 rgba(255, 255, 255, 0.5); }
   50% { box-shadow: 0 0 0 2px rgba(255, 214, 10, 0.9), 0 0 34px rgba(255, 214, 10, 0.8), inset 0 2px 0 rgba(255, 255, 255, 0.5); }
 }
+
+/* ── Standoff heroes — one imposing render per player side ──────────── */
+.sel-standoff {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background:
+    radial-gradient(120% 80% at 50% 8%, color-mix(in srgb, var(--sel-side) 26%, #0b0712) 0%, #08050f 62%, #050309 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.05),
+    inset 0 0 130px color-mix(in srgb, var(--sel-side) 20%, transparent),
+    0 18px 44px rgba(0, 0, 0, 0.6);
+  transition: background 300ms ease, box-shadow 300ms ease, filter 300ms ease;
+}
+.sel-standoff-a { clip-path: polygon(0 0, 100% 0, 100% calc(100% - 20px), calc(100% - 20px) 100%, 0 100%); }
+.sel-standoff-b { clip-path: polygon(0 0, 100% 0, 100% 100%, 20px 100%, 0 calc(100% - 20px)); }
+.sel-standoff::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 5px;
+  background: linear-gradient(180deg, var(--sel-side), color-mix(in srgb, var(--sel-side) 22%, transparent));
+  box-shadow: 0 0 22px color-mix(in srgb, var(--sel-side) 70%, transparent);
+  z-index: 8;
+}
+.sel-standoff-a::after { right: 0; }
+.sel-standoff-b::after { left: 0; }
+.sel-standoff.is-empty {
+  background:
+    radial-gradient(120% 80% at 50% 10%, color-mix(in srgb, var(--sel-side) 12%, #0a0710) 0%, #060409 70%);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04), inset 0 0 100px color-mix(in srgb, var(--sel-side) 10%, transparent), 0 18px 44px rgba(0, 0, 0, 0.5);
+}
+.sel-standoff.is-active {
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--sel-side) 40%, transparent),
+    inset 0 0 150px color-mix(in srgb, var(--sel-side) 30%, transparent),
+    0 0 38px color-mix(in srgb, var(--sel-side) 36%, transparent),
+    0 18px 44px rgba(0, 0, 0, 0.6);
+}
+.sel-standoff.is-locked { filter: saturate(1.02); }
+
+.sel-standoff-stage { position: relative; overflow: hidden; }
+
+/* Huge ghost index number, offset behind the figure. */
+.sel-standoff-index {
+  position: absolute;
+  top: 42%;
+  transform: translateY(-50%);
+  font-size: clamp(120px, 15vw, 220px);
+  line-height: 0.8;
+  color: rgba(255, 255, 255, 0.05);
+  letter-spacing: -0.05em;
+  pointer-events: none;
+  user-select: none;
+  z-index: 1;
+}
+.sel-standoff-a .sel-standoff-index { right: 4%; }
+.sel-standoff-b .sel-standoff-index { left: 4%; }
+
+/* Hard-edged platform the fighter stands on — a lit slab, not a soft blob. */
+.sel-standoff-floor {
+  position: absolute;
+  left: 50%;
+  bottom: 5%;
+  width: 78%;
+  height: 30px;
+  transform: translateX(-50%) perspective(220px) rotateX(58deg);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--sel-side) 85%, #fff 5%), color-mix(in srgb, var(--sel-side) 30%, transparent) 60%, transparent);
+  box-shadow: 0 0 26px color-mix(in srgb, var(--sel-side) 55%, transparent);
+  clip-path: polygon(18% 0, 82% 0, 100% 100%, 0 100%);
+  opacity: 0.7;
+  z-index: 2;
+}
+.sel-standoff-figure {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  top: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  filter: drop-shadow(0 18px 20px rgba(0, 0, 0, 0.72));
+  animation: selStandoffIn 320ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  z-index: 3;
+}
+/* Height-driven so the square sprite canvas is sized by the panel height and
+   the (narrow) figure fills it head-to-toe. Transparent side margins overflow
+   the panel and are clipped — that is what makes the hero read as dominant. */
+.sel-standoff-figwrap {
+  height: 116%;
+  aspect-ratio: 1 / 1;
+  flex: 0 0 auto;
+}
+.sel-standoff.is-empty .sel-standoff-figure,
+.sel-standoff:not(.is-active):not(.is-locked) .sel-standoff-figure { filter: drop-shadow(0 18px 20px rgba(0, 0, 0, 0.72)) saturate(0.7) brightness(0.7); }
+@keyframes selStandoffIn {
+  0% { opacity: 0; transform: translateY(20px) scale(0.97); }
+  60% { opacity: 1; }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+.sel-standoff-a .sel-standoff-figure { animation-name: selStandoffInA; }
+.sel-standoff-b .sel-standoff-figure { animation-name: selStandoffInB; }
+@keyframes selStandoffInA {
+  0% { opacity: 0; transform: translateX(-26px) scale(0.965); }
+  60% { opacity: 1; }
+  100% { opacity: 1; transform: translateX(0) scale(1); }
+}
+@keyframes selStandoffInB {
+  0% { opacity: 0; transform: translateX(26px) scale(0.965); }
+  60% { opacity: 1; }
+  100% { opacity: 1; transform: translateX(0) scale(1); }
+}
+
+.sel-standoff-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: clamp(90px, 12vw, 160px);
+  color: rgba(255, 255, 255, 0.06);
+  z-index: 2;
+}
+
+/* Player tab (top corner, angled toward the centre). */
+.sel-standoff-tab {
+  position: absolute;
+  top: 12px;
+  z-index: 7;
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.3em;
+  color: #fff;
+  padding: 6px 16px;
+  background: linear-gradient(180deg, var(--sel-side), color-mix(in srgb, var(--sel-side) 60%, #000));
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+.sel-standoff-a .sel-standoff-tab { left: -2px; clip-path: polygon(0 0, 100% 0, calc(100% - 12px) 100%, 0 100%); }
+.sel-standoff-b .sel-standoff-tab { right: -2px; clip-path: polygon(12px 0, 100% 0, 100% 100%, 0 100%); }
+
+.sel-standoff-tags { position: absolute; top: 12px; z-index: 7; display: flex; gap: 6px; }
+.sel-standoff-a .sel-standoff-tags { right: 12px; }
+.sel-standoff-b .sel-standoff-tags { left: 12px; flex-direction: row-reverse; }
+
+.sel-standoff-lock {
+  position: absolute;
+  bottom: 12px;
+  z-index: 7;
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  color: #0a0810;
+  padding: 5px 12px;
+  background: linear-gradient(180deg, #FFE27A, #F5A700);
+  box-shadow: 0 0 18px rgba(255, 214, 10, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  animation: selLockIn 260ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.sel-standoff-a .sel-standoff-lock { left: 12px; clip-path: polygon(0 0, 100% 0, calc(100% - 8px) 100%, 0 100%); }
+.sel-standoff-b .sel-standoff-lock { right: 12px; clip-path: polygon(8px 0, 100% 0, 100% 100%, 0 100%); }
+@keyframes selLockIn { 0% { opacity: 0; transform: scale(1.3); } 100% { opacity: 1; transform: scale(1); } }
+
+/* Name lockup slab under the render. */
+.sel-standoff-name { position: relative; z-index: 5; padding: 10px 16px 13px; animation: selNameIn 300ms ease both; }
+.sel-standoff-b .sel-standoff-name { text-align: right; }
+.sel-standoff-plabel { font-size: 9px; font-weight: 700; letter-spacing: 0.2em; margin-bottom: 2px; }
+.sel-standoff-nametext {
+  font-size: clamp(22px, 2.4vw, 42px);
+  line-height: 0.86;
+  transform: skewX(-5deg);
+  transform-origin: left bottom;
+}
+.sel-standoff-b .sel-standoff-nametext { transform: skewX(-5deg); transform-origin: right bottom; }
+.sel-standoff-arch { margin-top: 3px; }
+.sel-standoff-hp { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.sel-standoff-b .sel-standoff-hp { flex-direction: row-reverse; }
+.sel-standoff-hpbar { position: relative; flex: 1; height: 10px; background: rgba(0, 0, 0, 0.6); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14); overflow: hidden; }
+
+/* Center info dock — kit strip for the live-hovered operator. */
+.sel-dock {
+  position: relative;
+  padding: 7px 12px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0) 14%), linear-gradient(180deg, var(--sel-graphite-1), var(--sel-graphite-2));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), inset 0 -2px 0 rgba(0, 0, 0, 0.5), 0 6px 16px rgba(0, 0, 0, 0.45);
+  clip-path: polygon(8px 0, calc(100% - 8px) 0, 100% 100%, 0 100%);
+  animation: selNameIn 240ms ease both;
+}
+.sel-dock-ult { padding: 5px 10px 5px 11px; background: linear-gradient(100deg, color-mix(in srgb, var(--sel-accent) 20%, transparent), rgba(0, 0, 0, 0.3)); min-width: 0; }
 
 /* ── Stage select ───────────────────────────────────────────────────── */
 .sel-stage-preview { animation: selHeroIn 340ms cubic-bezier(0.16, 1, 0.3, 1) both; }

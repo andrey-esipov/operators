@@ -198,8 +198,13 @@ export function CharacterSelect() {
 
   const sideColor = SIDE_COLOR[side]
   const heroAccent = hoveredFighter?.accent ?? '#F72585'
-  const heroIndex = Math.max(0, ROSTER_ORDER.indexOf(hovered)) + 1
-  const heroNum = String(heroIndex).padStart(2, '0')
+
+  // Standoff sides. Each panel shows that player's committed pick; the side
+  // that is currently choosing tracks the live cursor so both fighters face
+  // off across the roster the way SF6/KOF/Tekken stage the pre-fight standoff.
+  const p1Fighter: FighterDef | null = selectedA ? (getFighter(selectedA) ?? null) : (side === 'a' ? (hoveredFighter ?? null) : null)
+  const p2Fighter: FighterDef | null = selectedB ? (getFighter(selectedB) ?? null) : (side === 'b' ? (hoveredFighter ?? null) : null)
+  const numOf = (f: FighterDef | null) => (f ? String(Math.max(0, ROSTER_ORDER.indexOf(f.id)) + 1).padStart(2, '0') : '00')
 
   return (
     <div
@@ -285,47 +290,20 @@ export function CharacterSelect() {
         </div>
       </div>
 
-      {/* ── Main: dominant hero (left) + subordinate roster (right) ──── */}
+      {/* ── Main: P1 standoff · roster · P2 standoff ──────────────────── */}
       <div className="relative z-10 flex gap-3 flex-1 min-h-0">
-        {hoveredFighter && (
-          <HeroPanel
-            key={`hero-${hoveredFighter.id}-${side}`}
-            fighter={hoveredFighter}
-            side={side}
-            heroNum={heroNum}
-            singlePicker={singlePickerMode}
-            expanded={expanded}
-            onToggleMoves={() => { Sfx.menuMove(); setExpanded((x) => !x) }}
-          />
-        )}
+        {/* P1 standoff (left, faces inward) */}
+        <StandoffHero
+          side="a"
+          fighter={p1Fighter}
+          num={numOf(p1Fighter)}
+          active={singlePickerMode ? true : side === 'a' && !selectedA}
+          locked={!!selectedA}
+          singlePicker={singlePickerMode}
+        />
 
-        {/* ─── RIGHT COLUMN ───────────────────────────────────────── */}
-        <div className="flex flex-col flex-1 min-w-0 min-h-0 gap-2.5">
-          {/* VS plates (VS mode only) */}
-          {!singlePickerMode && (
-            <div className="flex items-stretch gap-2 flex-shrink-0">
-              <VsPlate side="a" id={selectedA} active={side === 'a'} />
-              <div className="flex flex-col items-center justify-center px-1 flex-shrink-0">
-                <span
-                  className="sel-name-face"
-                  style={{
-                    fontSize: 30,
-                    color: '#FFD60A',
-                    textShadow: '2px 3px 0 #000, 0 0 18px rgba(255,214,10,0.55)',
-                    transform: 'skewX(-8deg)',
-                    lineHeight: 0.9,
-                  }}
-                >
-                  VS
-                </span>
-                <span className="sel-h" style={{ fontSize: 8, letterSpacing: '0.18em', color: 'rgba(255,255,255,0.55)', marginTop: 2 }}>
-                  {selectedA && selectedB ? 'READY' : selectedA ? 'P2 PICKS' : 'P1 PICKS'}
-                </span>
-              </div>
-              <VsPlate side="b" id={selectedB} active={side === 'b'} />
-            </div>
-          )}
-
+        {/* ─── CENTER: filters + roster + info dock ─────────────────── */}
+        <div className="flex flex-col flex-1 min-w-0 min-h-0 gap-2">
           {(arcadeMode || storyMode) && (
             <div
               className="sel-h flex-shrink-0 px-3 py-2 text-center"
@@ -342,57 +320,53 @@ export function CharacterSelect() {
             </div>
           )}
 
-          {/* Filter rail */}
-          <div className="flex flex-col gap-2 flex-shrink-0">
-            <div className="sel-tabrail">
-              <RailLabel>CRAFT</RailLabel>
-              {DISCIPLINE_FILTER_ORDER.map((d) => (
-                <FilterTab
-                  key={d}
-                  label={d === 'all' ? 'ALL' : DISCIPLINE_LABEL[d]}
-                  count={d === 'all' ? totalRoster : (disciplineCounts[d] ?? 0)}
-                  color={d === 'all' ? sideColor : DISCIPLINE_COLOR[d]}
-                  showDot={d !== 'all'}
-                  active={disciplineFilter === d}
-                  onClick={() => { Sfx.menuMove(); setDisciplineFilter(d) }}
-                />
-              ))}
+          {/* Compact arcade filter strip (one line, low-key) */}
+          <div className="sel-filterbar flex items-center flex-shrink-0">
+            {DISCIPLINE_FILTER_ORDER.map((d) => (
+              <FilterTab
+                key={d}
+                label={d === 'all' ? 'ALL' : DISCIPLINE_LABEL[d]}
+                count={d === 'all' ? totalRoster : (disciplineCounts[d] ?? 0)}
+                color={d === 'all' ? sideColor : DISCIPLINE_COLOR[d]}
+                showDot={d !== 'all'}
+                active={disciplineFilter === d}
+                onClick={() => { Sfx.menuMove(); setDisciplineFilter(d) }}
+              />
+            ))}
+            <span className="sel-filterbar-div" />
+            {ERA_FILTER_ORDER.map((e) => (
+              <FilterTab
+                key={e}
+                label={e === 'all' ? 'ERA' : ERA_LABEL[e].split(' · ')[0]}
+                count={e === 'all' ? 0 : (eraCounts[e] ?? 0)}
+                color={e === 'all' ? 'rgba(255,255,255,0.6)' : '#FCBF49'}
+                showDot={false}
+                active={eraFilter === e}
+                onClick={() => { Sfx.menuMove(); setEraFilter(e) }}
+              />
+            ))}
+            <div className="flex-1" />
+            <div className="sel-search">
+              <span aria-hidden className="sel-h" style={{ fontSize: 12, color: query ? sideColor : 'rgba(255,255,255,0.45)', textShadow: query ? `0 0 6px ${sideColor}` : 'none' }}>⌕</span>
+              <input
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="search"
+                className="sel-cond"
+                style={{ background: 'transparent', border: 'none', outline: 'none', color: '#fff', fontSize: 15, width: 92, fontWeight: 600 }}
+              />
             </div>
-            <div className="sel-tabrail">
-              <RailLabel>ERA</RailLabel>
-              {ERA_FILTER_ORDER.map((e) => (
-                <FilterTab
-                  key={e}
-                  label={e === 'all' ? 'ALL' : ERA_LABEL[e].split(' · ')[0]}
-                  count={e === 'all' ? totalRoster : (eraCounts[e] ?? 0)}
-                  color={e === 'all' ? sideColor : '#FCBF49'}
-                  showDot={false}
-                  active={eraFilter === e}
-                  onClick={() => { Sfx.menuMove(); setEraFilter(e) }}
-                />
-              ))}
-              <div className="flex-1" />
-              <div className="sel-search">
-                <span aria-hidden className="sel-h" style={{ fontSize: 13, color: query ? sideColor : 'rgba(255,255,255,0.5)', textShadow: query ? `0 0 6px ${sideColor}` : 'none' }}>⌕</span>
-                <input
-                  type="text"
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder="search…"
-                  className="sel-cond"
-                  style={{ background: 'transparent', border: 'none', outline: 'none', color: '#fff', fontSize: 16, width: 118, fontWeight: 600 }}
-                />
-              </div>
-              {anyFilterActive && (
-                <button onClick={clearFilters} className="sel-tab" style={{ ['--tab-c' as string]: '#fff' }}>✕ RESET</button>
-              )}
-            </div>
+            {anyFilterActive && (
+              <button onClick={clearFilters} className="sel-tab" style={{ ['--tab-c' as string]: '#fff' }}>✕</button>
+            )}
           </div>
 
-          {/* Roster count + grid */}
+          {/* Roster */}
           <div className="relative flex flex-col flex-1 min-w-0 min-h-0">
-            <div className="sel-h flex-shrink-0" style={{ fontSize: 10, letterSpacing: '0.18em', color: 'rgba(255,255,255,0.5)', marginBottom: 6, textShadow: '1px 1px 0 #000' }}>
-              {filteredRoster.length === totalRoster ? `${totalRoster} OPERATORS` : `${filteredRoster.length} / ${totalRoster} MATCH`}
+            <div className="sel-h flex-shrink-0 flex items-center justify-between" style={{ fontSize: 9, letterSpacing: '0.18em', color: 'rgba(255,255,255,0.42)', marginBottom: 5, textShadow: '1px 1px 0 #000' }}>
+              <span>{filteredRoster.length === totalRoster ? `${totalRoster} OPERATORS` : `${filteredRoster.length} / ${totalRoster} MATCH`}</span>
+              <span style={{ color: 'rgba(255,255,255,0.3)' }}>◄ ► ▲ ▼ MOVE · ENTER LOCK</span>
             </div>
 
             <div
@@ -401,8 +375,8 @@ export function CharacterSelect() {
               aria-label="Operator roster"
               tabIndex={0}
               onKeyDown={onRosterKey}
-              className="sel-grid pr-1 pt-1 pb-1 outline-none"
-              style={{ gridTemplateColumns: 'repeat(11, 1fr)', gridAutoRows: '118px', flex: '1 1 0' }}
+              className="sel-grid outline-none"
+              style={{ gridTemplateColumns: 'repeat(8, 1fr)', gridAutoRows: '1fr', flex: '1 1 0' }}
             >
               {filteredRoster.length === 0 ? (
                 <div className="col-span-full text-center sel-cond py-12" style={{ color: 'rgba(255,255,255,0.55)', fontSize: 18 }}>
@@ -431,31 +405,141 @@ export function CharacterSelect() {
               <MoveDrawer fighter={hoveredFighter} onClose={() => { Sfx.menuMove(); setExpanded(false) }} />
             )}
           </div>
+
+          {/* Info dock — the live-hovered operator's kit */}
+          {hoveredFighter && (
+            <CenterDock
+              key={`dock-${hoveredFighter.id}`}
+              fighter={hoveredFighter}
+              side={side}
+              expanded={expanded}
+              onToggleMoves={() => { Sfx.menuMove(); setExpanded((x) => !x) }}
+            />
+          )}
         </div>
+
+        {/* P2 standoff (right, faces inward) — VS mode only */}
+        {!singlePickerMode && (
+          <StandoffHero
+            side="b"
+            fighter={p2Fighter}
+            num={numOf(p2Fighter)}
+            active={side === 'b' && !selectedB}
+            locked={!!selectedB}
+            singlePicker={false}
+          />
+        )}
       </div>
     </div>
   )
 }
 
-/* ── Hero panel ──────────────────────────────────────────────────────── */
-function HeroPanel({
+/* ── Standoff hero ─ one imposing render per player side ──────────── */
+function StandoffHero({
+  side,
+  fighter,
+  num,
+  active,
+  locked,
+  singlePicker,
+}: {
+  side: 'a' | 'b'
+  fighter: FighterDef | null
+  num: string
+  active: boolean
+  locked: boolean
+  singlePicker: boolean
+}) {
+  const sideColor = SIDE_COLOR[side]
+  const basis = singlePicker ? 'clamp(360px, 33%, 520px)' : 'clamp(292px, 23%, 392px)'
+  const cls = [
+    'sel-standoff',
+    side === 'a' ? 'sel-standoff-a' : 'sel-standoff-b',
+    active ? 'is-active' : '',
+    locked ? 'is-locked' : '',
+    fighter ? '' : 'is-empty',
+  ].filter(Boolean).join(' ')
+  const disc = fighter ? getDiscipline(fighter) : null
+  const era = fighter ? getEra(fighter) : null
+  const hpPct = fighter ? Math.max(0.35, Math.min(1, fighter.maxHp / 1200)) : 0
+
+  return (
+    <div
+      className={cls}
+      style={{ ['--sel-side' as string]: sideColor, ['--sel-accent' as string]: fighter?.accent ?? sideColor, flex: `0 0 ${basis}` }}
+    >
+      <div className="sel-standoff-stage relative flex-1 min-h-0">
+        <div className="sel-standoff-index sel-name-face" aria-hidden>{num}</div>
+        <div className="sel-standoff-floor" />
+        {fighter ? (
+          <div className="sel-standoff-figure" key={fighter.id}>
+            <div className="sel-standoff-figwrap" style={{ transform: `translateY(${HERO_BASE + heroYOffset(fighter.id)}%)` }}>
+              <Sprite fighter={fighter} side={side} state="stance" />
+            </div>
+          </div>
+        ) : (
+          <div className="sel-standoff-empty sel-name-face" aria-hidden>?</div>
+        )}
+
+        <div className="sel-standoff-tab sel-h">{singlePicker ? 'OPERATOR' : SIDE_LABEL[side]}</div>
+        {disc && era && (
+          <div className="sel-standoff-tags">
+            <Tag color={DISCIPLINE_COLOR[disc]}>{DISCIPLINE_LABEL[disc]}</Tag>
+            <Tag color="#FCBF49">{ERA_LABEL[era].split(' · ')[0]}</Tag>
+          </div>
+        )}
+        {locked && <div className="sel-standoff-lock sel-h">✔ LOCKED IN</div>}
+      </div>
+
+      <div
+        className="sel-standoff-name"
+        style={{
+          background: `linear-gradient(180deg, ${(fighter?.accent ?? sideColor)}1c, rgba(6,4,12,0.96) 62%)`,
+          boxShadow: `inset 0 2px 0 ${sideColor}, inset 0 3px 0 rgba(0,0,0,0.4)`,
+        }}
+      >
+        <div className="sel-standoff-plabel sel-h" style={{ color: sideColor }}>
+          {SIDE_LABEL[side]}{fighter ? (locked ? ' · READY' : ' · CHOOSING') : ''}
+        </div>
+        {fighter ? (
+          <>
+            <div className="sel-name sel-standoff-nametext" style={{ fontSize: 'clamp(22px, 2.4vw, 42px)' }} title={fighter.name}>
+              {fighter.name}
+            </div>
+            <div className="sel-h sel-standoff-arch" style={{ fontSize: 11, letterSpacing: '0.16em', color: fighter.accent, textTransform: 'uppercase' }}>
+              {fighter.archetype}
+            </div>
+            <div className="sel-standoff-hp">
+              <span className="sel-h" style={{ fontSize: 9, letterSpacing: '0.12em', color: '#06D6A0' }}>HP</span>
+              <div className="sel-standoff-hpbar">
+                <div style={{ position: 'absolute', inset: 0, width: `${hpPct * 100}%`, background: 'linear-gradient(180deg, #5affce, #06D6A0 60%, #04966f)', boxShadow: '0 0 8px #06D6A0aa, inset 0 1px 0 rgba(255,255,255,0.5)' }} />
+              </div>
+              <span style={{ fontFamily: 'VT323, monospace', fontSize: 16, color: '#fff' }}>{fighter.maxHp}</span>
+            </div>
+          </>
+        ) : (
+          <div className="sel-name sel-standoff-nametext" style={{ fontSize: 'clamp(20px, 2vw, 34px)', color: 'rgba(255,255,255,0.3)' }}>
+            {active ? 'CHOOSING' : 'STANDBY'}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/* ── Center dock ─ live-hovered operator kit strip under the roster ──── */
+function CenterDock({
   fighter,
   side,
-  heroNum,
-  singlePicker,
   expanded,
   onToggleMoves,
 }: {
   fighter: FighterDef
   side: 'a' | 'b'
-  heroNum: string
-  singlePicker: boolean
   expanded: boolean
   onToggleMoves: () => void
 }) {
   const sideColor = SIDE_COLOR[side]
-  const disc = getDiscipline(fighter)
-  const era = getEra(fighter)
   const bestIn = (() => {
     const tops = Object.entries(fighter.scenarioBonus)
       .filter(([, v]) => v >= 1.3)
@@ -464,120 +548,49 @@ function HeroPanel({
       .map(([k]) => SCENARIOS[k as ScenarioId].tag)
     return tops.length > 0 ? tops : ['ALL-ROUNDER']
   })()
-  const hpPct = Math.max(0.35, Math.min(1, fighter.maxHp / 1200))
 
   return (
-    <div className="sel-hero flex-shrink-0 flex flex-col" style={{ flex: '0 0 clamp(430px, 40%, 620px)' }}>
-      {/* Cinematic render stage */}
-      <div className="relative flex-1 min-h-0 sel-hero-stage">
-        <div className="sel-hero-bg">
-          <div className="sel-hero-beam" />
-          <div className="sel-hero-halo" />
-          <div className="sel-hero-index sel-name-face">{heroNum}</div>
-          <div className="sel-hero-floor" />
-        </div>
-
-        <div className="sel-hero-figure" key={fighter.id}>
-          <div style={{ width: '94%', height: '122%', transform: `translateY(${HERO_BASE + heroYOffset(fighter.id)}%)` }}>
-            <Sprite fighter={fighter} side={side} state="stance" />
-          </div>
-        </div>
-
-        <div className="sel-hero-ribbon sel-h">
-          {singlePicker ? 'OPERATOR' : SIDE_LABEL[side]}
-        </div>
-
-        {/* Craft / era tabs, top-right of the render */}
-        <div className="absolute top-3 right-4 z-10 flex gap-1.5">
-          <Tag color={DISCIPLINE_COLOR[disc]}>{DISCIPLINE_LABEL[disc]}</Tag>
-          <Tag color="#FCBF49">{ERA_LABEL[era].split(' · ')[0]}</Tag>
-        </div>
+    <div className="sel-dock flex-shrink-0 flex items-center gap-2.5" key={fighter.id}>
+      <div className="sel-dock-ult flex items-center gap-2.5" style={{ borderLeft: `3px solid ${fighter.accent}` }}>
+        <span className="sel-h" style={{ fontSize: 10, letterSpacing: '0.12em', color: fighter.accent }}>⚡ ULT</span>
+        <span className="sel-cond truncate" style={{ fontSize: 15, color: '#fff', fontWeight: 700, letterSpacing: '0.02em' }} title={fighter.ult.name}>{fighter.ult.name}</span>
+        <span className="tabular-nums" style={{ fontFamily: 'VT323, monospace', fontSize: 16, color: 'rgba(255,255,255,0.9)' }}>{fighter.ult.baseDamage}</span>
       </div>
-
-      {/* Name + identity lockup */}
-      <div
-        className="sel-namewrap flex-shrink-0"
-        key={`np-${fighter.id}`}
+      <div className="flex items-center gap-1.5 flex-shrink-0">
+        <span className="sel-h" style={{ fontSize: 9, letterSpacing: '0.14em', color: 'rgba(255,255,255,0.42)' }}>BEST IN</span>
+        {bestIn.map((t) => (
+          <span key={t} className="sel-h" style={{ fontSize: 9, letterSpacing: '0.08em', color: '#FFD60A', padding: '2px 7px', background: '#FFD60A16', boxShadow: 'inset 0 0 0 1px #FFD60A55' }}>{t}</span>
+        ))}
+      </div>
+      <div className="flex-1" />
+      <button
+        onClick={onToggleMoves}
+        className="sel-btn"
         style={{
-          padding: '10px 18px 14px',
-          background: `linear-gradient(180deg, ${fighter.accent}1a, rgba(6,4,12,0.96) 60%)`,
-          boxShadow: `inset 0 2px 0 ${fighter.accent}, inset 0 3px 0 rgba(0,0,0,0.4)`,
+          fontSize: 10, color: '#fff', padding: '6px 13px',
+          background: expanded ? `linear-gradient(180deg, ${sideColor}cc, ${sideColor}88)` : 'linear-gradient(180deg, #2a2036, #14101d)',
+          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.2), inset 0 -2px 0 rgba(0,0,0,0.5)',
+          clipPath: 'polygon(5px 0, 100% 0, calc(100% - 5px) 100%, 0 100%)',
         }}
       >
-        <div className="flex items-end gap-3">
-          <span className="sel-name-index" style={{ fontSize: 22, lineHeight: 0.8, opacity: 0.85 }}>#{heroNum}</span>
-          <div className="min-w-0 flex-1">
-            <div
-              className="sel-name"
-              style={{ fontSize: 'clamp(34px, 4.6vw, 64px)' }}
-              title={fighter.name}
-            >
-              {fighter.name}
-            </div>
-          </div>
-        </div>
-        <div className="sel-h" style={{ fontSize: 12, letterSpacing: '0.22em', color: fighter.accent, marginTop: 4, textTransform: 'uppercase' }}>
-          {fighter.archetype}
-        </div>
-        <p className="sel-cond" style={{ fontSize: 16, lineHeight: 1.2, color: 'rgba(255,255,255,0.82)', marginTop: 6, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-          {fighter.bio}
-        </p>
-
-        {/* HP + ULT strip */}
-        <div className="flex items-center gap-3 mt-2.5">
-          <span className="sel-h" style={{ fontSize: 10, letterSpacing: '0.14em', color: '#06D6A0' }}>HP</span>
-          <div className="flex-1 relative" style={{ height: 12, background: 'rgba(0,0,0,0.6)', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.14)' }}>
-            <div style={{ position: 'absolute', inset: 0, width: `${hpPct * 100}%`, background: 'linear-gradient(180deg, #5affce, #06D6A0 60%, #04966f)', boxShadow: '0 0 8px #06D6A0aa, inset 0 1px 0 rgba(255,255,255,0.5)' }} />
-            <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', backgroundImage: 'repeating-linear-gradient(90deg, transparent 0, transparent calc(10% - 2px), rgba(0,0,0,0.85) calc(10% - 2px), rgba(0,0,0,0.85) 10%)' }} />
-          </div>
-          <span className="sel-cond tabular-nums" style={{ fontSize: 18, color: '#fff', fontFamily: 'VT323, monospace' }}>{fighter.maxHp}</span>
-        </div>
-
-        <div
-          className="mt-2.5 flex items-center gap-2.5"
-          style={{ padding: '7px 12px', background: `linear-gradient(100deg, ${fighter.accent}33, rgba(0,0,0,0.35))`, borderLeft: `3px solid ${fighter.accent}`, boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.1)' }}
-        >
-          <span className="sel-h" style={{ fontSize: 10, letterSpacing: '0.14em', color: fighter.accent }}>⚡ ULTIMATE</span>
-          <span className="sel-cond truncate flex-1" style={{ fontSize: 15, color: '#fff', letterSpacing: '0.02em', fontWeight: 700 }} title={fighter.ult.name}>{fighter.ult.name}</span>
-          <span className="tabular-nums" style={{ fontFamily: 'VT323, monospace', fontSize: 17, color: 'rgba(255,255,255,0.9)' }}>{fighter.ult.baseDamage} DMG</span>
-        </div>
-
-        <div className="flex items-center gap-2 mt-2.5">
-          <span className="sel-h" style={{ fontSize: 9, letterSpacing: '0.14em', color: 'rgba(255,255,255,0.42)' }}>BEST IN</span>
-          {bestIn.map((t) => (
-            <span key={t} className="sel-h" style={{ fontSize: 9, letterSpacing: '0.1em', color: '#FFD60A', padding: '2px 7px', background: '#FFD60A16', boxShadow: 'inset 0 0 0 1px #FFD60A55' }}>{t}</span>
-          ))}
-          <div className="flex-1" />
-          <button
-            onClick={onToggleMoves}
-            className="sel-btn"
-            style={{
-              fontSize: 10, color: '#fff', padding: '5px 12px',
-              background: expanded ? `linear-gradient(180deg, ${sideColor}cc, ${sideColor}88)` : 'linear-gradient(180deg, #2a2036, #14101d)',
-              boxShadow: `inset 0 1px 0 rgba(255,255,255,0.2), inset 0 -2px 0 rgba(0,0,0,0.5)`,
-              clipPath: 'polygon(5px 0, 100% 0, calc(100% - 5px) 100%, 0 100%)',
-            }}
-          >
-            {expanded ? '▾ HIDE' : '▸ MOVES'}
-          </button>
-          <button
-            onClick={() => {
-              Sfx.menuSelect()
-              useGame.getState().setSpotlightFighter(fighter.id)
-              useGame.getState().setPhase('fighter-spotlight')
-            }}
-            className="sel-btn"
-            style={{
-              fontSize: 10, color: '#3a2600', padding: '5px 12px',
-              background: 'linear-gradient(180deg, #FFE87A, #E0A400)',
-              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.5), inset 0 -2px 0 rgba(120,80,0,0.55)',
-              clipPath: 'polygon(5px 0, 100% 0, calc(100% - 5px) 100%, 0 100%)',
-            }}
-          >
-            ★ SPOTLIGHT
-          </button>
-        </div>
-      </div>
+        {expanded ? '▾ HIDE' : '▸ MOVES'}
+      </button>
+      <button
+        onClick={() => {
+          Sfx.menuSelect()
+          useGame.getState().setSpotlightFighter(fighter.id)
+          useGame.getState().setPhase('fighter-spotlight')
+        }}
+        className="sel-btn"
+        style={{
+          fontSize: 10, color: '#3a2600', padding: '6px 13px',
+          background: 'linear-gradient(180deg, #FFE87A, #E0A400)',
+          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.5), inset 0 -2px 0 rgba(120,80,0,0.55)',
+          clipPath: 'polygon(5px 0, 100% 0, calc(100% - 5px) 100%, 0 100%)',
+        }}
+      >
+        ★ SPOTLIGHT
+      </button>
     </div>
   )
 }
@@ -644,61 +657,7 @@ function RosterCell({
   )
 }
 
-/* ── VS plate ────────────────────────────────────────────────────────── */
-function VsPlate({ side, id, active }: { side: 'a' | 'b'; id: string | null; active: boolean }) {
-  const f = id ? getFighter(id) : null
-  const color = SIDE_COLOR[side]
-  const cls = [
-    'sel-plate',
-    side === 'a' ? 'sel-plate-a' : 'sel-plate-b',
-    f ? (side === 'a' ? 'is-filled-a' : 'is-filled-b') : '',
-    active && !f ? 'is-active' : '',
-  ].filter(Boolean).join(' ')
-
-  return (
-    <div className={cls} style={{ ['--sel-side' as string]: color }}>
-      <div className="sel-plate-portrait" style={{ boxShadow: `inset 0 0 0 1px ${f ? color : 'rgba(255,255,255,0.12)'}` }}>
-        {f ? (
-          <div className="sel-portrait" style={{ top: '-10%' }}>
-            <Sprite fighter={f} side={side} state="stance" />
-          </div>
-        ) : (
-          <div className="w-full h-full flex items-center justify-center sel-name-face" style={{ fontSize: 20, color: active ? color : 'rgba(255,255,255,0.28)' }}>{active ? '?' : '—'}</div>
-        )}
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="sel-h" style={{ fontSize: 9, letterSpacing: '0.16em', color }}>{SIDE_LABEL[side]}</div>
-        <div className="sel-name-face truncate" style={{ fontSize: 20, color: '#fff', letterSpacing: '0.02em', textShadow: '1px 1px 0 #000', lineHeight: 1 }}>
-          {f ? f.shortName : active ? 'CHOOSING' : 'WAITING'}
-        </div>
-        {f && (
-          <div className="sel-cond truncate" style={{ fontSize: 13, color: 'rgba(255,255,255,0.6)', marginTop: 1 }}>{f.archetype}</div>
-        )}
-      </div>
-    </div>
-  )
-}
-
 /* ── Filter tab + small helpers ──────────────────────────────────────── */
-function RailLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <span
-      style={{
-        fontFamily: 'Press Start 2P, monospace',
-        fontSize: 8,
-        letterSpacing: '0.14em',
-        color: 'rgba(255,220,150,0.7)',
-        padding: '5px 8px',
-        background: 'linear-gradient(180deg, #241b30, #14101d)',
-        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.1), inset 0 -2px 0 rgba(0,0,0,0.6)',
-        clipPath: 'polygon(4px 0, 100% 0, calc(100% - 4px) 100%, 0 100%)',
-      }}
-    >
-      {children}
-    </span>
-  )
-}
-
 function FilterTab({
   label, count, color, showDot, active, onClick,
 }: {

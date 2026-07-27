@@ -10,40 +10,40 @@
  * through robotic OS voices — they only land with the Azure Neural files.
  */
 
+import { fightAudio } from '../audio'
+
 let enabled = true
 let currentAudio: HTMLAudioElement | null = null
 
 const knownMissing = new Set<string>()
 
-function play(key: string, volume = 0.95) {
-  if (!enabled) return
-  if (knownMissing.has(key)) return
-  if (currentAudio) {
-    currentAudio.pause()
-    currentAudio.currentTime = 0
-    currentAudio = null
-  }
-  const a = new Audio(`/audio/voices/announcer/${key}.mp3`)
-  a.volume = volume
-  a.addEventListener('error', () => knownMissing.add(key))
-  a.play().catch(() => knownMissing.add(key))
-  currentAudio = a
-}
-
-function playStage(scenarioId: string) {
-  if (!enabled) return
-  const cacheKey = `stage:${scenarioId}`
+// Try the processed voice bus (radio EQ + plate reverb + music duck) first;
+// fall back to a raw <audio> element if Web-Audio routing isn't available.
+function playUrl(url: string, cacheKey: string, volume: number) {
   if (knownMissing.has(cacheKey)) return
   if (currentAudio) {
     currentAudio.pause()
     currentAudio.currentTime = 0
     currentAudio = null
   }
-  const a = new Audio(`/audio/voices/stages/${scenarioId}.mp3`)
-  a.volume = 0.9
+  const processed = fightAudio.playVoice(url, { volume })
+  const a = processed ?? new Audio(url)
+  if (!processed) {
+    a.volume = volume
+    a.play().catch(() => knownMissing.add(cacheKey))
+  }
   a.addEventListener('error', () => knownMissing.add(cacheKey))
-  a.play().catch(() => knownMissing.add(cacheKey))
   currentAudio = a
+}
+
+function play(key: string, volume = 0.95) {
+  if (!enabled) return
+  playUrl(`/audio/voices/announcer/${key}.mp3`, key, volume)
+}
+
+function playStage(scenarioId: string) {
+  if (!enabled) return
+  playUrl(`/audio/voices/stages/${scenarioId}.mp3`, `stage:${scenarioId}`, 0.9)
 }
 
 export const Announcer = {

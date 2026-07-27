@@ -20,7 +20,7 @@ import type { ImpactRouting, ImpactOpts, Flavor } from './impacts'
 import { buildMasterGraph, type MasterGraph } from './master'
 import { stageImpulse, STAGE_ACOUSTICS, type StageId } from './reverb'
 import { buildAmbience, type AmbienceHandle } from './ambience'
-import { clamp } from './dsp'
+import { clamp, impulseResponse } from './dsp'
 
 type WinCtx = typeof AudioContext
 
@@ -32,6 +32,9 @@ let tension = 1
 let masterVolume = 0.9
 let muted = false
 let unlockAttached = false
+
+// Lazily-built announcer/voice processing chain (radio EQ + plate reverb send).
+let voiceChain: { input: GainNode } | null = null
 
 // Simple voice-stealing budget: decays over time; small sounds are dropped
 // when the budget is exhausted so a mash of inputs never turns to mud.
@@ -110,6 +113,45 @@ function takeVoice(cost = 1): boolean {
   return true
 }
 
+/**
+ * Build (once) the announcer voice-processing chain and return its input node.
+ * Signal path: input ─► radio band-pass EQ (HPF 320 + presence peak + LPF 3.4k)
+ * ─► voiceBus, with a parallel send into a short PLATE reverb so the shout sits
+ * in a space like a real arena PA.
+ */
+function ensureVoiceChain(): GainNode | null {
+  if (!graph || !ctx) return null
+  if (voiceChain) return voiceChain.input
+  const input = ctx.createGain(); input.gain.value = 1.0
+
+  // Radio EQ: telephone-ish band with a presence bump so consonants cut.
+  const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 320; hp.Q.value = 0.7
+  const presence = ctx.createBiquadFilter(); presence.type = 'peaking'; presence.frequency.value = 2400; presence.Q.value = 1.1; presence.gain.value = 4.5
+  const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 3400; lp.Q.value = 0.7
+  input.connect(hp); hp.connect(presence); presence.connect(lp)
+  lp.connect(graph.voiceBus)
+
+  // Parallel PLATE reverb send — short, bright, dense.
+  const send = ctx.createGain(); send.gain.value = 0.22
+  const plate = ctx.createConvolver()
+  plate.buffer = impulseResponse(ctx, { seconds: 0.8, decay: 4.5, bright: 0.65, seed: 4242 })
+  lp.connect(send); send.connect(plate); plate.connect(graph.voiceBus)
+
+  voiceChain = { input }
+  return input
+}
+
+/** Duck the music bus under an announcer line, releasing after `dur` seconds. */
+function duckMusicForVoice(when: number, dur: number, depth = 0.55) {
+  if (!graph) return
+  const md = graph.musicDuck.gain
+  md.cancelScheduledValues(when)
+  md.setValueAtTime(md.value, when)
+  md.linearRampToValueAtTime(1 - depth, when + 0.05)
+  md.setValueAtTime(1 - depth, when + Math.max(0.1, dur))
+  md.setTargetAtTime(1, when + Math.max(0.1, dur), 0.25)
+}
+
 function fire(name: SoundName, opts: ImpactOpts = {}, cost = 1): number {
   const c = getCtx()
   if (muted) return c.currentTime
@@ -168,6 +210,37 @@ export const fightAudio = {
   musicBusNode(): GainNode | null { return graph?.musicBus ?? null },
   duckMusicNow(intensity = 0.8) { if (ctx) duck(ctx.currentTime + 0.005, intensity) },
 
+  // ─── announcer / voice (radio EQ + plate reverb + music duck) ───────
+  /**
+   * Play a voice/announcer MP3 through the processed voice bus: radio-EQ +
+   * short plate reverb, and duck the music underneath it. Returns the backing
+   * HTMLAudioElement on success, or null if Web-Audio routing wasn't possible
+   * (caller should then fall back to raw `<audio>` playback). Same-origin URLs
+   * only. Safe to call repeatedly; the processing chain is built once.
+   */
+  playVoice(url: string, opts: { volume?: number } = {}): HTMLAudioElement | null {
+    if (typeof window === 'undefined' || typeof Audio === 'undefined') return null
+    try {
+      const c = getCtx()
+      const input = ensureVoiceChain()
+      if (!input) return null
+      c.resume().catch(() => {})
+      const el = new Audio(url)
+      el.crossOrigin = 'anonymous'
+      el.volume = clamp(opts.volume ?? 0.95, 0, 1)
+      const srcNode = c.createMediaElementSource(el)
+      srcNode.connect(input)
+      const startDuck = (dur: number) => duckMusicForVoice(c.currentTime + 0.02, dur)
+      el.addEventListener('loadedmetadata', () => startDuck(isFinite(el.duration) && el.duration > 0 ? el.duration : 1.3))
+      // fire an immediate short duck too, in case metadata is slow
+      startDuck(1.2)
+      el.play().catch(() => {})
+      return el
+    } catch {
+      return null
+    }
+  },
+
   // ─── mix control ────────────────────────────────────────────────────
   setMasterVolume(v: number) {
     masterVolume = clamp(v, 0, 1)
@@ -184,6 +257,7 @@ export const fightAudio = {
   teardown() {
     try { ambience?.stop(ctx ? ctx.currentTime : 0, 0.3) } catch { /* noop */ }
     ambience = null
+    voiceChain = null
     if (ctx) { ctx.close().catch(() => {}); ctx = null; graph = null }
   },
 }

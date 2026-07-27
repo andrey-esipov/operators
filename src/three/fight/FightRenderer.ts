@@ -213,6 +213,66 @@ export class FightRenderer {
   fighter(side: 0 | 1) {
     return this.fighters[side]
   }
+
+  /**
+   * Count the pixels the fighters actually paint, by rendering their groups
+   * alone into an offscreen target and reading them back.
+   *
+   * Screenshot-based checks cannot distinguish "fighter drew nothing" from
+   * "fighter drew and something painted over it" — a bug that cost this repo a
+   * long debugging session, during which 11 screenshots of a completely
+   * empty stage were reported as passing. Projecting world positions to screen
+   * space does not help either: the maths is happy whether or not a single
+   * texel is ever shaded. Reading back an isolated render of just these two
+   * groups is the one signal that cannot be satisfied by an invisible fighter.
+   */
+  fighterCoverage(width = 320, height = 180) {
+    const renderer = this.engine.renderer
+    const scene = this.engine.scene
+    const target = new THREE.WebGLRenderTarget(width, height)
+    const parents = this.fighters.map((f) => f.group.parent)
+    const probeScene = new THREE.Scene()
+    // Lights live in the main scene; the sprite material needs them to shade.
+    scene.traverse((o) => {
+      if ((o as THREE.Light).isLight) probeScene.add((o as THREE.Light).clone())
+    })
+    probeScene.add(this.fighters[0].group, this.fighters[1].group)
+
+    const prevTarget = renderer.getRenderTarget()
+    renderer.setRenderTarget(target)
+    renderer.setClearColor(0x000000, 0)
+    renderer.clear(true, true, true)
+    renderer.render(probeScene, this.engine.camera)
+
+    const buf = new Uint8Array(width * height * 4)
+    renderer.readRenderTargetPixels(target, 0, 0, width, height, buf)
+    renderer.setRenderTarget(prevTarget)
+
+    // Put the groups back exactly where they were before the probe.
+    this.fighters.forEach((f, i) => parents[i]?.add(f.group))
+    target.dispose()
+
+    let lit = 0
+    let minX = width, maxX = -1, minY = height, maxY = -1
+    for (let i = 0; i < width * height; i++) {
+      if (buf[i * 4 + 3] < 24) continue
+      lit++
+      const x = i % width
+      const y = Math.floor(i / width)
+      if (x < minX) minX = x
+      if (x > maxX) maxX = x
+      if (y < minY) minY = y
+      if (y > maxY) maxY = y
+    }
+    return {
+      lit,
+      total: width * height,
+      fraction: lit / (width * height),
+      // Normalised 0..1, origin bottom-left (WebGL readback order).
+      bbox: lit ? { minX: minX / width, maxX: maxX / width, minY: minY / height, maxY: maxY / height } : null,
+    }
+  }
+
   get vfxRef() {
     return this.vfx
   }

@@ -12,6 +12,32 @@ import type { FightState, FighterState, FightEvent, StepResult, Vec2, Stance, Hi
 
 const FLOOR = 0
 const START = 138 // cm, ~world 2.6 each side
+// Stage walls in cm. DEFAULT_BOUNDS is ±8.2 world units and CM_TO_WORLD is
+// 3.4/180, so the wall sits at 8.2 * 180/3.4 ≈ 434cm. Held slightly inside
+// that so a cornered fighter still reads as on-stage rather than clipped
+// into the boundary.
+export const STAGE_MAX_X = 420
+export const STAGE_MIN_X = -420
+
+/**
+ * Movement speeds in centimetres per 60Hz frame.
+ *
+ * These were originally authored an order of magnitude too fast — a 26cm/frame
+ * walk is 15.6 m/s, faster than a world-record sprint — which sent both
+ * fighters into opposite walls within the first beat. Real fighters walk around
+ * 1.5 m/s and dash around 5 m/s; the values below are those, converted.
+ */
+const SPEED = {
+  walkFwd: 2.6,
+  walkBack: 2.2,
+  dash: 9,
+  /** Small step the attacker takes into a strike. */
+  lunge: 1.2,
+  /** Peak pushback when hitstun starts; decays to zero over the beat. */
+  hitstun: 3.1,
+  /** Pushback on a blocked hit. */
+  block: 3,
+}
 
 interface Kin {
   pos: Vec2
@@ -28,7 +54,7 @@ type Emit = (e: FightEvent) => void
 interface Beat {
   dur: number
   /** Called once when the beat starts. */
-  enter?: (s: MockSim) => void
+  enter?: (s: MockSim, emit: Emit) => void
   /** Per-frame, t = 0..dur-1. */
   tick?: (s: MockSim, t: number, emit: Emit) => void
 }
@@ -76,8 +102,8 @@ export class MockSim {
       enter: (s) => { s.phaseName = 'footsies'; s.setStance(0, 'walk-fwd'); s.setStance(1, 'walk-fwd') },
       tick: (s, t) => {
         const dir = t < 50 ? 1 : -1
-        s.walk(0, 26 * dir)
-        s.walk(1, 24 * -dir)
+        s.walk(0, SPEED.walkFwd * dir)
+        s.walk(1, SPEED.walkBack * -dir)
         s.setStance(0, dir > 0 ? 'walk-fwd' : 'walk-back')
         s.setStance(1, dir > 0 ? 'walk-fwd' : 'walk-back')
       },
@@ -87,7 +113,7 @@ export class MockSim {
     b.push({
       dur: 16,
       enter: (s) => { s.phaseName = 'dash-in'; s.setStance(0, 'dash') },
-      tick: (s) => s.walk(0, 62),
+      tick: (s) => s.walk(0, SPEED.dash * s.k[0].facing),
     })
 
     // ---- A heavy punch, connects -------------------------------------------
@@ -97,11 +123,14 @@ export class MockSim {
     b.push({
       dur: 26,
       enter: (s) => { s.phaseName = 'hitstun'; s.setStance(0, 'idle'); s.setStance(1, 'hitstun') },
-      tick: (s, t) => { s.k[1].vel.x = -s.k[1].facing * 0; s.walk(1, (26 - t) * -1.1 * s.k[1].facing * -1); s.slideDecay(1) },
+      tick: (s, t) => {
+        // Pushback away from the attacker, easing out across the beat.
+        s.walk(1, SPEED.hitstun * (1 - t / 26) * -s.k[1].facing)
+      },
     })
 
     b.push(idle(30))
-    b.push({ dur: 40, enter: (s) => { s.setStance(1, 'walk-back') }, tick: (s) => { s.walk(1, 10); s.faceOff() } })
+    b.push({ dur: 40, enter: (s) => { s.setStance(1, 'walk-back') }, tick: (s) => { s.walk(1, SPEED.walkBack * -s.k[1].facing); s.faceOff() } })
 
     // ---- B jumps in, A blocks ----------------------------------------------
     b.push(this.jumpBeat(1, -70, 150, 34))
@@ -144,7 +173,7 @@ export class MockSim {
     })
     b.push({
       dur: 40,
-      enter: (s) => {
+      enter: (s, emit) => {
         s.phaseName = 'reset'
         s.k[0].pos = { x: -START, y: 0 }; s.k[1].pos = { x: START, y: 0 }
         s.k[0].vel = { x: 0, y: 0 }; s.k[1].vel = { x: 0, y: 0 }
@@ -183,12 +212,12 @@ export class MockSim {
       tick: (s, t, emit) => {
         if (s.k[atk].move) s.k[atk].move.frame = t
         // small lunge into the strike
-        if (t < activeFrame) s.walk(atk, 6)
+        if (t < activeFrame) s.walk(atk, SPEED.lunge * s.k[atk].facing)
         if (t === activeFrame) {
           const at = contact(s.k[atk], s.k[def])
           if (opt.block) {
             emit({ type: 'block', at, attacker: atk })
-            s.k[def].vel.x = -s.k[def].facing * 6
+            s.k[def].vel.x = -s.k[def].facing * SPEED.block
           } else {
             emit({ type: 'hit', at, attacker: atk, level, damage })
             s.k[def].health = Math.max(0, s.k[def].health - damage)
@@ -232,20 +261,39 @@ export class MockSim {
 
   setStance(f: 0 | 1, st: Stance) { this.k[f].stance = st }
 
+  /** Set by any helper that has already moved a fighter in x this frame. */
+  private movedX: [boolean, boolean] = [false, false]
+
+  /**
+   * Apply horizontal velocity exactly once per fighter per frame.
+   *
+   * walk(), slideDecay() and gravity() are all called together by various
+   * beats, and each used to add vel.x to pos.x. A single airborne knockback
+   * frame therefore integrated the same velocity three times. Compounded over
+   * a loop it launched both fighters into the right wall, where the camera
+   * (which correctly refuses to pan past the stage bound) framed them jammed
+   * against the edge. Routing every x move through here keeps it to one.
+   */
+  private integrateX(f: 0 | 1, dx: number) {
+    if (this.movedX[f]) return
+    this.k[f].pos.x += dx
+    this.movedX[f] = true
+  }
+
   walk(f: 0 | 1, dxCm: number) {
-    this.k[f].pos.x += dxCm
+    this.integrateX(f, dxCm)
     this.k[f].vel.x = dxCm
   }
 
   slideDecay(f: 0 | 1) {
-    this.k[f].pos.x += this.k[f].vel.x
+    this.integrateX(f, this.k[f].vel.x)
     this.k[f].vel.x *= 0.86
   }
 
   gravity(f: 0 | 1) {
     if (this.k[f].grounded) return
     this.k[f].pos.y += this.k[f].vel.y
-    this.k[f].pos.x += this.k[f].vel.x
+    this.integrateX(f, this.k[f].vel.x)
     this.k[f].vel.y -= 0.9 // cm/frame^2, tuned for a ~0.5s hop
     this.k[f].vel.x *= 0.98
     if (this.k[f].pos.y <= 0) { this.k[f].pos.y = 0; this.k[f].grounded = true; this.k[f].vel.y = 0 }
@@ -257,8 +305,11 @@ export class MockSim {
     const events: FightEvent[] = []
     const emit: Emit = (e) => events.push(e)
 
+    this.movedX[0] = false
+    this.movedX[1] = false
+
     let beat = this.beats[this.cursor]
-    if (this.local === 0 && beat.enter) beat.enter(this)
+    if (this.local === 0 && beat.enter) beat.enter(this, emit)
     beat.tick?.(this, this.local, emit)
     this.local++
     if (this.local >= beat.dur) {
@@ -269,7 +320,25 @@ export class MockSim {
     void beat
 
     this.frame++
+    this.clampToStage()
     return { state: this.snapshot(), events }
+  }
+
+  /**
+   * Keep both fighters inside the playable stage.
+   *
+   * The scripted beats apply knockback and walk deltas without ever checking
+   * where the wall is, so pushback accumulated across a loop and both fighters
+   * eventually wandered hundreds of centimetres past the stage edge — far
+   * enough that the camera framed empty scenery. Clamping here also kills the
+   * residual velocity, otherwise a fighter pinned to the wall keeps its stored
+   * speed and rockets away the moment the next beat reads it.
+   */
+  private clampToStage() {
+    for (const k of this.k) {
+      if (k.pos.x < STAGE_MIN_X) { k.pos.x = STAGE_MIN_X; k.vel.x = 0 }
+      else if (k.pos.x > STAGE_MAX_X) { k.pos.x = STAGE_MAX_X; k.vel.x = 0 }
+    }
   }
 
   private snapshot(): FightState {

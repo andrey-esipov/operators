@@ -37,6 +37,16 @@ declare global {
     phase: () => string
     frame: () => number
     setStage: (id: ScenarioId) => void
+    /**
+     * Pixels the fighters themselves paint, measured by an isolated offscreen
+     * render. The one check an invisible fighter cannot pass.
+     */
+    coverage: () => {
+      lit: number
+      total: number
+      fraction: number
+      bbox: { minX: number; maxX: number; minY: number; maxY: number } | null
+    }
     renderer: FightRenderer | null
     }
   }
@@ -88,6 +98,7 @@ export function FightHarness() {
         phase: () => sim.phase,
         frame: () => sim.frame,
         setStage: (id) => renderer!.setStage(id),
+        coverage: () => renderer!.fighterCoverage(),
         renderer,
       }
       setStatus('running')

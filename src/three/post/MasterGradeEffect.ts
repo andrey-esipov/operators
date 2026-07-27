@@ -271,19 +271,38 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, const in float depth,
     // chroma ORTHOGONAL to the arena hue (the fighter's own identity colour) is
     // kept, so two fighters stay distinguishable. Running it after the pop means
     // the re-saturation cannot put the arena cast back. 0 on multi-hue stages.
+    float idChroma = 0.0;
     if (charUntint > 0.001) {
       float lch = luma(charLit);
       vec3 chroma = charLit - lch;                       // signed chroma about luma
       vec3 tdir = normalize(envTint - luma(envTint) + 1e-5);
       float align = dot(chroma, tdir);                   // fighter chroma along arena hue
-      charLit -= tdir * max(align, 0.0) * charUntint;    // subtract only the shared cast
+      vec3 ortho = chroma - tdir * align;                // fighter's own identity chroma
+      idChroma = length(ortho);
+      // Reveal-weight the strip by how much genuine identity chroma exists. The
+      // crude ellipse also catches co-planar background/props at the fighter
+      // depth; those are near-pure arena hue (ortho ~0) and un-tinting them would
+      // only grey them into a flat desaturated box. Gating on orthogonal magnitude
+      // leaves that background fully graded while still cleaning the shared cast
+      // off real fighter pixels that carry their own albedo.
+      float reveal = smoothstep(0.015, 0.10, idChroma);
+      charLit -= tdir * max(align, 0.0) * charUntint * reveal; // subtract shared cast
       charLit = max(charLit, 0.0);
     }
 
     // Blend how strongly we keep the character look vs the environment.
     vec3 charFinal = mix(cEnv, charLit, charChroma);
 
-    c = mix(cEnv, charFinal, matte);
+    // Subject gate: the elliptical matte also covers co-planar background at the
+    // fighter depth, and applying the (brighter, key-lifted) character look to it
+    // reads as a rectangular box — worst on bright stages (ipo-prep) where the
+    // wall behind the fighters is milky and near-neutral. A real fighter pixel is
+    // either notably DARK (an underlit subject the key rescues) or carries its OWN
+    // identity chroma; flat bright near-neutral arena is neither, so fade the look
+    // out on it. Kills the matte box without a true silhouette matte.
+    float envDark = 1.0 - smoothstep(0.14, 0.62, luma(cEnv));
+    float subj = clamp(max(envDark, smoothstep(0.02, 0.12, idChroma)), 0.0, 1.0);
+    c = mix(cEnv, charFinal, matte * mix(0.2, 1.0, subj));
   } else {
     c = cEnv;
   }

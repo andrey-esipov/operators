@@ -104,18 +104,7 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, const in float depth,
     // desaturated (which would read as a flat box halo around them).
     float dist = linearDepth(depth);
     matte *= 1.0 - smoothstep(charDepth, charDepth + charDepthWidth, dist);
-    // Chroma gate: the grade pass already partly neutralised the fighter before
-    // bloom, so inside the matte the fighter reads as PARTLY desaturated while any
-    // co-planar background/prop at the same depth is still FULLY the arena hue.
-    // Without a true silhouette matte the ellipse catches that background and the
-    // un-tint hits it harder than the fighter, which reads as a desaturated box.
-    // Suppress the un-tint on near-fully-saturated pixels so only the (already
-    // partly neutral) subject is touched and the background box disappears.
-    float mx = max(max(col.r, col.g), col.b);
-    float sat = mx < 1e-4 ? 0.0 : (mx - min(min(col.r, col.g), col.b)) / mx;
-    float subject = 1.0 - smoothstep(0.88, 0.995, sat);
-    float strength = clamp(charClarity, 0.0, 1.0) * matte * subject;
-    if (strength > 0.001) {
+    if (matte > 0.001) {
       float L = luma(col);
       vec3 chroma = col - L;                              // signed chroma about luma
       vec3 tdir = normalize(envTint - luma(envTint) + 1e-5);
@@ -125,8 +114,20 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, const in float depth,
       // pixel's own luma so brightness is preserved (no darkening from removing
       // the dominant channel), then lift a touch so the subject reads as lit.
       vec3 ortho = chroma - tdir * align;
-      vec3 target = (vec3(L) + ortho) * charKeyFin;
-      col = mix(col, max(target, 0.0), strength);
+      // Reveal-weight the strip by how much genuine identity chroma exists. The
+      // crude ellipse also catches co-planar background/props at the fighter
+      // depth; those are near-pure arena hue, so their orthogonal chroma is ~0.
+      // Un-tinting them would only grey them into a flat desaturated box. Gating
+      // on orthogonal magnitude leaves that background fully graded (no box) while
+      // still stripping the shared cast off fighter pixels that carry their own
+      // albedo. This is a truer separation than the old saturation gate, which
+      // could not tell a saturated fighter from a saturated background.
+      float reveal = smoothstep(0.015, 0.10, length(ortho));
+      float w = clamp(charClarity, 0.0, 1.0) * matte * reveal;
+      if (w > 0.001) {
+        vec3 target = (vec3(L) + ortho) * charKeyFin;
+        col = mix(col, max(target, 0.0), clamp(w, 0.0, 1.0));
+      }
     }
   }
 

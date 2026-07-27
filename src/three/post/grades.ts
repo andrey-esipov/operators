@@ -176,6 +176,10 @@ export const STAGE_GRADES: Record<ScenarioId, StageGrade> = {
     anamorphicTint: [0.5, 0.7, 1.0],
     hazeColor: [0.34, 0.52, 0.6],
     hazeAmount: 0.32,
+    // Teal/cyan-dominant arena light washes both fighters cyan; strip the shared
+    // cyan cast so warm skin/hair (orthogonal to cyan) reads them as separate.
+    envTint: [0.3, 0.72, 1.0],
+    charUntint: 0.6,
   }),
 
   // Stalled, airless. Flat, faintly sickly green-grey — the grind of the
@@ -205,6 +209,10 @@ export const STAGE_GRADES: Record<ScenarioId, StageGrade> = {
     anamorphicTint: [0.5, 0.6, 0.7],
     hazeColor: [0.5, 0.53, 0.48],
     hazeAmount: 0.42,
+    // Magenta/purple floor and blocks cast the fighters' lower halves violet so
+    // the legs dissolve into the arena; strip the shared magenta cast.
+    envTint: [0.85, 0.35, 1.0],
+    charUntint: 0.5,
   }),
 
   // Neon future. Cyan/magenta bi-chromatic, cool and high-contrast with hot
@@ -270,6 +278,10 @@ export const STAGE_GRADES: Record<ScenarioId, StageGrade> = {
     anamorphicTint: [1.0, 0.8, 0.4],
     hazeColor: [0.6, 0.54, 0.42],
     hazeAmount: 0.3,
+    // A hot magenta mid-band washes both fighters' torsos violet; strip the
+    // shared magenta cast so their own garment/skin chroma reads them apart.
+    envTint: [0.9, 0.32, 0.95],
+    charUntint: 0.55,
   }),
 
   // Crisis. Smouldering red/orange danger, crushed cool shadows, high

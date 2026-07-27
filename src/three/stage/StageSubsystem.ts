@@ -209,10 +209,14 @@ export class StageSubsystem implements Subsystem {
     }
     this.floor.applyLook(look)
 
-    // Atmosphere colours.
+    // Atmosphere colours. Near fog planes take the (dark) fog colour; the two
+    // far additive haze bands (last children) take the brighter accent so they
+    // read as luminous atmospheric depth behind the set.
     this.dust.setColor(cfg.motes.color)
-    ;(this.fog.group.children as THREE.Mesh[]).forEach((m) => {
-      ;(m.material as THREE.ShaderMaterial).uniforms.uColor.value.setHex(cfg.lighting.fog.color)
+    const fogKids = this.fog.group.children as THREE.Mesh[]
+    fogKids.forEach((m, i) => {
+      const isFar = i >= fogKids.length - 2
+      ;(m.material as THREE.ShaderMaterial).uniforms.uColor.value.setHex(isFar ? cfg.accent : cfg.lighting.fog.color)
     })
 
     // Rebuild the mid-ground architecture.

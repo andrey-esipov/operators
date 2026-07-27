@@ -302,9 +302,10 @@ function floorMaterial(): THREE.ShaderMaterial {
           jit.y += uRoughness * 0.004;
           vec3 r0 = texture2D(tDiffuse, ruv + jit).rgb;
           vec3 r1 = texture2D(tDiffuse, ruv + jit*1.5).rgb;
-          refl = mix(r0, r1, uRoughness*0.3) * uReflTint;
-          // Lift so dark reflected geometry still separates from the base.
-          refl += refl*refl*0.4;
+          refl = mix(r0, r1, uRoughness*0.3) * uReflTint * 1.28;
+          // Lift so dark reflected geometry still separates from the base, and
+          // punch bright reflected emissives (screens, neon) so the mirror reads.
+          refl += refl*refl*0.7;
         }
         float fres = pow(1.0 - clamp(dot(vec3(0.0,1.0,0.0), V), 0.0, 1.0), 3.0);
 
@@ -324,15 +325,19 @@ function floorMaterial(): THREE.ShaderMaterial {
         core = core*core;
         float contactCore = max(skirt*skirt*0.5, core);
 
-        float reflAmt = uReflectivity * (0.5 + 0.5*fres);
+        float reflAmt = uReflectivity * (0.62 + 0.38*fres);
         // reflection gains only in the wet skirt, NOT in the dark AO core
-        reflAmt = clamp(reflAmt + skirt*skirt*0.25*(1.0-core), 0.0, 0.96);
-        reflAmt *= 1.0 - core*0.85;
-        reflAmt *= 1.0 - smoothstep(14.0, 34.0, rad);
+        reflAmt = clamp(reflAmt + skirt*skirt*0.25*(1.0-core), 0.0, 0.97);
+        reflAmt *= 1.0 - core*0.9;
+        reflAmt *= 1.0 - smoothstep(16.0, 34.0, rad);
 
         vec3 H = normalize(normalize(uKeyDir) + V);
         float spec = pow(max(dot(N, H), 0.0), mix(80.0, 900.0, 1.0-uRoughness));
+        // broad low-power lobe = a soft polished sheen band across the near floor,
+        // the read that instantly says "this surface is wet/lacquered", not decal
+        float broad = pow(max(dot(N, H), 0.0), 22.0);
         vec3 sheen = uKeyColor * spec * (0.6 + fres) * (1.0 - uRoughness*0.6);
+        sheen += uKeyColor * broad * 0.3 * (1.0 - uRoughness*0.5);
         sheen += uRimColor * fres * uRimIntensity * 0.05;
 
         vec3 toFlash = uFlashPos.xyz - vWorld;
@@ -347,7 +352,7 @@ function floorMaterial(): THREE.ShaderMaterial {
         vec3 col = diff + grid + trim + sheen + flash + uTrimColor*ring*2.0;
         // Contact shadow: darken the surface (and grid) under each fighter, with
         // a strong tight AO core at the feet so they read as grounded, not lit.
-        col *= 1.0 - core*0.72 - skirt*skirt*0.22;
+        col *= 1.0 - core*0.86 - skirt*skirt*0.28;
         col = mix(col, refl, reflAmt);
         col += sheen*0.35 + trim*0.4;
 

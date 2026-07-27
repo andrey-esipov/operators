@@ -204,24 +204,31 @@ const WAVE_FRAG = /* glsl */ `
       if (a < 0.005) discard;
       gl_FragColor = vec4(col, a);
     } else if (uMode < 1.5) {
-      // RADIAL: super burst — dense, uneven light shafts from a structured core.
-      float aa = ang * 22.0;
-      // irregular ray lengths so it doesn't read as a perfect gear
-      float raylen = 0.5 + 0.5 * hash(floor(ang * 22.0 / 6.2831 * 22.0) + uSeed);
-      float rays = pow(0.5 + 0.5 * sin(aa + uSeed * 6.0), 8.0) * raylen;
-      rays += pow(0.5 + 0.5 * sin(aa * 0.5 + 1.7), 12.0) * 0.7;
-      // flicker/erode the rays with noise
-      rays *= 0.6 + 0.7 * fbm(vec2(ang * 5.0, r * 3.0 - uAge * 3.0) + uSeed);
-      float radial = smoothstep(1.0, 0.12, r);
-      float grow = smoothstep(0.0, 0.1, uAge);
-      float fade = 1.0 - smoothstep(0.3, 1.0, uAge);
-      // structured, churning core instead of a flat white disc
-      vec3 core = hotCore(r, ang, uColor2, 0.42, uSeed);
-      float coreA = smoothstep(0.42, 0.0, r);
-      float a = clamp((rays * radial * 0.95 + coreA) * grow * fade, 0.0, 1.0);
-      vec3 col = uColor2 * (rays * radial * 2.4 + 0.25) + core;
+      // RADIAL: ULT divine sunburst. Long, SHARP god-rays radiate from a small
+      // defined core over a TRANSPARENT disc (no flat fill) so the ray structure
+      // always reads instead of blooming into one solid orange ball. A crisp
+      // expanding gold ring marks the super's shock front.
+      float grow = smoothstep(0.0, 0.03, uAge);
+      float fade = 1.0 - smoothstep(0.30, 1.0, uAge);
+      // primary long rays (12) + sharp secondary rays (24) with per-spoke length
+      float rays = pow(0.5 + 0.5 * sin(ang * 12.0 + uSeed * 6.0), 14.0);
+      rays += pow(0.5 + 0.5 * sin(ang * 24.0 + 1.7 + uSeed), 22.0) * 0.5;
+      float rayLen = 0.55 + 0.45 * hash(floor((ang + 3.14159) / 6.2831 * 12.0) + uSeed);
+      // rays reach outward from just past the core and taper to nothing
+      float along = smoothstep(rayLen, 0.12, r) * smoothstep(0.07, 0.2, r);
+      rays *= along;
+      rays *= 0.7 + 0.55 * fbm(vec2(ang * 5.0, r * 3.0 - uAge * 3.0) + uSeed);
+      // crisp expanding golden ring — the super's shock front
+      float ringR = 0.28 + 0.58 * (1.0 - pow(1.0 - uAge, 2.0));
+      float goldRing = ring(r, ringR, 0.055) * (1.0 - smoothstep(0.55, 1.0, uAge));
+      // small, defined churning core (never a big flat disc)
+      vec3 core = hotCore(r, ang, uColor2, 0.20, uSeed);
+      float coreA = smoothstep(0.20, 0.0, r);
+      float body = rays + goldRing * 0.9;
+      float a = clamp((body + coreA) * grow * fade, 0.0, 1.0);
+      vec3 col = uColor2 * (body * 2.3) + vec3(1.0) * goldRing * 0.55 + core;
       col *= uIntensity;
-      if (a < 0.005) discard;
+      if (a < 0.004) discard;
       gl_FragColor = vec4(col, a);
     } else if (uMode < 2.5) {
       // HALO: turbulent energy bloom — flavour-tinted, eroded so it churns.
@@ -241,9 +248,11 @@ const WAVE_FRAG = /* glsl */ `
       // that narrow to a razor tip, with a bright core line down each one. The
       // sharp geometry gives crit an unmistakable silhouette, nothing like the
       // soft radial super sun or the electric ex ring.
-      float grow = smoothstep(0.0, 0.05, uAge);
+      float grow = smoothstep(0.0, 0.035, uAge);
       float fade = 1.0 - smoothstep(0.24, 1.0, uAge);
-      float ease = 1.0 - pow(1.0 - uAge, 2.6);
+      // SNAP to full size in ~3 frames (with a tiny overshoot pop) then hold — a
+      // real impact star cracks open instantly, it does not slowly grow.
+      float ease = smoothstep(0.0, 0.05, uAge) * (1.0 + 0.14 * (1.0 - smoothstep(0.05, 0.15, uAge)));
       float N = 6.0;
       float sector = 6.28318 / N;
       // angular distance to the nearest of 6 spoke axes
@@ -267,9 +276,11 @@ const WAVE_FRAG = /* glsl */ `
       // is a hard regular-polygon boundary (flat facets, sharp corners), with
       // straight radial fracture lines lancing from the corners to the centre —
       // a shattering pane of armour, never a soft round ring.
-      float grow = smoothstep(0.0, 0.04, uAge);
+      float grow = smoothstep(0.0, 0.035, uAge);
       float fade = 1.0 - smoothstep(0.32, 1.0, uAge);
-      float ease = 1.0 - pow(1.0 - uAge, 1.9);
+      // SNAP open — the armour pane cracks to full size instantly, then holds
+      // as a flash-frozen shatter before it fades.
+      float ease = smoothstep(0.0, 0.045, uAge) * (1.0 + 0.10 * (1.0 - smoothstep(0.045, 0.16, uAge)));
       float N = 7.0;
       float sector = 6.28318 / N;
       float rot = uSeed * 1.7;
@@ -302,7 +313,9 @@ const WAVE_FRAG = /* glsl */ `
       // a torn crackle rim — unmistakably electric, not a soft ring.
       float grow = smoothstep(0.0, 0.03, uAge);
       float fade = 1.0 - smoothstep(0.30, 1.0, uAge);
-      float ease = 1.0 - pow(1.0 - uAge, 2.2);
+      // SNAP the discharge to full length instantly — lightning strikes, it does
+      // not grow. This is what makes the forks read as electric, not a soft star.
+      float ease = smoothstep(0.0, 0.04, uAge);
       float NB = 9.0;
       float lane = floor((ang + 3.14159) / 6.28318 * NB);
       float within = fract((ang + 3.14159) / 6.28318 * NB) - 0.5;   // -0.5..0.5 in lane

@@ -107,7 +107,7 @@ const RECIPES: Record<HitFlavor, Recipe> = {
   },
   crit: {
     core: 0xffffff, energy: 0xffd35a, ember: 0xff7a12, scale: 1.35,
-    flashSize: 4.0, flashDecay: 0.22, flashSpikes: 1.7, streak: 2.4,
+    flashSize: 2.6, flashDecay: 0.22, flashSpikes: 1.4, streak: 2.4,
     flareSize: 2.9,
     sparkCount: 140, sparkSpeed: 18.5, sparkLife: 0.8,
     shardCount: 30,
@@ -133,7 +133,7 @@ const RECIPES: Record<HitFlavor, Recipe> = {
   },
   ex: {
     core: 0xeafffb, energy: 0x22d3ee, ember: 0x2a7bd8, scale: 1.1,
-    flashSize: 3.0, flashDecay: 0.2, flashSpikes: 1.4, streak: 1.8,
+    flashSize: 2.3, flashDecay: 0.2, flashSpikes: 0.7, streak: 1.8,
     flareSize: 2.0,
     sparkCount: 120, sparkSpeed: 16.5, sparkLife: 0.72,
     shardCount: 24,
@@ -146,8 +146,8 @@ const RECIPES: Record<HitFlavor, Recipe> = {
   },
   ult: {
     core: 0xffffff, energy: 0xffcf4d, ember: 0xff6a00, scale: 1.5,
-    flashSize: 4.6, flashDecay: 0.26, flashSpikes: 1.8, streak: 2.6,
-    flareSize: 3.2,
+    flashSize: 1.8, flashDecay: 0.24, flashSpikes: 1.4, streak: 2.6,
+    flareSize: 2.3,
     sparkCount: 190, sparkSpeed: 19, sparkLife: 0.85,
     shardCount: 40,
     debrisCount: 20, debrisSpeed: 9,
@@ -159,7 +159,7 @@ const RECIPES: Record<HitFlavor, Recipe> = {
   },
   signature: {
     core: 0xffffff, energy: 0xff3ba0, ember: 0xf72585, scale: 1.9,
-    flashSize: 5.5, flashDecay: 0.3, flashSpikes: 2.0, streak: 3.2,
+    flashSize: 3.6, flashDecay: 0.3, flashSpikes: 1.6, streak: 3.2,
     flareSize: 4.0,
     sparkCount: 260, sparkSpeed: 23, sparkLife: 0.95,
     shardCount: 60,
@@ -445,7 +445,7 @@ export class VfxSubsystem implements Subsystem {
       // SIGNATURE: anime super-flash pillar (handled with the radial block below too).
       this.waves.spawn('beam', p, r.shockSize * 1.35 * scale, 1.05, C(0xffffff), energy, 2.2 * mult, 1.0)
       this.waves.spawn('halo', p, r.shockSize * 0.6 * scale, 0.58, core, energy, 1.0 * mult)
-    } else if (r.shock) {
+    } else if (r.shock && !r.radial) {
       const shockPos = p.clone().add(away.clone().multiplyScalar(0.35 * scale))
       this.waves.spawn('shock', shockPos, r.shockSize * scale, 0.86, core, energy, 1.7 * mult, 1.18)
       // small tinted core behind the ring so the centre has mass (kills the donut)
@@ -457,9 +457,11 @@ export class VfxSubsystem implements Subsystem {
       this.waves.spawn('star', p, 3.4 * scale, 0.9, C(0xffffff), energy, 1.9 * mult)
     }
     if (r.radial) {
-      // ULT: golden radial sun + a trailing expanding shock ring for depth.
-      this.waves.spawn('radial', p, r.shockSize * 1.5 * scale, 0.98, C(0xffffff), energy, 1.6)
-      this.waves.spawn('shock', p, r.shockSize * 1.9 * scale, 0.9, core, ember, 1.2, 1.0)
+      // ULT: divine golden sunburst (sharp god-rays + shock ring) crowned with a
+      // hard star-flare cross so the centre reads as structured light, not a ball.
+      this.waves.spawn('radial', p, r.shockSize * 1.25 * scale, 0.95, C(0xffffff), energy, 1.5)
+      this.waves.spawn('star', p, r.shockSize * 0.95 * scale, 0.6, C(0xffffff), energy, 1.4, 1.0)
+      this.waves.spawn('shock', p, r.shockSize * 1.9 * scale, 0.9, core, ember, 1.1, 1.0)
     }
 
     // 7. ground reaction
@@ -539,53 +541,76 @@ export class VfxSubsystem implements Subsystem {
 
   private shatter(side: 'a' | 'b') {
     const p = this.ctx.anchors.fighter(side).clone()
+    p.z += 0.35
     const feet = this.ctx.anchors.get(`fighter:${side}:feet`)?.clone() ?? p.clone().setY(WORLD.GROUND_Y)
-    const ice = C(0xdff3ff)
+    const white = C(0xffffff)
+    const cyan = C(0x74e0ff)
+    const deep = C(0x2a9bd8)
     const red = C(0xef233c)
 
-    // cold burst light
-    this.lights.pop(p, C(0x9fdcff), 16, 0.28, 0.05, 13)
-
-    // crystalline flash — brief pop so the faceted CRYSTAL silhouette is what reads
-    this.flashMat.uniforms.uColor.value.copy(ice)
-    this.flashMat.uniforms.uColor2.value.copy(C(0x8fc4ff))
-    this.flashMat.uniforms.uSpikes.value = 5.0
-    this.flashMat.uniforms.uStreak.value = 1.6
+    // ── Beat 1 (0ms): the CRACK — blinding cold flash, a hard white impact star
+    // and the big faceted glass pane snapping open. This is the spectacular frame.
+    this.lights.pop(p, C(0xbfe9ff), 22, 0.3, 0.05, 15)
+    // crystalline contact flash — cold, brief, so the CRYSTAL silhouette reads
+    this.flashMat.uniforms.uColor.value.copy(white)
+    this.flashMat.uniforms.uColor2.value.copy(cyan)
+    this.flashMat.uniforms.uSpikes.value = 4.0
+    this.flashMat.uniforms.uStreak.value = 2.0
     this.flash.position.copy(p)
-    this.flash.scale.setScalar(3.0)
+    this.flash.scale.setScalar(2.6)
     this.flash.visible = true
-    this.flashMax = 0.22
-    this.flashLife = 0.22
+    this.flashMax = 0.2
+    this.flashLife = 0.2
 
-    // glass star — hot white flash core
+    // hot white contact flare core
     this.additive.emit({
-      position: p, count: 1, speed: 0, color: C(0xffffff), color2: ice,
-      size: 3.0, life: 0.4, gravity: 0, drag: 0.001, shape: 'flare', intensity: 3.0,
+      position: p, count: 1, speed: 0, color: white, color2: cyan,
+      size: 2.6, life: 0.4, gravity: 0, drag: 0.001, shape: 'flare', intensity: 3.0,
     })
-    // CRYSTAL shell — the faceted, brittle ice silhouette (shatter's identity)
-    this.waves.spawn('crystal', p, 6.8, 1.0, ice, ice, 2.1)
-    // a second, tighter crimson crystal for the two-tone armour-rupture read
-    this.waves.spawn('crystal', p, 4.6, 0.9, red, C(0xff5a72), 1.9)
-    this.waves.spawn('halo', p, 2.2, 0.5, C(0xffffff), ice, 1.0)
-    // sharp icy shards exploding as hard angular splinters, bouncing on the floor
-    this.additive.emit({
-      position: p, count: 120, speed: 12, speedVariance: 0.8, color: C(0xffffff), color2: ice,
-      size: 0.3, sizeVariance: 0.9, life: 1.1, gravity: -15, drag: 0.55, shape: 'shard',
-      intensity: 3.2, jitter: 0.5, spin: 16, stretch: 3.4,
+    // sharp white impact star — the instant CRACK read
+    this.waves.spawn('star', p, 6.5, 0.72, white, cyan, 2.2, 1.0)
+    // the big faceted glass pane — shatter's identity, now snaps to full size
+    this.waves.spawn('crystal', p, 7.8, 0.95, white, cyan, 2.4)
+    // a second inner crimson-conviction pane for the two-tone armour rupture
+    this.waves.spawn('crystal', p, 4.8, 0.85, C(0xffd9dd), red, 1.7)
+    // cold halo backing so the centre has cyan mass
+    this.waves.spawn('halo', p, 3.0, 0.5, cyan, deep, 1.1)
+    this.decals.spawn('ring', feet, 2.6, 0.5, cyan, deep, 1.5)
+    this.decals.spawn('scorch', feet, 1.2, 1.4, deep, C(0x08202e), 0.7)
+
+    // ── Beat 2 (55ms): the pane EXPLODES into flying glass — hard angular
+    // splinters bursting out and skittering on the floor, plus a secondary ring.
+    this.schedule(0.055, () => {
+      this.lights.pop(p, cyan, 14, 0.28, 0.05, 13)
+      // dense icy splinters bursting outward, stretched & spinning
+      this.additive.emit({
+        position: p, count: 150, speed: 14, speedVariance: 0.85, color: white, color2: cyan,
+        size: 0.3, sizeVariance: 0.9, life: 1.15, gravity: -16, drag: 0.5, shape: 'shard',
+        intensity: 3.3, jitter: 0.5, spin: 18, stretch: 3.6,
+      })
+      // heavier glass chunks with real ballistic bounce
+      this.alpha.emit({
+        position: p, count: 60, speed: 9, speedVariance: 0.7, color: C(0xbfe6ff), color2: C(0x5a9fd0),
+        size: 0.18, sizeVariance: 0.8, life: 1.6, lifeVariance: 0.4, gravity: -18, drag: 0.4,
+        shape: 'debris', bounce: true, restitution: 0.5, intensity: 0.9, spin: 16,
+      })
+      // crimson conviction shards snapping through the ice
+      this.additive.emit({
+        position: p, count: 46, speed: 8, speedVariance: 0.8, color: red, color2: C(0x7a0d16),
+        size: 0.14, sizeVariance: 0.7, life: 0.8, gravity: -9, drag: 1.3, shape: 'shard',
+        stretch: 2.8, intensity: 2.8, jitter: 0.3, spin: 8,
+      })
+      // secondary expanding glass ring
+      this.waves.spawn('shock', p, 5.5, 0.7, white, cyan, 1.6, 1.0)
+      // frost dust settling along the floor plane
+      this.alpha.emit({
+        position: feet.clone().add(new THREE.Vector3(0, 0.03, 0)), count: 30, speed: 6,
+        speedVariance: 0.7, flatten: 0.95, color: C(0x8fb8cc), color2: C(0x24485a), size: 0.5,
+        sizeVariance: 0.6, life: 1.0, gravity: -0.5, drag: 2.8, shape: 'dust', groundAlign: true,
+        intensity: 0.7, spin: 0.5,
+      })
+      this.decals.spawn('ring', feet, 3.6, 0.55, cyan, deep, 1.4)
     })
-    this.alpha.emit({
-      position: p, count: 52, speed: 8.5, speedVariance: 0.7, color: C(0xbfe6ff), color2: C(0x6aa8d8),
-      size: 0.16, sizeVariance: 0.8, life: 1.5, lifeVariance: 0.4, gravity: -17, drag: 0.4,
-      shape: 'debris', bounce: true, restitution: 0.5, intensity: 0.85, spin: 14,
-    })
-    // red conviction rupture — hot crimson shard cores snapping through the ice
-    this.additive.emit({
-      position: p, count: 54, speed: 7, speedVariance: 0.8, color: red, color2: C(0x7a0d16),
-      size: 0.13, sizeVariance: 0.7, life: 0.75, gravity: -8, drag: 1.4, shape: 'shard',
-      stretch: 2.8, intensity: 2.8, jitter: 0.3, spin: 8,
-    })
-    this.decals.spawn('ring', feet, 2.4, 0.5, ice, red, 1.4)
-    this.decals.spawn('scorch', feet, 1.2, 1.4, red, C(0x3a0810), 0.8)
   }
 
   // -- KO (the money shot) -------------------------------------------------

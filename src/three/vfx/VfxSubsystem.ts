@@ -110,14 +110,14 @@ const RECIPES: Record<HitFlavor, Recipe> = {
   crit: {
     core: 0xffffff, energy: 0xffd35a, ember: 0xff7a12, scale: 1.35,
     flashSize: 2.1, flashDecay: 0.2, flashSpikes: 1.4, streak: 2.4,
-    flareSize: 2.1,
+    flareSize: 1.3,
     sparkCount: 140, sparkSpeed: 18.5, sparkLife: 0.8,
     shardCount: 30,
     debrisCount: 26, debrisSpeed: 9.5,
     shock: true, shockSize: 5.4,
     groundRing: 2.6, scorch: 1.4, dust: 22,
     smokeCount: 16, emberCount: 26,
-    lightPeak: 24, lightDecay: 0.28, lightRange: 15,
+    lightPeak: 20, lightDecay: 0.28, lightRange: 15,
     radial: false, starBurst: true,
   },
   combo: {
@@ -136,14 +136,14 @@ const RECIPES: Record<HitFlavor, Recipe> = {
   ex: {
     core: 0xeafffb, energy: 0x22d3ee, ember: 0x2a7bd8, scale: 1.1,
     flashSize: 2.3, flashDecay: 0.2, flashSpikes: 0.7, streak: 1.8,
-    flareSize: 2.0,
-    sparkCount: 120, sparkSpeed: 16.5, sparkLife: 0.72,
+    flareSize: 1.0,
+    sparkCount: 74, sparkSpeed: 16.5, sparkLife: 0.72,
     shardCount: 24,
     debrisCount: 10, debrisSpeed: 8,
     shock: true, shockSize: 4.0,
     groundRing: 1.9, scorch: 0.7, dust: 12,
-    smokeCount: 10, emberCount: 24,
-    lightPeak: 21, lightDecay: 0.26, lightRange: 14,
+    smokeCount: 6, emberCount: 12,
+    lightPeak: 17, lightDecay: 0.26, lightRange: 14,
     radial: false, bolt: true,
   },
   ult: {
@@ -438,7 +438,8 @@ export class VfxSubsystem implements Subsystem {
     // distinct silhouette instead of one recoloured ring.
     if (r.bolt) {
       // EX: forked electric discharge owns the frame — NO halo washing it out.
-      this.waves.spawn('bolt', p, r.shockSize * 1.2 * scale, 0.95, C(0xffffff), energy, 2.4 * mult)
+      // Sized large + bright so the bolts dominate over spark fuzz + bloom.
+      this.waves.spawn('bolt', p, r.shockSize * 1.6 * scale, 0.95, C(0xffffff), energy, 2.9 * mult)
     } else if (r.starBurst) {
       // CRIT: the hard impact star dominates — only a faint halo for depth.
       this.waves.spawn('star', p, r.shockSize * 1.5 * scale, 0.92, C(0xffffff), energy, 2.4 * mult)

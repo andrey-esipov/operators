@@ -313,41 +313,47 @@ const WAVE_FRAG = /* glsl */ `
       if (a < 0.005) discard;
       gl_FragColor = vec4(col, a);
     } else if (uMode < 5.5) {
-      // BOLT: forked lightning discharge (EX signature). A handful of BOLD jagged
-      // bolts fork outward from the centre with visible splitting branches, over
-      // a torn crackle rim — unmistakably electric, not a soft ring.
+      // BOLT: forked lightning discharge (EX signature). A few BOLD, well-separated
+      // jagged bolts fork outward from the centre with splitting branches. Kept
+      // sparse with wide DARK gaps between lanes (like the crit star's spikes) so
+      // heavy scene bloom renders them as distinct electric forks instead of fusing
+      // them into a soft plasma ball.
       float grow = smoothstep(0.0, 0.03, uAge);
       float fade = 1.0 - smoothstep(0.30, 1.0, uAge);
       // SNAP the discharge to full length instantly — lightning strikes, it does
       // not grow. This is what makes the forks read as electric, not a soft star.
       float ease = smoothstep(0.0, 0.04, uAge);
-      float NB = 9.0;
+      float NB = 6.0;
       float lane = floor((ang + 3.14159) / 6.28318 * NB);
       float within = fract((ang + 3.14159) / 6.28318 * NB) - 0.5;   // -0.5..0.5 in lane
       // main bolt wanders hard sideways as it climbs outward
-      float wander = (fbm(vec2(lane * 4.1 + uSeed, r * 6.0 - ease * 5.0)) - 0.5) * 0.9;
-      float w = mix(0.20, 0.05, clamp(r, 0.0, 1.0));   // tapers toward the tip
+      float wander = (fbm(vec2(lane * 4.1 + uSeed, r * 6.0 - ease * 5.0)) - 0.5) * 0.7;
+      // NARROW filament with a hard falloff so the dark gaps between bolts stay
+      // black — a fat soft bolt would bloom into its neighbours and fill the disc.
+      float w = mix(0.11, 0.028, clamp(r, 0.0, 1.0));   // tapers toward the tip
       float bolt = smoothstep(w, 0.0, abs(within - wander));
-      float len = 0.55 + 0.45 * hash(lane + uSeed * 3.0);
-      bolt *= smoothstep(ease * len, ease * len - 0.14, r);
-      bolt *= smoothstep(0.02, 0.11, r);   // clear the very centre
+      float len = 0.62 + 0.38 * hash(lane + uSeed * 3.0);
+      bolt *= smoothstep(ease * len, ease * len - 0.12, r);
+      bolt *= smoothstep(0.02, 0.10, r);   // clear the very centre
       // a forked branch splitting off partway out
-      float bwander = wander + (hash(lane + 7.0) - 0.5) * 1.0;
+      float bwander = wander + (hash(lane + 7.0) - 0.5) * 0.8;
       float branch = smoothstep(w * 0.7, 0.0, abs(within - bwander))
                      * smoothstep(0.34, 0.46, r)
-                     * smoothstep(ease * len * 0.92, ease * len * 0.92 - 0.12, r);
-      bolt = max(bolt, branch * 0.85);
-      // flicker so it feels alive, not a static gear
-      bolt *= 0.6 + 0.7 * fbm(vec2(lane * 2.0, r * 10.0) + uSeed * 4.0);
-      // torn crackle rim snapping around the discharge
-      float ringR = ease * 0.70 * (0.85 + 0.28 * fbm(vec2(cos(ang), sin(ang)) * 6.0 + uSeed));
-      float crackle = smoothstep(0.045, 0.0, abs(r - ringR))
-                      * (0.5 + 0.8 * pow(0.5 + 0.5 * sin(ang * 26.0 + uSeed * 8.0), 3.0));
-      vec3 core = hotCore(r, ang, uColor2, 0.15, uSeed);
-      float coreA = smoothstep(0.15, 0.0, r);
-      float a = clamp((bolt * 1.1 + crackle + coreA) * grow * fade, 0.0, 1.0);
-      // saturated cyan body with only a thin white filament along the strike
-      vec3 col = uColor2 * (bolt * 2.7 + crackle * 2.2 + 0.15) + vec3(1.0) * (bolt * 0.7 + crackle * 0.4) + core;
+                     * smoothstep(ease * len * 0.9, ease * len * 0.9 - 0.11, r);
+      bolt = max(bolt, branch * 0.8);
+      // flicker so it feels alive, not a static gear (kept above 0 so bolts never
+      // vanish, but never a flat fill)
+      bolt *= 0.7 + 0.5 * fbm(vec2(lane * 2.0, r * 10.0) + uSeed * 4.0);
+      // a few crackle sparks pinned ONTO the bolt tips (not a full rim ring, which
+      // was what filled the gaps and produced the plasma ball)
+      float tip = smoothstep(ease * len, ease * len - 0.05, r) * smoothstep(ease * len - 0.12, ease * len, r);
+      float crackle = bolt * tip * (0.4 + 0.9 * pow(0.5 + 0.5 * sin(ang * 40.0 + uSeed * 8.0), 4.0));
+      vec3 core = hotCore(r, ang, uColor2, 0.12, uSeed) * 0.35;
+      float coreA = smoothstep(0.12, 0.0, r) * 0.4;
+      float a = clamp((bolt * 1.25 + crackle + coreA) * grow * fade, 0.0, 1.0);
+      // saturated cyan body with a thin white filament along the strike; core kept
+      // dim so the forked bolts own the silhouette instead of a plasma orb.
+      vec3 col = uColor2 * (bolt * 3.4 + crackle * 2.4 + 0.05) + vec3(1.0) * (bolt * 0.9 + crackle * 0.5) + core;
       col *= uIntensity;
       if (a < 0.005) discard;
       gl_FragColor = vec4(col, a);

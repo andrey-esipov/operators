@@ -92,6 +92,9 @@ console.log('  __ceremony:', cer)
 for (const [name, kind, opts, holdMs] of [
   ['04-pre-fight', 'pre-fight', {}, 1800],
   ['05-round-end', 'round-end', { winner: 'a', round: 1 }, 1200],
+  // PERFECT is not a badge bolt-on: it re-tints the whole backdrop gold and
+  // lifts the dim, so it needs its own frame or that grade is never seen.
+  ['05b-round-end-perfect', 'round-end', { winner: 'a', round: 1, perfect: true }, 1200],
   ['06-match-end', 'match-end', { winner: 'a', perfect: false }, 1400],
   ['07-arcade-victory', 'arcade-victory', { winner: 'a' }, 1400],
   // MatchEnd only renders DEFEATED when mode === 'arcade' (a P2 win in vs mode
@@ -100,6 +103,9 @@ for (const [name, kind, opts, holdMs] of [
   // hero/foil flip onto the player's fallen fighter — was never reviewed.
   ['08-match-end-defeat', 'match-end', { winner: 'b', mode: 'arcade' }, 1400],
   ['09-match-end-vs-p2', 'match-end', { winner: 'b' }, 1400],
+  // Final-boss win swaps the subtitle to FINAL BOSS DEFEATED and the button to
+  // CLAIM YOUR PRIZE (arcadeStep must sit on the last ARCADE_PROGRESSION entry).
+  ['10-match-end-final-boss', 'match-end', { winner: 'a', mode: 'arcade', b: 'lenny', arcadeStep: 7 }, 1400],
 ]) {
   try {
     if (cer === 'object') {

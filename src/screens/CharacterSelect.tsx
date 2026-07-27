@@ -534,7 +534,7 @@ export function CharacterSelect() {
                   style={{
                     background: marquee
                       ? 'linear-gradient(180deg, rgba(255,240,200,0.1) 0%, rgba(60,48,20,0.78) 14%, rgba(12,8,20,0.94) 100%)'
-                      : `linear-gradient(180deg, rgba(255,255,255,0.09) 0%, ${discColor}26 11%, rgba(40,29,58,0.72) 42%, rgba(11,7,18,0.95) 100%)`,
+                      : `linear-gradient(180deg, rgba(255,255,255,0.09) 0%, ${discColor}66 13%, rgba(40,29,58,0.6) 46%, rgba(11,7,18,0.95) 100%)`,
                     border: `${(selByA || selByB || isCursor) ? '2px' : '1px'} solid ${borderCol}`,
                     boxShadow: (selByA || selByB)
                       ? `0 0 0 2px ${pickGlow}, 0 0 22px ${pickGlow}, inset 0 -14px 18px -12px ${f.accent}`
@@ -542,16 +542,16 @@ export function CharacterSelect() {
                       ? `0 0 18px ${sideColor}cc, inset 0 -16px 20px -12px ${f.accent}, inset 0 1px 0 rgba(255,255,255,0.16)`
                       : marquee
                       ? `0 0 12px #FFD60A55, inset -2px -2px 0 rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.08)`
-                      : `inset 0 2px 0 rgba(255,255,255,0.12), inset -2px -3px 0 rgba(0,0,0,0.55), inset 0 -11px 15px -12px ${discColor}, 0 4px 9px rgba(0,0,0,0.5)`,
+                      : `inset 0 2px 0 rgba(255,255,255,0.12), inset -2px -3px 0 rgba(0,0,0,0.55), inset 0 -13px 16px -10px ${discColor}, 0 4px 9px rgba(0,0,0,0.5)`,
                     cursor: isLocked ? 'not-allowed' : 'pointer',
-                    opacity: isLocked ? 0.4 : (isCursor || selByA || selByB || marquee) ? 1 : 0.7,
+                    opacity: isLocked ? 0.4 : (isCursor || selByA || selByB || marquee) ? 1 : 0.78,
                     filter: isLocked
                       ? 'none'
                       : isCursor
                       ? 'brightness(1.14) saturate(1.06)'
                       : (selByA || selByB || marquee)
                       ? 'none'
-                      : 'brightness(0.58) saturate(0.85)',
+                      : 'brightness(0.66) saturate(0.95)',
                     minHeight: 84,
                   }}
                 >
@@ -655,16 +655,16 @@ function FilterChip({
     <button
       onClick={onClick}
       title={`${count} operators`}
-      className="sel-chip font-display text-[8px] tracking-widest px-2 py-1"
+      className="sel-chip font-display text-[8px] tracking-widest px-2.5 py-1.5"
       style={{
         background: active
-          ? `linear-gradient(180deg, ${color}55, ${color}22)`
-          : 'linear-gradient(180deg, #241a33, #140d1f)',
+          ? `linear-gradient(180deg, ${color}66, ${color}26)`
+          : 'linear-gradient(180deg, #2c2038, #120c1c)',
         color: active ? '#fff' : 'rgba(255,255,255,0.68)',
-        border: `1px solid ${active ? color : 'rgba(0,0,0,0.6)'}`,
+        border: `1px solid ${active ? color : 'rgba(0,0,0,0.7)'}`,
         boxShadow: active
-          ? `inset 2px 2px 3px rgba(0,0,0,0.55), inset -1px -1px 0 ${color}66, 0 0 12px ${color}77`
-          : 'inset 1.5px 1.5px 0 rgba(255,255,255,0.14), inset -2px -2px 0 rgba(0,0,0,0.6), 0 1px 0 rgba(0,0,0,0.5)',
+          ? `inset 2px 2px 4px rgba(0,0,0,0.6), inset -1px -1px 0 ${color}88, 0 0 14px ${color}88`
+          : 'inset 0 2px 0 rgba(255,255,255,0.18), inset 2px 0 0 rgba(255,255,255,0.1), inset 0 -3px 0 rgba(0,0,0,0.65), inset -2px 0 0 rgba(0,0,0,0.5), 0 2px 3px rgba(0,0,0,0.55)',
         cursor: 'pointer',
         letterSpacing: '0.15em',
         clipPath: 'polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%, 0 5px)',
@@ -740,7 +740,7 @@ function HeroNameplate({
             {fighter.name.toUpperCase()}
           </div>
           <div className="font-display text-[8px] tracking-widest mt-1" style={{ color: fighter.accent }}>
-            {fighter.archetype} · {fighter.episode}
+            {fighter.archetype}
           </div>
         </div>
         <div className="flex gap-1.5 flex-shrink-0">
@@ -808,14 +808,14 @@ function HeroNameplate({
       <div className="flex gap-2 mt-2.5">
         <button
           onClick={onToggleMoves}
-          className="sel-chip flex-1 font-display text-[9px] tracking-widest px-3 py-1.5"
+          className="sel-chip flex-1 font-display text-[9px] tracking-widest px-3 py-2"
           style={{
             background: expanded
-              ? `linear-gradient(180deg, ${sideColor}55, ${sideColor}20)`
-              : `linear-gradient(180deg, ${fighter.accent}3a, ${fighter.accent}12)`,
+              ? `linear-gradient(180deg, ${sideColor}66, ${sideColor}22)`
+              : `linear-gradient(180deg, ${fighter.accent}4a, ${fighter.accent}14)`,
             color: '#fff',
             border: `1px solid ${expanded ? sideColor : fighter.accent}`,
-            boxShadow: `inset 0 1px 0 rgba(255,255,255,0.25), inset -1px -2px 0 rgba(0,0,0,0.5)`,
+            boxShadow: `inset 0 2px 0 rgba(255,255,255,0.35), inset 0 -3px 0 rgba(0,0,0,0.55), 0 2px 4px rgba(0,0,0,0.5)`,
             clipPath: 'polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%, 0 5px)',
             cursor: 'pointer',
           }}
@@ -828,13 +828,14 @@ function HeroNameplate({
             useGame.getState().setSpotlightFighter(fighter.id)
             useGame.getState().setPhase('fighter-spotlight')
           }}
-          className="sel-chip flex-1 font-display text-[9px] tracking-widest px-3 py-1.5"
+          className="sel-chip flex-1 font-display text-[9px] tracking-widest px-3 py-2"
           style={{
-            background: 'linear-gradient(180deg, rgba(255,214,10,0.28), rgba(255,214,10,0.08))',
-            color: '#FFD60A',
+            background: 'linear-gradient(180deg, #FFE87A, #E0A400)',
+            color: '#3a2600',
             border: '1px solid #FFD60A',
-            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), inset -1px -2px 0 rgba(0,0,0,0.5)',
+            boxShadow: 'inset 0 2px 0 rgba(255,255,255,0.55), inset 0 -3px 0 rgba(120,80,0,0.6), 0 2px 4px rgba(0,0,0,0.5)',
             clipPath: 'polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%, 0 5px)',
+            textShadow: '0 1px 0 rgba(255,255,255,0.3)',
             cursor: 'pointer',
           }}
         >

@@ -42,16 +42,24 @@ export class FightCamera {
 
   // Framing tuning (world units).
   private readonly baseY = WORLD.CAMERA.target[1]
-  private readonly minZ = 7.5
+  // Where the lens actually aims at rest. Aiming near mid-torso (a touch below
+  // the chest) with the camera only slightly above it keeps the lens close to
+  // level, which drops the fighters' feet into the lower ~15% of the frame and
+  // rides the near floor up over the foreground — hiding the stage floor's
+  // front edge instead of leaving a dead black bar under the action, while
+  // still leaving a little headroom above the head.
+  private readonly aimY = 1.62
+  private readonly camBaseY = 2.12
+  private readonly minZ = 6.5
   private readonly maxZ = 15.5
-  private readonly marginX = 2.6
-  private readonly marginY = 2.4
+  private readonly marginX = 1.85
+  private readonly marginY = 1.9
 
   constructor(cam: THREE.PerspectiveCamera, bounds: StageBounds) {
     this.cam = cam
     this.bounds = bounds
-    this.pos.set(new THREE.Vector3(0, this.baseY + 0.7, 11.4))
-    this.look.set(new THREE.Vector3(0, this.baseY, 0))
+    this.pos.set(new THREE.Vector3(0, this.camBaseY, 9.6))
+    this.look.set(new THREE.Vector3(0, this.aimY, 0))
   }
 
   setBounds(b: StageBounds) {
@@ -95,8 +103,9 @@ export class FightCamera {
     const camX = lo <= hi ? clamp(midX, lo, hi) : midX
 
     // Rise toward the action when it goes airborne, but keep feet visible.
-    const lookY = this.baseY + Math.max(0, f.topY - this.baseY) * 0.32
-    const camY = this.baseY + 0.7 + Math.max(0, f.topY - this.baseY) * 0.22
+    const rise = Math.max(0, f.topY - this.baseY)
+    const lookY = this.aimY + rise * 0.34
+    const camY = this.camBaseY + rise * 0.24
 
     // Springs give the operator mass — snappy but never jittery.
     const targetPos = this.tmpPos.set(camX, camY, z + this.dolly.value)

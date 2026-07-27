@@ -264,10 +264,14 @@ export const STAGE_GRADES: Record<ScenarioId, StageGrade> = {
     anamorphicTint: [0.5, 0.6, 0.7],
     hazeColor: [0.5, 0.53, 0.48],
     hazeAmount: 0.42,
-    // Magenta/purple floor and blocks cast the fighters' lower halves violet so
-    // the legs dissolve into the arena; strip the shared magenta cast.
+    // Magenta/purple floor and blocks cast the fighters' lower halves violet, but
+    // the fighters already carry distinct albedo here (grey vs grey-hat, blue vs
+    // indigo jeans, red hair) — the arena is multi-hue enough to read them apart.
+    // An A/B proved the char branch only ADDED a matte-box lift around the man, so
+    // it stays OFF; the plain arena grade reads cleaner.
     envTint: [0.85, 0.35, 1.0],
-    charUntint: 0.52,
+    charUntint: 0.0,
+    charStrength: 0.0,
     mattePad: 1.05,
   }),
 
@@ -344,10 +348,13 @@ export const STAGE_GRADES: Record<ScenarioId, StageGrade> = {
     anamorphicTint: [1.0, 0.8, 0.4],
     hazeColor: [0.6, 0.54, 0.42],
     hazeAmount: 0.3,
-    // A hot magenta mid-band washes both fighters' torsos violet; strip the
-    // shared magenta cast so their own garment/skin chroma reads them apart.
+    // A hot magenta mid-band washes both fighters' torsos violet, but their own
+    // garment/skin chroma (white/lilac top + blue jeans vs magenta jacket + blue
+    // jeans) still reads them apart against the red-gold stage. The char branch
+    // only lifted a faint matte box, so leave it OFF and let the arena grade run.
     envTint: [0.9, 0.32, 0.95],
-    charUntint: 0.54,
+    charUntint: 0.0,
+    charStrength: 0.0,
     mattePad: 1.05,
   }),
 
@@ -456,8 +463,12 @@ export const STAGE_GRADES: Record<ScenarioId, StageGrade> = {
     anamorphicTint: [1.0, 0.75, 0.45],
     hazeColor: [0.62, 0.55, 0.45],
     hazeAmount: 0.36,
+    // Warm red-orange dock light. An A/B proved the fighters already read cleanly
+    // here (auburn hair, white top, blue jeans vs dark jacket, olive pants) — the
+    // un-tint only greened the man's skin and lifted a matte box, so leave it OFF.
     envTint: [1.0, 0.5, 0.28],
-    charUntint: 0.78,
+    charUntint: 0.0,
+    charStrength: 0.0,
     mattePad: 1.05,
   }),
 }

@@ -158,6 +158,12 @@ class FighterRig {
     this.mesh.receiveShadow = false
     this.mesh.customDepthMaterial = createFighterDepthMaterial(this.uniforms)
     this.mesh.frustumCulled = false
+    // Never bloom the character's diffuse. PostPipeline collects everything
+    // flagged this way into an inverted SelectiveBloomEffect selection, so the
+    // stage, the VFX and the supers still glow while the fighter stays legible.
+    // Tagging (rather than calling into the pipeline) keeps the fighter
+    // subsystem free of a dependency on post, and survives quality rebuilds.
+    this.mesh.userData.noBloom = true
     // Anchor the quad so its bottom edge sits on y = 0.
     this.mesh.position.y = 0.5
     this.group.add(this.mesh)

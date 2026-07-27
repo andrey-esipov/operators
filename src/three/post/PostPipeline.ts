@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import {
-  BloomEffect,
+  SelectiveBloomEffect,
   BlendFunction,
   EffectComposer,
   EffectPass,
@@ -57,7 +57,14 @@ export class PostPipeline implements Subsystem, RenderDriver {
   private ctx!: EngineContext
   private composer!: EffectComposer
 
-  private bloom!: BloomEffect
+  private bloom!: SelectiveBloomEffect
+  /**
+   * Meshes excluded from bloom. Populated by the fighter subsystem via
+   * `excludeFromBloom()`; re-applied on every rebuild because a quality change
+   * throws the old effect away along with its selection.
+   */
+  private readonly bloomExcluded = new Set<THREE.Object3D>()
+  private bloomSynced = false
   private lens!: LensEffect
   private grade!: MasterGradeEffect
   private finalize!: LensFinalizeEffect
@@ -127,7 +134,23 @@ export class PostPipeline implements Subsystem, RenderDriver {
     // Measured across all 8 arenas: mean saturation was pinned at exactly
     // 1.000 with up to 100% of lit pixels holding a dead channel; on the
     // Gaussian path it drops to 0.45-0.86 with dead channels under 10%.
-    this.bloom = new BloomEffect({
+    //
+    // SELECTIVE, and inverted: bloom the whole frame EXCEPT the fighters.
+    // Measured on the settled combat frame, plain bloom doubled the fighters'
+    // mean luminance (41 -> 85 on Chesky's head, 76 -> 164 on Doshi's torso)
+    // and drove 5.7% of Doshi's torso to pure white. Faces stopped being faces.
+    // The sprites are not at fault and neither is the grade -- `?nograde`
+    // measured WORSE (11.4% blown), so the character grade was already holding
+    // them back. The threshold is simply below where lit skin and a white
+    // jacket sit, and bloom runs after the grade, so nothing downstream of it
+    // can put the character read back.
+    //
+    // Real fighting games bloom the stage, the VFX and the supers, never the
+    // character's diffuse -- that is what keeps a fighter legible against a
+    // blown-out background. Excluding the fighter meshes gets that directly,
+    // rather than raising the threshold globally and killing the stage glow
+    // this pipeline is built around.
+    this.bloom = new SelectiveBloomEffect(scene, camera, {
       intensity: this.currentGrade.bloomIntensity,
       luminanceThreshold: this.currentGrade.bloomThreshold,
       luminanceSmoothing: 0.3,
@@ -135,6 +158,9 @@ export class PostPipeline implements Subsystem, RenderDriver {
       kernelSize: KernelSize.HUGE,
       radius: 0.85,
     })
+    this.bloom.inverted = true
+    this.bloom.ignoreBackground = false
+    this.bloomSynced = false
 
     // --- lens dirt + anamorphic (reads the bloom buffer) ----------------
     this.lens = new LensEffect({
@@ -195,6 +221,23 @@ export class PostPipeline implements Subsystem, RenderDriver {
     renderer.toneMapping = THREE.NoToneMapping
   }
 
+  /**
+   * Collect every mesh tagged `userData.noBloom` into the (inverted) bloom
+   * selection, i.e. exclude it from bloom. Subsystems tag their own meshes
+   * rather than calling in here, so post stays a leaf dependency.
+   *
+   * Runs on build and again on the first frame: `PostPipeline` is added after
+   * the fighter subsystem but `build()` can still race sprite creation, and a
+   * quality change rebuilds the effect with an empty selection.
+   */
+  private syncBloomExclusions() {
+    this.bloomExcluded.clear()
+    this.ctx.scene.traverse((o) => {
+      if (o.userData?.noBloom) this.bloomExcluded.add(o)
+    })
+    this.bloom.selection.set([...this.bloomExcluded])
+  }
+
   onEvent(e: FightEvent) {
     if (e.kind === 'hit') {
       const strength =
@@ -225,6 +268,14 @@ export class PostPipeline implements Subsystem, RenderDriver {
 
   update(dt: number, state: FightRenderState) {
     this.time += dt
+
+    // Fighter sprites are built during the fighter subsystem's init, which can
+    // land after build(). Re-collect once on the first frame so the exclusion
+    // is live before anything is drawn.
+    if (!this.bloomSynced) {
+      this.bloomSynced = true
+      this.syncBloomExclusions()
+    }
 
     // --- character matte projection ------------------------------------
     // Build the screen-space power windows over the two fighters from their

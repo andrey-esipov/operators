@@ -248,7 +248,10 @@
   -webkit-background-clip: text; background-clip: text;
   color: transparent;
   -webkit-text-stroke: 3px #0a0510;
-  filter: drop-shadow(4px 5px 0 #0a0510);
+  filter:
+    drop-shadow(2px 2px 0 rgba(255,46,136,0.5))
+    drop-shadow(5px 6px 0 #0a0510)
+    drop-shadow(0 16px 26px rgba(0,0,0,0.55));
 }
 .mm-logo-slash {
   display: block; height: 6px; width: clamp(180px, 26vw, 340px);
@@ -374,9 +377,10 @@
   content: ""; position: absolute; z-index: -1;
   left: -100vw; right: -6px; top: 3px; bottom: 3px;
   background: linear-gradient(270deg,
-    color-mix(in srgb, var(--accent, #FF2E88) 15%, transparent) 0,
-    color-mix(in srgb, var(--accent, #FF2E88) 5%, transparent) 210px,
-    transparent 540px);
+    color-mix(in srgb, var(--accent, #FF2E88) 30%, transparent) 0,
+    color-mix(in srgb, var(--accent, #FF2E88) 12%, transparent) 240px,
+    transparent 560px);
+  border-right: 2px solid color-mix(in srgb, var(--accent, #FF2E88) 60%, transparent);
 }
 .mm-item:hover .mm-item-label,
 .mm-item.mm-on .mm-item-label {

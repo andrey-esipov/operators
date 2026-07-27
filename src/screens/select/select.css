@@ -862,21 +862,49 @@
 
 .sel-standoff-stage { position: relative; overflow: hidden; }
 
-/* Huge ghost index number, offset behind the figure. */
+/* Roster number — a small stamped badge in the top outer corner, not a wash. */
 .sel-standoff-index {
   position: absolute;
-  top: 42%;
-  transform: translateY(-50%);
-  font-size: clamp(120px, 15vw, 220px);
+  top: 10px;
+  font-size: clamp(26px, 2.6vw, 42px);
   line-height: 0.8;
-  color: rgba(255, 255, 255, 0.05);
-  letter-spacing: -0.05em;
+  color: transparent;
+  -webkit-text-stroke: 1.5px color-mix(in srgb, var(--sel-side) 55%, rgba(255,255,255,0.25));
+  letter-spacing: -0.04em;
   pointer-events: none;
   user-select: none;
-  z-index: 1;
+  opacity: 0.9;
+  z-index: 2;
 }
-.sel-standoff-a .sel-standoff-index { right: 4%; }
-.sel-standoff-b .sel-standoff-index { left: 4%; }
+.sel-standoff-a .sel-standoff-index { right: 12px; }
+.sel-standoff-b .sel-standoff-index { left: 12px; }
+
+/* Colossal surname running vertically up the outer edge — the hero stands in
+   front of their own name, the way GG Strive / Tekken frame a fighter. This is
+   integrated display type, not a caption. */
+.sel-standoff-bigname {
+  position: absolute;
+  bottom: 6%;
+  font-size: clamp(96px, 13vh, 200px);
+  line-height: 0.72;
+  letter-spacing: -0.03em;
+  white-space: nowrap;
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  color: color-mix(in srgb, var(--sel-side) 20%, transparent);
+  -webkit-text-stroke: 2.5px color-mix(in srgb, var(--sel-side) 68%, transparent);
+  pointer-events: none;
+  user-select: none;
+  z-index: 2;
+  filter: drop-shadow(0 0 22px color-mix(in srgb, var(--sel-side) 34%, transparent));
+  animation: selBigNameIn 460ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.sel-standoff-a .sel-standoff-bigname { left: -0.14em; }
+.sel-standoff-b .sel-standoff-bigname { right: -0.14em; }
+@keyframes selBigNameIn {
+  0% { opacity: 0; transform: translateY(40px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
 
 /* Hard-edged platform the fighter stands on — a lit slab, not a soft blob. */
 .sel-standoff-floor {
@@ -1035,9 +1063,27 @@
 }
 .sel-standoff-b .sel-standoff-nametext { transform: skewX(-5deg); transform-origin: right bottom; }
 .sel-standoff-arch { margin-top: 3px; }
-.sel-standoff-hp { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.sel-standoff-hp { display: flex; align-items: center; gap: 8px; margin-top: 9px; }
 .sel-standoff-b .sel-standoff-hp { flex-direction: row-reverse; }
-.sel-standoff-hpbar { position: relative; flex: 1; height: 10px; background: rgba(0, 0, 0, 0.6); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14); overflow: hidden; }
+/* Segmented power meter — hard notches read as a fighting-game HUD gauge, not a
+   smooth SaaS progress bar. */
+.sel-standoff-hpbar {
+  position: relative;
+  flex: 1;
+  height: 13px;
+  background: rgba(0, 0, 0, 0.7);
+  box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.18);
+  overflow: hidden;
+  clip-path: polygon(3px 0, 100% 0, calc(100% - 3px) 100%, 0 100%);
+}
+.sel-standoff-hpbar::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  background-image: repeating-linear-gradient(90deg, transparent 0, transparent 9px, rgba(0, 0, 0, 0.85) 9px, rgba(0, 0, 0, 0.85) 11px);
+}
 
 /* Center info dock — kit strip for the live-hovered operator. */
 .sel-dock {

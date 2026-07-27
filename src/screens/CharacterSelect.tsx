@@ -503,6 +503,9 @@ function StandoffHero({
     >
       <div className="sel-standoff-stage relative flex-1 min-h-0">
         <div className="sel-standoff-index sel-name-face" aria-hidden>{num}</div>
+        {fighter && (
+          <div className="sel-standoff-bigname sel-name-face" aria-hidden>{fighter.shortName}</div>
+        )}
         <div className="sel-standoff-floor" />
         {fighter ? (
           <div className="sel-standoff-figure" key={fighter.id}>
@@ -542,10 +545,10 @@ function StandoffHero({
         </div>
         {fighter ? (
           <>
-            <div className="sel-name sel-standoff-nametext" style={{ fontSize: 'clamp(26px, 2.9vw, 54px)' }} title={fighter.name}>
+            <div className="sel-name sel-standoff-nametext" style={{ fontSize: 'clamp(30px, 3.4vw, 62px)' }} title={fighter.name}>
               {fighter.name}
             </div>
-            <div className="sel-h sel-standoff-arch" style={{ fontSize: 11, letterSpacing: '0.16em', color: fighter.accent, textTransform: 'uppercase' }}>
+            <div className="sel-h sel-standoff-arch" style={{ fontSize: 12, letterSpacing: '0.18em', color: fighter.accent, textTransform: 'uppercase' }}>
               {fighter.archetype}
             </div>
             <div className="sel-standoff-hp">

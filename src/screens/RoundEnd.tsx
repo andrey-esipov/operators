@@ -131,7 +131,7 @@ export function RoundEnd() {
             className="flex flex-col items-center"
             style={{ animation: 'cer-loser-in 0.5s ease-out 0.15s both' }}
           >
-            <div style={{ width: 'min(22vw, 210px)', height: 'min(30vh, 240px)', filter: 'grayscale(0.6) brightness(0.7)' }}>
+            <div style={{ width: 'min(24vw, 235px)', height: 'min(33vh, 265px)', filter: 'grayscale(0.6) brightness(0.7)' }}>
               <Sprite fighter={loser} side={loserSide} state="lose" />
             </div>
             <Kicker style={{ marginTop: 2, fontSize: 'clamp(9px,1vw,12px)', letterSpacing: '0.28em', color: 'rgba(255,255,255,0.5)' }}>
@@ -151,7 +151,7 @@ export function RoundEnd() {
             <div className="absolute" style={{ left: '50%', bottom: '14%' }}>
               <ShockRing color={accent} size={200} thickness={4} delay={0.25} duration={0.6} />
             </div>
-            <div className="relative" style={{ width: 'min(38vw, 400px)', height: 'min(56vh, 480px)' }}>
+            <div className="relative" style={{ width: 'min(42vw, 450px)', height: 'min(60vh, 520px)' }}>
               <div
                 className="cer-breathe"
                 style={{

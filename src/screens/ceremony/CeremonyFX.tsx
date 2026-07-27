@@ -125,7 +125,7 @@ export function StageBackdrop({
       )}
       <div
         className="absolute inset-0"
-        style={{ background: 'radial-gradient(ellipse at center, transparent 14%, rgba(0,0,0,0.86) 100%)' }}
+        style={{ background: 'radial-gradient(ellipse at 50% 48%, transparent 22%, rgba(0,0,0,0.6) 74%, rgba(0,0,0,0.82) 100%)' }}
       />
       <div className="absolute inset-0 pointer-events-none crt-overlay" />
     </div>

@@ -101,7 +101,7 @@ export function MatchEnd() {
     return () => { clearInterval(tick); clearTimeout(advance) }
   }, [arcadePlayerWon, isFinalBoss, nextArcadeFight])
 
-  const titleColor = arcadePlayerLost ? '#FF3B57' : '#FFD60A'
+  const titleColor = arcadePlayerLost ? '#9DB8DE' : '#FFD60A'
 
   return (
     <div className="cer-anim relative w-full h-full flex flex-col items-center justify-center overflow-hidden px-6 py-4" style={{ background: '#05030b' }}>
@@ -120,12 +120,12 @@ export function MatchEnd() {
       <div className="relative z-10" style={{ animation: 'cer-shake-hard 0.3s ease-out both' }}>
         <PowerWord
           size={arcadePlayerLost ? 'clamp(78px, 13.5vw, 200px)' : 'clamp(86px, 15vw, 224px)'}
-          color={arcadePlayerLost ? '#FF6B7D' : '#FFFFFF'}
-          gradient={arcadePlayerLost ? CER_GRAD.crimson : CER_GRAD.gold}
-          echo={arcadePlayerLost ? '#3a0d1a' : '#B3122F'}
+          color={arcadePlayerLost ? '#DCE4F2' : '#FFFFFF'}
+          gradient={arcadePlayerLost ? CER_GRAD.steel : CER_GRAD.gold}
+          echo={arcadePlayerLost ? '#0A1A33' : '#B3122F'}
           echoOffset="0.08em"
-          glow={arcadePlayerLost ? '#E63946' : '#F77F00'}
-          glow2={arcadePlayerLost ? '#7209B7' : '#E63946'}
+          glow={arcadePlayerLost ? '#2E5C8A' : '#F77F00'}
+          glow2={arcadePlayerLost ? '#12335c' : '#E63946'}
           skew={-8}
           entrance="ko"
           live
@@ -161,7 +161,7 @@ export function MatchEnd() {
           style={{ animation: 'cer-loser-in 0.5s ease-out 0.2s both' }}
         >
           <div style={{
-            width: 'min(18vw, 165px)', height: 'min(23vh, 175px)',
+            width: 'min(21vw, 200px)', height: 'min(27vh, 210px)',
             filter: foil.litVictor
               ? `drop-shadow(0 0 20px ${accent}) brightness(1.02)`
               : 'grayscale(0.7) brightness(0.62)',
@@ -194,7 +194,7 @@ export function MatchEnd() {
           />
           <div
             style={{
-              width: 'min(34vw, 360px)', height: 'min(46vh, 360px)', position: 'relative',
+              width: 'min(40vw, 440px)', height: 'min(52vh, 430px)', position: 'relative',
             }}
           >
             <div
@@ -220,12 +220,16 @@ export function MatchEnd() {
         </div>
       </div>
 
-      {/* MATCH STATS — pop up in sequence. */}
-      <div className="relative z-10 mt-4 flex gap-4 flex-wrap justify-center">
-        <StatTile label="BIGGEST HIT" value={`${matchStats.biggest}`} unit="DMG" accent="#FF3B57" delay={0.5} />
-        <StatTile label="LONGEST STREAK" value={`${matchStats.longestCombo}×`} unit="COMBO" accent="#FFD60A" delay={0.6} />
-        <StatTile label="WINNER HP" value={`${winnerHpPct}`} unit="% LEFT" accent={winnerHpPct >= 90 ? '#06D6A0' : '#FCBF49'} delay={0.7} />
-      </div>
+      {/* MATCH STATS — one cohesive result bar (reads designed, not like three
+          floating dashboard cards). */}
+      <StatBar
+        lost={arcadePlayerLost}
+        stats={[
+          { label: 'BIGGEST HIT', value: `${matchStats.biggest}`, unit: 'DMG', accent: '#FF3B57' },
+          { label: 'LONGEST STREAK', value: `${matchStats.longestCombo}×`, unit: 'COMBO', accent: '#FFD60A' },
+          { label: arcadePlayerLost ? 'ENEMY HP' : 'WINNER HP', value: `${winnerHpPct}`, unit: '% LEFT', accent: winnerHpPct >= 90 ? '#06D6A0' : '#FCBF49' },
+        ]}
+      />
 
       <div
         className="cer-type relative z-10 mt-3"
@@ -284,25 +288,42 @@ export function MatchEnd() {
   )
 }
 
-function StatTile({ label, value, unit, accent, delay }: { label: string; value: string; unit: string; accent: string; delay: number }) {
+function StatBar({ stats, lost }: { stats: { label: string; value: string; unit: string; accent: string }[]; lost: boolean }) {
+  const edge = lost ? '#2E5C8A' : '#FFB400'
   return (
     <div
-      className="cer-type relative"
+      className="cer-type relative z-10 mt-5"
       style={{
-        minWidth: 190,
-        padding: '14px 26px 16px',
-        background: 'linear-gradient(160deg, rgba(12,8,20,0.9), rgba(20,10,28,0.75))',
-        border: '1px solid rgba(255,255,255,0.14)',
-        borderTop: `4px solid ${accent}`,
-        clipPath: 'polygon(0 0, 100% 0, 100% 100%, 12px 100%, 0 calc(100% - 12px))',
-        boxShadow: `0 0 18px ${accent}33, inset 0 0 18px rgba(0,0,0,0.5)`,
-        animation: `cer-tile-pop 0.45s cubic-bezier(0.2,0.9,0.3,1) ${delay}s both`,
+        animation: 'cer-tile-pop 0.5s cubic-bezier(0.2,0.9,0.3,1) 0.5s both',
       }}
     >
-      <div className="cer-cond" style={{ fontSize: 'clamp(10px,1.15vw,14px)', fontWeight: 700, letterSpacing: '0.24em', color: accent }}>{label}</div>
-      <div className="flex items-baseline gap-1.5 mt-1">
-        <span className="cer-display" style={{ fontSize: 'clamp(38px,4.6vw,64px)', color: '#fff', lineHeight: 0.86, textShadow: `0 0 14px ${accent}66` }}>{value}</span>
-        <span className="cer-cond" style={{ fontSize: 'clamp(11px,1.25vw,16px)', fontWeight: 700, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.62)' }}>{unit}</span>
+      <div
+        className="flex items-stretch"
+        style={{
+          background: 'linear-gradient(160deg, rgba(10,7,17,0.94), rgba(18,11,26,0.86))',
+          borderTop: `4px solid ${edge}`,
+          borderBottom: '1px solid rgba(255,255,255,0.1)',
+          clipPath: 'polygon(18px 0, 100% 0, calc(100% - 18px) 100%, 0 100%)',
+          boxShadow: `0 10px 34px rgba(0,0,0,0.6), 0 0 26px ${edge}22`,
+          padding: '2px',
+        }}
+      >
+        {stats.map((s, i) => (
+          <div
+            key={s.label}
+            className="flex flex-col justify-center px-8 py-3"
+            style={{
+              borderLeft: i > 0 ? '1px solid rgba(255,255,255,0.12)' : undefined,
+              minWidth: 180,
+            }}
+          >
+            <div className="cer-cond" style={{ fontSize: 'clamp(10px,1.15vw,14px)', fontWeight: 700, letterSpacing: '0.24em', color: s.accent }}>{s.label}</div>
+            <div className="flex items-baseline gap-1.5 mt-0.5">
+              <span className="cer-display" style={{ fontSize: 'clamp(38px,4.8vw,66px)', color: '#fff', lineHeight: 0.84, textShadow: `0 2px 0 rgba(0,0,0,0.6), 0 0 16px ${s.accent}55` }}>{s.value}</span>
+              <span className="cer-cond" style={{ fontSize: 'clamp(11px,1.25vw,16px)', fontWeight: 700, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.6)' }}>{s.unit}</span>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   )

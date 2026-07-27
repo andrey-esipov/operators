@@ -80,7 +80,7 @@ export function StartScreen({ onStart }: { onStart: () => void }) {
 
       <div className="ss-foot">
         <span className="dot">●</span> Insert Coin &nbsp;·&nbsp; {FIGHTERS.length} Operators
-        &nbsp;·&nbsp; {frameworks} Frameworks &nbsp;·&nbsp; #LennysBuildathon
+        &nbsp;·&nbsp; {frameworks} Frameworks &nbsp;·&nbsp; &copy; Lenny&rsquo;s Podcast
       </div>
     </div>
   )

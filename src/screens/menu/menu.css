@@ -343,8 +343,8 @@
 }
 .mm-item-sub {
   display: block; max-width: 42ch; white-space: nowrap;
-  font-family: var(--mm-cond); font-weight: 600;
-  font-size: clamp(11px, 1.35vh, 13px); letter-spacing: 0.16em;
+  font-family: var(--mm-ui); font-weight: 600;
+  font-size: clamp(11px, 1.35vh, 13px); letter-spacing: 0.2em;
   text-transform: uppercase;
   color: var(--mm-dim); margin-top: 7px; line-height: 1;
   opacity: 0; max-height: 0; overflow: hidden;
@@ -409,9 +409,12 @@
 .mm-item.mm-primary::after {
   content: ""; position: absolute; left: clamp(14px, 1.3vw, 22px); bottom: clamp(6px, 1vh, 12px);
   width: clamp(230px, 88%, 460px); height: 5px;
-  background: linear-gradient(90deg, var(--mm-magenta) 0%, var(--mm-amber) 62%, transparent 100%);
+  background: linear-gradient(90deg, var(--mm-magenta) 0%, var(--mm-amber) 40%, var(--mm-magenta) 62%, var(--mm-amber) 100%);
+  background-size: 220% 100%;
   box-shadow: 3px 3px 0 rgba(8,4,14,0.85);
 }
+.mm-anim .mm-item.mm-primary::after { animation: mmBarFlow 2.6s linear infinite; }
+@keyframes mmBarFlow { from { background-position: 0 0; } to { background-position: 220% 0; } }
 .mm-item.mm-primary .mm-index { color: color-mix(in srgb, var(--accent,#FF2E88) 70%, #fff); }
 .mm-item.mm-primary .mm-item-tag {
   color: #0a0714; font-size: clamp(13px, 1.7vh, 16px);

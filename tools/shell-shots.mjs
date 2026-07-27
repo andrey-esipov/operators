@@ -94,7 +94,12 @@ for (const [name, kind, opts, holdMs] of [
   ['05-round-end', 'round-end', { winner: 'a', round: 1 }, 1200],
   ['06-match-end', 'match-end', { winner: 'a', perfect: false }, 1400],
   ['07-arcade-victory', 'arcade-victory', { winner: 'a' }, 1400],
-  ['08-match-end-defeat', 'match-end', { winner: 'b' }, 1400],
+  // MatchEnd only renders DEFEATED when mode === 'arcade' (a P2 win in vs mode
+  // is a legitimate VICTORY for P2). Without mode:'arcade' this shot silently
+  // captured a second VICTORY screen, so the authored defeat framing — the
+  // hero/foil flip onto the player's fallen fighter — was never reviewed.
+  ['08-match-end-defeat', 'match-end', { winner: 'b', mode: 'arcade' }, 1400],
+  ['09-match-end-vs-p2', 'match-end', { winner: 'b' }, 1400],
 ]) {
   try {
     if (cer === 'object') {

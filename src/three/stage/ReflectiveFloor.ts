@@ -309,19 +309,33 @@ function floorMaterial(): THREE.ShaderMaterial {
         }
         float fres = pow(1.0 - clamp(dot(vec3(0.0,1.0,0.0), V), 0.0, 1.0), 3.0);
 
-        // Contact: a wide soft skirt + a tight dark AO core directly under each
-        // fighter so the sprites read as physically planted, not floating on glow.
+        // Contact: a directional CAST shadow (offset + elongated away from the
+        // key light) plus a tight dark AO core at the feet, so the sprites read
+        // as physically planted with a shadow that agrees with the lighting.
+        vec2 keyXZ = uKeyDir.xz;
+        float kl = length(keyXZ);
+        vec2 castDir = kl > 1e-3 ? -keyXZ / kl : vec2(0.0, 1.0); // shadow throw dir
+        vec2 castPerp = vec2(-castDir.y, castDir.x);
+        // wide soft skirt, stretched along the cast direction
         float skirt = 0.0;
-        vec2 ea = (P - uContactA) / vec2(0.95, 0.72);
-        skirt = max(skirt, 1.0 - smoothstep(0.0, 1.0, length(ea)));
-        vec2 eb = (P - uContactB) / vec2(0.95, 0.72);
-        skirt = max(skirt, 1.0 - smoothstep(0.0, 1.0, length(eb)));
-        // tight core (darker, smaller footprint at the feet)
+        {
+          vec2 da = P - (uContactA + castDir * 0.5);
+          vec2 ea = vec2(dot(da, castDir) / 1.35, dot(da, castPerp) / 0.82);
+          skirt = max(skirt, 1.0 - smoothstep(0.0, 1.0, length(ea)));
+          vec2 db = P - (uContactB + castDir * 0.5);
+          vec2 eb = vec2(dot(db, castDir) / 1.35, dot(db, castPerp) / 0.82);
+          skirt = max(skirt, 1.0 - smoothstep(0.0, 1.0, length(eb)));
+        }
+        // tight core (darker, smaller footprint right at the feet)
         float core = 0.0;
-        vec2 ca = (P - uContactA) / vec2(0.6, 0.42);
-        core = max(core, 1.0 - smoothstep(0.0, 1.0, length(ca)));
-        vec2 cb = (P - uContactB) / vec2(0.6, 0.42);
-        core = max(core, 1.0 - smoothstep(0.0, 1.0, length(cb)));
+        {
+          vec2 da = P - (uContactA + castDir * 0.16);
+          vec2 ca = vec2(dot(da, castDir) / 0.72, dot(da, castPerp) / 0.44);
+          core = max(core, 1.0 - smoothstep(0.0, 1.0, length(ca)));
+          vec2 db = P - (uContactB + castDir * 0.16);
+          vec2 cb = vec2(dot(db, castDir) / 0.72, dot(db, castPerp) / 0.44);
+          core = max(core, 1.0 - smoothstep(0.0, 1.0, length(cb)));
+        }
         core = core*core;
         float contactCore = max(skirt*skirt*0.5, core);
 

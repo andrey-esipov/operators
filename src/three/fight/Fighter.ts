@@ -86,6 +86,14 @@ export class Fighter {
     this.mesh = new THREE.Mesh(makeUnitQuad(), mat)
     this.mesh.frustumCulled = false
     this.mesh.renderOrder = 10
+    // Keep the fighter out of the (inverted) selective bloom. Blooming the
+    // character's own diffuse doubles its luminance and blows lit skin / a hit
+    // flash to pure white — measured directly here: with bloom on the defender,
+    // the heavy-hit frame lost all albedo and read as a white silhouette; with
+    // the mesh excluded it keeps its full read. Real fighters bloom the stage,
+    // the VFX and the supers, never the sprite. The PostPipeline collects every
+    // mesh tagged noBloom into the exclusion set on its first frame.
+    this.mesh.userData.noBloom = true
 
     this.shadow = new THREE.Mesh(
       new THREE.PlaneGeometry(1, 1),
@@ -196,8 +204,13 @@ export class Fighter {
     this.uniforms.uTime.value += ctx.dt
 
     // ---- Hit flash (brief; rides unscaled dt so hitstop can't hold it) ----
-    if (this.hitFlash > 0) this.hitFlash = Math.max(0, this.hitFlash - ctx.realDt * 7)
-    this.uniforms.uHitFlash.value = this.hitFlash * 0.9
+    // A hit flash is a fighting-game convention, but it must SNAP: a couple of
+    // frames of near-white on the contact frame, then gone. Decaying too slowly
+    // (and, previously, letting bloom amplify it) turned the defender into a
+    // sustained white ghost. Fast unscaled decay keeps it to ~3-4 frames, and
+    // squaring the envelope makes it spike and clear rather than linger.
+    if (this.hitFlash > 0) this.hitFlash = Math.max(0, this.hitFlash - ctx.realDt * 12)
+    this.uniforms.uHitFlash.value = this.hitFlash * this.hitFlash * 0.85
 
     // ---- KO dissolve ------------------------------------------------------
     this.dissolve += (this.targetDissolve - this.dissolve) * Math.min(1, ctx.dt * 2.5)

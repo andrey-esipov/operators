@@ -243,10 +243,13 @@ const FRAG = /* glsl */ `
     vec3 ambient = uAmbientColor * uAmbientIntensity + uBounceColor * lowBody * 0.5;
 
     // ---- Fresnel rim (stage rim colour + accent identity) -----------------
-    float fres = pow(1.0 - clamp(dot(N, vec3(0.0, 0.0, 1.0)), 0.0, 1.0), 2.4);
+    // The accent rim keeps the fighter's identity readable against any
+    // backdrop, but it is a thin edge highlight, not a glow — kept low and
+    // interior-gated so it never blooms into a halo around the silhouette.
+    float fres = pow(1.0 - clamp(dot(N, vec3(0.0, 0.0, 1.0)), 0.0, 1.0), 2.8);
     float rimTerm = clamp(dot(N, normalize(uRimDir)) * 0.5 + 0.5, 0.0, 1.0);
     vec3 stageRim = uRimColor * uRimIntensity * fres * rimTerm;
-    vec3 accentRim = uAccent * fres * 1.15;
+    vec3 accentRim = uAccent * fres * 0.5;
     vec3 rim = (stageRim + accentRim) * interior;
 
     // ---- Transient impact point light -------------------------------------

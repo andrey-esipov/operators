@@ -382,13 +382,13 @@ function lightSpec(p: number): HitSpec {
 function heavySpec(p: number): HitSpec {
   return {
     gain: 1.05 * (0.85 + 0.3 * p),
-    crack: { level: 1.2, punch: 3.4, hp: 1500, lp: 9000, attack: 0.0008, dur: 0.010, color: 'white' },
-    sizzle: { level: 0.55, hp: 2000, dur: 0.09, color: 'pink' },
-    body: { level: 0.95, f0: 120, f1: 44, dur: 0.24, type: 'sine', partial: 2.7, partialLevel: 0.28 },
-    bodyGrit: { level: 0.8, lp: 620, dur: 0.16 },
-    sub: { level: 1.05, f0: 56, f1: 30, dur: 0.3 },
-    thump: { level: 1.25, f0: 82, dur: 0.11 },
-    texture: { level: 0.6, bp: 1300, q: 0.85, dur: 0.15, color: 'pink', spread: 1.0, haas: 0.009 },
+    crack: { level: 1.55, punch: 4.5, hp: 1500, lp: 6800, attack: 0.0006, dur: 0.009, color: 'white' },
+    sizzle: { level: 0.26, hp: 1500, dur: 0.09, color: 'pink' },
+    body: { level: 1.05, f0: 118, f1: 44, dur: 0.24, type: 'sine', partial: 2.7, partialLevel: 0.28 },
+    bodyGrit: { level: 0.6, lp: 560, dur: 0.16 },
+    sub: { level: 1.45, f0: 56, f1: 30, dur: 0.3 },
+    thump: { level: 1.55, f0: 80, dur: 0.12 },
+    texture: { level: 0.4, bp: 900, q: 0.85, dur: 0.14, color: 'pink', spread: 1.0, haas: 0.009 },
     ring: { level: 0.16, partials: [178, 267, 401, 590], dur: 0.22, type: 'sine', spread: 0.5 },
     drive: 0.28,
     reverbSend: 0.28,
@@ -468,9 +468,10 @@ export function renderImpact(
         s.gain *= 0.5 + i * 0.08
         s.body.f0 *= 1 + i * 0.09
         s.body.dur *= 0.5
-        if (s.sizzle) s.sizzle.level *= 0.4      // darker flurry so combo separates
-        s.crack.hp *= 0.8                         // spectrally from the brighter shatter
-        s.crack.lp = 6500
+        if (s.sizzle) s.sizzle.level *= 0.15     // much darker flurry: pulls combo's
+        s.crack.hp *= 0.6                         // centroid well below the bright shatter
+        s.crack.lp = 4500
+        s.texture.bp *= 0.55
         s.reverbSend = 0.03
         end = Math.max(end, oneHit(ctx, routing, when + gp, s, pan + (i - 1) * 0.15, seed + i * 17))
       })
@@ -492,6 +493,8 @@ export function renderImpact(
       const crack = critSpec(0.9)
       crack.gain *= 0.9
       crack.ring = undefined
+      crack.body.level *= 0.55   // lean the pre-crack's mid/low so shatter reads brighter
+      crack.sub = undefined
       end = Math.max(end, oneHit(ctx, routing, when, crack, pan, seed))
       // glass cloud
       const rnd = mulberryLite(seed + 7)
@@ -506,7 +509,7 @@ export function renderImpact(
       // on white noise) with dispersion + pitch drift, so they read as fracturing
       // debris rather than a bank of stationary sine rails.
       for (let i = 0; i < 20; i++) {
-        const f = 2400 + rnd() * 7200
+        const f = 3200 + rnd() * 7600
         const nb2 = noiseBuffer(ctx, 0.7, { color: 'white', stereo: true, seed: seed + 200 + i * 7 })
         const sv = bufferVoice(ctx, nb2)
         const bp2 = ctx.createBiquadFilter(); bp2.type = 'bandpass'; bp2.Q.value = 22 + rnd() * 26
@@ -525,9 +528,9 @@ export function renderImpact(
       // crackle
       const nb = noiseBuffer(ctx, 0.5, { color: 'blue', seed: seed + 3 })
       const { src, gain } = bufferVoice(ctx, nb)
-      const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 4200
+      const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 5500
       gain.disconnect(); src.connect(gain); gain.connect(hp); hp.connect(g)
-      gain.gain.setValueAtTime(0.28, when + 0.01)
+      gain.gain.setValueAtTime(0.42, when + 0.01)
       gain.gain.exponentialRampToValueAtTime(0.0001, when + 0.4)
       src.start(when + 0.01); src.stop(when + 0.55)
       return Math.max(end, when + 0.5) + IMPACT_END_PAD

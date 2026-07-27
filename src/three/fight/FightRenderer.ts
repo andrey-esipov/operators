@@ -320,7 +320,7 @@ class FightWorld {
       const ax = a.chestAnchor().x
       const bx = b.chestAnchor().x
       const topY = Math.max(
-        simToWorld(views[0].pos).y + views[0].maxHealth * 0 + heightWorld(views[0]),
+        simToWorld(views[0].pos).y + heightWorld(views[0]),
         simToWorld(views[1].pos).y + heightWorld(views[1]),
       )
       this.r.cameraRef.update(realDt, {

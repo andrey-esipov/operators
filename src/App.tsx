@@ -13,9 +13,19 @@ const ThreeLab = lazy(() =>
   import('./three/dev/ThreeLab').then((m) => ({ default: m.ThreeLab })),
 )
 
+/** Real-time fight renderer harness at `?fight=1`. Lazy, dev-only. */
+const FightHarness = lazy(() =>
+  import('./three/dev/FightHarness').then((m) => ({ default: m.FightHarness })),
+)
+
 function isLabRoute(): boolean {
   if (typeof window === 'undefined') return false
   return new URLSearchParams(window.location.search).get('lab') === '1'
+}
+
+function isFightRoute(): boolean {
+  if (typeof window === 'undefined') return false
+  return new URLSearchParams(window.location.search).get('fight') === '1'
 }
 
 export function App() {
@@ -24,6 +34,7 @@ export function App() {
   const selectedB = useGame((s) => s.selectedB)
   const musicEnabled = useGame((s) => s.musicEnabled)
   const [lab] = useState(isLabRoute)
+  const [fight] = useState(isFightRoute)
 
   // Arcade boot gate. Shown once per page load before anything else. The
   // press is a real user gesture, so it unlocks the soundtrack — the menu's
@@ -103,6 +114,14 @@ export function App() {
     return (
       <Suspense fallback={<div style={{ color: '#fff', padding: 24 }}>loading lab…</div>}>
         <ThreeLab />
+      </Suspense>
+    )
+  }
+
+  if (fight) {
+    return (
+      <Suspense fallback={<div style={{ color: '#fff', padding: 24 }}>loading fight…</div>}>
+        <FightHarness />
       </Suspense>
     )
   }

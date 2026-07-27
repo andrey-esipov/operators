@@ -248,6 +248,10 @@ function tryCancel(
   input: InputFrame, relDir: Direction, events: FightEvent[],
 ): void {
   if (!f.move) return
+  // Cancels are confirmed on contact — you can't special-cancel a move that
+  // hasn't connected yet, which is what stops a jab being cancelled before it
+  // even hits and lets real hit-confirms work.
+  if (!f.attackConnected) return
   const fr = def.moves[f.move.id]?.frames[f.move.frame]
   if (!fr?.cancels || fr.cancels.length === 0) return
   const ctx = buildContext(s, i, f, input, relDir)

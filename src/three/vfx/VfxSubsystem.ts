@@ -150,13 +150,13 @@ const RECIPES: Record<HitFlavor, Recipe> = {
     core: 0xffffff, energy: 0xffcf4d, ember: 0xff6a00, scale: 1.5,
     flashSize: 1.3, flashDecay: 0.22, flashSpikes: 1.4, streak: 2.6,
     flareSize: 1.5,
-    sparkCount: 190, sparkSpeed: 19, sparkLife: 0.85,
+    sparkCount: 130, sparkSpeed: 19, sparkLife: 0.85,
     shardCount: 40,
     debrisCount: 20, debrisSpeed: 9,
     shock: true, shockSize: 6.0,
     groundRing: 3.0, scorch: 1.6, dust: 26,
-    smokeCount: 22, emberCount: 40,
-    lightPeak: 27, lightDecay: 0.34, lightRange: 17,
+    smokeCount: 22, emberCount: 26,
+    lightPeak: 15, lightDecay: 0.34, lightRange: 14,
     radial: true,
   },
   signature: {
@@ -169,7 +169,7 @@ const RECIPES: Record<HitFlavor, Recipe> = {
     shock: true, shockSize: 6.4,
     groundRing: 3.6, scorch: 2.2, dust: 36,
     smokeCount: 32, emberCount: 54,
-    lightPeak: 31, lightDecay: 0.38, lightRange: 20,
+    lightPeak: 23, lightDecay: 0.38, lightRange: 17,
     radial: false, beam: true,
   },
 }
@@ -560,43 +560,45 @@ export class VfxSubsystem implements Subsystem {
 
     // ── Beat 1 (0ms): the CRACK — blinding cold flash, a hard white impact star
     // and the big faceted glass pane snapping open. This is the spectacular frame.
-    this.lights.pop(p, C(0xbfe9ff), 22, 0.3, 0.05, 15)
+    // Central emission is kept lean so the CRYSTAL FACET lines are the brightest
+    // feature and survive bloom as a shard shell (instead of a soft cyan orb) even
+    // on dark, low-key stages.
+    this.lights.pop(p, C(0xbfe9ff), 13, 0.3, 0.05, 13)
     // crystalline contact flash — cold, brief, so the CRYSTAL silhouette reads
     this.flashMat.uniforms.uColor.value.copy(white)
     this.flashMat.uniforms.uColor2.value.copy(cyan)
     this.flashMat.uniforms.uSpikes.value = 4.0
     this.flashMat.uniforms.uStreak.value = 2.0
     this.flash.position.copy(p)
-    this.flash.scale.setScalar(2.6)
+    this.flash.scale.setScalar(1.4)
     this.flash.visible = true
-    this.flashMax = 0.2
-    this.flashLife = 0.2
+    this.flashMax = 0.17
+    this.flashLife = 0.17
 
     // hot white contact flare core
     this.additive.emit({
       position: p, count: 1, speed: 0, color: white, color2: cyan,
-      size: 2.6, life: 0.4, gravity: 0, drag: 0.001, shape: 'flare', intensity: 3.0,
+      size: 1.3, life: 0.4, gravity: 0, drag: 0.001, shape: 'flare', intensity: 1.1,
     })
-    // sharp white impact star — the instant CRACK read
-    this.waves.spawn('star', p, 6.5, 0.72, white, cyan, 2.2, 1.0)
-    // the big faceted glass pane — shatter's identity, now snaps to full size
-    this.waves.spawn('crystal', p, 7.8, 0.95, white, cyan, 2.4)
+    // sharp white impact star — the instant CRACK read (lean so it doesn't dome)
+    this.waves.spawn('star', p, 5.2, 0.72, white, cyan, 1.3, 1.0)
+    // the big faceted glass pane — shatter's identity, snaps to full size, bright
+    // facet shell so the crystal reads as the dominant structure.
+    this.waves.spawn('crystal', p, 7.8, 0.95, white, cyan, 3.2)
     // a second inner crimson-conviction pane for the two-tone armour rupture
-    this.waves.spawn('crystal', p, 4.8, 0.85, C(0xffd9dd), red, 1.7)
-    // cold halo backing so the centre has cyan mass
-    this.waves.spawn('halo', p, 3.0, 0.5, cyan, deep, 1.1)
+    this.waves.spawn('crystal', p, 4.8, 0.85, C(0xffd9dd), red, 2.0)
     this.decals.spawn('ring', feet, 2.6, 0.5, cyan, deep, 1.5)
     this.decals.spawn('scorch', feet, 1.2, 1.4, deep, C(0x08202e), 0.7)
 
     // ── Beat 2 (55ms): the pane EXPLODES into flying glass — hard angular
     // splinters bursting out and skittering on the floor, plus a secondary ring.
     this.schedule(0.055, () => {
-      this.lights.pop(p, cyan, 14, 0.28, 0.05, 13)
+      this.lights.pop(p, cyan, 10, 0.28, 0.05, 13)
       // dense icy splinters bursting outward, stretched & spinning
       this.additive.emit({
-        position: p, count: 150, speed: 14, speedVariance: 0.85, color: white, color2: cyan,
+        position: p, count: 130, speed: 16, speedVariance: 0.85, color: white, color2: cyan,
         size: 0.3, sizeVariance: 0.9, life: 1.15, gravity: -16, drag: 0.5, shape: 'shard',
-        intensity: 3.3, jitter: 0.5, spin: 18, stretch: 3.6,
+        intensity: 2.8, jitter: 0.5, spin: 18, stretch: 3.6,
       })
       // heavier glass chunks with real ballistic bounce
       this.alpha.emit({

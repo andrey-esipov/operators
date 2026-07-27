@@ -222,11 +222,13 @@ const WAVE_FRAG = /* glsl */ `
       float ringR = 0.28 + 0.58 * (1.0 - pow(1.0 - uAge, 2.0));
       float goldRing = ring(r, ringR, 0.055) * (1.0 - smoothstep(0.55, 1.0, uAge));
       // small, defined churning core (never a big flat disc)
-      vec3 core = hotCore(r, ang, uColor2, 0.20, uSeed);
-      float coreA = smoothstep(0.20, 0.0, r);
+      vec3 core = hotCore(r, ang, uColor2, 0.16, uSeed);
+      float coreA = smoothstep(0.16, 0.0, r);
       float body = rays + goldRing * 0.9;
-      float a = clamp((body + coreA) * grow * fade, 0.0, 1.0);
-      vec3 col = uColor2 * (body * 2.3) + vec3(1.0) * goldRing * 0.55 + core;
+      float a = clamp((body + coreA * 0.5) * grow * fade, 0.0, 1.0);
+      // Rays own the frame; the central core is kept dim so it never blooms into a
+      // solid dome that swallows the god-ray silhouette on dark, low-key stages.
+      vec3 col = uColor2 * (body * 3.1) + vec3(1.0) * goldRing * 0.5 + core * 0.4;
       col *= uIntensity;
       if (a < 0.004) discard;
       gl_FragColor = vec4(col, a);
@@ -301,12 +303,12 @@ const WAVE_FRAG = /* glsl */ `
       // fine secondary chip cracks
       float chip = smoothstep(0.008, 0.0, abs(mod(ang * 3.0 + uSeed, sector) - sector * 0.5))
                    * smoothstep(edge, edge2, r) * 0.5;
-      vec3 core = hotCore(r, ang, uColor2, 0.18, uSeed) * 0.5;
-      float coreA = smoothstep(0.18, 0.0, r) * 0.55;
+      vec3 core = hotCore(r, ang, uColor2, 0.16, uSeed) * 0.28;
+      float coreA = smoothstep(0.16, 0.0, r) * 0.3;
       float a = clamp((shell + shell2 + crack * 0.9 + chip + coreA) * grow * fade, 0.0, 1.0);
       // bright glassy rim (white) on the shell crest, flavour colour in the body
-      vec3 col = uColor2 * (shell * 2.1 + shell2 * 1.4 + crack * 2.3 + chip * 1.7 + 0.15)
-                 + vec3(1.0) * (shell * 1.1 + crack * 0.5) + core;
+      vec3 col = uColor2 * (shell * 2.3 + shell2 * 1.5 + crack * 2.4 + chip * 1.8 + 0.09)
+                 + vec3(1.0) * (shell * 1.15 + crack * 0.5) + core;
       col *= uIntensity;
       if (a < 0.005) discard;
       gl_FragColor = vec4(col, a);

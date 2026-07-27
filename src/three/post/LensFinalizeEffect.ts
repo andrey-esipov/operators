@@ -123,7 +123,18 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, const in float depth,
       // albedo. This is a truer separation than the old saturation gate, which
       // could not tell a saturated fighter from a saturated background.
       float reveal = smoothstep(0.015, 0.10, length(ortho));
-      float w = clamp(charClarity, 0.0, 1.0) * matte * reveal;
+      // Heavy arena bloom (e.g. the pulsing teal lights on hypergrowth/ai-native)
+      // pulls a fighter's skin chroma ALONG the arena hue, collapsing its
+      // orthogonal identity chroma toward zero — so the reveal gate above stops
+      // firing and the skin reads as the arena colour (green faces). Recover it
+      // with a second term that strips the shared cast on any LIT pixel carrying
+      // a strong aligned cast: bloomed fighter skin/clothing is bright AND heavily
+      // arena-tinted, whereas the co-planar background the ellipse also covers is
+      // either dark floor (low L) or barely tinted (low align), so it is left
+      // alone and no desaturated box appears.
+      float castStrip = smoothstep(0.07, 0.22, max(align, 0.0)) * smoothstep(0.16, 0.44, L);
+      float reveal2 = max(reveal, castStrip * 0.7);
+      float w = clamp(charClarity, 0.0, 1.0) * matte * reveal2;
       if (w > 0.001) {
         vec3 target = (vec3(L) + ortho) * charKeyFin;
         col = mix(col, max(target, 0.0), clamp(w, 0.0, 1.0));

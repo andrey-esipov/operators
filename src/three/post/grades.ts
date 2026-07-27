@@ -176,13 +176,13 @@ export const STAGE_GRADES: Record<ScenarioId, StageGrade> = {
     anamorphicTint: [0.5, 0.7, 1.0],
     hazeColor: [0.34, 0.52, 0.6],
     hazeAmount: 0.32,
-    // Teal/cyan-dominant arena light washes both fighters toward GREEN (teal
-    // ambient boosts skin's green channel), not pure cyan — so the un-tint axis
-    // must include green to strip it, otherwise faces read green. Point envTint
-    // green-cyan and un-tint firmly; warm hair and purple denim (both orthogonal
-    // to green-cyan) survive and read the two fighters apart.
-    envTint: [0.42, 0.95, 0.9],
-    charUntint: 0.74,
+    // Teal/cyan-dominant arena light renders both fighters' SKIN green (the key
+    // light on the characters is greener than the cyan floor/UI). The un-tint
+    // axis must match the cast ON THE FIGHTERS, not the arena's cyan — so envTint
+    // points at that green. Removing the green cast neutralises skin to warm grey;
+    // purple denim and red hair (orthogonal to green) survive to read them apart.
+    envTint: [0.5, 1.0, 0.55],
+    charUntint: 0.9,
   }),
 
   // Stalled, airless. Flat, faintly sickly green-grey — the grind of the
@@ -248,11 +248,12 @@ export const STAGE_GRADES: Record<ScenarioId, StageGrade> = {
     anamorphicTint: [0.5, 0.8, 1.0],
     hazeColor: [0.28, 0.44, 0.66],
     hazeAmount: 0.38,
-    // Dark teal + hologram-orb light greens both fighters' skin; widen the
-    // un-tint axis toward green (not just blue) so faces neutralise instead of
-    // reading green, while warm skin/hair and any non-teal albedo survive.
-    envTint: [0.4, 0.8, 0.98],
-    charUntint: 0.74,
+    // Dark teal + hologram-orb light greens both fighters' skin; the un-tint axis
+    // must be the GREEN cast on the characters (not the arena's blue-teal) or the
+    // green residue survives the projection. Neutralises skin to warm grey while
+    // warm hair and off-axis albedo read the fighters apart.
+    envTint: [0.5, 1.0, 0.6],
+    charUntint: 0.8,
   }),
 
   // Money. Warm gold with rich green undertones, luxe and slightly opulent —
@@ -351,7 +352,7 @@ export const STAGE_GRADES: Record<ScenarioId, StageGrade> = {
     anamorphic: 0.42,
     anamorphicTint: [0.7, 0.8, 1.0],
     hazeColor: [0.62, 0.66, 0.72],
-    hazeAmount: 0.34,
+    hazeAmount: 0.16,
     envTint: [0.34, 0.5, 1.0],
     charUntint: 0.6,
   }),

@@ -344,6 +344,7 @@ export function MainMenu() {
 
         {/* ── RIGHT: featured VS showcase ── */}
         <div className="mm-right">
+          <div className="mm-right-focus" />
           <div className="mm-showcase-tag">◇ TONIGHT&rsquo;S CARD ◇</div>
           <div className="mm-showcase-floor" />
           <div className="mm-showcase">
@@ -354,6 +355,8 @@ export function MainMenu() {
           <div className={`mm-press ${animClass}`}>◇ CHOOSE YOUR MODE ◇</div>
         </div>
       </div>
+
+      <div className="mm-seam" />
 
       <div className="mm-foot">
         v1.0 · #LENNYSBUILDATHON · OPERATORS.REPLIT.APP
@@ -478,15 +481,18 @@ function ShowcaseFighter({
     <div
       key={fighter.id}
       className={`mm-fighter mm-showcase-entry ${anim}`}
-      style={{ filter: `drop-shadow(0 0 22px ${fighter.accent}AA) drop-shadow(0 10px 0 rgba(0,0,0,0.55))` }}
+      style={{
+        ['--faccent' as string]: fighter.accent,
+        filter: `drop-shadow(0 0 22px ${fighter.accent}AA) drop-shadow(0 10px 0 rgba(0,0,0,0.55))`,
+      }}
     >
       <div className={`mm-fighter-art ${anim ? 'idle-bob' : ''}`}>
         <Sprite fighter={fighter} side={side} state="stance" />
       </div>
-      <div className="mm-fighter-name" style={{ color: fighter.accent }}>
-        {fighter.shortName}
+      <div className="mm-nameplate">
+        <div className="mm-fighter-name">{fighter.shortName}</div>
+        <div className="mm-fighter-arch">{fighter.archetype}</div>
       </div>
-      <div className="mm-fighter-arch">{fighter.archetype}</div>
     </div>
   )
 }

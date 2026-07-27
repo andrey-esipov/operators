@@ -86,9 +86,9 @@
   z-index: 2;
   background:
     linear-gradient(100deg,
-      rgba(7,4,14,0.97) 0%,
-      rgba(9,5,18,0.94) 40%,
-      rgba(11,6,22,0.78) 72%,
+      rgba(7,4,14,0.98) 0%,
+      rgba(9,5,18,0.96) 42%,
+      rgba(11,6,22,0.88) 74%,
       rgba(11,6,22,0.0) 100%);
   clip-path: polygon(0 0, 100% 0, calc(100% - 120px) 100%, 0 100%);
 }
@@ -118,8 +118,7 @@
   transform: translateX(-88px) skewX(-9.4deg);
   transform-origin: top;
   background: linear-gradient(180deg, transparent, rgba(255,120,150,0.5) 26%, rgba(255,180,80,0.5) 74%, transparent);
-  box-shadow: 0 0 10px rgba(255,110,60,0.24);
-  opacity: 0.6;
+  opacity: 0.55;
 }
 
 /* Vignette + letterbox to frame the whole composition. */
@@ -220,16 +219,19 @@
 /* ── Brand / logotype ───────────────────────────────────────────────── */
 .mm-brand { position: relative; }
 .mm-eyebrow {
-  display: inline-flex; align-items: center; gap: 10px;
-  font-family: var(--mm-ui); font-weight: 600;
-  font-size: clamp(10px, 1.25vh, 12.5px); letter-spacing: 0.42em;
-  color: var(--mm-amber); text-transform: uppercase;
-  margin-bottom: clamp(6px, 1vh, 12px);
+  display: inline-flex; align-items: center; gap: 8px;
+  font-family: var(--mm-ui); font-weight: 700;
+  font-size: clamp(10px, 1.2vh, 12px); letter-spacing: 0.22em;
+  color: #120a04; text-transform: uppercase;
+  margin-bottom: clamp(8px, 1.3vh, 14px);
+  padding: 4px 12px 4px 10px;
+  background: var(--mm-amber);
+  clip-path: polygon(0 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
+  box-shadow: 3px 3px 0 rgba(8,4,14,0.9);
 }
 .mm-eyebrow::before {
-  content: ""; width: clamp(22px, 3vw, 40px); height: 2px;
-  background: linear-gradient(90deg, var(--mm-magenta), var(--mm-amber));
-  box-shadow: 0 0 10px rgba(255,194,61,0.8);
+  content: ""; width: clamp(14px, 1.6vw, 20px); height: 3px;
+  background: #120a04;
 }
 .mm-logo {
   position: relative;
@@ -245,14 +247,13 @@
   -webkit-background-clip: text; background-clip: text;
   color: transparent;
   -webkit-text-stroke: 3px #0a0510;
-  filter: drop-shadow(3px 4px 0 #0a0510) drop-shadow(0 3px 4px rgba(0,0,0,0.65));
+  filter: drop-shadow(4px 5px 0 #0a0510);
 }
 .mm-logo-slash {
   display: block; height: 6px; width: clamp(180px, 26vw, 340px);
   margin-top: clamp(8px, 1.4vh, 16px);
   transform: skewX(-7deg);
-  background: linear-gradient(90deg, var(--mm-magenta) 0%, var(--mm-amber) 60%, transparent 100%);
-  box-shadow: 0 0 16px rgba(255,46,136,0.7);
+  background: linear-gradient(90deg, var(--mm-magenta) 0%, var(--mm-amber) 58%, transparent 100%);
 }
 .mm-tagline {
   font-family: var(--mm-cond); font-weight: 600;
@@ -274,11 +275,11 @@
   z-index: 1; pointer-events: none;
   --mm-accent: var(--mm-magenta);
   border-left: 5px solid var(--mm-accent);
-  background: linear-gradient(90deg, color-mix(in srgb, var(--mm-accent) 46%, transparent) 0%, color-mix(in srgb, var(--mm-accent) 14%, transparent) 44%, transparent 82%);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--mm-accent) 30%, transparent) 0%, color-mix(in srgb, var(--mm-accent) 9%, transparent) 46%, transparent 84%);
   box-shadow:
-    inset 0 1px 0 color-mix(in srgb, var(--mm-accent) 40%, transparent),
-    inset 0 -1px 0 color-mix(in srgb, var(--mm-accent) 40%, transparent),
-    0 0 34px color-mix(in srgb, var(--mm-accent) 34%, transparent);
+    inset 3px 0 0 color-mix(in srgb, var(--mm-accent) 55%, transparent),
+    inset 0 1px 0 color-mix(in srgb, #000 35%, transparent),
+    inset 0 -1px 0 color-mix(in srgb, #000 35%, transparent);
   transition:
     top 0.19s cubic-bezier(0.2,0.85,0.25,1),
     height 0.19s cubic-bezier(0.2,0.85,0.25,1),
@@ -287,18 +288,17 @@
 }
 /* Solid chevron nub on the cursor's leading edge — physical selection HW. */
 .mm-cursor::before {
-  content: ""; position: absolute; left: -5px; top: 50%; width: 0; height: 0;
+  content: ""; position: absolute; left: -6px; top: 50%; width: 0; height: 0;
   transform: translateY(-50%);
-  border-top: 9px solid transparent; border-bottom: 9px solid transparent;
-  border-left: 12px solid var(--mm-accent);
-  filter: drop-shadow(0 0 8px color-mix(in srgb, var(--mm-accent) 60%, transparent));
+  border-top: 10px solid transparent; border-bottom: 10px solid transparent;
+  border-left: 13px solid var(--mm-accent);
 }
 .mm-menu.mm-ready .mm-cursor { opacity: 1; }
-/* Keyboard/gamepad steering gets a hard targeting frame + pulse. */
+/* Keyboard/gamepad steering gets a hard targeting frame. */
 .mm-kbd .mm-cursor {
   box-shadow:
     inset 0 0 0 2px var(--mm-accent),
-    0 0 40px color-mix(in srgb, var(--mm-accent) 46%, transparent);
+    inset 3px 0 0 var(--mm-accent);
 }
 .mm-anim.mm-kbd .mm-menu.mm-ready .mm-cursor { animation: mmCursorPulse 1.1s ease-in-out infinite; }
 @keyframes mmCursorPulse {
@@ -335,10 +335,11 @@
   transition: opacity 0.16s ease, text-shadow 0.16s ease, letter-spacing 0.18s ease, transform 0.18s cubic-bezier(0.2,0.8,0.2,1);
 }
 .mm-item-sub {
-  display: block; max-width: 42ch;
-  font-family: var(--mm-body); font-weight: 500;
-  font-size: clamp(13px, 1.6vh, 15.5px); letter-spacing: 0.005em;
-  color: var(--mm-dim); margin-top: 6px; line-height: 1.25;
+  display: block; max-width: 42ch; white-space: nowrap;
+  font-family: var(--mm-cond); font-weight: 600;
+  font-size: clamp(11px, 1.35vh, 13px); letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--mm-dim); margin-top: 7px; line-height: 1;
   opacity: 0; max-height: 0; overflow: hidden;
   transition: opacity 0.18s ease, max-height 0.24s ease, margin-top 0.18s ease;
 }
@@ -363,8 +364,8 @@
 .mm-item.mm-on .mm-item-label {
   opacity: 1; color: #fff;
   text-shadow:
-    0 0 1px color-mix(in srgb, var(--mm-amber) 80%, #fff),
-    0 0 18px color-mix(in srgb, var(--accent, #FF2E88) 65%, transparent);
+    2px 2px 0 #0a0510,
+    0 0 1px color-mix(in srgb, var(--mm-amber) 85%, #fff);
 }
 /* Selected non-primary items grow via transform (no layout reflow, so the
    moving cursor stays perfectly aligned). */
@@ -385,20 +386,20 @@
 /* PRIMARY (Story) — always visibly the winner. */
 .mm-item.mm-primary { padding-top: clamp(14px, 2.1vh, 22px); padding-bottom: clamp(18px, 2.6vh, 28px); }
 .mm-item.mm-primary .mm-item-label { font-size: clamp(42px, 6.2vh, 56px); opacity: 0.98; letter-spacing: 0.003em; }
-.mm-item.mm-primary .mm-item-sub { opacity: 1; max-height: 40px; color: #E4D6FF; }
+.mm-item.mm-primary .mm-item-sub { opacity: 0.72; max-height: 40px; color: #C9BBEC; }
 /* Full-bleed selection underbar — the strongest single mark in the frame. */
 .mm-item.mm-primary::after {
   content: ""; position: absolute; left: clamp(14px, 1.3vw, 22px); bottom: clamp(6px, 1vh, 12px);
-  width: clamp(230px, 88%, 460px); height: 4px;
+  width: clamp(230px, 88%, 460px); height: 5px;
   background: linear-gradient(90deg, var(--mm-magenta) 0%, var(--mm-amber) 62%, transparent 100%);
-  box-shadow: 0 0 16px rgba(255,46,136,0.7), 0 0 30px rgba(255,140,40,0.35);
+  box-shadow: 3px 3px 0 rgba(8,4,14,0.85);
 }
 .mm-item.mm-primary .mm-index { color: color-mix(in srgb, var(--accent,#FF2E88) 70%, #fff); }
 .mm-item.mm-primary .mm-item-tag {
   color: #0a0714;
   background: linear-gradient(90deg, var(--mm-magenta), var(--mm-amber));
   border-color: transparent;
-  box-shadow: 0 0 18px rgba(255,46,136,0.55);
+  box-shadow: 2px 2px 0 rgba(8,4,14,0.8);
 }
 .mm-anim .mm-item.mm-primary .mm-item-tag { animation: mmTagBlink 1.3s steps(1) infinite; }
 @keyframes mmTagBlink { 0%,64% { opacity: 1; } 65%,100% { opacity: 0.4; } }
@@ -485,9 +486,7 @@
 .mm-show-floor {
   position: absolute; left: 12%; right: 6%; bottom: clamp(92px, 14.4vh, 160px);
   height: 2px;
-  background: linear-gradient(90deg, transparent, rgba(255,194,61,0.55) 30%, rgba(255,46,136,0.55) 70%, transparent);
-  box-shadow: 0 0 26px rgba(255,140,40,0.5);
-  filter: blur(0.4px);
+  background: linear-gradient(90deg, transparent, rgba(255,194,61,0.5) 30%, rgba(255,46,136,0.5) 70%, transparent);
 }
 .mm-fighter {
   position: relative;
@@ -502,7 +501,7 @@
 .mm-fighter-art::before {
   content: ""; position: absolute; left: -8%; right: -8%; bottom: -2%;
   height: 62%; z-index: -1; pointer-events: none;
-  background: radial-gradient(60% 100% at 50% 100%, color-mix(in srgb, var(--faccent,#FFC23D) 34%, transparent) 0%, transparent 68%);
+  background: radial-gradient(60% 100% at 50% 100%, color-mix(in srgb, var(--faccent,#FFC23D) 30%, transparent) 0%, transparent 68%);
   filter: blur(6px);
 }
 /* Hard contact shadow anchoring the feet to the floor. */
@@ -515,45 +514,44 @@
 .mm-anim .mm-fighter-art .idle-bob,
 .mm-anim .mm-fighter-art { }
 .mm-nameplate {
-  position: relative; margin-top: 8px;
-  padding: 6px 18px; min-width: clamp(140px, 15vw, 210px);
+  position: relative; margin-top: 10px;
+  padding: 8px 22px 9px; min-width: clamp(150px, 16vw, 226px);
   text-align: center;
-  background: linear-gradient(180deg, rgba(14,8,24,0.92), rgba(8,4,16,0.95));
-  border-top: 2px solid var(--faccent, #FFC23D);
-  clip-path: polygon(10px 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
+  background: linear-gradient(180deg, #16101f 0%, #0b0714 100%);
+  border-top: 3px solid var(--faccent, #FFC23D);
+  clip-path: polygon(12px 0, 100% 0, calc(100% - 12px) 100%, 0 100%);
+  box-shadow: 4px 5px 0 rgba(6,3,12,0.7);
 }
 .mm-fighter-name {
-  font-family: var(--mm-display); font-size: clamp(20px, 2.8vh, 30px);
+  font-family: var(--mm-display); font-size: clamp(22px, 3vh, 32px);
   letter-spacing: 0.03em; color: #fff; transform: skewX(-8deg);
-  text-shadow: 0 0 14px color-mix(in srgb, var(--faccent,#FFC23D) 55%, transparent);
+  text-shadow: 2px 2px 0 #0a0510;
 }
 .mm-fighter-arch {
-  font-family: var(--mm-cond); font-weight: 600;
-  font-size: clamp(10px, 1.3vh, 13px); letter-spacing: 0.16em;
-  color: var(--faccent, #FFC23D); text-transform: uppercase; margin-top: 2px;
+  display: inline-block; margin-top: 6px;
+  padding: 3px 13px 4px;
+  font-family: var(--mm-cond); font-weight: 700;
+  font-size: clamp(9.5px, 1.2vh, 12px); letter-spacing: 0.12em;
+  color: #120a04; text-transform: uppercase;
+  background: var(--faccent, #FFC23D);
+  clip-path: polygon(5px 0, 100% 0, calc(100% - 5px) 100%, 0 100%);
 }
 .mm-vs {
   align-self: center;
   margin-bottom: clamp(30px, 6vh, 80px);
   font-family: var(--mm-display);
-  font-size: clamp(60px, 11vh, 124px); line-height: 1;
-  background: linear-gradient(180deg, #FFFFFF 0%, #FFD24A 46%, #FF8A1B 74%, #F0431F 100%);
+  font-size: clamp(64px, 12vh, 132px); line-height: 1;
+  background: linear-gradient(180deg, #FFD24A 0%, #FF8A1B 52%, #F0431F 100%);
   -webkit-background-clip: text; background-clip: text; color: transparent;
-  -webkit-text-stroke: 3px #0a0510;
+  -webkit-text-stroke: 4px #0a0510;
   transform: skewX(-8deg);
-  filter: drop-shadow(3px 4px 0 #0a0510) drop-shadow(0 4px 6px rgba(0,0,0,0.6));
+  filter: drop-shadow(6px 6px 0 #0a0510);
   flex-shrink: 0;
 }
 .mm-anim .mm-vs { animation: mmVsPulse 1.8s ease-in-out infinite; }
 @keyframes mmVsPulse {
-  0%, 100% {
-    transform: skewX(-8deg) scale(1);
-    filter: drop-shadow(3px 4px 0 #0a0510) drop-shadow(0 4px 6px rgba(0,0,0,0.6));
-  }
-  50% {
-    transform: skewX(-8deg) scale(1.045);
-    filter: drop-shadow(3px 4px 0 #0a0510) drop-shadow(0 4px 6px rgba(0,0,0,0.6)) drop-shadow(0 0 26px rgba(255,140,40,0.5));
-  }
+  0%, 100% { transform: skewX(-8deg) scale(1); }
+  50%      { transform: skewX(-8deg) scale(1.05); }
 }
 
 /* Controls hint bar bottom-right. */
@@ -644,10 +642,14 @@
   display: flex; flex-direction: column; align-items: center; justify-content: center;
 }
 .ss-eyebrow {
-  font-family: var(--mm-ui); font-weight: 600;
-  font-size: clamp(11px, 1.5vh, 15px); letter-spacing: 0.44em;
-  color: var(--mm-amber); text-transform: uppercase; margin-bottom: 14px;
-  text-shadow: 0 2px 8px #000;
+  display: inline-block; align-self: center;
+  font-family: var(--mm-ui); font-weight: 700;
+  font-size: clamp(11px, 1.5vh, 15px); letter-spacing: 0.22em;
+  color: #120a04; text-transform: uppercase; margin-bottom: 18px;
+  padding: 5px 15px 6px;
+  background: var(--mm-amber);
+  clip-path: polygon(0 0, 100% 0, calc(100% - 9px) 100%, 0 100%);
+  box-shadow: 4px 4px 0 rgba(6,3,12,0.85);
 }
 .ss-logo {
   position: relative; display: inline-block;
@@ -659,19 +661,18 @@
     linear-gradient(180deg, #FFF7D6 0%, #FFE04A 30%, #FF9E1B 56%, #F0431F 80%, #C21230 100%);
   -webkit-background-clip: text; background-clip: text; color: transparent;
   -webkit-text-stroke: 3.5px #0a0510;
-  filter: drop-shadow(4px 5px 0 #0a0510) drop-shadow(0 5px 6px rgba(0,0,0,0.7));
+  filter: drop-shadow(5px 6px 0 #0a0510);
 }
 .ss-rule {
   height: 4px; width: clamp(300px, 40vw, 560px); margin: clamp(18px,3vh,32px) 0 0;
   background: linear-gradient(90deg, transparent, var(--mm-magenta) 30%, var(--mm-amber) 70%, transparent);
-  box-shadow: 0 0 18px rgba(255,46,136,0.6);
 }
 .ss-cta {
   margin-top: clamp(48px, 8vh, 96px);
   font-family: var(--mm-display);
   font-size: clamp(38px, 6.2vh, 70px); letter-spacing: 0.04em;
   color: #FFF6E0; transform: skewX(-8deg);
-  text-shadow: 0 0 22px rgba(255,194,61,0.65), 3px 4px 0 rgba(0,0,0,0.6);
+  text-shadow: 4px 5px 0 rgba(0,0,0,0.7);
 }
 .ss-cta b {
   color: var(--mm-amber); font-weight: 400; margin: 0 0.28em;
@@ -725,9 +726,13 @@
     radial-gradient(122% 102% at 50% 44%, transparent 56%, rgba(7,6,18,0.5) 100%);
 }
 .am-eyebrow {
-  font-family: var(--mm-ui); font-weight: 600;
-  letter-spacing: 0.4em; color: var(--mm-amber); text-transform: uppercase;
-  text-shadow: 0 2px 8px #000;
+  display: inline-block;
+  font-family: var(--mm-ui); font-weight: 700;
+  letter-spacing: 0.22em; color: #120a04; text-transform: uppercase;
+  padding: 5px 14px 6px;
+  background: var(--mm-amber);
+  clip-path: polygon(0 0, 100% 0, calc(100% - 9px) 100%, 0 100%);
+  box-shadow: 4px 4px 0 rgba(6,3,12,0.85);
 }
 .am-logo {
   position: relative; display: inline-block; font-family: var(--mm-display);
@@ -737,7 +742,7 @@
     linear-gradient(180deg, #FFF7D6 0%, #FFE04A 30%, #FF9E1B 56%, #F0431F 80%, #C21230 100%);
   -webkit-background-clip: text; background-clip: text; color: transparent;
   -webkit-text-stroke: 3px #0a0510;
-  filter: drop-shadow(4px 5px 0 #0a0510) drop-shadow(0 4px 6px rgba(0,0,0,0.65));
+  filter: drop-shadow(5px 6px 0 #0a0510);
 }
 .am-anim { animation: amLogoBreathe 3.4s ease-in-out infinite; }
 @keyframes amLogoBreathe {
@@ -747,13 +752,13 @@
 .am-prompt {
   font-family: var(--mm-display); letter-spacing: 0.06em; color: var(--mm-amber);
   transform: skewX(-8deg);
-  text-shadow: 0 0 26px rgba(255,140,40,0.75), 3px 4px 0 rgba(0,0,0,0.6);
+  text-shadow: 4px 5px 0 rgba(0,0,0,0.72);
   animation: amFlash 1.05s steps(1) infinite;
 }
 @keyframes amFlash { 0%, 60% { opacity: 1; } 61%, 100% { opacity: 0.22; } }
 .am-banner {
   font-family: var(--mm-display); letter-spacing: 0.06em; color: #fff;
-  transform: skewX(-8deg); text-shadow: 0 0 28px rgba(255,46,136,0.6), 3px 4px 0 rgba(0,0,0,0.55);
+  transform: skewX(-8deg); text-shadow: 4px 5px 0 rgba(0,0,0,0.72);
 }
 .am-label {
   font-family: var(--mm-ui); font-weight: 700; letter-spacing: 0.24em; text-transform: uppercase;

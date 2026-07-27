@@ -611,6 +611,16 @@ export const FIGHTER_FRAGMENT = /* glsl */ `
     float fillWrap = dot(Nbroad, normalize(uFillDir)) * 0.5 + 0.5;
     lit += fillCol * lowerForm * fillWrap * uFillIntensity * 0.85;
     lit += uBounceColor * lowerForm * bounce * uBounceIntensity * 0.9;
+    // Lower-body neutral separation floor: the two form terms above are driven by
+    // the stage FILL and BOUNCE, which on a dim single-channel rig (crisis red) are
+    // near-black — so a dark trouser shin collapses to the SAME near-black as the
+    // floor and the leg vanishes below mid-calf except at the extreme silhouette
+    // (frontal shins carry almost no fresnel rim). Add a tiny STAGE-INDEPENDENT
+    // neutral floor on the crushed lower body so the shin always keeps a hair of
+    // value above a black floor and the leg reads even when every stage light is
+    // off. Gated by lowerForm (lower body + dark + darkNeed crush), so it adds
+    // nothing to already-lit legs on bright rigs and never touches upper-body folds.
+    lit += vec3(0.17) * lowerForm;
     vec3 color = lit;
 
     // ---- Hero grade: authored value range + defended colour identity ------

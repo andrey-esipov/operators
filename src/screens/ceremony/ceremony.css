@@ -1,9 +1,41 @@
-/* Ceremony screens — kinetic keyframes.
+/* stylelint-disable */
+@import url('https://fonts.googleapis.com/css2?family=Anton&family=Oswald:wght@400;500;600;700&family=Barlow+Condensed:ital,wght@0,600;0,700;1,500;1,600&display=swap');
+
+/* Ceremony screens — kinetic keyframes + AAA type system.
    Owned by the ceremony agent. index.css is shared and off-limits, so every
    new motion primitive the VS / round-end / match-end / arcade screens need
    lives here. Base (un-animated) styles are authored as the RESTING state so
    that `prefers-reduced-motion` can switch animations off and still leave a
-   correct, readable composition. */
+   correct, readable composition.
+
+   TYPOGRAPHY — the single biggest lever for the AAA look. The rest of the app
+   is intentionally pixel-art (Press Start 2P + a global -webkit-font-smoothing:
+   none), which reads "retro web arcade". Fighting-game ceremony type is heavy,
+   condensed, industrial and crisply anti-aliased so it survives over busy art.
+   We bring in Anton (ultra-heavy condensed display) for the giant impact words
+   and Oswald / Barlow Condensed for names, labels and stats, and locally
+   re-enable font smoothing on ceremony type so the faces render sharp. Pixel
+   sprites keep their pixelated image-rendering — only TEXT is smoothed. */
+
+:root {
+  --cer-display: 'Anton', 'Arial Narrow', system-ui, sans-serif;
+  --cer-cond: 'Oswald', 'Arial Narrow', system-ui, sans-serif;
+  --cer-quote: 'Barlow Condensed', 'Oswald', system-ui, sans-serif;
+}
+
+/* Crisp, anti-aliased ceremony type. Scoped so we never touch sprite pixels. */
+.cer-anim .cer-type,
+.cer-anim .cer-type * {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-smoothing: antialiased;
+  image-rendering: auto;
+  text-rendering: geometricPrecision;
+}
+
+.cer-display { font-family: var(--cer-display); font-weight: 400; letter-spacing: 0.005em; }
+.cer-cond    { font-family: var(--cer-cond); }
+.cer-quote   { font-family: var(--cer-quote); }
 
 /* ---- PreFight: fighters slam in from opposite sides with overshoot ---- */
 @keyframes cer-slam-left {
@@ -65,6 +97,30 @@
 /* Full-frame white impact flash. */
 @keyframes cer-impact-flash {
   0%   { opacity: 0.85; }
+  100% { opacity: 0; }
+}
+
+/* KO impact burst — a blinding white-hot core that detonates at the point of
+   impact and collapses in ~220ms, so the first frame reads as a punch landing
+   rather than a flat colour wash. */
+@keyframes cer-ko-burst {
+  0%   { transform: translate(-50%, -50%) scale(0.15); opacity: 1; }
+  40%  { opacity: 0.95; }
+  100% { transform: translate(-50%, -50%) scale(2.8); opacity: 0; }
+}
+/* Radial impact shards — thin spikes that fire outward from the KO centre. */
+@keyframes cer-ko-shard {
+  0%   { transform: translate(-50%, -50%) rotate(var(--rot)) scaleX(0.1); opacity: 0.95; }
+  45%  { opacity: 0.9; }
+  100% { transform: translate(-50%, -50%) rotate(var(--rot)) scaleX(1); opacity: 0; }
+}
+
+/* KO hit-freeze flash — holds near-peak white through the ~120ms impact frame
+   (screen blend keeps the white KO letters readable while the arena blows out),
+   then drops fast. Makes the impact frame the visual peak. */
+@keyframes cer-hitfreeze {
+  0%   { opacity: 0.72; }
+  38%  { opacity: 0.6; }
   100% { opacity: 0; }
 }
 
@@ -204,3 +260,169 @@
     transition-duration: 0.001ms !important;
   }
 }
+
+/* ============================================================================
+   AAA POWER-WORD TYPE — the giant impact words (VS, K.O., FIGHT, VICTORY…).
+   A PowerWord stacks three copies of the same glyphs: a magenta and a cyan
+   layer offset a few px in `screen` blend for a chromatic-aberration split,
+   with the solid fill on top carrying a crisp black outline + hard drop shadow
+   so it stays legible over any stage art. Layers are positioned by the JSX;
+   these classes carry the paint. ==========================================*/
+.cer-pw {
+  position: relative;
+  display: inline-block;
+  font-family: var(--cer-display);
+  line-height: 0.86;
+  text-transform: uppercase;
+  white-space: nowrap;
+  will-change: transform, filter;
+}
+.cer-pw__layer {
+  grid-area: 1 / 1;
+  display: block;
+}
+.cer-pw--stack { display: grid; }
+/* base fill sits above the chroma ghosts */
+.cer-pw__fill { position: relative; z-index: 3; }
+.cer-pw__metal { position: relative; z-index: 4; pointer-events: none; }
+.cer-pw__echo { position: relative; z-index: 0; pointer-events: none; }
+.cer-pw__ghost { position: relative; z-index: 1; mix-blend-mode: screen; pointer-events: none; }
+.cer-pw__ghost--r { color: #ff2d6b; transform: translate(-0.055em, 0.006em); }
+.cer-pw__ghost--c { color: #21e6ff; transform: translate(0.055em, -0.006em); }
+
+/* Chromatic jitter on the ghosts — sells energy without moving the fill. */
+@keyframes cer-chroma-jit {
+  0%, 100% { transform: translate(-0.055em, 0.006em); }
+  50%      { transform: translate(-0.075em, -0.004em); }
+}
+.cer-pw--live .cer-pw__ghost--r { animation: cer-chroma-jit 0.9s steps(2) infinite; }
+.cer-pw--live .cer-pw__ghost--c { animation: cer-chroma-jit 0.9s steps(2) infinite reverse; }
+
+/* ---- Impact-word entrances ---- */
+/* Hard slam: overscale + blur crash into a snappy settle. Lands ~180ms. */
+@keyframes cer-word-slam {
+  0%   { transform: scale(2.2) skewX(-9deg); opacity: 0; filter: blur(7px); }
+  36%  { transform: scale(0.94) skewX(-9deg); opacity: 1; filter: blur(0); }
+  55%  { transform: scale(1.05) skewX(-9deg); }
+  100% { transform: scale(1) skewX(-9deg); opacity: 1; }
+}
+/* KO: even harder + a residual chroma pulse. */
+@keyframes cer-word-ko {
+  0%   { transform: scale(3) skewX(-8deg); opacity: 0; filter: blur(12px); }
+  30%  { transform: scale(0.9) skewX(-8deg); opacity: 1; filter: blur(0); }
+  46%  { transform: scale(1.08) skewX(-8deg); }
+  64%  { transform: scale(0.98) skewX(-8deg); }
+  100% { transform: scale(1) skewX(-8deg); opacity: 1; }
+}
+/* subtle living idle so the resting word breathes */
+@keyframes cer-word-idle {
+  0%, 100% { transform: scale(1) skewX(-8deg); }
+  50%      { transform: scale(1.018) skewX(-8deg); }
+}
+
+/* VS: crashes in spinning, snaps to a hard angle. */
+@keyframes cer-vs-crash {
+  0%   { transform: translate(-50%, -50%) scale(3.4) rotate(-70deg); opacity: 0; filter: blur(9px); }
+  42%  { transform: translate(-50%, -50%) scale(0.9) rotate(6deg); opacity: 1; filter: blur(0); }
+  60%  { transform: translate(-50%, -50%) scale(1.12) rotate(-5deg); }
+  100% { transform: translate(-50%, -50%) scale(1) rotate(-7deg); opacity: 1; }
+}
+@keyframes cer-vs-hum {
+  0%, 100% { transform: translate(-50%, -50%) scale(1) rotate(-7deg); }
+  50%      { transform: translate(-50%, -50%) scale(1.04) rotate(-7deg); }
+}
+
+/* ---- Bold diagonal color-block split for the VS screen ---- */
+@keyframes cer-wedge-left  { 0% { transform: translateX(-115%) skewX(-11deg); } 100% { transform: translateX(0) skewX(-11deg); } }
+@keyframes cer-wedge-right { 0% { transform: translateX(115%) skewX(-11deg); }  100% { transform: translateX(0) skewX(-11deg); } }
+
+/* Energised seam sweep down the centre diagonal. */
+@keyframes cer-seam-pulse {
+  0%, 100% { opacity: 0.65; filter: brightness(1); }
+  50%      { opacity: 1;    filter: brightness(1.5); }
+}
+@keyframes cer-seam-scan {
+  0%   { transform: translateY(-60%) translateX(-50%) rotate(11deg); opacity: 0; }
+  25%  { opacity: 1; }
+  100% { transform: translateY(60%) translateX(-50%) rotate(11deg); opacity: 0; }
+}
+
+/* Angular chevrons that march toward the centre behind a slam. */
+@keyframes cer-chev-drift {
+  0%   { transform: translateX(var(--chev-from)) skewX(-16deg); opacity: 0; }
+  30%  { opacity: 0.5; }
+  100% { transform: translateX(var(--chev-to)) skewX(-16deg); opacity: 0; }
+}
+
+/* Nameplate slabs slide in from the outer edge and lock. */
+@keyframes cer-plate-left  { 0% { transform: translateX(-140%) skewX(-13deg); opacity: 0; } 60% { transform: translateX(4%) skewX(-13deg); opacity: 1; } 100% { transform: translateX(0) skewX(-13deg); opacity: 1; } }
+@keyframes cer-plate-right { 0% { transform: translateX(140%) skewX(-13deg); opacity: 0; }  60% { transform: translateX(-4%) skewX(-13deg); opacity: 1; } 100% { transform: translateX(0) skewX(-13deg); opacity: 1; } }
+
+/* Letters of a power word wipe up in sequence (used for FIGHT / result subtitles). */
+@keyframes cer-letter-up {
+  0%   { transform: translateY(0.5em) rotateX(-70deg); opacity: 0; }
+  100% { transform: translateY(0) rotateX(0); opacity: 1; }
+}
+
+/* Angular action buttons: sheen sweep on idle. */
+@keyframes cer-btn-sheen {
+  0%   { transform: translateX(-130%) skewX(-20deg); }
+  100% { transform: translateX(230%) skewX(-20deg); }
+}
+.cer-btn {
+  position: relative;
+  overflow: hidden;
+  font-family: var(--cer-cond);
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
+  transition: transform 0.12s ease-out, filter 0.12s ease-out;
+  cursor: pointer;
+}
+.cer-btn:hover { transform: translateY(-2px) scale(1.03); filter: brightness(1.15); }
+.cer-btn:active { transform: translateY(0) scale(0.99); }
+.cer-btn::after {
+  content: '';
+  position: absolute; top: 0; bottom: 0; left: 0; width: 40%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.35), transparent);
+  animation: cer-btn-sheen 2.6s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* Angular stat card entrance already covered by cer-tile-pop; add a value count-in. */
+@keyframes cer-bar-grow { 0% { transform: scaleX(0); } 100% { transform: scaleX(1); } }
+
+/* Winner spotlight column of light behind the champion. */
+@keyframes cer-beam-breathe {
+  0%, 100% { opacity: 0.5; transform: translateX(-50%) scaleY(1); }
+  50%      { opacity: 0.8; transform: translateX(-50%) scaleY(1.04); }
+}
+
+/* Diagonal ribbon confetti fall + flutter. */
+@keyframes cer-ribbon {
+  0%   { transform: translate(0, -14vh) rotate(0deg) scaleX(1); opacity: 0; }
+  8%   { opacity: 1; }
+  50%  { transform: translate(var(--drift, 0px), 50vh) rotate(220deg) scaleX(0.4); }
+  100% { transform: translate(calc(var(--drift, 0px) * -1), 116vh) rotate(460deg) scaleX(1); opacity: 0.9; }
+}
+
+/* Film grain shimmer for a premium, less-flat surface. */
+@keyframes cer-grain-shift {
+  0% { transform: translate(0,0); }
+  25% { transform: translate(-2%, 1%); }
+  50% { transform: translate(1%, -2%); }
+  75% { transform: translate(-1%, 2%); }
+  100% { transform: translate(0,0); }
+}
+.cer-grain {
+  position: absolute; inset: -50%;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/></svg>");
+  opacity: 0.06;
+  mix-blend-mode: overlay;
+  animation: cer-grain-shift 1.2s steps(3) infinite;
+  pointer-events: none;
+}
+
+/* Thin top HUD rule + round pips for the VS header. */
+@keyframes cer-hud-in { 0% { transform: translateY(-120%); opacity: 0; } 100% { transform: translateY(0); opacity: 1; } }

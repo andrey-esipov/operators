@@ -92,22 +92,40 @@ export function StageBackdrop({
         className="absolute inset-0 w-full h-full object-cover"
         style={{
           imageRendering: 'pixelated',
-          filter: `brightness(${dim}) saturate(1.05) contrast(1.05)`,
+          // Crush the busy stage art hard so the authored state grade — not the
+          // raw teal/green pixels — owns the frame. Low saturation lets the tint
+          // layers below unify the whole backdrop to one graphic hue.
+          filter: `brightness(${dim}) saturate(0.28) contrast(1.24)`,
           transform: 'scale(1.06)',
         }}
       />
+      {/* Duotone grade — a `color` blend unifies the whole backdrop to the
+          screen's key hue (warm gold win / cold steel loss / hot red KO) so no
+          two states read alike and nothing looks muddy. */}
+      {tint && (
+        <div
+          className="absolute inset-0"
+          style={{ background: tint, mixBlendMode: 'color', opacity: 0.72 }}
+        />
+      )}
+      {tint && (
+        <div
+          className="absolute inset-0"
+          style={{ background: tint, mixBlendMode: 'soft-light', opacity: 0.5 }}
+        />
+      )}
       {tint && (
         <div
           className="absolute inset-0"
           style={{
-            background: `radial-gradient(ellipse at 50% 48%, ${tint}55 0%, ${tint}18 34%, transparent 64%)`,
+            background: `radial-gradient(ellipse at 50% 46%, ${tint}59 0%, ${tint}1a 32%, transparent 60%)`,
             mixBlendMode: 'screen',
           }}
         />
       )}
       <div
         className="absolute inset-0"
-        style={{ background: 'radial-gradient(ellipse at center, transparent 18%, rgba(0,0,0,0.8) 100%)' }}
+        style={{ background: 'radial-gradient(ellipse at 50% 48%, transparent 22%, rgba(0,0,0,0.6) 74%, rgba(0,0,0,0.82) 100%)' }}
       />
       <div className="absolute inset-0 pointer-events-none crt-overlay" />
     </div>

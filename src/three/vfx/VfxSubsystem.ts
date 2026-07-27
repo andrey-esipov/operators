@@ -74,6 +74,8 @@ interface Recipe {
   bolt?: boolean
   // signature-only vertical super-flash pillar
   beam?: boolean
+  // combo-only violet multi-hit flurry rosette
+  combo?: boolean
 }
 
 const C = (hex: number) => new THREE.Color(hex)
@@ -119,17 +121,17 @@ const RECIPES: Record<HitFlavor, Recipe> = {
     radial: false, starBurst: true,
   },
   combo: {
-    core: 0xffffff, energy: 0xc77dff, ember: 0x8a2be2, scale: 1.0,
-    flashSize: 2.9, flashDecay: 0.16, flashSpikes: 1.0, streak: 1.2,
-    flareSize: 1.5,
-    sparkCount: 60, sparkSpeed: 14, sparkLife: 0.6,
-    shardCount: 14,
+    core: 0xffffff, energy: 0xc77dff, ember: 0x8a2be2, scale: 1.05,
+    flashSize: 2.4, flashDecay: 0.16, flashSpikes: 1.0, streak: 1.2,
+    flareSize: 1.6,
+    sparkCount: 70, sparkSpeed: 15, sparkLife: 0.62,
+    shardCount: 16,
     debrisCount: 8, debrisSpeed: 7,
-    shock: true, shockSize: 3.0,
-    groundRing: 1.4, scorch: 0.6, dust: 10,
-    smokeCount: 8, emberCount: 16,
-    lightPeak: 9, lightDecay: 0.18, lightRange: 9,
-    radial: false,
+    shock: true, shockSize: 3.2,
+    groundRing: 1.5, scorch: 0.6, dust: 11,
+    smokeCount: 8, emberCount: 18,
+    lightPeak: 11, lightDecay: 0.18, lightRange: 9,
+    radial: false, combo: true,
   },
   ex: {
     core: 0xeafffb, energy: 0x22d3ee, ember: 0x2a7bd8, scale: 1.1,
@@ -158,15 +160,15 @@ const RECIPES: Record<HitFlavor, Recipe> = {
     radial: true,
   },
   signature: {
-    core: 0xffffff, energy: 0xff3ba0, ember: 0xf72585, scale: 1.9,
-    flashSize: 3.6, flashDecay: 0.3, flashSpikes: 1.6, streak: 3.2,
-    flareSize: 4.0,
-    sparkCount: 260, sparkSpeed: 23, sparkLife: 0.95,
-    shardCount: 60,
+    core: 0xffffff, energy: 0xff3ba0, ember: 0xf72585, scale: 1.55,
+    flashSize: 1.5, flashDecay: 0.15, flashSpikes: 1.4, streak: 3.0,
+    flareSize: 1.7,
+    sparkCount: 240, sparkSpeed: 23, sparkLife: 0.95,
+    shardCount: 56,
     debrisCount: 30, debrisSpeed: 11,
-    shock: true, shockSize: 7.5,
-    groundRing: 3.8, scorch: 2.2, dust: 36,
-    smokeCount: 32, emberCount: 58,
+    shock: true, shockSize: 6.4,
+    groundRing: 3.6, scorch: 2.2, dust: 36,
+    smokeCount: 32, emberCount: 54,
     lightPeak: 22, lightDecay: 0.36, lightRange: 18,
     radial: false, beam: true,
   },
@@ -328,7 +330,7 @@ export class VfxSubsystem implements Subsystem {
     const p0 = this.ctx.anchors.fighter(target).clone()
     p0.z += 0.35
     const offsets = [0, 0.07, 0.15]
-    const scales = [0.7, 0.85, 1.15]
+    const scales = [0.95, 0.85, 1.25]
     offsets.forEach((dt, i) => {
       this.schedule(dt, () => {
         const jx = (Math.random() - 0.5) * 0.5
@@ -442,9 +444,17 @@ export class VfxSubsystem implements Subsystem {
       this.waves.spawn('star', p, r.shockSize * 1.5 * scale, 0.92, C(0xffffff), energy, 2.4 * mult)
       this.waves.spawn('halo', p, r.shockSize * 0.4 * scale, 0.5, core, energy, 0.85 * mult)
     } else if (r.beam) {
-      // SIGNATURE: anime super-flash pillar (handled with the radial block below too).
-      this.waves.spawn('beam', p, r.shockSize * 1.35 * scale, 1.05, C(0xffffff), energy, 2.2 * mult, 1.0)
-      this.waves.spawn('halo', p, r.shockSize * 0.6 * scale, 0.58, core, energy, 1.0 * mult)
+      // SIGNATURE: anime super-flash pillar. Bright magenta pillar owns the frame;
+      // only a small tinted core behind it (a big halo here is what bloomed to a
+      // pink blob) so the vertical structure survives the bloom. Narrowed in x
+      // (stretchX 0.7) so it reads as a tall column, not a square burst.
+      this.waves.spawn('beam', p, r.shockSize * 1.4 * scale, 1.05, C(0xffffff), energy, 2.3 * mult, 0.7)
+      this.waves.spawn('halo', p, r.shockSize * 0.3 * scale, 0.46, core, energy, 0.6 * mult)
+    } else if (r.combo) {
+      // COMBO: violet multi-hit flurry rosette + a compact energy core. Snaps to
+      // full size instantly so even the opening micro-hit reads on capture.
+      this.waves.spawn('flurry', p, r.shockSize * 1.5 * scale, 0.9, C(0xffffff), energy, 2.2 * mult)
+      this.waves.spawn('halo', p, r.shockSize * 0.4 * scale, 0.46, core, energy, 0.9 * mult)
     } else if (r.shock && !r.radial) {
       const shockPos = p.clone().add(away.clone().multiplyScalar(0.35 * scale))
       this.waves.spawn('shock', shockPos, r.shockSize * scale, 0.86, core, energy, 1.7 * mult, 1.18)

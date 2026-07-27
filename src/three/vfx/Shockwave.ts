@@ -15,7 +15,7 @@ import type { EngineContext, QualityTier } from '../types'
  *   halo   — soft energy disc that flashes and fades (contact bloom)
  */
 
-type WaveMode = 'shock' | 'radial' | 'halo' | 'star' | 'crystal' | 'bolt' | 'beam'
+type WaveMode = 'shock' | 'radial' | 'halo' | 'star' | 'crystal' | 'bolt' | 'beam' | 'flurry'
 
 interface Wave {
   mesh: THREE.Mesh
@@ -90,7 +90,7 @@ export class Shockwave {
     w.mat.uniforms.uColor.value.copy(color)
     w.mat.uniforms.uColor2.value.copy(color2)
     w.mat.uniforms.uMode.value =
-      mode === 'shock' ? 0 : mode === 'radial' ? 1 : mode === 'halo' ? 2 : mode === 'star' ? 3 : mode === 'crystal' ? 4 : mode === 'bolt' ? 5 : 6
+      mode === 'shock' ? 0 : mode === 'radial' ? 1 : mode === 'halo' ? 2 : mode === 'star' ? 3 : mode === 'crystal' ? 4 : mode === 'bolt' ? 5 : mode === 'beam' ? 6 : 7
     w.mat.uniforms.uIntensity.value = intensity
     w.mat.uniforms.uSeed.value = Math.random() * 10
     w.mat.uniforms.uAge.value = 0
@@ -124,7 +124,7 @@ const WAVE_FRAG = /* glsl */ `
   uniform float uAge;    // 0..1
   uniform vec3  uColor;
   uniform vec3  uColor2;
-  uniform float uMode;   // 0 shock,1 radial,2 halo,3 star,4 crystal,5 bolt,6 beam
+  uniform float uMode;   // 0 shock,1 radial,2 halo,3 star,4 crystal,5 bolt,6 beam,7 flurry
   uniform float uIntensity;
   uniform float uSeed;
 
@@ -346,30 +346,74 @@ const WAVE_FRAG = /* glsl */ `
       col *= uIntensity;
       if (a < 0.005) discard;
       gl_FragColor = vec4(col, a);
-    } else {
+    } else if (uMode < 6.5) {
       // BEAM: an anime super-flash column (SIGNATURE). A blinding vertical light
       // pillar with a thin horizontal lens crossbar and secondary radial spokes.
       // The strong vertical shape is unmistakably different from the round golden
-      // ult sun, so the two biggest supers never collide.
+      // ult sun, so the two biggest supers never collide. Kept structurally lean
+      // (small hot core, feathered pillar) so it survives bloom as a PILLAR and
+      // never floods into a flat pink blob.
       float grow = smoothstep(0.0, 0.04, uAge);
       float fade = 1.0 - smoothstep(0.28, 1.0, uAge);
       float ease = 1.0 - pow(1.0 - uAge, 2.0);
-      // vertical pillar — narrow in x, tall in y, feathered edges + churn
-      float pillarW = 0.14 + 0.05 * fbm(vec2(d.y * 6.0, uSeed));
+      // vertical pillar — narrow in x, tall in y, feathered edges + churn.
+      // A dark seam is carved down the very centre so the pillar reads as two
+      // bright rails (structure) instead of one solid slab that blooms to white.
+      float pillarW = 0.11 + 0.045 * fbm(vec2(d.y * 6.0, uSeed));
       float pillar = smoothstep(pillarW, 0.0, abs(d.x)) * smoothstep(1.0, 0.1, abs(d.y) * 0.9);
+      float rails = smoothstep(0.028, pillarW * 0.55, abs(d.x)); // carve centre seam
+      pillar *= 0.35 + 0.65 * rails;
       // thin horizontal lens crossbar
-      float bar = smoothstep(0.035, 0.0, abs(d.y)) * smoothstep(1.0, 0.0, abs(d.x) * 0.85);
+      float bar = smoothstep(0.03, 0.0, abs(d.y)) * smoothstep(1.0, 0.0, abs(d.x) * 0.85);
       // secondary radial spokes so the centre still bursts
-      float spokes = pow(0.5 + 0.5 * sin(ang * 16.0 + uSeed * 6.0), 9.0) * smoothstep(0.9, 0.15, r) * 0.7;
+      float spokes = pow(0.5 + 0.5 * sin(ang * 16.0 + uSeed * 6.0), 9.0) * smoothstep(0.9, 0.15, r) * 0.6;
       float grid = grow * ease;
       pillar *= grid; bar *= grid; spokes *= grid;
-      vec3 core = hotCore(r, ang, uColor2, 0.34, uSeed);
-      float coreA = smoothstep(0.34, 0.0, r);
-      float a = clamp((pillar + bar + spokes + coreA) * fade, 0.0, 1.0);
-      vec3 col = uColor2 * (pillar * 1.9 + bar * 1.6 + spokes * 2.0 + 0.2)
-                 + vec3(1.0) * (bar * 0.8 + pillar * 0.4) + core;
+      // small, tight core — a big soft core is exactly what blooms into a blob
+      vec3 core = hotCore(r, ang, uColor2, 0.20, uSeed);
+      float coreA = smoothstep(0.20, 0.0, r);
+      float a = clamp((pillar + bar + spokes + coreA * 0.8) * fade, 0.0, 1.0);
+      // saturated magenta owns the body; white confined to the thin crossbar/spine
+      vec3 col = uColor2 * (pillar * 1.7 + bar * 1.5 + spokes * 1.9 + 0.2)
+                 + vec3(1.0) * (bar * 0.7 + pillar * 0.28) + core * 0.85;
       col *= uIntensity;
       if (a < 0.005) discard;
+      gl_FragColor = vec4(col, a);
+    } else {
+      // FLURRY: COMBO signature. A violet rosette of many sharp, UNEVEN impact
+      // blades — a rapid multi-hit barrage frozen mid-strike — wrapped in two
+      // expanding concentric hit-rings (the rising combo counter). Blades snap to
+      // full length instantly (a combo is fast) and every blade is a different
+      // length, so it reads as chaotic violence, never the clean symmetric crit
+      // star or the soft golden ult sun.
+      float grow = smoothstep(0.0, 0.03, uAge);
+      float fade = 1.0 - smoothstep(0.26, 1.0, uAge);
+      float ease = smoothstep(0.0, 0.04, uAge);
+      float N = 11.0;                          // many blades = many hits
+      float sector = 6.28318 / N;
+      float rot = uSeed * 2.0 + uAge * 1.4;    // slight swirl — energy whipping round
+      float idx = floor((ang + rot + 3.14159) / sector);
+      float da = mod(ang + rot + sector * 0.5, sector) - sector * 0.5;
+      // per-blade length varies wildly for a ragged, hand-thrown barrage
+      float len = 0.42 + 0.55 * hash(idx + uSeed * 3.0);
+      float reach = len * ease;
+      float along = smoothstep(reach, 0.0, r);
+      float halfw = 0.15 * clamp(1.0 - r / max(reach, 0.001), 0.0, 1.0); // narrows to tip
+      float blade = along * smoothstep(halfw, halfw * 0.12, abs(da));
+      float coreline = along * smoothstep(halfw * 0.4, 0.0, abs(da));    // bright spine
+      // two expanding hit-rings — the combo count rising
+      float g = 1.0 - pow(1.0 - uAge, 2.0);
+      float r1 = 0.30 * g;
+      float r2 = 0.60 * g;
+      float rings = ring(r, r1, 0.03) + ring(r, r2, 0.024) * 0.7;
+      rings *= (1.0 - smoothstep(0.4, 1.0, uAge));
+      vec3 core = hotCore(r, ang, uColor2, 0.18, uSeed);
+      float coreA = smoothstep(0.18, 0.0, r);
+      float a = clamp((blade * 0.9 + coreline + rings + coreA) * grow * fade, 0.0, 1.0);
+      vec3 col = uColor2 * (blade * 2.6 + rings * 2.2 + 0.2)
+                 + vec3(1.0) * (coreline * 0.95 + rings * 0.4) + core;
+      col *= uIntensity;
+      if (a < 0.004) discard;
       gl_FragColor = vec4(col, a);
     }
   }

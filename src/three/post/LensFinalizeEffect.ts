@@ -104,7 +104,17 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, const in float depth,
     // desaturated (which would read as a flat box halo around them).
     float dist = linearDepth(depth);
     matte *= 1.0 - smoothstep(charDepth, charDepth + charDepthWidth, dist);
-    float strength = clamp(charClarity, 0.0, 1.0) * matte;
+    // Chroma gate: the grade pass already partly neutralised the fighter before
+    // bloom, so inside the matte the fighter reads as PARTLY desaturated while any
+    // co-planar background/prop at the same depth is still FULLY the arena hue.
+    // Without a true silhouette matte the ellipse catches that background and the
+    // un-tint hits it harder than the fighter, which reads as a desaturated box.
+    // Suppress the un-tint on near-fully-saturated pixels so only the (already
+    // partly neutral) subject is touched and the background box disappears.
+    float mx = max(max(col.r, col.g), col.b);
+    float sat = mx < 1e-4 ? 0.0 : (mx - min(min(col.r, col.g), col.b)) / mx;
+    float subject = 1.0 - smoothstep(0.88, 0.995, sat);
+    float strength = clamp(charClarity, 0.0, 1.0) * matte * subject;
     if (strength > 0.001) {
       float L = luma(col);
       vec3 chroma = col - L;                              // signed chroma about luma
@@ -140,7 +150,7 @@ export class LensFinalizeEffect extends Effect {
       ['camFar', new THREE.Uniform(100)],
       ['charDepth', new THREE.Uniform(13.0)],
       ['charDepthWidth', new THREE.Uniform(5.0)],
-      ['charKeyFin', new THREE.Uniform(1.18)],
+      ['charKeyFin', new THREE.Uniform(1.08)],
     ])
     super('LensFinalizeEffect', fragment, {
       attributes: EffectAttribute.CONVOLUTION | EffectAttribute.DEPTH,

@@ -331,7 +331,7 @@ export class PostPipeline implements Subsystem, RenderDriver {
       const hy = this.lastY
       this.projX(feetA)
       const fy = this.lastY
-      halfH = Math.max(0.18, Math.abs(hy - fy) * 0.5 * 1.5)
+      halfH = Math.max(0.16, Math.abs(hy - fy) * 0.5 * 1.18)
       this._charA.y = (hy + fy) * 0.5
     }
     const headB = anchors.get('fighter:b:head')
@@ -341,36 +341,38 @@ export class PostPipeline implements Subsystem, RenderDriver {
       const hy = this.lastY
       this.projX(feetB)
       const fy = this.lastY
-      halfH = Math.max(halfH, Math.abs(hy - fy) * 0.5 * 1.5)
+      halfH = Math.max(halfH, Math.abs(hy - fy) * 0.5 * 1.18)
       this._charB.y = (hy + fy) * 0.5
     }
 
-    // Horizontal extent from a fixed world offset around the chest. Kept generous
-    // so the ellipse reliably spans each fighter across lunge/crouch poses; the
-    // depth gate (below) is what keeps the far background at full arena grade, so
-    // a wide window here only ever affects pixels on the fighter plane.
+    // Horizontal extent from a fixed world offset around the chest. Hug the
+    // fighter core rather than the whole silhouette: because no true per-fighter
+    // matte exists, a wide window catches co-planar props/floor at the fighter
+    // distance (the depth gate can't separate them) and reads as a desaturated
+    // box. A tighter window keeps the treatment on the body where identity lives.
     this._pv.copy(chestA)
-    this._pv.x += 0.95
+    this._pv.x += 0.66
     this._pv.project(camera)
     const offx = this._pv.x * 0.5 + 0.5
-    let halfW = Math.abs(offx - cax) * 1.5
-    if (!(halfW > 0.02)) halfW = 0.12
-    halfW = Math.max(halfW, 0.11)
+    let halfW = Math.abs(offx - cax) * 1.08
+    if (!(halfW > 0.02)) halfW = 0.09
+    halfW = Math.max(halfW, 0.085)
     this._charHalf.set(halfW, halfH)
 
     // Distance from camera to the fighter plane, so the grade can depth-gate the
-    // matte and exclude the far background inside the power window. Span BOTH
-    // fighters (they can be at slightly different distances mid-move) with a wide
-    // falloff so neither drops out of the matte.
+    // matte and exclude the far background inside the power window. Gate TIGHT to
+    // the fighter plane: pass everything up to just behind the farther fighter,
+    // then ramp off fast so the wall/props a few units behind them keep the full
+    // arena grade (otherwise the elliptical window de-tints the backdrop and reads
+    // as a visible rectangular box around each fighter).
     const distA = this.ctx.camera.position.distanceTo(chestA)
     const distB = this.ctx.camera.position.distanceTo(chestB)
-    const nearDist = Math.min(distA, distB)
-    const spread = Math.abs(distA - distB)
-    this.grade.setCharDepth(nearDist + 2.5, spread + 9.0)
+    const farDist = Math.max(distA, distB)
+    this.grade.setCharDepth(farDist + 1.1, 2.4)
     this.grade.setCharMatte(this._charA, this._charB, this._charHalf)
 
     // The finalize pass re-asserts the same matte after bloom (see below).
-    this.finalize.setCharDepth(nearDist + 2.5, spread + 9.0)
+    this.finalize.setCharDepth(farDist + 1.1, 2.4)
     this.finalize.setCharMatte(this._charA, this._charB, this._charHalf)
   }
 

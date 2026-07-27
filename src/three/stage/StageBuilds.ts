@@ -792,7 +792,7 @@ function buildMonetization(b: StageBuild, cfg: StageConfig, flags: QualityFlags)
   b.onUpdate((t) => (board.mat.uniforms.uTime.value = t))
   // secondary data boards — nudged left of the big ticker so the wall isn't a
   // single centred stack
-  screenWall(b, 3, 1, 2.4, 1.5, new THREE.Vector3(-1.4, 4.6, -14.6), ['data', 'equalizer', 'data'], cfg.screen.hue, cfg.screen.hue2, 6)
+  screenWall(b, 3, 1, 2.4, 1.5, new THREE.Vector3(-1.4, 4.6, -14.6), ['data', 'ticker', 'data'], cfg.screen.hue, cfg.screen.hue2, 6)
   // gold columns — ASYMMETRIC colonnade: a deep three-column run receding on the
   // LEFT, a single tall column on the RIGHT, so the temple isn't mirrored.
   const colPlan: { sign: number; count: number }[] = [{ sign: -1, count: 3 }, { sign: 1, count: 1 }]
@@ -987,20 +987,21 @@ function buildIpoPrep(b: StageBuild, cfg: StageConfig, flags: QualityFlags) {
   // Thin fluttering slivers in gold/white/blue drift down across the hall and
   // wrap, so the stage reads as an IPO celebration, not an awards podium.
   if (flags.crowdCount > 0) {
-    const tapeColors = [0xffd60a, 0xfcbf49, 0xffffff, 0x9ecbff, 0xffe08a]
-    const N = 70
-    const geo = new THREE.PlaneGeometry(0.07, 0.28)
-    const seeds: { x: number; z: number; y0: number; sp: number; rot: number; sw: number }[] = []
+    const tapeColors = [0xffd60a, 0xfcbf49, 0xffffff, 0x9ecbff, 0xffe08a, 0xff6a6a, 0x8affc0]
+    const N = 140
+    const geo = new THREE.PlaneGeometry(0.11, 0.34)
+    const seeds: { x: number; z: number; y0: number; sp: number; rot: number; sw: number; sc: number }[] = []
     const tape = new THREE.InstancedMesh(geo, new THREE.MeshBasicMaterial({ vertexColors: false, toneMapped: false, side: THREE.DoubleSide }), N)
     const colr = new THREE.Color()
     for (let i = 0; i < N; i++) {
       seeds.push({
-        x: (Math.random() * 2 - 1) * 9.5,
-        z: -4 - Math.random() * 9,
+        x: (Math.random() * 2 - 1) * 11.0,
+        z: -3 - Math.random() * 11,
         y0: Math.random() * 13,
-        sp: 1.1 + Math.random() * 1.6,
+        sp: 1.0 + Math.random() * 1.8,
         rot: Math.random() * Math.PI,
-        sw: 0.6 + Math.random() * 1.4,
+        sw: 0.6 + Math.random() * 1.6,
+        sc: 0.7 + Math.random() * 0.9,
       })
       tape.setColorAt(i, colr.setHex(tapeColors[i % tapeColors.length]))
     }
@@ -1010,10 +1011,11 @@ function buildIpoPrep(b: StageBuild, cfg: StageConfig, flags: QualityFlags) {
       for (let i = 0; i < N; i++) {
         const s = seeds[i]
         const y = 13 - ((s.y0 + t * s.sp) % 13.5)
-        const sway = Math.sin(t * s.sw + s.rot) * 0.4
+        const sway = Math.sin(t * s.sw + s.rot) * 0.7
         pos.set(s.x + sway, y, s.z)
         eu.set(t * s.sw * 1.6 + s.rot, t * s.sp + s.rot, s.rot * 2)
         qq.setFromEuler(eu)
+        sc.set(s.sc, s.sc, s.sc)
         m4.compose(pos, qq, sc)
         tape.setMatrixAt(i, m4)
       }

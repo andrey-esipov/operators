@@ -176,10 +176,13 @@ export const STAGE_GRADES: Record<ScenarioId, StageGrade> = {
     anamorphicTint: [0.5, 0.7, 1.0],
     hazeColor: [0.34, 0.52, 0.6],
     hazeAmount: 0.32,
-    // Teal/cyan-dominant arena light washes both fighters cyan; strip the shared
-    // cyan cast so warm skin/hair (orthogonal to cyan) reads them as separate.
-    envTint: [0.3, 0.72, 1.0],
-    charUntint: 0.6,
+    // Teal/cyan-dominant arena light washes both fighters toward GREEN (teal
+    // ambient boosts skin's green channel), not pure cyan — so the un-tint axis
+    // must include green to strip it, otherwise faces read green. Point envTint
+    // green-cyan and un-tint firmly; warm hair and purple denim (both orthogonal
+    // to green-cyan) survive and read the two fighters apart.
+    envTint: [0.42, 0.95, 0.9],
+    charUntint: 0.74,
   }),
 
   // Stalled, airless. Flat, faintly sickly green-grey — the grind of the
@@ -212,7 +215,7 @@ export const STAGE_GRADES: Record<ScenarioId, StageGrade> = {
     // Magenta/purple floor and blocks cast the fighters' lower halves violet so
     // the legs dissolve into the arena; strip the shared magenta cast.
     envTint: [0.85, 0.35, 1.0],
-    charUntint: 0.5,
+    charUntint: 0.64,
   }),
 
   // Neon future. Cyan/magenta bi-chromatic, cool and high-contrast with hot
@@ -245,8 +248,11 @@ export const STAGE_GRADES: Record<ScenarioId, StageGrade> = {
     anamorphicTint: [0.5, 0.8, 1.0],
     hazeColor: [0.28, 0.44, 0.66],
     hazeAmount: 0.38,
-    envTint: [0.3, 0.5, 1.0],
-    charUntint: 0.62,
+    // Dark teal + hologram-orb light greens both fighters' skin; widen the
+    // un-tint axis toward green (not just blue) so faces neutralise instead of
+    // reading green, while warm skin/hair and any non-teal albedo survive.
+    envTint: [0.4, 0.8, 0.98],
+    charUntint: 0.74,
   }),
 
   // Money. Warm gold with rich green undertones, luxe and slightly opulent —
@@ -281,7 +287,7 @@ export const STAGE_GRADES: Record<ScenarioId, StageGrade> = {
     // A hot magenta mid-band washes both fighters' torsos violet; strip the
     // shared magenta cast so their own garment/skin chroma reads them apart.
     envTint: [0.9, 0.32, 0.95],
-    charUntint: 0.55,
+    charUntint: 0.66,
   }),
 
   // Crisis. Smouldering red/orange danger, crushed cool shadows, high

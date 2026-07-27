@@ -249,12 +249,15 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, const in float depth,
     // Neutral fill floor: on a dark stage whose dominant tint matches the
     // fighter (ai-native / ipo-prep blue, crisis red) a lift alone just makes a
     // brighter version of the SAME hue, so the subject still dissolves. A small
-    // achromatic fill added ONLY to near-black fighter pixels pushes them toward
+    // achromatic fill added to under-lit fighter pixels pushes them toward
     // neutral grey — which reads instantly against a saturated coloured arena —
     // and self-limits to zero on already-lit fighters, so bright stages are
-    // untouched.
-    float dk = 1.0 - smoothstep(0.06, 0.42, luma(charLit));
-    charLit += charFill * dk;
+    // untouched. Scaled by charUntint so the strongly monochrome stages (crisis
+    // red, where the un-tint has almost no orthogonal chroma to reveal and the
+    // fill is the ONLY separation lever) get a firmer neutral push and their two
+    // fighters split by VALUE, while multi-hue stages (charUntint 0) are untouched.
+    float dk = 1.0 - smoothstep(0.06, 0.52, luma(charLit));
+    charLit += charFill * dk * (1.0 + charUntint * 0.7);
 
     // Subject pop so the characters read as the most saturated things in frame.
     // This runs BEFORE the arena un-tint so it boosts the fighter's OWN identity
@@ -309,13 +312,24 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, const in float depth,
 
   // ── depth-weighted aerial perspective (never touches the fighters) ─────
   if (hazeAmount > 0.001) {
-    float fog = smoothstep(hazeStart, hazeEnd, dist) * hazeAmount * (1.0 - matte);
-    // Far → lifts toward the haze tint and loses local contrast/saturation, the
-    // near/far separation that builds real depth (near stays punchy + darker,
-    // far reads lighter + flatter, i.e. classic aerial perspective).
-    vec3 hazed = mix(c, hazeColor, 0.6);
-    float lo = luma(hazed);
-    hazed = mix(vec3(lo), hazed, 0.7);
+    // Depth alone gates the haze: hazeStart sits WELL BEHIND the fighter plane
+    // (~13 units) so the subject and the co-planar mid-ground stay perfectly
+    // clear, and only the genuinely-far background (walls, skyline) fogs. This
+    // is a monotonic function of depth, so it can never draw a fighter-shaped
+    // clear window (the old (1 - matte) carve did — it stamped an elliptical
+    // halo into the fog around each fighter). Removing the matte term deletes
+    // that artifact entirely; the depth gate is the only protection needed.
+    float fog = smoothstep(hazeStart, hazeEnd, dist) * hazeAmount;
+    // Aerial perspective is DESATURATION-forward, not a grey wash: far loses
+    // its local chroma/contrast and drifts only faintly toward the atmosphere
+    // tint. A hard lift to a bright haze colour produced a milky rectangular
+    // band where a flat far wall crossed the ramp (worst on ipo-prep, whose
+    // back wall is already bright), so the drift is kept small and the chroma
+    // drain does the depth work — near stays punchy + saturated, far reads
+    // flatter + desaturated, i.e. classic aerial perspective without a band.
+    float lo = luma(c);
+    vec3 hazed = mix(c, vec3(lo), 0.6);         // drain far chroma (depth cue)
+    hazed = mix(hazed, hazeColor, 0.1);          // faint drift toward atmosphere
     c = mix(c, hazed, fog);
   }
 
@@ -402,8 +416,8 @@ export class MasterGradeEffect extends Effect {
       // depth haze
       ['hazeColor', new THREE.Uniform(new THREE.Vector3(0.5, 0.55, 0.62))],
       ['hazeAmount', new THREE.Uniform(0.35)],
-      ['hazeStart', new THREE.Uniform(12)],
-      ['hazeEnd', new THREE.Uniform(54)],
+      ['hazeStart', new THREE.Uniform(26)],
+      ['hazeEnd', new THREE.Uniform(95)],
       ['camNear', new THREE.Uniform(0.1)],
       ['camFar', new THREE.Uniform(320)],
     ])

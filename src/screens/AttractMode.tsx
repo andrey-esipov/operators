@@ -6,6 +6,14 @@ import { PULL_QUOTES } from '../data/pull-quotes'
 import { Sprite } from '../components/Sprite'
 import { Sfx } from '../lib/audio'
 import { Announcer } from '../lib/announcer'
+import './menu/menu.css'
+
+// AAA type tokens (defined on .am-root in menu.css). Referencing them
+// inline keeps every scene on the same industrial display/UI faces instead
+// of the pixel webfont the old attract reel used.
+const DISPLAY = 'var(--mm-display)'
+const UI = 'var(--mm-ui)'
+const BODY = 'var(--mm-body)'
 
 interface Props {
   onExit: () => void
@@ -26,7 +34,7 @@ type Scene =
  * via the parent's onExit callback wired to a global pointer listener.
  *
  * Scenes:
- *   1. Title beat        — "OPERATORS" logo with subtitle
+ *   1. Title beat        — "OPERATORS" logotype with subtitle
  *   2. Matchup            — random Fighter A vs Fighter B in a stage
  *   3. K.O. flash         — "K.O.!" banner over a winner pose
  *   4. Quote pull-card    — random curated quote
@@ -73,9 +81,7 @@ export function AttractMode({ onExit }: Props) {
   const scene = scenes[sceneIdx % scenes.length]
 
   // Advance scenes. Stats + quote scenes hold longer than the default so
-  // the viewer can actually read them. Stats keeps its staggered reveal
-  // (~0.8s for four cells at 0.18s stagger), then dwells for ~5.2s of a
-  // 6s scene — readable but not overlong.
+  // the viewer can actually read them.
   useEffect(() => {
     const duration =
       scene.kind === 'ko' ? 3000
@@ -103,24 +109,12 @@ export function AttractMode({ onExit }: Props) {
 
   return (
     <div
-      className="relative w-full h-full overflow-hidden cursor-pointer"
+      className="am-root"
       onClick={onExit}
       onKeyDown={onExit}
       tabIndex={-1}
-      style={{
-        background: 'radial-gradient(circle at 50% 30%, #1A0F2E 0%, #0F0A1A 100%)',
-      }}
+      style={{ background: 'radial-gradient(circle at 50% 32%, #150C26 0%, #07050E 100%)' }}
     >
-      {/* CRT flicker overlay always present */}
-      <div
-        className="pointer-events-none absolute inset-0"
-        style={{
-          background: 'repeating-linear-gradient(0deg, rgba(0,0,0,0.15) 0px, transparent 2px, transparent 4px)',
-          opacity: 0.4,
-          mixBlendMode: 'multiply',
-        }}
-      />
-
       {scene.kind === 'title' && <TitleScene />}
       {scene.kind === 'matchup' && (
         <MatchupScene
@@ -136,16 +130,20 @@ export function AttractMode({ onExit }: Props) {
       {scene.kind === 'stats' && <StatsScene />}
       {scene.kind === 'roster' && <RosterScene />}
 
+      {/* Atmosphere overlays over every scene */}
+      <div className="am-vignette" aria-hidden />
+      <div className="am-scan" aria-hidden />
+      <div className="am-grain" aria-hidden />
+
       {/* Constant PRESS START prompt at bottom */}
       <div
-        className="absolute left-0 right-0 bottom-6 z-30 text-center font-display text-base tracking-widest pointer-events-none"
+        className="am-prompt"
         style={{
-          color: '#FFD60A',
-          textShadow: '3px 3px 0 black, 0 0 18px #F77F00',
-          animation: 'flash 1s linear infinite',
+          position: 'absolute', left: 0, right: 0, bottom: 30, zIndex: 41,
+          textAlign: 'center', fontSize: 18, pointerEvents: 'none',
         }}
       >
-        ◇ CLICK ANYWHERE TO PLAY ◇
+        PRESS START
       </div>
     </div>
   )
@@ -156,52 +154,24 @@ export function AttractMode({ onExit }: Props) {
 function TitleScene() {
   return (
     <div className="relative w-full h-full flex flex-col items-center justify-center">
-      {/* Hero artwork if present */}
+      {/* Hero artwork if present, driven dark so the logotype owns the frame */}
       <img
         src="/menu/title-hero.png"
         alt=""
         onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')}
         className="absolute inset-0 w-full h-full object-cover"
-        style={{
-          imageRendering: 'pixelated',
-          opacity: 0.7,
-          mixBlendMode: 'screen',
-        }}
+        style={{ imageRendering: 'pixelated', opacity: 0.34, filter: 'brightness(0.7) saturate(1.1)' }}
       />
       <div
         className="absolute inset-0"
-        style={{ background: 'radial-gradient(ellipse, transparent 30%, rgba(0,0,0,0.85) 100%)' }}
+        style={{ background: 'radial-gradient(ellipse at 50% 46%, transparent 24%, rgba(4,2,10,0.9) 100%)' }}
       />
-      <div
-        className="relative z-10 font-display tracking-widest"
-        style={{
-          color: '#FFD60A',
-          fontSize: 110,
-          letterSpacing: '0.1em',
-          textShadow: '8px 8px 0 black, 0 0 32px #F77F00, 0 0 64px #E63946',
-          animation: 'titlePulse 2s ease-in-out infinite',
-          transform: 'skewX(-3deg)',
-        }}
-      >
+      <div className="am-eyebrow relative z-10" style={{ fontSize: 15, marginBottom: 18 }}>
+        A Tactical Fighter on Lenny&rsquo;s Podcast
+      </div>
+      <div className="am-logo am-anim relative z-10" style={{ fontSize: 150 }}>
         OPERATORS
       </div>
-      <div
-        className="relative z-10 font-display tracking-widest mt-3"
-        style={{
-          color: 'white',
-          fontSize: 14,
-          letterSpacing: '0.4em',
-          textShadow: '2px 2px 0 black',
-        }}
-      >
-        ★ A TACTICAL FIGHTER ON LENNY'S PODCAST ★
-      </div>
-      <style>{`
-        @keyframes titlePulse {
-          0%, 100% { transform: skewX(-3deg) scale(1) }
-          50%      { transform: skewX(-3deg) scale(1.04) }
-        }
-      `}</style>
     </div>
   )
 }
@@ -222,22 +192,19 @@ function MatchupScene({
         alt=""
         onError={(e) => ((e.target as HTMLImageElement).style.opacity = '0')}
         className="absolute inset-0 w-full h-full object-cover"
-        style={{ imageRendering: 'pixelated', filter: 'brightness(0.7)' }}
+        style={{ imageRendering: 'pixelated', filter: 'brightness(0.5) saturate(0.9)' }}
       />
-      <div className="absolute inset-0" style={{ background: 'radial-gradient(ellipse at center, transparent 30%, rgba(0,0,0,0.7) 100%)' }} />
+      <div className="absolute inset-0" style={{ background: 'radial-gradient(ellipse at center, transparent 26%, rgba(4,2,10,0.82) 100%)' }} />
 
       {/* Stage label */}
       <div
-        className="absolute top-12 left-0 right-0 text-center font-display"
+        className="am-label absolute left-0 right-0 text-center"
         style={{
-          color: stage.accent,
-          fontSize: 24,
-          letterSpacing: '0.3em',
-          textShadow: '4px 4px 0 black',
+          top: 54, color: stage.accent, fontSize: 20, letterSpacing: '0.32em',
           animation: 'banner-in 0.6s ease-out',
         }}
       >
-        {stage.icon} {stage.name}
+        {stage.icon}&nbsp;&nbsp;{stage.name}
       </div>
 
       {/* Fighters facing off */}
@@ -245,41 +212,28 @@ function MatchupScene({
         <div style={{ width: 260, height: 340 }} className="idle-bob">
           <Sprite fighter={a} side="a" state="stance" />
           <div
-            className="absolute top-0 left-0 right-0 text-center font-display"
-            style={{ color: a.accent, fontSize: 20, letterSpacing: '0.2em', textShadow: '2px 2px 0 black', transform: 'translateY(-40px)' }}
+            className="absolute top-0 left-0 right-0 text-center"
+            style={{ fontFamily: UI, fontWeight: 700, color: a.accent, fontSize: 22, letterSpacing: '0.14em', textShadow: '0 2px 10px #000', transform: 'translateY(-40px)' }}
           >
             {a.shortName}
           </div>
         </div>
         <div
-          className="font-display"
-          style={{
-            color: '#FFD60A',
-            fontSize: 64,
-            letterSpacing: '0.05em',
-            textShadow: '4px 4px 0 black, 0 0 24px #F77F00',
-            animation: 'titlePulse 1.4s ease-in-out infinite',
-          }}
+          className="am-banner"
+          style={{ fontSize: 82, animation: 'attract-pop-in 0.5s cubic-bezier(0.2,0.9,0.3,1)' }}
         >
           VS
         </div>
         <div style={{ width: 260, height: 340 }} className="idle-bob">
           <Sprite fighter={b} side="b" state="stance" />
           <div
-            className="absolute top-0 left-0 right-0 text-center font-display"
-            style={{ color: b.accent, fontSize: 20, letterSpacing: '0.2em', textShadow: '2px 2px 0 black', transform: 'translateY(-40px)' }}
+            className="absolute top-0 left-0 right-0 text-center"
+            style={{ fontFamily: UI, fontWeight: 700, color: b.accent, fontSize: 22, letterSpacing: '0.14em', textShadow: '0 2px 10px #000', transform: 'translateY(-40px)' }}
           >
             {b.shortName}
           </div>
         </div>
       </div>
-
-      <style>{`
-        @keyframes titlePulse {
-          0%, 100% { transform: scale(1) }
-          50%      { transform: scale(1.08) }
-        }
-      `}</style>
     </div>
   )
 }
@@ -290,7 +244,7 @@ function KOScene({ winner, loser }: { winner: string; loser: string }) {
   return (
     <div
       className="relative w-full h-full"
-      style={{ background: 'radial-gradient(ellipse, #1A0F2E 0%, #0F0A1A 100%)' }}
+      style={{ background: 'radial-gradient(ellipse at 50% 40%, #150C26 0%, #07050E 100%)' }}
     >
       {/* Defeated fighter on the side */}
       <div className="absolute left-8 bottom-12 opacity-50" style={{ width: 240, height: 320 }}>
@@ -302,31 +256,21 @@ function KOScene({ winner, loser }: { winner: string; loser: string }) {
         <Sprite fighter={w} side="a" state="win" />
       </div>
 
-      {/* "K.O." text */}
+      {/* "K.O." banner */}
       <div
-        className="absolute left-0 right-0 text-center font-display"
+        className="am-banner absolute left-0 right-0 text-center"
         style={{
-          top: '24%',
-          color: '#FFD60A',
-          fontSize: 140,
-          letterSpacing: '0.18em',
-          textShadow: '8px 8px 0 black, 0 0 32px #F77F00, 0 0 64px #E63946',
-          transform: 'skewX(-6deg)',
+          top: '22%', fontSize: 168, letterSpacing: '0.02em',
+          textShadow: '0 0 40px rgba(255,46,136,0.7), 0 6px 0 rgba(0,0,0,0.6)',
           animation: 'koBannerCrash 0.6s cubic-bezier(0.2, 0.9, 0.3, 1)',
         }}
       >
-        K.O.!
+        K.O.
       </div>
 
       <div
-        className="absolute left-0 right-0 text-center font-display"
-        style={{
-          top: '46%',
-          color: w.accent,
-          fontSize: 28,
-          letterSpacing: '0.35em',
-          textShadow: '4px 4px 0 black',
-        }}
+        className="am-label absolute left-0 right-0 text-center"
+        style={{ top: '50%', color: w.accent, fontSize: 26, letterSpacing: '0.34em' }}
       >
         {w.shortName} WINS
       </div>
@@ -338,12 +282,12 @@ function KOScene({ winner, loser }: { winner: string; loser: string }) {
           const speed = 25 + (i % 18)
           const dx = Math.cos(angle) * speed
           const dy = Math.sin(angle) * speed - 12
-          const hue = ['#FFD60A', '#F77F00', '#E63946', '#FFFFFF'][i % 4]
+          const hue = ['#FFC23D', '#FF7E10', '#FF2E88', '#FFFFFF'][i % 4]
           return (
             <rect
               key={i}
               x={50}
-              y={36}
+              y={34}
               width={(i % 3) + 1}
               height={(i % 3) + 1}
               fill={hue}
@@ -369,41 +313,37 @@ function QuoteScene({ fighterId, quote, episode }: { fighterId: string; quote: s
       {/* Background fighter silhouette */}
       <div
         className="absolute left-0 right-0 flex items-center justify-center pointer-events-none"
-        style={{ top: '14%', opacity: 0.18 }}
+        style={{ top: '12%', opacity: 0.14 }}
       >
         <div style={{ width: 320, height: 460 }}>
           <Sprite fighter={f} side="a" state="win" />
         </div>
       </div>
 
-      {/* Quote card. Note: we deliberately do NOT use a CSS keyframe
-       *  animation here — in React 18 dev (StrictMode), the component
-       *  mounts → unmounts → remounts on first render, which re-fires
-       *  the keyframe and causes a visible flash/disappear/reappear. A
-       *  static element renders consistently in both dev and prod. */}
+      {/* Quote card. No entrance keyframe on purpose — StrictMode's
+       *  mount→unmount→remount would re-fire it and flash the card. */}
       <div
-        className="relative z-10 max-w-3xl px-8 py-6"
+        className="relative z-10 max-w-3xl"
         style={{
-          background: 'rgba(15,10,26,0.85)',
-          border: `3px solid ${f.accent}`,
-          boxShadow: `0 0 36px ${f.accent}77, inset -2px -2px 0 rgba(0,0,0,0.5), inset 2px 2px 0 rgba(255,255,255,0.1)`,
+          padding: '38px 44px',
+          background: 'linear-gradient(180deg, rgba(12,7,22,0.9), rgba(7,4,14,0.94))',
+          borderLeft: `4px solid ${f.accent}`,
+          boxShadow: `0 30px 80px rgba(0,0,0,0.6), -18px 0 60px ${f.accent}22`,
+          backdropFilter: 'blur(2px)',
         }}
       >
         <div
-          className="font-display text-[10px] tracking-widest mb-3"
-          style={{ color: f.accent }}
+          style={{ fontFamily: UI, fontWeight: 700, fontSize: 12, letterSpacing: '0.28em', color: f.accent, marginBottom: 16, textTransform: 'uppercase' }}
         >
-          ◇ VERBATIM FROM {episode.toUpperCase()}
+          Verbatim from {episode}
         </div>
         <p
-          className="font-body italic text-3xl text-white leading-snug"
-          style={{ textShadow: '2px 2px 0 black' }}
+          style={{ fontFamily: BODY, fontStyle: 'italic', fontSize: 34, lineHeight: 1.28, color: '#F5F0FF', textShadow: '0 2px 12px #000' }}
         >
           &ldquo;{quote}&rdquo;
         </p>
         <div
-          className="font-display text-[12px] tracking-widest mt-4"
-          style={{ color: f.accent }}
+          style={{ fontFamily: UI, fontWeight: 700, fontSize: 15, letterSpacing: '0.22em', color: f.accent, marginTop: 22, textTransform: 'uppercase' }}
         >
           — {f.shortName}
         </div>
@@ -415,11 +355,6 @@ function QuoteScene({ fighterId, quote, episode }: { fighterId: string; quote: s
 function StatsScene() {
   // Derive counts from the canonical data so this never drifts as the
   // roster grows. Frameworks = every move + every ult across all fighters.
-  // Voice lines = 6 fixed slots per fighter + the trash-talk array length.
-  // Cut from 6 stats to 4 — the previous "GAME MODES: 6" was stale after
-  // the menu consolidation (PR #35), and "PATTERN MATCHES: ∞" was filler
-  // that crowded the readable stats off the screen. Four stats, big and
-  // legible, hold for the full 8s scene duration.
   const frameworks = FIGHTERS.reduce((sum, f) => sum + f.moves.length + 1, 0)
   const voiceLines = FIGHTERS.reduce(
     (sum, f) => sum + 6 + (f.voiceLines.trash?.length ?? 0),
@@ -434,17 +369,12 @@ function StatsScene() {
   return (
     <div className="relative w-full h-full flex flex-col items-center justify-center px-12">
       <div
-        className="font-display tracking-widest mb-10"
-        style={{
-          color: '#FFD60A',
-          fontSize: 32,
-          letterSpacing: '0.3em',
-          textShadow: '4px 4px 0 black, 0 0 24px #F77F00',
-        }}
+        className="am-label"
+        style={{ color: 'var(--mm-amber)', fontSize: 22, letterSpacing: '0.34em', marginBottom: 44 }}
       >
-        FROM LENNY'S ARCHIVE
+        From Lenny&rsquo;s Archive
       </div>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-x-12 gap-y-10">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-x-16 gap-y-10">
         {stats.map((s, i) => (
           <div
             key={s.label}
@@ -452,19 +382,16 @@ function StatsScene() {
             style={{ animation: `attract-pop-in 0.55s ease-out ${i * 0.18}s both` }}
           >
             <div
-              className="font-num tabular-nums"
               style={{
-                color: 'white',
-                fontSize: 96,
-                lineHeight: 1,
-                textShadow: '4px 4px 0 black, 0 0 18px #F72585',
+                fontFamily: DISPLAY, color: '#F5F0FF', fontSize: 108, lineHeight: 1,
+                transform: 'skewX(-6deg)',
+                textShadow: '0 0 26px rgba(255,46,136,0.45), 0 6px 0 rgba(0,0,0,0.5)',
               }}
             >
               {s.num}
             </div>
             <div
-              className="font-display text-xs tracking-widest mt-3"
-              style={{ color: '#FCBF49', letterSpacing: '0.3em' }}
+              style={{ fontFamily: UI, fontWeight: 700, fontSize: 13, letterSpacing: '0.3em', color: 'var(--mm-amber)', marginTop: 14 }}
             >
               {s.label}
             </div>
@@ -479,15 +406,10 @@ function RosterScene() {
   return (
     <div className="relative w-full h-full flex flex-col items-center justify-center">
       <div
-        className="font-display tracking-widest mb-6"
-        style={{
-          color: '#FFD60A',
-          fontSize: 24,
-          letterSpacing: '0.3em',
-          textShadow: '4px 4px 0 black',
-        }}
+        className="am-label"
+        style={{ color: 'var(--mm-amber)', fontSize: 22, letterSpacing: '0.32em', marginBottom: 26 }}
       >
-        {FIGHTERS.length} OPERATORS
+        {FIGHTERS.length} Operators
       </div>
       <div className="grid grid-cols-7 gap-2 max-w-4xl">
         {FIGHTERS.map((f, i) => (
@@ -495,16 +417,16 @@ function RosterScene() {
             key={f.id}
             className="aspect-square relative"
             style={{
-              background: `linear-gradient(180deg, ${f.accent}33, ${f.accent}11)`,
-              border: `2px solid ${f.accent}88`,
-              boxShadow: 'inset -2px -2px 0 rgba(0,0,0,0.4)',
+              background: `linear-gradient(180deg, ${f.accent}30, ${f.accent}0D)`,
+              border: `1px solid ${f.accent}77`,
+              boxShadow: 'inset 0 -18px 30px rgba(0,0,0,0.5)',
               animation: `banner-in 0.5s ease-out ${(i * 0.04)}s both`,
             }}
           >
             <Sprite fighter={f} side="a" state="stance" />
             <div
-              className="absolute left-0 right-0 bottom-0 font-display text-[7px] text-center py-0.5 text-white truncate"
-              style={{ background: 'rgba(0,0,0,0.78)', letterSpacing: '0.5px' }}
+              className="absolute left-0 right-0 bottom-0 text-center truncate"
+              style={{ fontFamily: UI, fontWeight: 700, fontSize: 8, letterSpacing: '0.06em', color: '#fff', padding: '2px 0', background: 'rgba(4,2,10,0.82)' }}
             >
               {f.shortName}
             </div>

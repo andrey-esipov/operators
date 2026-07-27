@@ -1,23 +1,21 @@
 import { useEffect, useState } from 'react'
-import { Logo } from '../components/Logo'
 import { Sfx } from '../lib/audio'
+import { FIGHTERS } from '../data/fighters'
 import { SCENARIO_ORDER } from '../data/scenarios'
+import './menu/menu.css'
 
 /**
  * Arcade boot gate — the first thing the player sees on a cold load.
  *
- * It exists for two reasons that happen to be the same reason. (1) Browsers
- * block audio until a real user gesture, so the menu always opened in dead
- * silence; (2) SF II (and every cab in the arcade) boots to a title screen
- * that waits for you to PRESS START. Turning the required first click into a
- * deliberate "press start" makes the silence intentional, and the press
- * unlocks the soundtrack so the Attract reel that follows finally has music.
+ * Browsers block audio until a real user gesture, so the menu always
+ * opened in dead silence; and every arcade cab boots to a title that
+ * waits for PRESS START. Turning the required first click into a
+ * deliberate "press start" makes the silence intentional and unlocks the
+ * soundtrack for the Attract reel that follows.
  *
- * Press start → caller flips into the menu's Attract mode (with sound). The
- * next input there drops the player into the real menu, exactly as before.
+ * Press start → caller flips into the menu's Attract mode (with sound).
  */
 export function StartScreen({ onStart }: { onStart: () => void }) {
-  // Any key also starts — matches the click/tap affordance on the container.
   useEffect(() => {
     function onKey() {
       Sfx.menuSelect()
@@ -27,10 +25,9 @@ export function StartScreen({ onStart }: { onStart: () => void }) {
     return () => window.removeEventListener('keydown', onKey)
   }, [onStart])
 
-  // Slowly cycle the fight stages behind the title, heavily faded so the
-  // prompt stays legible. Cross-fade by stacking all stages and toggling
-  // opacity — they're reused by the Attract reel right after, so loading
-  // them here also warms the cache.
+  // Slow cross-fading stage slideshow behind the title, heavily graded so
+  // the wordmark and prompt stay legible. Preloading the stages here also
+  // warms the cache for the Attract reel that follows.
   const [stageIdx, setStageIdx] = useState(0)
   useEffect(() => {
     const id = setInterval(() => {
@@ -44,16 +41,17 @@ export function StartScreen({ onStart }: { onStart: () => void }) {
     onStart()
   }
 
+  const frameworks = FIGHTERS.reduce((s, f) => s + f.moves.length + 1, 0)
+
   return (
     <div
       onClick={handlePress}
       role="button"
       tabIndex={0}
       aria-label="Press start"
-      className="fixed inset-0 flex flex-col items-center justify-center cursor-pointer select-none overflow-hidden"
-      style={{ background: 'radial-gradient(ellipse at center, #1A1230 0%, #0F0A1A 70%)' }}
+      className="ss-root"
     >
-      {/* Faded cross-fading stage slideshow */}
+      {/* Cross-fading stage backdrop */}
       {SCENARIO_ORDER.map((id, i) => (
         <img
           key={id}
@@ -61,74 +59,29 @@ export function StartScreen({ onStart }: { onStart: () => void }) {
           alt=""
           aria-hidden
           decoding="async"
-          className="absolute inset-0 w-full h-full object-cover pointer-events-none"
-          style={{
-            opacity: i === stageIdx ? 0.5 : 0,
-            transition: 'opacity 1.8s ease-in-out',
-            filter: 'blur(1px) saturate(1)',
-          }}
+          className={`ss-bg ${i === stageIdx ? 'ss-bg-anim' : ''}`}
+          style={{ opacity: i === stageIdx ? 0.55 : 0 }}
         />
       ))}
-      {/* Darken + vignette so the title and prompt stay readable over any
-          stage. Kept light at the center so the scene reads through; darker
-          at the edges to frame it and anchor the text. */}
-      <div
-        className="absolute inset-0 pointer-events-none"
-        style={{
-          background:
-            'radial-gradient(ellipse at center, rgba(15,10,26,0.28) 0%, rgba(15,10,26,0.6) 65%, rgba(15,10,26,0.85) 100%)',
-        }}
-      />
+      <div className="ss-grade" />
+      <div className="ss-scan" />
+      <div className="ss-grain" />
 
-      {/* ── Foreground content ── */}
-      <div className="relative z-10 flex flex-col items-center">
-        {/* Title wordmark with a slow breathing glow. The arbitrary variant
-            forces the SVG to scale to the container width so it never
-            overflows on narrow / short viewports. */}
-        <div className="start-title-glow w-full max-w-[960px] px-6 [&>svg]:w-full [&>svg]:h-auto">
-          <Logo size={1.4} />
-        </div>
-
-        {/* The marquee prompt — large, pulsating call-to-action */}
-        <div
-          className="press-start-pulse"
-          style={{
-            marginTop: 96,
-            fontFamily: 'Press Start 2P, monospace',
-            fontSize: 64,
-            letterSpacing: 5,
-            color: '#FFD60A',
-          }}
-        >
-          PRESS START
-        </div>
-
-        <div
-          className="mt-8"
-          style={{
-            fontFamily: 'Press Start 2P, monospace',
-            fontSize: 15,
-            letterSpacing: 2,
-            color: '#C4ABF0',
-            textShadow: '0 2px 6px rgba(0,0,0,0.9)',
-          }}
-        >
-          CLICK ANYWHERE · OR PRESS ANY KEY
-        </div>
+      <div className="ss-corners" aria-hidden>
+        <span /><span /><span /><span />
       </div>
 
-      {/* Arcade footer strip */}
-      <div
-        className="absolute bottom-7 left-0 right-0 text-center z-10"
-        style={{
-          fontFamily: 'Press Start 2P, monospace',
-          fontSize: 12,
-          letterSpacing: 2,
-          color: '#9D86C4',
-          textShadow: '0 2px 6px rgba(0,0,0,0.9)',
-        }}
-      >
-        INSERT COIN · 64 OPERATORS · 320 FRAMEWORKS · #LENNYSBUILDATHON
+      <div className="ss-content">
+        <div className="ss-eyebrow">A Tactical Fighter on Lenny&rsquo;s Podcast</div>
+        <h1 className="ss-logo" data-text="OPERATORS">OPERATORS</h1>
+        <div className="ss-rule" />
+        <div className="ss-cta ss-cta-anim">PRESS START</div>
+        <div className="ss-sub">Click anywhere · or press any key</div>
+      </div>
+
+      <div className="ss-foot">
+        <span className="dot">●</span> Insert Coin &nbsp;·&nbsp; {FIGHTERS.length} Operators
+        &nbsp;·&nbsp; {frameworks} Frameworks &nbsp;·&nbsp; #LennysBuildathon
       </div>
     </div>
   )

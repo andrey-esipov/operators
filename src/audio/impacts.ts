@@ -158,57 +158,83 @@ function oneHit(
   }
 
   // 2) BODY — pitch-swept thump. Delayed ~1.6ms so the crack owns the first
-  //    sample. Built as a MODAL body (fundamental + inharmonic partner that
-  //    beats) with a slow vibrato + a broadband noise bed that rides the FULL
-  //    decay, so the tail is a physical thwack, not a clean damped sine rail.
+  //    sample. The tonal core (fundamental + inharmonic partner) decays FAST so
+  //    it delivers a thwack, NOT a ringing sine rail; a mono, irregularly-
+  //    modulated noise bed then fills the WHOLE remaining decay so the tail
+  //    reads as physical debris/tearing rather than a clean damped oscillator.
   {
     const b = spec.body
     const bWhen = when + 0.0016
+    const tonalDur = b.dur * 0.5 // short tonal thwack
     const { osc, gain } = oscVoice(ctx, b.type, b.f0)
     osc.frequency.setValueAtTime(b.f0, bWhen)
-    osc.frequency.exponentialRampToValueAtTime(Math.max(20, b.f1), bWhen + b.dur)
-    // vibrato — a few cents of wobble so the tone isn't a static rail
+    osc.frequency.exponentialRampToValueAtTime(Math.max(20, b.f1), bWhen + tonalDur)
+    // vibrato — a few cents of wobble so even the short tone isn't a static rail
     const vib = ctx.createOscillator(); vib.type = 'sine'; vib.frequency.value = 7 + (seed % 5)
-    const vibG = ctx.createGain(); vibG.gain.value = b.f0 * 0.012
+    const vibG = ctx.createGain(); vibG.gain.value = b.f0 * 0.014
     vib.connect(vibG); vibG.connect(osc.frequency)
-    vib.start(bWhen); vib.stop(bWhen + b.dur + 0.02)
+    vib.start(bWhen); vib.stop(bWhen + tonalDur + 0.02)
     gain.connect(g)
     gain.gain.setValueAtTime(0.0001, bWhen)
     gain.gain.linearRampToValueAtTime(b.level, bWhen + 0.004)
-    gain.gain.exponentialRampToValueAtTime(0.0001, bWhen + b.dur)
-    osc.start(bWhen); osc.stop(bWhen + b.dur + 0.02)
-    end = Math.max(end, bWhen + b.dur)
+    gain.gain.exponentialRampToValueAtTime(0.0001, bWhen + tonalDur)
+    osc.start(bWhen); osc.stop(bWhen + tonalDur + 0.02)
+    end = Math.max(end, bWhen + tonalDur)
 
     if (b.partial && b.partialLevel) {
-      // inharmonic ratio (non-integer) → beating against the fundamental.
+      // inharmonic ratio (non-integer) → beating; also decays fast.
       const ratio = b.partial * 0.987
       const p2 = oscVoice(ctx, 'sine', b.f0 * ratio)
       p2.osc.frequency.setValueAtTime(b.f0 * ratio, bWhen)
-      p2.osc.frequency.exponentialRampToValueAtTime(Math.max(30, b.f1 * ratio), bWhen + b.dur * 0.85)
+      p2.osc.frequency.exponentialRampToValueAtTime(Math.max(30, b.f1 * ratio), bWhen + tonalDur * 0.8)
       p2.gain.connect(g)
       p2.gain.gain.setValueAtTime(0.0001, bWhen)
       p2.gain.gain.linearRampToValueAtTime(b.partialLevel, bWhen + 0.004)
-      p2.gain.gain.exponentialRampToValueAtTime(0.0001, bWhen + b.dur * 0.85)
-      p2.osc.start(bWhen); p2.osc.stop(bWhen + b.dur * 0.85 + 0.02)
+      p2.gain.gain.exponentialRampToValueAtTime(0.0001, bWhen + tonalDur * 0.7)
+      p2.osc.start(bWhen); p2.osc.stop(bWhen + tonalDur * 0.8 + 0.02)
     }
 
     if (spec.bodyGrit) {
-      // Broadband noise bed that tracks the WHOLE body decay (not a short
-      // burst) so late-tail energy stays noisy, killing the pure-sine tail.
+      // Mono (width-controlled) low noise bed spanning the WHOLE body decay with
+      // an IRREGULAR amplitude walk so late-tail energy is stochastic — this is
+      // what turns a synth boom into a physical impact and erases harmonic rails.
       const bg = spec.bodyGrit
-      const bedDur = Math.max(bg.dur, b.dur * 0.9)
-      const nb = noiseBuffer(ctx, bedDur * 1.4, { color: 'brown', seed: seed + 71 })
+      const bedDur = Math.max(bg.dur, b.dur)
+      const nb = noiseBuffer(ctx, bedDur * 1.4, { color: 'brown', stereo: false, seed: seed + 71 })
       const { src, gain: gg } = bufferVoice(ctx, nb)
       const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = bg.lp; lp.Q.value = 0.9
       lp.frequency.setValueAtTime(bg.lp, bWhen)
-      lp.frequency.exponentialRampToValueAtTime(Math.max(120, bg.lp * 0.55), bWhen + bedDur)
+      lp.frequency.exponentialRampToValueAtTime(Math.max(120, bg.lp * 0.5), bWhen + bedDur)
       src.connect(gg); gg.disconnect(); gg.connect(lp); lp.connect(g)
+      const rnd = mulberryLite(seed + 313)
+      const steps = 10
       gg.gain.setValueAtTime(0.0001, bWhen)
       gg.gain.linearRampToValueAtTime(bg.level, bWhen + 0.002)
-      gg.gain.exponentialRampToValueAtTime(bg.level * 0.28, bWhen + bedDur * 0.4)
-      gg.gain.exponentialRampToValueAtTime(0.0001, bWhen + bedDur)
+      for (let i = 1; i <= steps; i++) {
+        const t = bWhen + (bedDur * i) / steps
+        const decay = Math.pow(1 - i / (steps + 1), 1.6) // overall fade
+        const jitter = 0.45 + 1.0 * rnd() // irregular texture
+        gg.gain.linearRampToValueAtTime(Math.max(0.0001, bg.level * decay * jitter), t)
+      }
+      gg.gain.exponentialRampToValueAtTime(0.0001, bWhen + bedDur + 0.005)
       src.start(bWhen); src.stop(bWhen + bedDur + 0.02)
       end = Math.max(end, bWhen + bedDur)
+
+      // Debris air: a quieter, brighter, STEREO-decorrelated pair riding the same
+      // tail — restores tail width + high texture (physical shards) while the low
+      // bed stays mono and tight. Level scales with the main grit.
+      for (const side of [-0.55, 0.55]) {
+        const dnb = noiseBuffer(ctx, bedDur * 1.4, { color: 'white', stereo: false, seed: seed + 411 + (side < 0 ? 0 : 37) })
+        const dv = bufferVoice(ctx, dnb)
+        const dhp = ctx.createBiquadFilter(); dhp.type = 'highpass'; dhp.frequency.value = 1600; dhp.Q.value = 0.5
+        const dpan = ctx.createStereoPanner(); dpan.pan.value = clamp(pan + side, -1, 1)
+        dv.gain.disconnect(); dv.src.connect(dv.gain); dv.gain.connect(dhp); dhp.connect(dpan); dpan.connect(g)
+        const dl = bg.level * 0.5
+        dv.gain.gain.setValueAtTime(0.0001, bWhen)
+        dv.gain.gain.linearRampToValueAtTime(dl, bWhen + 0.002)
+        dv.gain.gain.exponentialRampToValueAtTime(0.0001, bWhen + bedDur * 0.85)
+        dv.src.start(bWhen); dv.src.stop(bWhen + bedDur + 0.02)
+      }
     }
   }
 
@@ -258,10 +284,12 @@ function oneHit(
   }
 
   // 5) RING — inharmonic partials (metal/glass/energy), optionally spread across
-  //    the stereo field for width.
+  //    the stereo field. Each partial gets an irregular amplitude flutter so it
+  //    shimmers/beats instead of sitting as a static horizontal rail.
   if (spec.ring) {
     const r = spec.ring
     const spread = r.spread ?? 0
+    const rnd = mulberryLite(seed + 907)
     r.partials.forEach((f, i) => {
       const { osc, gain } = oscVoice(ctx, r.type ?? 'sine', f)
       const lvl = r.level * (1 - i / (r.partials.length + 1))
@@ -275,7 +303,15 @@ function oneHit(
       }
       gain.gain.setValueAtTime(0.0001, when + 0.001)
       gain.gain.linearRampToValueAtTime(lvl, when + 0.004)
-      gain.gain.exponentialRampToValueAtTime(0.0001, when + dur)
+      // flutter: a few irregular level dips over the decay so it isn't a clean rail
+      const steps = 6
+      for (let s = 1; s <= steps; s++) {
+        const t = when + 0.004 + (dur - 0.004) * (s / steps)
+        const decay = Math.pow(1 - s / (steps + 1), 1.5)
+        const jit = 0.4 + 0.9 * rnd()
+        gain.gain.linearRampToValueAtTime(Math.max(0.0001, lvl * decay * jit), t)
+      }
+      gain.gain.exponentialRampToValueAtTime(0.0001, when + dur + 0.005)
       osc.start(when + 0.001); osc.stop(when + dur + 0.02)
       end = Math.max(end, when + dur)
     })
@@ -293,13 +329,13 @@ function scale(spec: HitSpec, k: number): HitSpec {
 
 function lightSpec(p: number): HitSpec {
   return {
-    gain: 1.75 * (0.8 + 0.4 * p),
+    gain: 2.4 * (0.8 + 0.4 * p),
     // crisp but with real contact: a snappy crack over a present, darker thump.
     crack: { level: 0.7, punch: 1.4, hp: 2200, lp: 9000, attack: 0.0004, dur: 0.0035, color: 'white' },
-    sizzle: { level: 0.32, hp: 3400, dur: 0.035, color: 'blue', spread: 0.7 },
-    body: { level: 1.6, f0: 165, f1: 62, dur: 0.16, type: 'sine', partial: 2.4, partialLevel: 0.24 },
-    bodyGrit: { level: 0.5, lp: 850, dur: 0.06 },
-    texture: { level: 0.4, bp: 1700, q: 0.9, dur: 0.07, color: 'white', spread: 0.8, haas: 0.006 },
+    sizzle: { level: 0.5, hp: 3400, dur: 0.045, color: 'blue', spread: 0.75 },
+    body: { level: 1.5, f0: 165, f1: 62, dur: 0.14, type: 'sine', partial: 2.4, partialLevel: 0.24 },
+    bodyGrit: { level: 0.5, lp: 1100, dur: 0.1 },
+    texture: { level: 0.6, bp: 2400, q: 0.9, dur: 0.08, color: 'white', spread: 0.85, haas: 0.006 },
     drive: 0.12,
     reverbSend: 0.14,
   }
@@ -310,9 +346,9 @@ function heavySpec(p: number): HitSpec {
     gain: 1.05 * (0.85 + 0.3 * p),
     crack: { level: 1.15, punch: 3.0, hp: 1500, lp: 9000, attack: 0.0009, dur: 0.010, color: 'white' },
     sizzle: { level: 0.55, hp: 2000, dur: 0.09, color: 'pink' },
-    body: { level: 0.9, f0: 140, f1: 46, dur: 0.24, type: 'sine', partial: 2.7, partialLevel: 0.28 },
-    bodyGrit: { level: 0.7, lp: 700, dur: 0.09 },
-    sub: { level: 0.6, f0: 58, f1: 30, dur: 0.3 },
+    body: { level: 0.95, f0: 120, f1: 44, dur: 0.24, type: 'sine', partial: 2.7, partialLevel: 0.28 },
+    bodyGrit: { level: 0.85, lp: 650, dur: 0.16 },
+    sub: { level: 0.72, f0: 56, f1: 30, dur: 0.3 },
     texture: { level: 0.74, bp: 1500, q: 0.85, dur: 0.15, color: 'pink', spread: 1.0, haas: 0.009 },
     ring: { level: 0.16, partials: [178, 267, 401, 590], dur: 0.22, type: 'sine', spread: 0.5 },
     drive: 0.28,
@@ -323,29 +359,30 @@ function heavySpec(p: number): HitSpec {
 function critSpec(p: number): HitSpec {
   return {
     gain: 1.05 * (0.85 + 0.35 * p),
-    crack: { level: 1.05, punch: 3.1, hp: 3000, attack: 0.0006, dur: 0.007, color: 'blue' },
-    sizzle: { level: 0.6, hp: 4000, dur: 0.08, color: 'blue', spread: 0.85 },
-    body: { level: 1.2, f0: 148, f1: 54, dur: 0.2, type: 'triangle', partial: 2.5, partialLevel: 0.34 },
-    bodyGrit: { level: 0.8, lp: 800, dur: 0.14 },
-    sub: { level: 1.05, f0: 66, f1: 32, dur: 0.26 },
-    texture: { level: 0.75, bp: 3000, q: 0.65, dur: 0.16, color: 'blue', spread: 1.0, haas: 0.008 },
-    ring: { level: 0.3, partials: [1860, 3120, 4700, 6400], dur: 0.34, type: 'sine', spread: 0.7 },
-    drive: 0.42,
+    // bone-crack identity: darker & more percussive than ex, metallic short ring.
+    crack: { level: 1.1, punch: 3.2, hp: 2400, attack: 0.0006, dur: 0.007, color: 'white' },
+    sizzle: { level: 0.5, hp: 3400, dur: 0.07, color: 'pink', spread: 0.8 },
+    body: { level: 1.3, f0: 138, f1: 50, dur: 0.2, type: 'triangle', partial: 2.5, partialLevel: 0.34 },
+    bodyGrit: { level: 0.95, lp: 750, dur: 0.16 },
+    sub: { level: 1.05, f0: 64, f1: 30, dur: 0.26 },
+    texture: { level: 0.8, bp: 2200, q: 0.6, dur: 0.16, color: 'pink', spread: 1.0, haas: 0.008 },
+    ring: { level: 0.26, partials: [1400, 2100, 3200, 4300], dur: 0.26, type: 'sine', spread: 0.7 },
+    drive: 0.36,
     reverbSend: 0.32,
   }
 }
 
 function exSpec(p: number): HitSpec {
   return {
-    gain: 1.45 * (0.85 + 0.3 * p),
-    crack: { level: 0.98, punch: 2.6, hp: 3500, attack: 0.0005, dur: 0.006, color: 'blue' },
-    sizzle: { level: 0.55, hp: 4200, dur: 0.09, color: 'blue', spread: 0.9 },
-    // electric hit still needs real body so it doesn't disconnect from the others.
-    body: { level: 1.0, f0: 158, f1: 72, dur: 0.17, type: 'sawtooth', partial: 2.0, partialLevel: 0.28 },
-    bodyGrit: { level: 0.55, lp: 900, dur: 0.12 },
+    gain: 1.15 * (0.85 + 0.3 * p),
+    // electric identity: bright, buzzy, sawtooth body + a long fluttering buzz.
+    crack: { level: 0.98, punch: 2.6, hp: 3800, attack: 0.0005, dur: 0.006, color: 'blue' },
+    sizzle: { level: 0.58, hp: 4400, dur: 0.1, color: 'blue', spread: 0.95 },
+    body: { level: 1.0, f0: 158, f1: 72, dur: 0.17, type: 'sawtooth', partial: 2.0, partialLevel: 0.3 },
+    bodyGrit: { level: 0.6, lp: 950, dur: 0.14 },
     sub: { level: 0.9, f0: 70, f1: 38, dur: 0.22 },
-    texture: { level: 0.58, bp: 4200, q: 3.5, dur: 0.18, color: 'blue', spread: 0.95, haas: 0.009 },
-    ring: { level: 0.42, partials: [1200, 1800, 2700, 4050], dur: 0.28, type: 'sawtooth', spread: 0.9 },
+    texture: { level: 0.6, bp: 4600, q: 3.8, dur: 0.2, color: 'blue', spread: 0.95, haas: 0.009 },
+    ring: { level: 0.52, partials: [1200, 1810, 2730, 4090, 5600], dur: 0.3, type: 'sawtooth', spread: 0.9 },
     drive: 0.5,
     reverbSend: 0.28,
   }
@@ -564,13 +601,13 @@ export function renderImpact(
       const big: HitSpec = {
         gain: 1.65, 
         // KO needs a BROADBAND CRACK, not just rumble — bright, wide, violent.
-        crack: { level: 1.05, punch: 3.4, hp: 2000, attack: 0.0014, dur: 0.016, color: 'white' },
-        sizzle: { level: 0.7, hp: 2600, dur: 0.16, color: 'white', spread: 0.95 },
-        body: { level: 1.0, f0: 130, f1: 40, dur: 0.6, type: 'sine', partial: 2.7, partialLevel: 0.32 },
-        bodyGrit: { level: 0.9, lp: 850, dur: 0.95 },
-        sub: { level: 1.0, f0: 62, f1: 22, dur: 0.9 },
-        texture: { level: 1.15, bp: 2600, q: 0.55, dur: 0.6, color: 'white', spread: 1.0, haas: 0.014 },
-        ring: { level: 0.44, partials: [2100, 3300, 4700, 6100], dur: 0.45, type: 'sine', spread: 1.0 },
+        crack: { level: 1.05, punch: 3.4, hp: 1800, attack: 0.0014, dur: 0.016, color: 'white' },
+        sizzle: { level: 0.5, hp: 2400, dur: 0.14, color: 'white', spread: 0.95 },
+        body: { level: 1.35, f0: 105, f1: 42, dur: 0.6, type: 'sine', partial: 2.7, partialLevel: 0.3 },
+        bodyGrit: { level: 0.95, lp: 800, dur: 0.95 },
+        sub: { level: 1.6, f0: 55, f1: 24, dur: 0.95 },
+        texture: { level: 0.85, bp: 2200, q: 0.6, dur: 0.6, color: 'white', spread: 1.0, haas: 0.014 },
+        ring: { level: 0.34, partials: [2100, 3300, 4700, 6100], dur: 0.45, type: 'sine', spread: 1.0 },
         drive: 0.4,
         reverbSend: 0.6,
       }

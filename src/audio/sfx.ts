@@ -80,22 +80,24 @@ export function renderFootstep(ctx: Ctx, r: ImpactRouting, when: number, opts: {
 
 /** Cloth/gi movement — soft high-passed noise swish, audible but subtle. */
 export function renderCloth(ctx: Ctx, r: ImpactRouting, when: number, opts: { pan?: number; seed?: number } = {}): number {
-  const dur = 0.11
+  const dur = 0.19
   const basePan = opts.pan ?? 0
-  const bus = ctx.createGain(); bus.gain.value = 1; bus.connect(r.out)
-  if (r.reverb) { const s = ctx.createGain(); s.gain.value = 0.08; bus.connect(s); s.connect(r.reverb) }
-  // two decorrelated voices for a natural fabric swish
-  for (const side of [-0.4, 0.4]) {
-    const nb = noiseBuffer(ctx, dur * 1.4, { color: 'pink', seed: (opts.seed ?? 123) + (side < 0 ? 0 : 90) })
+  const bus = ctx.createGain(); bus.gain.value = 0.95; bus.connect(r.out)
+  // no reverb send — a light foley layer; the decorrelated IR tail would over-widen it.
+  // two decorrelated voices for a natural fabric swish — soft attack + longer
+  // sustain so it reads as friction, not a spike.
+  for (const side of [-0.25, 0.25]) {
+    const nb = noiseBuffer(ctx, dur * 1.4, { color: 'pink', stereo: false, seed: (opts.seed ?? 123) + (side < 0 ? 0 : 90) })
     const { src, gain } = bufferVoice(ctx, nb)
     const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 0.8
-    bp.frequency.setValueAtTime(1800, when)
-    bp.frequency.exponentialRampToValueAtTime(3200, when + dur * 0.5)
-    bp.frequency.exponentialRampToValueAtTime(1500, when + dur)
+    bp.frequency.setValueAtTime(1600, when)
+    bp.frequency.exponentialRampToValueAtTime(2800, when + dur * 0.5)
+    bp.frequency.exponentialRampToValueAtTime(1300, when + dur)
     const pan = ctx.createStereoPanner(); pan.pan.value = clamp(basePan + side, -1, 1)
     gain.disconnect(); src.connect(gain); gain.connect(bp); bp.connect(pan); pan.connect(bus)
     gain.gain.setValueAtTime(0.0001, when)
-    gain.gain.linearRampToValueAtTime(0.95, when + 0.012)
+    gain.gain.linearRampToValueAtTime(0.9, when + 0.03)
+    gain.gain.linearRampToValueAtTime(0.55, when + dur * 0.55)
     gain.gain.exponentialRampToValueAtTime(0.0001, when + dur)
     src.start(when); src.stop(when + dur + 0.02)
   }
@@ -132,7 +134,7 @@ export function renderMeterCharge(ctx: Ctx, r: ImpactRouting, when: number, dur 
 
 /** Super activation stinger — a bright, aggressive rising power chord hit. */
 export function renderSuperStinger(ctx: Ctx, r: ImpactRouting, when: number): number {
-  const bus = ctx.createGain(); bus.gain.value = 0.68; bus.connect(r.out)
+  const bus = ctx.createGain(); bus.gain.value = 1.9; bus.connect(r.out)
   if (r.reverb) { const s = ctx.createGain(); s.gain.value = 0.35; bus.connect(s); s.connect(r.reverb) }
   // impact stab
   const o = ctx.createOscillator(); o.type = 'sawtooth'
@@ -186,7 +188,7 @@ export function renderSuperStinger(ctx: Ctx, r: ImpactRouting, when: number): nu
 
 /** Victory sting — bright ascending major fanfare with octave depth + a pad swell. */
 export function renderVictory(ctx: Ctx, r: ImpactRouting, when: number): number {
-  const bus = ctx.createGain(); bus.gain.value = 0.58; bus.connect(r.out)
+  const bus = ctx.createGain(); bus.gain.value = 1.35; bus.connect(r.out)
   if (r.reverb) { const s = ctx.createGain(); s.gain.value = 0.34; bus.connect(s); s.connect(r.reverb) }
   const notes = [523.25, 659.25, 783.99, 1046.5]
   notes.forEach((f, i) => {

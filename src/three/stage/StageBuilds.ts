@@ -187,27 +187,6 @@ function screenWall(
   }
 }
 
-/** Tall structural pillars flanking the play space to frame the composition. */
-function flankPillars(b: StageBuild, cfg: StageConfig, x: number, z: number, trimColor: number) {
-  for (const sign of [-1, 1]) {
-    const col = new THREE.Mesh(
-      new THREE.BoxGeometry(1.5, 14, 1.5),
-      structureMat({ color: cfg.structure, roughness: 0.7, metalness: 0.5 }),
-    )
-    col.position.set(sign * x, 6, z)
-    col.castShadow = true
-    col.receiveShadow = true
-    b.add(col)
-    // glowing edge strip
-    const strip = new THREE.Mesh(new THREE.BoxGeometry(0.14, 12, 0.14), glowMat(trimColor, 0.9))
-    strip.position.set(sign * (x - 0.82), 6, z + 0.78)
-    b.add(strip)
-    b.onUpdate((t) => {
-      ;(strip.material as THREE.MeshBasicMaterial).opacity = 0.7 + 0.25 * Math.sin(t * 2 + sign)
-    })
-  }
-}
-
 /** Foreground occluders — dark shapes close to camera, blurred into bokeh by
  *  DOF. Distinct per stage (kept to the frame edges/top so they frame rather
  *  than block the fighters) so the foreground stops being the same rail+cable. */
@@ -468,18 +447,22 @@ function buildHypergrowth(b: StageBuild, cfg: StageConfig, flags: QualityFlags) 
   // THE ROCKET DECK — launch gantry, a rocket silhouette venting glow, control
   // screens, a crowd of onlookers on the deck below.
   const s = cfg.structure
-  // gantry towers
-  for (const sign of [-1, 1]) {
-    const tower = trussBeam(13, 1.0, s)
-    tower.rotation.z = Math.PI / 2
-    tower.position.set(sign * 7.5, 6.5, -12)
-    b.add(tower)
-    // cross arms
-    for (let i = 0; i < 3; i++) {
-      const arm = trussBeam(4, 0.5, s)
-      arm.position.set(sign * 5.6, 3 + i * 3.5, -12)
-      b.add(arm)
-    }
+  // launch gantry — deliberately ASYMMETRIC so the deck reads as a real pad, not
+  // a mirrored diagram: a TALL service tower with a swing arm on the left, a
+  // SHORTER umbilical mast with a LOX tank cluster on the right.
+  const towerL = trussBeam(15.5, 1.0, s); towerL.rotation.z = Math.PI / 2; towerL.position.set(-7.9, 7.9, -12); b.add(towerL)
+  for (let i = 0; i < 4; i++) { const arm = trussBeam(4.2, 0.5, s); arm.position.set(-5.7, 2.8 + i * 3.1, -12); b.add(arm) }
+  // retractable swing service arm reaching in toward the rocket
+  const swing = trussBeam(4.8, 0.42, s); swing.position.set(-3.3, 11.4, -12.6); b.add(swing)
+  const towerR = trussBeam(11.5, 0.85, s); towerR.rotation.z = Math.PI / 2; towerR.position.set(8.3, 5.9, -12); b.add(towerR)
+  for (let i = 0; i < 2; i++) { const arm = trussBeam(3.4, 0.5, s); arm.position.set(6.7, 3.6 + i * 3.4, -12); b.add(arm) }
+  // cryogenic propellant tanks clustered at the right mast base (unique mass)
+  for (let k = 0; k < 2; k++) {
+    const tank = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 0.85, 3.2, 18), structureMat({ color: 0xdfe6ec, roughness: 0.42, metalness: 0.5 }))
+    tank.position.set(9.0 - k * 1.85, 2.3, -10.6 + k * 0.7); b.add(tank)
+    const domeT = new THREE.Mesh(new THREE.SphereGeometry(0.85, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2), structureMat({ color: 0xe6edf2, roughness: 0.4, metalness: 0.5 }))
+    domeT.position.set(9.0 - k * 1.85, 3.9, -10.6 + k * 0.7); b.add(domeT)
+    const frost = new THREE.Mesh(new THREE.CylinderGeometry(0.92, 0.92, 3.0, 12), glowMat(0xcfe8ff, 0.1)); frost.position.copy(tank.position); b.add(frost)
   }
   // rocket body — panelled two-tone metal with a dark base and fins
   const rocket = new THREE.Mesh(
@@ -526,9 +509,14 @@ function buildHypergrowth(b: StageBuild, cfg: StageConfig, flags: QualityFlags) 
     ;(glow.material as THREE.MeshBasicMaterial).opacity = 0.55 + 0.25 * Math.abs(Math.sin(t * 4))
     ;(shaft.material as THREE.ShaderMaterial).uniforms.uTime.value = t
   })
-  // control screens flanking
-  screenWall(b, 2, 2, 2.2, 1.4, new THREE.Vector3(-6.5, 4.5, -9.4), ['data', 'equalizer', 'ticker', 'grid'], cfg.screen.hue, cfg.screen.hue2, 2)
-  screenWall(b, 2, 2, 2.2, 1.4, new THREE.Vector3(6.5, 4.5, -9.4), ['grid', 'ticker', 'data', 'equalizer'], cfg.screen.hue, cfg.screen.hue2, 5)
+  // control screens — ASYMMETRIC: a tall 2x2 telemetry stack on the left, a low
+  // wide status strip plus a big mission-countdown clock on the right.
+  screenWall(b, 2, 2, 2.2, 1.4, new THREE.Vector3(-6.7, 5.1, -9.4), ['data', 'equalizer', 'ticker', 'grid'], cfg.screen.hue, cfg.screen.hue2, 2)
+  screenWall(b, 3, 1, 1.85, 1.15, new THREE.Vector3(7.2, 3.1, -9.0), ['ticker', 'data', 'ticker'], cfg.screen.hue, cfg.screen.hue2, 5)
+  const clock = makeScreen(2.6, 1.5, 'ticker', 0x66e6ff, 0xffffff, 1.3, 44)
+  clock.mesh.position.set(7.0, 5.5, -9.2)
+  b.add(clock.mesh)
+  b.onUpdate((t) => (clock.mat.uniforms.uTime.value = t))
   // a distant crowd suggestion, far back and low so it reads as a mass
   if (flags.crowdCount > 0) {
     const { mesh, update } = crowdBand(Math.min(70, flags.crowdCount), 30, 0x0a1622, 7)
@@ -593,10 +581,13 @@ function buildPlateau(b: StageBuild, cfg: StageConfig, flags: QualityFlags) {
     b.add(leg)
   }
 
-  // stepped terraces — a bar-graph that climbs then flatlines into the plateau,
-  // built as glowing-edged slabs receding on both sides for real depth.
-  const heights = [2.2, 3.4, 4.4, 5.0, 5.2, 5.2, 5.2, 5.2]
+  // stepped terraces — ASYMMETRIC bar-graphs: the LEFT run climbs and holds
+  // (the plateau); the RIGHT run climbs then rolls over and declines (the miss).
+  // Two different profiles kill the mirror and reinforce the story.
+  const heightsL = [2.2, 3.4, 4.4, 5.0, 5.2, 5.2, 5.2, 5.2]
+  const heightsR = [2.6, 3.9, 4.7, 4.3, 3.7, 3.1, 2.7, 2.4]
   for (const sign of [-1, 1]) {
+    const heights = sign < 0 ? heightsL : heightsR
     for (let i = 0; i < heights.length; i++) {
       const h = heights[i]
       const x = sign * (4.2 + i * 1.35)
@@ -608,9 +599,10 @@ function buildPlateau(b: StageBuild, cfg: StageConfig, flags: QualityFlags) {
       step.position.set(x, h / 2, z)
       step.castShadow = true; step.receiveShadow = true
       b.add(step)
-      // glowing top edge — brighter toward the flat plateau to emphasise stall
+      // glowing top edge — cool trim on the holding left, warning-warm on the
+      // declining right, so the two runs read as different outcomes
       const capBright = 0.5 + 0.5 * (i / heights.length)
-      const cap = new THREE.Mesh(new THREE.BoxGeometry(1.26, 0.11, 1.26), glowMat(cfg.trim, capBright))
+      const cap = new THREE.Mesh(new THREE.BoxGeometry(1.26, 0.11, 1.26), glowMat(sign < 0 ? cfg.trim : cfg.accent, capBright))
       cap.position.set(x, h + 0.02, z)
       b.add(cap)
       // front glowing riser strip so the bars read from the camera
@@ -643,13 +635,20 @@ function buildAiNative(b: StageBuild, cfg: StageConfig, flags: QualityFlags) {
   // THE MODEL FLOOR — a datacenter cathedral: monolith server towers with
   // flowing neural screens, holographic node lattices, cool cyan glow.
   const s = cfg.structure
-  // server monoliths in two receding rows
+  // server monoliths — ASYMMETRIC: a denser, taller bank on the LEFT, a sparser
+  // bank on the RIGHT (plus a wide cooling unit below), so the hall never reads
+  // as a mirrored diagram.
+  const towerPlan: { sign: number; count: number; h0: number }[] = [
+    { sign: -1, count: 3, h0: 9.6 },
+    { sign: 1, count: 2, h0: 7.9 },
+  ]
   for (let row = 0; row < 2; row++) {
-    for (const sign of [-1, 1]) {
-      for (let i = 0; i < 3; i++) {
+    for (const plan of towerPlan) {
+      const sign = plan.sign
+      for (let i = 0; i < plan.count; i++) {
         const z = -9 - i * 3.0 - row * 0.5
         const x = sign * (4.5 + row * 2.2 + i * 0.6)
-        const h = 9 - i * 0.8
+        const h = plan.h0 - i * 0.8
         const tower = new THREE.Mesh(new THREE.BoxGeometry(1.8, h, 1.4), structureMat({ color: s, roughness: 0.5, metalness: 0.6 }))
         tower.position.set(x, h / 2, z)
         tower.castShadow = true
@@ -670,14 +669,24 @@ function buildAiNative(b: StageBuild, cfg: StageConfig, flags: QualityFlags) {
       }
     }
   }
-  // central holographic neural board
-  const board = makeScreen(9, 5, 'neural', cfg.screen.hue, cfg.screen.hue2, 1.0, 1)
-  board.mesh.position.set(0, 5.5, -14)
+  // wide liquid-cooling unit low on the RIGHT — a chunky pipe-rack that balances
+  // the emptier right bank with a different silhouette (breaks the mirror).
+  const cool = new THREE.Mesh(new THREE.BoxGeometry(3.6, 2.2, 1.5), structureMat({ color: 0x141a24, roughness: 0.55, metalness: 0.6 }))
+  cool.position.set(7.4, 1.1, -8.4); cool.castShadow = true; b.add(cool)
+  for (let p = 0; p < 3; p++) {
+    const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 3.4, 10), structureMat({ color: 0x2a3444, roughness: 0.4, metalness: 0.7 }))
+    pipe.rotation.z = Math.PI / 2; pipe.position.set(7.4, 0.5 + p * 0.6, -7.6); b.add(pipe)
+    const flow = new THREE.Mesh(new THREE.BoxGeometry(3.5, 0.05, 0.05), glowMat(0x59ffe0, 0.5)); flow.position.set(7.4, 0.5 + p * 0.6, -7.42); b.add(flow)
+  }
+  // central holographic neural board — nudged right to counterbalance the
+  // left-shifted globe hologram (breaks the dead-centre axis)
+  const board = makeScreen(8, 5, 'neural', cfg.screen.hue, cfg.screen.hue2, 1.0, 1)
+  board.mesh.position.set(2.0, 5.7, -14)
   b.add(board.mesh)
   b.onUpdate((t) => (board.mat.uniforms.uTime.value = t))
   // holographic "model" — a wireframe globe with orbiting rings on a projector
   // plinth, set behind the play space so it reads as datacenter set-dressing.
-  const holoX = 0, holoY = 4.0, holoZ = -11.5
+  const holoX = -1.9, holoY = 4.0, holoZ = -11.5
   const plinth = new THREE.Mesh(
     new THREE.CylinderGeometry(0.7, 1.0, 1.2, 20),
     structureMat({ color: s, roughness: 0.5, metalness: 0.6, emissive: cfg.trim, emissiveIntensity: 0.25 }),
@@ -719,26 +728,41 @@ function buildMonetization(b: StageBuild, cfg: StageConfig, flags: QualityFlags)
   board.mesh.position.set(0, 7.5, -15)
   b.add(board.mesh)
   b.onUpdate((t) => (board.mat.uniforms.uTime.value = t))
-  // secondary data boards
-  screenWall(b, 3, 1, 2.4, 1.5, new THREE.Vector3(0, 4.6, -14.6), ['data', 'equalizer', 'data'], cfg.screen.hue, cfg.screen.hue2, 6)
-  // gold columns
-  for (const sign of [-1, 1]) {
-    for (let i = 0; i < 2; i++) {
+  // secondary data boards — nudged left of the big ticker so the wall isn't a
+  // single centred stack
+  screenWall(b, 3, 1, 2.4, 1.5, new THREE.Vector3(-1.4, 4.6, -14.6), ['data', 'equalizer', 'data'], cfg.screen.hue, cfg.screen.hue2, 6)
+  // gold columns — ASYMMETRIC colonnade: a deep three-column run receding on the
+  // LEFT, a single tall column on the RIGHT, so the temple isn't mirrored.
+  const colPlan: { sign: number; count: number }[] = [{ sign: -1, count: 3 }, { sign: 1, count: 1 }]
+  for (const plan of colPlan) {
+    for (let i = 0; i < plan.count; i++) {
       const col = new THREE.Mesh(
         new THREE.CylinderGeometry(0.9, 1.0, 13, 20),
         structureMat({ color: 0x6a4c12, roughness: 0.3, metalness: 0.9, emissive: 0x2a1c04, emissiveIntensity: 0.6 }),
       )
-      col.position.set(sign * (5.5 + i * 2.5), 6.5, -11 - i * 2)
+      col.position.set(plan.sign * (5.5 + i * 2.5), 6.5, -11 - i * 2)
       col.castShadow = true
       b.add(col)
       // capital glow ring
       const ring = new THREE.Mesh(new THREE.TorusGeometry(1.05, 0.08, 8, 24), glowMat(cfg.trim, 0.8))
-      ring.position.set(sign * (5.5 + i * 2.5), 12.8, -11 - i * 2)
+      ring.position.set(plan.sign * (5.5 + i * 2.5), 12.8, -11 - i * 2)
       ring.rotation.x = Math.PI / 2
       b.add(ring)
     }
   }
-  flankPillars(b, cfg, 7.2, -9, cfg.trim)
+  // a gilded vault-door disc set into the RIGHT wall — a unique hero mass that
+  // balances the deeper left colonnade (money kept behind steel)
+  const vault = new THREE.Mesh(new THREE.CylinderGeometry(2.3, 2.3, 0.5, 40), structureMat({ color: 0x5a4a1e, roughness: 0.35, metalness: 0.95, emissive: 0x201804, emissiveIntensity: 0.5 }))
+  vault.rotation.x = Math.PI / 2; vault.position.set(9.6, 5.2, -12.5); b.add(vault)
+  for (let r = 0; r < 2; r++) {
+    const vr = new THREE.Mesh(new THREE.TorusGeometry(1.5 - r * 0.6, 0.09, 8, 40), glowMat(cfg.trim, 0.7))
+    vr.position.set(9.6, 5.2, -12.24); b.add(vr)
+  }
+  for (let k = 0; k < 8; k++) {
+    const ang = (k / 8) * Math.PI * 2
+    const spoke = new THREE.Mesh(new THREE.BoxGeometry(0.14, 1.9, 0.08), structureMat({ color: 0x8a6a1c, roughness: 0.3, metalness: 0.95 }))
+    spoke.position.set(9.6 + Math.cos(ang) * 0.0, 5.2, -12.22); spoke.rotation.z = ang; b.add(spoke)
+  }
   overhead(b, cfg, flags, 'gold')
   foreground(b, 'gold')
 }
@@ -746,23 +770,31 @@ function buildMonetization(b: StageBuild, cfg: StageConfig, flags: QualityFlags)
 function buildCrisis(b: StageBuild, cfg: StageConfig, flags: QualityFlags) {
   // THE WAR ROOM — red-alert command center: a wall of alarm screens, a
   // situation table, rotating warning beacons, harsh red practicals.
-  screenWall(b, 4, 3, 2.3, 1.4, new THREE.Vector3(0, 6.0, -14.5), ['alert', 'data', 'ekg', 'grid', 'alert', 'ticker', 'data', 'alert', 'grid', 'alert', 'data', 'ekg'], cfg.screen.hue, cfg.screen.hue2, 3)
+  // command video wall — shifted LEFT of centre; a tall vertical status totem
+  // stands on the RIGHT so the room reads asymmetric, not a mirrored grid.
+  screenWall(b, 4, 3, 2.3, 1.4, new THREE.Vector3(-2.2, 6.2, -14.5), ['alert', 'data', 'ekg', 'grid', 'alert', 'ticker', 'data', 'alert', 'grid', 'alert', 'data', 'ekg'], cfg.screen.hue, cfg.screen.hue2, 3)
+  const totem = makeScreen(1.8, 6.4, 'ekg', 0xff5a3c, 0xffb04c, 1.2, 33)
+  totem.mesh.position.set(6.6, 5.6, -13.6)
+  b.add(totem.mesh)
+  const totemBez = new THREE.Mesh(new THREE.PlaneGeometry(2.0, 6.6), structureMat({ color: 0x120606, roughness: 0.6, metalness: 0.4 }))
+  totemBez.position.set(6.6, 5.6, -13.66); b.add(totemBez)
+  b.onUpdate((t) => (totem.mat.uniforms.uTime.value = t))
   // ANGULAR COMMAND CONSOLE — a hexagonal war table with a flat rectangular
   // holo readout and a scatter of operator stations around it. Deliberately
   // angular + low + wide so it never reads as the same round dais as ipo-prep.
   const consoleBase = new THREE.Mesh(new THREE.CylinderGeometry(2.5, 2.8, 0.8, 6), structureMat({ color: 0x1a0e0e, roughness: 0.6, metalness: 0.5 }))
   consoleBase.rotation.y = Math.PI / 6
-  consoleBase.position.set(0, 0.4, -10)
+  consoleBase.position.set(-1.5, 0.4, -10)
   consoleBase.castShadow = true
   b.add(consoleBase)
   // hex rim strip
   const rimHex = new THREE.Mesh(new THREE.TorusGeometry(2.55, 0.06, 6, 6), glowMat(0xff5a3c, 0.85))
   rimHex.rotation.x = Math.PI / 2; rimHex.rotation.z = Math.PI / 6
-  rimHex.position.set(0, 0.82, -10)
+  rimHex.position.set(-1.5, 0.82, -10)
   b.add(rimHex)
   // flat rectangular tactical readout laid on the console top
   const map = makeScreen(3.7, 2.9, 'grid', 0xff6a4c, 0xffc04c, 1.5, 9)
-  map.mesh.position.set(0, 0.86, -10)
+  map.mesh.position.set(-1.5, 0.86, -10)
   map.mesh.rotation.x = -Math.PI / 2
   b.add(map.mesh)
   b.onUpdate((t) => {
@@ -772,7 +804,7 @@ function buildCrisis(b: StageBuild, cfg: StageConfig, flags: QualityFlags) {
   // operator stations: angular desks + tilted alert monitors flanking the console
   for (let k = 0; k < 3; k++) {
     const ang = -0.85 + k * 0.85
-    const dx = Math.sin(ang) * 3.9
+    const dx = -1.5 + Math.sin(ang) * 3.9
     const dz = -9.6 + Math.cos(ang) * 1.0
     const desk = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.14, 0.85), structureMat({ color: 0x241414, roughness: 0.7, metalness: 0.4 }))
     desk.position.set(dx, 0.82, dz); desk.rotation.y = -ang
@@ -784,26 +816,31 @@ function buildCrisis(b: StageBuild, cfg: StageConfig, flags: QualityFlags) {
     b.add(scr.mesh)
     b.onUpdate((t) => (scr.mat.uniforms.uTime.value = t))
   }
-  // rotating warning beacons
-  for (const sign of [-1, 1]) {
-    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 8, 8), structureMat({ color: cfg.structure, roughness: 0.7, metalness: 0.5 }))
-    post.position.set(sign * 6.5, 4, -8)
+  // rotating warning beacons — different height, depth and phase per side so the
+  // pair never reads as a mirror.
+  const beaconPlan: { x: number; postH: number; y: number; z: number }[] = [
+    { x: -6.9, postH: 9.2, y: 8.9, z: -8.4 },
+    { x: 6.2, postH: 6.6, y: 6.6, z: -7.2 },
+  ]
+  beaconPlan.forEach((bp, bi) => {
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, bp.postH, 8), structureMat({ color: cfg.structure, roughness: 0.7, metalness: 0.5 }))
+    post.position.set(bp.x, bp.postH / 2, bp.z)
     b.add(post)
     const beacon = new THREE.Mesh(new THREE.SphereGeometry(0.35, 12, 10), glowMat(0xef233c, 1))
-    beacon.position.set(sign * 6.5, 8.1, -8)
+    beacon.position.set(bp.x, bp.y, bp.z)
     b.add(beacon)
     const beam = lightShaft(0.3, 1.6, 5, 0xef233c, 0.8)
-    beam.position.set(sign * 6.5, 5.4, -8)
+    beam.position.set(bp.x, bp.y - 2.7, bp.z)
     b.add(beam)
     b.onUpdate((t) => {
-      const p = 0.5 + 0.5 * Math.sin(t * 5 + (sign > 0 ? Math.PI : 0))
+      const p = 0.5 + 0.5 * Math.sin(t * 5 + bi * 2.3)
       ;(beacon.material as THREE.MeshBasicMaterial).opacity = 0.4 + p * 0.6
       const bm = beam.material as THREE.ShaderMaterial
       bm.uniforms.uTime.value = t
       bm.uniforms.uOpacity.value = 0.3 + p * 0.7
-      beam.rotation.y = t * 2
+      beam.rotation.y = t * 2 + bi
     })
-  }
+  })
   overhead(b, cfg, flags, 'alarm')
   foreground(b, 'alarm')
 }
@@ -821,22 +858,38 @@ function buildIpoPrep(b: StageBuild, cfg: StageConfig, flags: QualityFlags) {
     b.add(mesh)
     b.onUpdate((t) => (mat.uniforms.uTime.value = t))
   }
-  // marble columns
-  for (const sign of [-1, 1]) {
-    for (let i = 0; i < 3; i++) {
+  // marble columns — ASYMMETRIC colonnade: a full three-column run receding on
+  // the LEFT, only two (with a wider gap) on the RIGHT to make room for a
+  // presenter's podium, so the hall isn't mirrored.
+  const ipoCols: { sign: number; count: number }[] = [{ sign: -1, count: 3 }, { sign: 1, count: 2 }]
+  for (const plan of ipoCols) {
+    for (let i = 0; i < plan.count; i++) {
       const col = new THREE.Mesh(
         new THREE.CylinderGeometry(0.7, 0.8, 12, 20),
         structureMat({ color: 0x2a3648, roughness: 0.35, metalness: 0.4 }),
       )
-      col.position.set(sign * (4.5 + i * 2.2), 6, -8 - i * 2)
+      col.position.set(plan.sign * (4.5 + i * 2.2), 6, -8 - i * 2)
       col.castShadow = true
       b.add(col)
       // gold capital
       const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.95, 0.75, 0.6, 20), structureMat({ color: 0x8a6a1c, roughness: 0.3, metalness: 0.95, emissive: 0x3a2a06, emissiveIntensity: 0.7 }))
-      cap.position.set(sign * (4.5 + i * 2.2), 12.2, -8 - i * 2)
+      cap.position.set(plan.sign * (4.5 + i * 2.2), 12.2, -8 - i * 2)
       b.add(cap)
     }
   }
+  // presenter's podium with a live mic on the RIGHT — a unique human-scale prop
+  // that fills the gap left by the shorter right colonnade.
+  const podium = new THREE.Mesh(new THREE.BoxGeometry(1.3, 2.1, 0.9), structureMat({ color: 0x24303f, roughness: 0.4, metalness: 0.5 }))
+  podium.position.set(7.4, 1.05, -8.6); podium.castShadow = true; b.add(podium)
+  const podTop = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.18, 1.1), structureMat({ color: 0x8a6a1c, roughness: 0.3, metalness: 0.95, emissive: 0x3a2a06, emissiveIntensity: 0.6 }))
+  podTop.position.set(7.4, 2.2, -8.6); b.add(podTop)
+  const podScreen = makeScreen(1.0, 0.62, 'ticker', cfg.screen.hue, cfg.screen.hue2, 1.0, 55)
+  podScreen.mesh.position.set(7.4, 1.5, -8.14); podScreen.mesh.rotation.x = -0.5; b.add(podScreen.mesh)
+  b.onUpdate((t) => (podScreen.mat.uniforms.uTime.value = t))
+  const micStem = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.9, 6), structureMat({ color: 0x0a0a0a, roughness: 1 }))
+  micStem.position.set(7.7, 2.6, -8.5); micStem.rotation.z = 0.3; b.add(micStem)
+  const micHead = new THREE.Mesh(new THREE.SphereGeometry(0.08, 8, 8), structureMat({ color: 0x14181c, roughness: 0.6, metalness: 0.6 }))
+  micHead.position.set(7.84, 3.0, -8.5); b.add(micHead)
   // OPENING-BELL ROSTRUM — three shrinking SQUARE tiers topped by a lit brass
   // bell on a post. Tall + gold + rectilinear so it reads as a totally
   // different silhouette from crisis's low hexagonal console.

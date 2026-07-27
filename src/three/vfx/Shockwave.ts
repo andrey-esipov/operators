@@ -157,9 +157,11 @@ const WAVE_FRAG = /* glsl */ `
   // is tinted so the flavour colour survives bloom + grade.
   vec3 hotCore(float r, float ang, vec3 tint, float radius, float seed){
     float body = smoothstep(radius, 0.0, r);
-    float churn = 0.45 + 0.9 * fbm(vec2(cos(ang), sin(ang)) * 5.0 + vec2(seed, -uAge * 3.0));
-    float pin = smoothstep(radius * 0.32, 0.0, r);      // tiny white pinpoint
-    return tint * pow(body, 1.6) * churn * 2.2 + vec3(1.0) * pin * 1.6;
+    float churn = 0.5 + 0.85 * fbm(vec2(cos(ang), sin(ang)) * 5.0 + vec2(seed, -uAge * 3.0));
+    float pin = smoothstep(radius * 0.20, 0.0, r);      // tiny white pinpoint
+    // Flavour colour owns the core body; white is confined to a small pin so the
+    // centre never resolves to a flat blown-out blob.
+    return tint * pow(body, 1.95) * churn * 1.7 + vec3(1.0) * pin * 0.7;
   }
 
   void main(){
@@ -229,8 +231,8 @@ const WAVE_FRAG = /* glsl */ `
       float churn = 0.55 + 0.7 * fbm(vec2(cos(ang), sin(ang)) * 3.0 + vec2(uSeed, -uAge * 2.0));
       float a = pow(body, 1.7) * grow * fade * churn;
       // hot white only at the very core; the disc body is saturated identity colour
-      float hotcore = smoothstep(0.28, 0.0, r);
-      vec3 col = uColor2 * (0.8 + body * 2.2) + vec3(1.0) * hotcore * 1.0;
+      float hotcore = smoothstep(0.24, 0.0, r);
+      vec3 col = uColor2 * (0.9 + body * 2.2) + vec3(1.0) * hotcore * 0.45;
       col *= uIntensity;
       if (a < 0.005) discard;
       gl_FragColor = vec4(col, a * 0.9);
@@ -256,7 +258,7 @@ const WAVE_FRAG = /* glsl */ `
       vec3 core = hotCore(r, ang, uColor2, 0.24, uSeed);
       float coreA = smoothstep(0.24, 0.0, r);
       float a = clamp((spike * 0.85 + coreline + baseRing + coreA) * grow * fade, 0.0, 1.0);
-      vec3 col = uColor2 * (spike * 2.2 + baseRing * 2.0 + 0.2) + vec3(1.0) * coreline * 2.0 + core;
+      vec3 col = uColor2 * (spike * 2.8 + baseRing * 2.2 + 0.2) + vec3(1.0) * coreline * 1.15 + core;
       col *= uIntensity;
       if (a < 0.005) discard;
       gl_FragColor = vec4(col, a);
@@ -285,44 +287,49 @@ const WAVE_FRAG = /* glsl */ `
       // fine secondary chip cracks
       float chip = smoothstep(0.008, 0.0, abs(mod(ang * 3.0 + uSeed, sector) - sector * 0.5))
                    * smoothstep(edge, edge2, r) * 0.5;
-      vec3 core = hotCore(r, ang, uColor2, 0.22, uSeed) * 0.8;
-      float coreA = smoothstep(0.22, 0.0, r) * 0.8;
+      vec3 core = hotCore(r, ang, uColor2, 0.18, uSeed) * 0.5;
+      float coreA = smoothstep(0.18, 0.0, r) * 0.55;
       float a = clamp((shell + shell2 + crack * 0.9 + chip + coreA) * grow * fade, 0.0, 1.0);
       // bright glassy rim (white) on the shell crest, flavour colour in the body
-      vec3 col = uColor2 * (shell * 1.4 + shell2 + crack * 1.8 + chip * 1.5 + 0.2)
-                 + vec3(1.0) * (shell * 1.3 + crack * 0.6) + core;
+      vec3 col = uColor2 * (shell * 2.1 + shell2 * 1.4 + crack * 2.3 + chip * 1.7 + 0.15)
+                 + vec3(1.0) * (shell * 1.1 + crack * 0.5) + core;
       col *= uIntensity;
       if (a < 0.005) discard;
       gl_FragColor = vec4(col, a);
     } else if (uMode < 5.5) {
-      // BOLT: a crackling electric discharge (EX signature). Thin, jagged
-      // lightning fingers of random length jitter around the centre and a torn
-      // crackle-ring snaps around the rim — reads as raw electricity, clearly
-      // distinct from combo's smooth violet ring.
+      // BOLT: forked lightning discharge (EX signature). A handful of BOLD jagged
+      // bolts fork outward from the centre with visible splitting branches, over
+      // a torn crackle rim — unmistakably electric, not a soft ring.
       float grow = smoothstep(0.0, 0.03, uAge);
-      float fade = 1.0 - smoothstep(0.22, 1.0, uAge);
-      float ease = 1.0 - pow(1.0 - uAge, 2.4);
-      float NB = 13.0;
+      float fade = 1.0 - smoothstep(0.30, 1.0, uAge);
+      float ease = 1.0 - pow(1.0 - uAge, 2.2);
+      float NB = 9.0;
       float lane = floor((ang + 3.14159) / 6.28318 * NB);
       float within = fract((ang + 3.14159) / 6.28318 * NB) - 0.5;   // -0.5..0.5 in lane
-      // each bolt wanders sideways with noise as it travels outward
-      float wander = (fbm(vec2(lane * 4.1 + uSeed, r * 7.0 - ease * 6.0)) - 0.5) * 0.7;
-      float bolt = smoothstep(0.16, 0.0, abs(within - wander));
-      // random per-lane length; only some lanes reach far
-      float len = 0.35 + 0.65 * hash(lane + uSeed * 3.0);
-      bolt *= smoothstep(ease * len, ease * len - 0.18, r);
-      bolt *= smoothstep(0.02, 0.10, r);   // clear the very centre
+      // main bolt wanders hard sideways as it climbs outward
+      float wander = (fbm(vec2(lane * 4.1 + uSeed, r * 6.0 - ease * 5.0)) - 0.5) * 0.9;
+      float w = mix(0.20, 0.05, clamp(r, 0.0, 1.0));   // tapers toward the tip
+      float bolt = smoothstep(w, 0.0, abs(within - wander));
+      float len = 0.55 + 0.45 * hash(lane + uSeed * 3.0);
+      bolt *= smoothstep(ease * len, ease * len - 0.14, r);
+      bolt *= smoothstep(0.02, 0.11, r);   // clear the very centre
+      // a forked branch splitting off partway out
+      float bwander = wander + (hash(lane + 7.0) - 0.5) * 1.0;
+      float branch = smoothstep(w * 0.7, 0.0, abs(within - bwander))
+                     * smoothstep(0.34, 0.46, r)
+                     * smoothstep(ease * len * 0.92, ease * len * 0.92 - 0.12, r);
+      bolt = max(bolt, branch * 0.85);
       // flicker so it feels alive, not a static gear
-      bolt *= 0.55 + 0.9 * fbm(vec2(lane * 2.0, r * 12.0) + uSeed * 4.0);
-      // torn crackle ring
-      float ringR = ease * 0.62 * (0.85 + 0.3 * fbm(vec2(cos(ang), sin(ang)) * 6.0 + uSeed));
-      float crackle = smoothstep(0.05, 0.0, abs(r - ringR))
-                      * (0.5 + 0.8 * pow(0.5 + 0.5 * sin(ang * 24.0 + uSeed * 8.0), 3.0));
-      vec3 core = hotCore(r, ang, uColor2, 0.20, uSeed);
-      float coreA = smoothstep(0.20, 0.0, r);
-      float a = clamp((bolt + crackle + coreA) * grow * fade, 0.0, 1.0);
-      // bolts are white-hot cyan cores
-      vec3 col = uColor2 * (bolt * 1.6 + crackle * 2.0 + 0.2) + vec3(1.0) * (bolt * 1.4 + crackle * 0.6) + core;
+      bolt *= 0.6 + 0.7 * fbm(vec2(lane * 2.0, r * 10.0) + uSeed * 4.0);
+      // torn crackle rim snapping around the discharge
+      float ringR = ease * 0.70 * (0.85 + 0.28 * fbm(vec2(cos(ang), sin(ang)) * 6.0 + uSeed));
+      float crackle = smoothstep(0.045, 0.0, abs(r - ringR))
+                      * (0.5 + 0.8 * pow(0.5 + 0.5 * sin(ang * 26.0 + uSeed * 8.0), 3.0));
+      vec3 core = hotCore(r, ang, uColor2, 0.15, uSeed);
+      float coreA = smoothstep(0.15, 0.0, r);
+      float a = clamp((bolt * 1.1 + crackle + coreA) * grow * fade, 0.0, 1.0);
+      // saturated cyan body with only a thin white filament along the strike
+      vec3 col = uColor2 * (bolt * 2.7 + crackle * 2.2 + 0.15) + vec3(1.0) * (bolt * 0.7 + crackle * 0.4) + core;
       col *= uIntensity;
       if (a < 0.005) discard;
       gl_FragColor = vec4(col, a);

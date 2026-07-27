@@ -154,7 +154,7 @@ export function createFighterUniforms(): FighterUniforms {
     uContrast: { value: 1.23 },
     uSaturation: { value: 1.2 },
     uKickColor: { value: new THREE.Color(0xdcecff) },
-    uKickIntensity: { value: 1.25 },
+    uKickIntensity: { value: 1.12 },
   }
 }
 
@@ -433,16 +433,22 @@ export const FIGHTER_FRAGMENT = /* glsl */ `
 
     // ---- Specular (material-aware) ---------------------------------------
     vec3 H = normalize(Lkey + V);
-    float ndh = max(dot(N, H), 0.0);
+    // Use a normal blended a touch toward the broad form for the highlight, so
+    // the tight speculars don't stair-step where crisp normal detail crosses the
+    // pixel grid (prop edges, knuckles) — smoother glint, same material split.
+    vec3 Nspec = normalize(mix(N, Nbroad, 0.32));
+    float ndh = max(dot(Nspec, H), 0.0);
     // Skin: broad soft sheen. Cotton: almost none. Denim: dead matte.
     // Metal/hair: tight bright glint. Kept far apart so materials never read as
     // one uniform "wet plastic" surface.
     float specSkin  = pow(ndh, 20.0) * 0.26 * skin;
     // A second, tighter skin/brow highlight so faces catch a real glint (the
     // AAA "wet eye / cheekbone" pop) instead of one broad soft sheen.
-    float specSkinHot = pow(ndh, 60.0) * 0.5 * skin;
+    float specSkinHot = pow(ndh, 50.0) * 0.4 * skin;
     float specCloth = pow(ndh, 44.0) * 0.03 * cloth * (1.0 - denim);
-    float specMetal = pow(ndh, 95.0) * 1.45 * (metal + dark * 0.45);
+    // Metal/hardware glint: kept bright but not razor-tight, so it doesn't
+    // stair-step into hard aliasing where a prop edge crosses the pixel grid.
+    float specMetal = pow(ndh, 74.0) * 1.15 * (metal + dark * 0.45);
     vec3 specular = keyCol * (specSkin + specSkinHot + specCloth + specMetal) * uKeyIntensity * 0.3 * selfShadow;
     // Sweat sheen at low HP / exertion: extra broad wet highlight, skin only.
     specular += keyCol * pow(ndh, 40.0) * skin * uSweat * 0.6 * uKeyIntensity * 0.3;

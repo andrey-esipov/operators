@@ -538,9 +538,16 @@ function buildPlateau(b: StageBuild, cfg: StageConfig, flags: QualityFlags) {
   const boardFrame = new THREE.Mesh(new THREE.BoxGeometry(15.4, 5.6, 0.4), structureMat({ color: 0x140b22, roughness: 0.5, metalness: 0.5 }))
   boardFrame.position.set(0, 4.8, -15)
   b.add(boardFrame)
-  const boardSurf = new THREE.Mesh(new THREE.PlaneGeometry(14.6, 5.0), structureMat({ color: 0x0e0720, roughness: 0.4, metalness: 0.4 }))
+  const boardSurf = new THREE.Mesh(new THREE.PlaneGeometry(14.6, 5.0), structureMat({ color: 0x12092a, roughness: 0.4, metalness: 0.4, emissive: 0x1a1140, emissiveIntensity: 0.55 }))
   boardSurf.position.set(0, 4.8, -14.78)
   b.add(boardSurf)
+  // corner brackets so the panel unmistakably reads as a lit display, not a void
+  for (const sx of [-1, 1]) for (const sy of [-1, 1]) {
+    const hb = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.1, 0.06), glowMat(cfg.trim, 0.8))
+    hb.position.set(sx * 6.6, 4.8 + sy * 2.3, -14.68); b.add(hb)
+    const vb = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.2, 0.06), glowMat(cfg.trim, 0.8))
+    vb.position.set(sx * 7.2, 4.8 + sy * 1.9, -14.68); b.add(vb)
+  }
   for (let g = 0; g < 5; g++) {
     const gl = new THREE.Mesh(new THREE.BoxGeometry(14.2, 0.03, 0.03), glowMat(0x5a3a7a, 0.32))
     gl.position.set(0, 2.5 + g * 1.0, -14.74)

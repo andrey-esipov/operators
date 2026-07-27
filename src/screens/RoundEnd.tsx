@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import './ceremony/devExpose'
 import './ceremony/ceremony.css'
 import { ShockRing, ImpactFlash, StageBackdrop, WinnerFloor } from './ceremony/CeremonyFX'
-import { PowerWord, Kicker } from './ceremony/CeremonyType'
+import { PowerWord, Kicker, CER_GRAD } from './ceremony/CeremonyType'
 import { useGame } from '../state/game'
 import { getFighter } from '../data/fighters'
 import { Sfx } from '../lib/audio'
@@ -82,6 +82,7 @@ export function RoundEnd() {
             <PowerWord
               size="clamp(28px, 5vw, 62px)"
               color="#FFE68A"
+              gradient={CER_GRAD.gold}
               glow="#FFB703"
               glow2="#F77F00"
               skew={-8}
@@ -110,6 +111,7 @@ export function RoundEnd() {
           <PowerWord
             size={isDraw ? 'clamp(64px, 13vw, 180px)' : 'clamp(90px, 18vw, 260px)'}
             color="#FFFFFF"
+            gradient={isDraw ? CER_GRAD.steel : CER_GRAD.steel}
             glow="#F77F00"
             glow2="#E63946"
             skew={-8}

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import './ceremony/devExpose'
 import './ceremony/ceremony.css'
 import { ImpactFlash, StageBackdrop, WinnerFloor } from './ceremony/CeremonyFX'
-import { PowerWord, Kicker } from './ceremony/CeremonyType'
+import { PowerWord, Kicker, CER_GRAD } from './ceremony/CeremonyType'
 import { useGame } from '../state/game'
 import { getFighter } from '../data/fighters'
 import { Sprite } from '../components/Sprite'
@@ -120,6 +120,7 @@ export function MatchEnd() {
         <PowerWord
           size={arcadePlayerLost ? 'clamp(64px, 11vw, 150px)' : 'clamp(70px, 12vw, 168px)'}
           color={arcadePlayerLost ? '#FF6B7D' : '#FFFFFF'}
+          gradient={arcadePlayerLost ? CER_GRAD.crimson : CER_GRAD.gold}
           glow={arcadePlayerLost ? '#E63946' : '#F77F00'}
           glow2={arcadePlayerLost ? '#7209B7' : '#E63946'}
           skew={-8}

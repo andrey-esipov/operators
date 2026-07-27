@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import './ceremony/devExpose'
 import './ceremony/ceremony.css'
 import { ShockRing, ImpactFlash, SpeedStreaks } from './ceremony/CeremonyFX'
-import { PowerWord, Nameplate, Kicker } from './ceremony/CeremonyType'
+import { PowerWord, Nameplate, Kicker, CER_GRAD } from './ceremony/CeremonyType'
 import { Announcer } from '../lib/announcer'
 import { useGame } from '../state/game'
 import { getFighter } from '../data/fighters'
@@ -386,6 +386,7 @@ export function PreFight() {
               <PowerWord
                 size="clamp(140px, 24vw, 340px)"
                 color="#FFD60A"
+                gradient={CER_GRAD.gold}
                 glow="#F77F00"
                 glow2="#E63946"
                 skew={0}
@@ -415,6 +416,7 @@ export function PreFight() {
                 <PowerWord
                   size="clamp(110px, 19vw, 280px)"
                   color="#FFFFFF"
+                  gradient={CER_GRAD.steel}
                   glow="#F72585"
                   glow2="#FFD60A"
                   skew={-8}

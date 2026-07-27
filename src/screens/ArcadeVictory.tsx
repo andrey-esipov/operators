@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import './ceremony/devExpose'
 import './ceremony/ceremony.css'
 import { ImpactFlash, StageBackdrop, WinnerFloor } from './ceremony/CeremonyFX'
-import { PowerWord, Kicker } from './ceremony/CeremonyType'
+import { PowerWord, Kicker, CER_GRAD } from './ceremony/CeremonyType'
 import { useGame } from '../state/game'
 import { getFighter } from '../data/fighters'
 import { Sprite } from '../components/Sprite'
@@ -59,11 +59,11 @@ export function ArcadeVictory() {
 
       {/* TITLE — ARCADE / COMPLETE, two heavy lines, staggered crash. */}
       <div className="relative z-10 flex flex-col items-center" style={{ animation: 'cer-shake-hard 0.3s ease-out both' }}>
-        <PowerWord size="clamp(52px, 8vw, 118px)" color="#FFD60A" glow="#F77F00" glow2="#E63946" skew={-8} entrance="ko" live idle>
+        <PowerWord size="clamp(52px, 8vw, 118px)" color="#FFD60A" gradient={CER_GRAD.gold} glow="#F77F00" glow2="#E63946" skew={-8} entrance="ko" live idle>
           ARCADE
         </PowerWord>
         <div style={{ marginTop: '-0.12em' }}>
-          <PowerWord size="clamp(52px, 8vw, 118px)" color="#FFFFFF" glow="#FFD60A" glow2="#F77F00" skew={-8} entrance="slam" delay={0.12} live idle>
+          <PowerWord size="clamp(52px, 8vw, 118px)" color="#FFFFFF" gradient={CER_GRAD.steel} glow="#FFD60A" glow2="#F77F00" skew={-8} entrance="slam" delay={0.12} live idle>
             COMPLETE
           </PowerWord>
         </div>

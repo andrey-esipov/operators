@@ -92,22 +92,32 @@ export function StageBackdrop({
         className="absolute inset-0 w-full h-full object-cover"
         style={{
           imageRendering: 'pixelated',
-          filter: `brightness(${dim}) saturate(1.05) contrast(1.05)`,
+          // Desaturate + crush the busy teal art so it reads as a graded
+          // backdrop, not a competing midground — the callout must own contrast.
+          filter: `brightness(${dim}) saturate(0.6) contrast(1.22)`,
           transform: 'scale(1.06)',
         }}
       />
+      {/* Duotone grade wash — pushes the whole frame toward the screen's key
+          colour so it stops reading muddy and gains a graphic, authored grade. */}
+      {tint && (
+        <div
+          className="absolute inset-0"
+          style={{ background: tint, mixBlendMode: 'overlay', opacity: 0.5 }}
+        />
+      )}
       {tint && (
         <div
           className="absolute inset-0"
           style={{
-            background: `radial-gradient(ellipse at 50% 48%, ${tint}55 0%, ${tint}18 34%, transparent 64%)`,
+            background: `radial-gradient(ellipse at 50% 46%, ${tint}66 0%, ${tint}1f 32%, transparent 62%)`,
             mixBlendMode: 'screen',
           }}
         />
       )}
       <div
         className="absolute inset-0"
-        style={{ background: 'radial-gradient(ellipse at center, transparent 18%, rgba(0,0,0,0.8) 100%)' }}
+        style={{ background: 'radial-gradient(ellipse at center, transparent 14%, rgba(0,0,0,0.86) 100%)' }}
       />
       <div className="absolute inset-0 pointer-events-none crt-overlay" />
     </div>

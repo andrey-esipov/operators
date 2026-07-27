@@ -18,6 +18,19 @@ const ENTRANCE_ANIM: Record<Entrance, string> = {
 }
 
 /**
+ * Metallic gradient fills — the single biggest "AAA identity" lever for the
+ * power words. A hot top highlight, a saturated core and a bright specular
+ * band read as pressed metal / enamel rather than flat web type. Pass one to
+ * PowerWord via `gradient`.
+ */
+export const CER_GRAD = {
+  gold: 'linear-gradient(177deg,#fffefb 0%,#ffe9a3 26%,#ffc23d 46%,#f79313 58%,#ffd871 76%,#fff6d8 100%)',
+  steel: 'linear-gradient(177deg,#ffffff 0%,#eaf1ff 24%,#a9bbda 50%,#7f93b6 60%,#dbe6fb 80%,#ffffff 100%)',
+  crimson: 'linear-gradient(177deg,#ffe6ec 0%,#ff9fb2 28%,#ff375f 50%,#c81d3c 62%,#ff7d97 82%,#ffe0e8 100%)',
+  ice: 'linear-gradient(177deg,#ffffff 0%,#d6f6ff 26%,#66d6ff 50%,#1f9fd6 62%,#a6ecff 82%,#ffffff 100%)',
+} as const
+
+/**
  * Build a hard 8-direction outline ring using layered text-shadows. Radius is
  * expressed in `em` so the keyline thickness tracks the font size across the
  * clamp() range. Produces the crisp "sticker" edge AAA callouts rely on.
@@ -51,6 +64,7 @@ export function PowerWord({
   live = true,
   chroma = true,
   idle = false,
+  gradient,
   className = '',
   style,
 }: {
@@ -67,6 +81,7 @@ export function PowerWord({
   live?: boolean
   chroma?: boolean
   idle?: boolean
+  gradient?: string
   className?: string
   style?: CSSProperties
 }) {
@@ -118,6 +133,23 @@ export function PowerWord({
       <span className="cer-pw__layer cer-pw__fill cer-display" style={fillStyle}>
         {children}
       </span>
+      {gradient && (
+        <span
+          className="cer-pw__layer cer-pw__metal cer-display"
+          aria-hidden
+          style={{
+            fontSize: size,
+            backgroundImage: gradient,
+            WebkitBackgroundClip: 'text',
+            backgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            color: 'transparent',
+            textShadow: 'inset 0 2px 0 rgba(255,255,255,0.5)',
+          }}
+        >
+          {children}
+        </span>
+      )}
     </span>
   )
 }

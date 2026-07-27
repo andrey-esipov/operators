@@ -27,7 +27,21 @@ export function ArcadeVictory() {
   const accent = player.accent || '#FFD60A'
 
   return (
-    <div className="cer-anim relative w-full h-full flex flex-col items-center justify-center overflow-hidden px-6 py-4" style={{ background: '#05030b' }}>
+    // Arcade victory carries one more stacked band than the other ceremony
+    // screens (two-line title + defeated foil + champion + quote + unlock
+    // counter + two CTAs), so it overruns the shared safe-frame unit on short
+    // 16:9 displays and drops the CTAs below the fold. Tighten the unit locally
+    // and drive the inter-band gaps off it so the whole stack scales together
+    // instead of the type shrinking while fixed px gaps hold the height.
+    <div
+      className="cer-anim relative w-full h-full flex flex-col items-center justify-center overflow-hidden px-6"
+      style={{
+        background: '#05030b',
+        ['--cer-u' as string]: 'min(0.9vw, 1.24vh)',
+        ['--cer-gap' as string]: 'calc(1.1 * var(--cer-u))',
+        paddingBlock: 'var(--cer-gap)',
+      }}
+    >
       <StageBackdrop scenario={scenario} tint="#F7A400" dim={0.48} />
       <div className="cer-rays" style={{ opacity: 0.26 }} />
       <div className="cer-grain" />
@@ -59,7 +73,7 @@ export function ArcadeVictory() {
         style={{
           top: 26, left: 26, padding: '5px 16px 5px 14px',
           background: 'linear-gradient(180deg, #FFD60A, #F77F00)',
-          color: '#160c02', fontWeight: 800, fontSize: 'clamp(10px,1.05vw,13px)',
+          color: '#160c02', fontWeight: 800, fontSize: 'clamp(10px,calc(1.05 * var(--cer-u)),13px)',
           letterSpacing: '0.26em',
           clipPath: 'polygon(0 0, 100% 0, calc(100% - 12px) 100%, 0 100%)',
           boxShadow: '0 3px 12px rgba(0,0,0,0.5)',
@@ -99,24 +113,24 @@ export function ArcadeVictory() {
 
       {/* TITLE — ARCADE / COMPLETE, two heavy lines, staggered crash. */}
       <div className="relative z-10 flex flex-col items-center" style={{ animation: 'cer-shake-hard 0.3s ease-out both' }}>
-        <PowerWord size="clamp(58px, 9vw, 132px)" color="#FFD60A" gradient={CER_GRAD.gold} echo="#B3122F" echoOffset="0.08em" glow="#F77F00" glow2="#E63946" skew={-8} entrance="ko" live idle>
+        <PowerWord size="clamp(58px, calc(9 * var(--cer-u)), 132px)" color="#FFD60A" gradient={CER_GRAD.gold} echo="#B3122F" echoOffset="0.08em" glow="#F77F00" glow2="#E63946" skew={-8} entrance="ko" live idle>
           ARCADE
         </PowerWord>
         <div style={{ marginTop: '-0.12em' }}>
-          <PowerWord size="clamp(58px, 9vw, 132px)" color="#FFFFFF" gradient={CER_GRAD.steel} echo="#7A1F6B" echoOffset="0.08em" glow="#FFD60A" glow2="#F77F00" skew={-8} entrance="slam" delay={0.12} live idle>
+          <PowerWord size="clamp(58px, calc(9 * var(--cer-u)), 132px)" color="#FFFFFF" gradient={CER_GRAD.steel} echo="#7A1F6B" echoOffset="0.08em" glow="#FFD60A" glow2="#F77F00" skew={-8} entrance="slam" delay={0.12} live idle>
             COMPLETE
           </PowerWord>
         </div>
       </div>
 
-      <div className="cer-type relative z-10 mt-3" style={{ animation: 'cer-rise-fade 0.45s ease-out 0.35s both' }}>
-        <Kicker color="rgba(255,255,255,0.85)" style={{ fontSize: 'clamp(12px,1.5vw,18px)', letterSpacing: '0.32em' }}>
+      <div className="cer-type relative z-10" style={{ marginTop: 'var(--cer-gap)', animation: 'cer-rise-fade 0.45s ease-out 0.35s both' }}>
+        <Kicker color="rgba(255,255,255,0.85)" style={{ fontSize: 'clamp(12px,calc(1.5 * var(--cer-u)),18px)', letterSpacing: '0.32em' }}>
           YOU BEAT LENNY
         </Kicker>
       </div>
 
       {/* Champion — large, lit, rising into frame with a defeated Lenny beside. */}
-      <div className="relative z-10 mt-3 flex items-end justify-center gap-10 md:gap-16">
+      <div className="relative z-10 flex items-end justify-center gap-10 md:gap-16" style={{ marginTop: 'var(--cer-gap)' }}>
         {(() => {
           const lenny = getFighter('lenny')
           return lenny ? (
@@ -124,10 +138,10 @@ export function ArcadeVictory() {
               className="flex flex-col items-center"
               style={{ animation: 'cer-loser-in 0.5s ease-out 0.4s both' }}
             >
-              <div style={{ width: 'min(14vw, 130px)', height: 'min(16vh, 130px)', filter: 'grayscale(0.6) brightness(0.7)' }}>
+              <div style={{ width: 'min(calc(14 * var(--cer-u)), 130px)', height: 'min(calc(9.0 * var(--cer-u)), 130px)', filter: 'grayscale(0.6) brightness(0.7)' }}>
                 <Sprite fighter={lenny} side="b" state="lose" />
               </div>
-              <Kicker style={{ marginTop: 6, fontSize: 'clamp(9px,1vw,12px)', color: 'rgba(255,255,255,0.5)' }}>LENNY · DEFEATED</Kicker>
+              <Kicker style={{ marginTop: 6, fontSize: 'clamp(9px,calc(1 * var(--cer-u)),12px)', color: 'rgba(255,255,255,0.5)' }}>LENNY · DEFEATED</Kicker>
             </div>
           ) : null
         })()}
@@ -151,7 +165,7 @@ export function ArcadeVictory() {
               animation: 'cer-spotlight 2.6s ease-in-out infinite',
             }}
           />
-          <div className="relative" style={{ width: 'min(42vw, 460px)', height: 'min(58vh, 500px)' }}>
+          <div className="relative" style={{ width: 'min(calc(42 * var(--cer-u)), 460px)', height: 'min(calc(32.62 * var(--cer-u)), 500px)' }}>
             <div
               className="cer-breathe"
               style={{ width: '100%', height: '100%', filter: `drop-shadow(0 0 38px ${accent}) drop-shadow(6px 10px 0 rgba(0,0,0,0.5))` }}
@@ -161,7 +175,7 @@ export function ArcadeVictory() {
             <WinnerFloor color={accent} />
           </div>
           <div className="cer-type mt-1" style={{ transform: 'skewX(-10deg)' }}>
-            <span className="cer-display" style={{ display: 'inline-block', transform: 'skewX(10deg)', color: accent, fontSize: 'clamp(22px,3vw,40px)', letterSpacing: '0.03em', textShadow: `2px 2px 0 rgba(0,0,0,0.85), 0 0 18px ${accent}` }}>
+            <span className="cer-display" style={{ display: 'inline-block', transform: 'skewX(10deg)', color: accent, fontSize: 'clamp(22px,calc(3 * var(--cer-u)),40px)', letterSpacing: '0.03em', textShadow: `2px 2px 0 rgba(0,0,0,0.85), 0 0 18px ${accent}` }}>
               {player.shortName} · CHAMPION
             </span>
           </div>
@@ -170,9 +184,10 @@ export function ArcadeVictory() {
 
       {/* Pull-quote. */}
       <div
-        className="cer-type cer-quote relative z-10 mt-4 max-w-2xl text-center px-6"
+        className="cer-type cer-quote relative z-10 max-w-2xl text-center px-6"
         style={{
-          fontStyle: 'italic', fontWeight: 500, fontSize: 'clamp(16px,2vw,24px)',
+          marginTop: 'var(--cer-gap)',
+          fontStyle: 'italic', fontWeight: 500, fontSize: 'clamp(16px,calc(2 * var(--cer-u)),24px)',
           color: '#fff', lineHeight: 1.2, textShadow: '1px 1px 0 rgba(0,0,0,0.8)',
           animation: 'cer-rise-fade 0.45s ease-out 0.55s both',
         }}
@@ -182,16 +197,17 @@ export function ArcadeVictory() {
       </div>
 
       <div
-        className="cer-type relative z-10 mt-3"
-        style={{ animation: 'cer-rise-fade 0.45s ease-out 0.65s both' }}
+        className="cer-type relative z-10"
+        style={{ marginTop: 'var(--cer-gap)', animation: 'cer-rise-fade 0.45s ease-out 0.65s both' }}
       >
-        <Kicker color="#FFD60A" style={{ fontSize: 'clamp(9px,1.1vw,13px)' }}>
+        <Kicker color="#FFD60A" style={{ fontSize: 'clamp(9px,calc(1.1 * var(--cer-u)),13px)' }}>
           QUOTE BANK · {quoteBank.length} FRAMEWORKS UNLOCKED
         </Kicker>
       </div>
 
       <div
-        className="relative z-10 mt-5 flex gap-4 flex-wrap justify-center items-center"
+        className="relative z-10 flex gap-4 flex-wrap justify-center items-center"
+        style={{ marginTop: 'calc(1.6 * var(--cer-u))' }}
       >
         <button
           onClick={() => { Sfx.menuSelect(); useGame.getState().setPhase('generate-fighter') }}
@@ -199,7 +215,7 @@ export function ArcadeVictory() {
           style={{
             background: 'linear-gradient(180deg, rgba(24,16,4,0.92), rgba(10,7,3,0.94))',
             color: '#FFD60A',
-            fontSize: 'clamp(14px,1.6vw,19px)',
+            fontSize: 'clamp(14px,calc(1.6 * var(--cer-u)),19px)',
             fontWeight: 800,
             letterSpacing: '0.16em',
             border: '2px solid #FFD60A',
@@ -217,7 +233,7 @@ export function ArcadeVictory() {
           style={{
             background: 'transparent',
             color: 'rgba(255,255,255,0.55)',
-            fontSize: 'clamp(12px,1.35vw,16px)',
+            fontSize: 'clamp(12px,calc(1.35 * var(--cer-u)),16px)',
             fontWeight: 700,
             letterSpacing: '0.2em',
             border: '1.5px solid rgba(255,255,255,0.26)',

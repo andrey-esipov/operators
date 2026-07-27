@@ -89,9 +89,9 @@ export function RoundEnd() {
       >
         {isPerfect && (
           <div className="flex items-center gap-3 mb-1">
-            <span style={{ color: '#FFD60A', fontSize: 'clamp(20px,3vw,34px)' }}>★</span>
+            <span style={{ color: '#FFD60A', fontSize: 'clamp(20px,calc(3 * var(--cer-u)),34px)' }}>★</span>
             <PowerWord
-              size="clamp(28px, 5vw, 62px)"
+              size="clamp(28px, calc(5 * var(--cer-u)), 62px)"
               color="#FFE68A"
               gradient={CER_GRAD.gold}
               glow="#FFB703"
@@ -102,7 +102,7 @@ export function RoundEnd() {
             >
               PERFECT
             </PowerWord>
-            <span style={{ color: '#FFD60A', fontSize: 'clamp(20px,3vw,34px)' }}>★</span>
+            <span style={{ color: '#FFD60A', fontSize: 'clamp(20px,calc(3 * var(--cer-u)),34px)' }}>★</span>
           </div>
         )}
 
@@ -116,7 +116,7 @@ export function RoundEnd() {
               <div
                 className="absolute"
                 style={{
-                  left: 0, top: 0, width: 'clamp(320px,44vw,640px)', height: 'clamp(320px,44vw,640px)',
+                  left: 0, top: 0, width: 'clamp(320px,calc(44 * var(--cer-u)),640px)', height: 'clamp(320px,calc(44 * var(--cer-u)),640px)',
                   transform: 'translate(-50%,-50%)',
                   background: `radial-gradient(circle at center, #fff 0%, #FFE7C2 16%, ${accent}cc 34%, transparent 62%)`,
                   animation: 'cer-ko-burst 0.4s cubic-bezier(0.1,0.8,0.3,1) both',
@@ -128,7 +128,7 @@ export function RoundEnd() {
                   className="absolute"
                   style={{
                     left: 0, top: 0,
-                    width: 'clamp(280px,52vw,760px)', height: i % 2 ? 5 : 8,
+                    width: 'clamp(280px,calc(52 * var(--cer-u)),760px)', height: i % 2 ? 5 : 8,
                     transformOrigin: 'center',
                     background: `linear-gradient(90deg, transparent, #fff 46%, #fff 54%, transparent)`,
                     boxShadow: `0 0 14px ${accent}`,
@@ -141,17 +141,17 @@ export function RoundEnd() {
           )}
           {/* angular energy slashes flanking the KO */}
           <span className="absolute top-1/2 -left-[6%] pointer-events-none" style={{
-            width: 'clamp(60px,10vw,150px)', height: 8, transform: 'translateY(-50%) skewX(-30deg)',
+            width: 'clamp(60px,calc(10 * var(--cer-u)),150px)', height: 8, transform: 'translateY(-50%) skewX(-30deg)',
             background: `linear-gradient(90deg, transparent, ${accent})`, boxShadow: `0 0 16px ${accent}`,
             animation: 'cer-wipe-left 0.3s ease-out 0.1s both',
           }} />
           <span className="absolute top-1/2 -right-[6%] pointer-events-none" style={{
-            width: 'clamp(60px,10vw,150px)', height: 8, transform: 'translateY(-50%) skewX(-30deg)',
+            width: 'clamp(60px,calc(10 * var(--cer-u)),150px)', height: 8, transform: 'translateY(-50%) skewX(-30deg)',
             background: `linear-gradient(270deg, transparent, ${accent})`, boxShadow: `0 0 16px ${accent}`,
             animation: 'cer-wipe-right 0.3s ease-out 0.1s both',
           }} />
           <PowerWord
-            size={isDraw ? 'clamp(64px, 13vw, 180px)' : 'clamp(110px, 21vw, 300px)'}
+            size={isDraw ? 'clamp(64px, calc(13 * var(--cer-u)), 180px)' : 'clamp(110px, calc(21 * var(--cer-u)), 300px)'}
             color="#FFFFFF"
             gradient={isDraw ? CER_GRAD.ice : CER_GRAD.steel}
             echo={isDraw ? '#1f6f88' : '#C81020'}
@@ -174,10 +174,10 @@ export function RoundEnd() {
             className="flex flex-col items-center"
             style={{ animation: 'cer-loser-in 0.5s ease-out 0.15s both' }}
           >
-            <div style={{ width: 'min(24vw, 235px)', height: 'min(33vh, 265px)', filter: 'grayscale(0.6) brightness(0.7)' }}>
+            <div style={{ width: 'min(calc(24 * var(--cer-u)), 235px)', height: 'min(calc(18.56 * var(--cer-u)), 265px)', filter: 'grayscale(0.6) brightness(0.7)' }}>
               <Sprite fighter={loser} side={loserSide} state="lose" />
             </div>
-            <Kicker style={{ marginTop: 2, fontSize: 'clamp(9px,1vw,12px)', letterSpacing: '0.28em', color: 'rgba(255,255,255,0.5)' }}>
+            <Kicker style={{ marginTop: 2, fontSize: 'clamp(9px,calc(1 * var(--cer-u)),12px)', letterSpacing: '0.28em', color: 'rgba(255,255,255,0.5)' }}>
               {loser.shortName} · DOWN
             </Kicker>
           </div>
@@ -194,7 +194,7 @@ export function RoundEnd() {
             <div className="absolute" style={{ left: '50%', bottom: '14%' }}>
               <ShockRing color={accent} size={200} thickness={4} delay={0.25} duration={0.6} />
             </div>
-            <div className="relative" style={{ width: 'min(42vw, 450px)', height: 'min(60vh, 520px)' }}>
+            <div className="relative" style={{ width: 'min(calc(42 * var(--cer-u)), 450px)', height: 'min(calc(33.75 * var(--cer-u)), 520px)' }}>
               <div
                 className="cer-breathe"
                 style={{
@@ -227,7 +227,7 @@ export function RoundEnd() {
               className="cer-display"
               style={{
                 display: 'inline-block', transform: 'skewX(10deg)', color: '#fff',
-                fontSize: 'clamp(20px, 3vw, 40px)', letterSpacing: '0.04em',
+                fontSize: 'clamp(20px, calc(3 * var(--cer-u)), 40px)', letterSpacing: '0.04em',
                 textShadow: `2px 2px 0 rgba(0,0,0,0.8), 0 0 16px ${accent}`,
               }}
             >
@@ -246,7 +246,7 @@ export function RoundEnd() {
           <div
             className="cer-type cer-quote mt-3 max-w-2xl text-center px-6"
             style={{
-              fontStyle: 'italic', fontWeight: 500, fontSize: 'clamp(16px,2vw,24px)',
+              fontStyle: 'italic', fontWeight: 500, fontSize: 'clamp(16px,calc(2 * var(--cer-u)),24px)',
               color: 'rgba(255,255,255,0.82)', letterSpacing: '0.01em', lineHeight: 1.15,
               animation: 'cer-rise-fade 0.45s ease-out 0.55s both',
               textShadow: '1px 1px 0 rgba(0,0,0,0.8)',

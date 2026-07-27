@@ -57,7 +57,7 @@ export function PowerWord({
   glow = '#F77F00',
   glow2,
   stroke = '#08040f',
-  strokeWidth = 'clamp(2px, 0.5vw, 6px)',
+  strokeWidth = 'clamp(2px, calc(0.5 * var(--cer-u)), 6px)',
   skew = -8,
   entrance = 'slam',
   delay = 0,
@@ -99,9 +99,9 @@ export function PowerWord({
   // then a hard drop shadow for weight, then the coloured glow bloom behind.
   const shadow = [
     ringShadow(0.03, stroke),
-    'clamp(4px,0.6vw,9px) clamp(5px,0.7vw,11px) 0 rgba(0,0,0,0.9)',
-    glow ? `0 0 clamp(16px,2.2vw,38px) ${glow}` : '',
-    glow2 ? `0 0 clamp(32px,4.6vw,82px) ${glow2}` : '',
+    'clamp(4px,calc(0.6 * var(--cer-u)),9px) clamp(5px,calc(0.7 * var(--cer-u)),11px) 0 rgba(0,0,0,0.9)',
+    glow ? `0 0 clamp(16px,calc(2.2 * var(--cer-u)),38px) ${glow}` : '',
+    glow2 ? `0 0 clamp(32px,calc(4.6 * var(--cer-u)),82px) ${glow2}` : '',
   ].filter(Boolean).join(', ')
 
   const fillStyle: CSSProperties = {
@@ -132,7 +132,7 @@ export function PowerWord({
             fontSize: size,
             color: echo,
             transform: `translate(${echoOffset}, ${echoOffset})`,
-            textShadow: `${ringShadow(0.024, echo)}, 0 0 clamp(6px,1vw,16px) ${echo}`,
+            textShadow: `${ringShadow(0.024, echo)}, 0 0 clamp(6px,calc(1 * var(--cer-u)),16px) ${echo}`,
           }}
         >
           {children}
@@ -184,7 +184,7 @@ export function Nameplate({
   align,
   tag,
   tagStyle,
-  size = 'clamp(30px, 4.4vw, 66px)',
+  size = 'clamp(30px, calc(4.4 * var(--cer-u)), 66px)',
 }: {
   name: string
   sub?: string
@@ -202,7 +202,7 @@ export function Nameplate({
           className="cer-cond"
           style={{
             display: 'inline-block',
-            fontSize: 'clamp(9px, 1vw, 13px)',
+            fontSize: 'clamp(9px, calc(1 * var(--cer-u)), 13px)',
             fontWeight: 700,
             letterSpacing: '0.34em',
             color: '#fff',
@@ -260,7 +260,7 @@ export function Nameplate({
         <div
           className="cer-cond"
           style={{
-            fontSize: 'clamp(10px, 1.15vw, 15px)',
+            fontSize: 'clamp(10px, calc(1.15 * var(--cer-u)), 15px)',
             fontWeight: 600,
             letterSpacing: '0.24em',
             color: 'rgba(255,255,255,0.82)',
@@ -295,7 +295,7 @@ export function Kicker({
         letterSpacing: '0.4em',
         textTransform: 'uppercase',
         color,
-        fontSize: 'clamp(10px, 1.15vw, 15px)',
+        fontSize: 'clamp(10px, calc(1.15 * var(--cer-u)), 15px)',
         textShadow: '1px 1px 0 rgba(0,0,0,0.8)',
         ...style,
       }}

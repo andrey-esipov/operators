@@ -126,8 +126,8 @@ export function MatchEnd() {
           className="absolute pointer-events-none"
           style={{
             left: '50%', top: '52%',
-            width: arcadePlayerLost ? 'min(72vw, 1040px)' : 'min(80vw, 1180px)',
-            height: 'clamp(40px, 6.4vw, 96px)',
+            width: arcadePlayerLost ? 'min(calc(72 * var(--cer-u)), 1040px)' : 'min(calc(80 * var(--cer-u)), 1180px)',
+            height: 'clamp(40px, calc(6.4 * var(--cer-u)), 96px)',
             transform: `translate(${arcadePlayerLost ? '-56%' : '-50%'}, -50%) skewX(${arcadePlayerLost ? -15 : -8}deg)`,
             background: arcadePlayerLost
               ? 'linear-gradient(180deg, transparent, rgba(46,92,138,0.32) 22%, rgba(10,20,40,0.5) 50%, rgba(46,92,138,0.32) 78%, transparent)'
@@ -139,7 +139,7 @@ export function MatchEnd() {
           }}
         />
         <PowerWord
-          size={arcadePlayerLost ? 'clamp(72px, 12.5vw, 186px)' : 'clamp(80px, 13.5vw, 202px)'}
+          size={arcadePlayerLost ? 'clamp(72px, calc(12.5 * var(--cer-u)), 186px)' : 'clamp(80px, calc(13.5 * var(--cer-u)), 202px)'}
           color={arcadePlayerLost ? '#DCE4F2' : '#FFFFFF'}
           gradient={arcadePlayerLost ? CER_GRAD.steel : CER_GRAD.gold}
           echo={arcadePlayerLost ? '#0A1A33' : '#B3122F'}
@@ -159,14 +159,14 @@ export function MatchEnd() {
         className="cer-type relative z-10 mt-1"
         style={{ animation: 'cer-rise-fade 0.45s ease-out 0.25s both' }}
       >
-        <Kicker color={titleColor} style={{ fontSize: 'clamp(14px,2vw,24px)', letterSpacing: '0.28em', fontWeight: 700 }}>
+        <Kicker color={titleColor} style={{ fontSize: 'clamp(14px,calc(2 * var(--cer-u)),24px)', letterSpacing: '0.28em', fontWeight: 700 }}>
           {arcadePlayerLost ? `DEFEATED BY ${winner.name.toUpperCase()}` : `${winner.name.toUpperCase()} · WINNER`}
         </Kicker>
       </div>
 
       {mode === 'arcade' && arcadePlayerWon && (
         <div className="cer-type relative z-10 mt-2" style={{ animation: 'cer-rise-fade 0.45s ease-out 0.32s both' }}>
-          <Kicker color="rgba(255,255,255,0.75)" style={{ fontSize: 'clamp(10px,1.2vw,14px)' }}>
+          <Kicker color="rgba(255,255,255,0.75)" style={{ fontSize: 'clamp(10px,calc(1.2 * var(--cer-u)),14px)' }}>
             STAGE {arcadeStep + 1} / {ARCADE_PROGRESSION.length}
             {isFinalBoss && <span style={{ color: '#FFD60A' }}> · FINAL BOSS DEFEATED</span>}
           </Kicker>
@@ -182,8 +182,8 @@ export function MatchEnd() {
           style={{ animation: 'cer-loser-in 0.5s ease-out 0.2s both' }}
         >
           <div style={{
-            width: foil.litVictor ? 'min(29vw, 310px)' : 'min(21vw, 200px)',
-            height: foil.litVictor ? 'min(42vh, 360px)' : 'min(27vh, 210px)',
+            width: foil.litVictor ? 'min(calc(29 * var(--cer-u)), 310px)' : 'min(calc(21 * var(--cer-u)), 200px)',
+            height: foil.litVictor ? 'min(calc(23.62 * var(--cer-u)), 360px)' : 'min(calc(15.19 * var(--cer-u)), 210px)',
             filter: foil.litVictor
               ? `drop-shadow(0 0 26px ${accent}) brightness(1.05)`
               : 'grayscale(0.7) brightness(0.62)',
@@ -191,13 +191,13 @@ export function MatchEnd() {
             <Sprite fighter={foil.fighter} side={foil.side} state={foil.state} />
           </div>
           <Kicker style={{
-            marginTop: 2, fontSize: foil.litVictor ? 'clamp(11px,1.35vw,17px)' : 'clamp(9px,1vw,12px)',
+            marginTop: 2, fontSize: foil.litVictor ? 'clamp(11px,calc(1.35 * var(--cer-u)),17px)' : 'clamp(9px,calc(1 * var(--cer-u)),12px)',
             color: foil.litVictor ? accent : 'rgba(255,255,255,0.5)',
             letterSpacing: '0.18em', fontWeight: 700,
             textShadow: foil.litVictor ? `0 0 14px ${accent}` : undefined,
           }}>{foil.label}</Kicker>
           {!foil.litVictor && (
-            <div className="cer-type cer-quote mt-1 max-w-[16ch] text-center leading-tight" style={{ fontStyle: 'italic', fontSize: 'clamp(12px,1.3vw,15px)', color: 'rgba(255,255,255,0.4)' }}>“{loser.voiceLines.lose}”</div>
+            <div className="cer-type cer-quote mt-1 max-w-[16ch] text-center leading-tight" style={{ fontStyle: 'italic', fontSize: 'clamp(12px,calc(1.3 * var(--cer-u)),15px)', color: 'rgba(255,255,255,0.4)' }}>“{loser.voiceLines.lose}”</div>
           )}
         </div>
 
@@ -217,7 +217,7 @@ export function MatchEnd() {
           />
           <div
             style={{
-              width: 'min(42vw, 480px)', height: 'min(50vh, 520px)', position: 'relative',
+              width: 'min(calc(42 * var(--cer-u)), 480px)', height: 'min(calc(28.12 * var(--cer-u)), 520px)', position: 'relative',
             }}
           >
             <div
@@ -235,11 +235,11 @@ export function MatchEnd() {
             <WinnerFloor color={hero.defeated ? '#3a3f4d' : accent} />
           </div>
           <div className="cer-type mt-1" style={{ transform: 'skewX(-10deg)' }}>
-            <span className="cer-display" style={{ display: 'inline-block', transform: 'skewX(10deg)', color: hero.defeated ? '#c8ccd6' : accent, fontSize: 'clamp(22px,3vw,38px)', letterSpacing: '0.03em', textShadow: hero.defeated ? '2px 2px 0 rgba(0,0,0,0.85)' : `2px 2px 0 rgba(0,0,0,0.85), 0 0 18px ${accent}` }}>
+            <span className="cer-display" style={{ display: 'inline-block', transform: 'skewX(10deg)', color: hero.defeated ? '#c8ccd6' : accent, fontSize: 'clamp(22px,calc(3 * var(--cer-u)),38px)', letterSpacing: '0.03em', textShadow: hero.defeated ? '2px 2px 0 rgba(0,0,0,0.85)' : `2px 2px 0 rgba(0,0,0,0.85), 0 0 18px ${accent}` }}>
               {hero.fighter.shortName}
             </span>
           </div>
-          <div className="cer-type cer-quote mt-1 max-w-[32ch] text-center leading-tight" style={{ fontStyle: 'italic', fontWeight: 500, fontSize: 'clamp(14px,1.6vw,19px)', color: hero.defeated ? 'rgba(255,255,255,0.6)' : '#fff', textShadow: '1px 1px 0 rgba(0,0,0,0.8)' }}>“{hero.quote}”</div>
+          <div className="cer-type cer-quote mt-1 max-w-[32ch] text-center leading-tight" style={{ fontStyle: 'italic', fontWeight: 500, fontSize: 'clamp(14px,calc(1.6 * var(--cer-u)),19px)', color: hero.defeated ? 'rgba(255,255,255,0.6)' : '#fff', textShadow: '1px 1px 0 rgba(0,0,0,0.8)' }}>“{hero.quote}”</div>
         </div>
       </div>
 
@@ -265,7 +265,7 @@ export function MatchEnd() {
             style={{
               background: 'linear-gradient(180deg, rgba(24,16,4,0.92), rgba(10,7,3,0.94))',
               color: accent,
-              fontSize: 'clamp(14px,1.55vw,19px)',
+              fontSize: 'clamp(14px,calc(1.55 * var(--cer-u)),19px)',
               fontWeight: 800,
               letterSpacing: '0.16em',
               border: `2px solid ${accent}`,
@@ -285,7 +285,7 @@ export function MatchEnd() {
             style={{
               background: 'linear-gradient(180deg, rgba(10,18,32,0.92), rgba(6,10,20,0.94))',
               color: '#BBD0EC',
-              fontSize: 'clamp(14px,1.55vw,19px)',
+              fontSize: 'clamp(14px,calc(1.55 * var(--cer-u)),19px)',
               fontWeight: 800,
               letterSpacing: '0.16em',
               border: '2px solid #3E6DA0',
@@ -340,10 +340,10 @@ function StatBar({ stats, lost }: { stats: { label: string; value: string; unit:
               minWidth: 180,
             }}
           >
-            <div className="cer-cond" style={{ fontSize: 'clamp(10px,1.15vw,14px)', fontWeight: 700, letterSpacing: '0.24em', color: s.accent }}>{s.label}</div>
+            <div className="cer-cond" style={{ fontSize: 'clamp(10px,calc(1.15 * var(--cer-u)),14px)', fontWeight: 700, letterSpacing: '0.24em', color: s.accent }}>{s.label}</div>
             <div className="flex items-baseline gap-1.5 mt-0.5">
-              <span className="cer-display" style={{ fontSize: 'clamp(38px,4.8vw,66px)', color: '#fff', lineHeight: 0.84, textShadow: `0 2px 0 rgba(0,0,0,0.6), 0 0 16px ${s.accent}55` }}>{s.value}</span>
-              <span className="cer-cond" style={{ fontSize: 'clamp(11px,1.25vw,16px)', fontWeight: 700, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.6)' }}>{s.unit}</span>
+              <span className="cer-display" style={{ fontSize: 'clamp(38px,calc(4.8 * var(--cer-u)),66px)', color: '#fff', lineHeight: 0.84, textShadow: `0 2px 0 rgba(0,0,0,0.6), 0 0 16px ${s.accent}55` }}>{s.value}</span>
+              <span className="cer-cond" style={{ fontSize: 'clamp(11px,calc(1.25 * var(--cer-u)),16px)', fontWeight: 700, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.6)' }}>{s.unit}</span>
             </div>
           </div>
         ))}
@@ -377,7 +377,7 @@ function ShareButton({
       style={{
         background: 'transparent',
         color: 'rgba(255,255,255,0.5)',
-        fontSize: 'clamp(11px,1.2vw,14px)',
+        fontSize: 'clamp(11px,calc(1.2 * var(--cer-u)),14px)',
         fontWeight: 700,
         letterSpacing: '0.2em',
         border: '1.5px solid rgba(255,255,255,0.22)',

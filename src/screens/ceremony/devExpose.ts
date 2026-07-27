@@ -49,14 +49,39 @@ if (import.meta.env.DEV) {
     arcadeStep?: number
   }
 
+  // Build FULLY-POPULATED entries. An earlier version of this helper cast
+  // partial objects through `as unknown as BattleLogEntry`, which silenced tsc
+  // and then crashed the renderer on `for (const s of entry.appliedStatuses)`
+  // — blanking match-end and arcade-victory so nobody ever reviewed them. The
+  // harness must produce data the real sim could produce; no casts.
   function sampleLog(winner: Side, quote: string, episode: string): BattleLogEntry[] {
     const w = winner
-    const l: Side = winner === 'a' ? 'b' : 'a'
-    return [
-      { attacker: w, defender: l, moveId: 'x', moveName: 'OPENER', finalDamage: 90, quote, episode } as unknown as BattleLogEntry,
-      { attacker: w, defender: l, moveId: 'y', moveName: 'RUSH', finalDamage: 140, quote, episode } as unknown as BattleLogEntry,
-      { attacker: w, defender: l, moveId: 'z', moveName: 'FINISH', finalDamage: 220, quote, episode } as unknown as BattleLogEntry,
+    const beats: Array<{ id: string; name: string; dmg: number; extra: Partial<BattleLogEntry> }> = [
+      { id: 'x', name: 'OPENER', dmg: 90, extra: {} },
+      { id: 'y', name: 'RUSH', dmg: 140, extra: { flash: 'combo', comboBonus: 22, comboTitle: 'TRIPLE THREAT' } },
+      { id: 'z', name: 'FINISH', dmg: 220, extra: { flash: 'ult', shattered: true, signature: true } },
     ]
+    let hp = 450
+    return beats.map(({ id, name, dmg, extra }, i) => {
+      hp = Math.max(0, hp - dmg)
+      return {
+        turn: i + 1,
+        attacker: w,
+        moveId: id,
+        moveName: name,
+        baseDamage: dmg,
+        scenarioMultiplier: 1,
+        comboBonus: 0,
+        critMultiplier: 1,
+        finalDamage: dmg,
+        hpAfter: w === 'a' ? { a: 450, b: hp } : { a: hp, b: 450 },
+        quote,
+        episode,
+        timestamp: new Date(0).toISOString(),
+        appliedStatuses: [],
+        ...extra,
+      } satisfies BattleLogEntry
+    })
   }
 
   const CER = {

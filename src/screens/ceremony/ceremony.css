@@ -21,6 +21,21 @@
   --cer-display: 'Anton', 'Arial Narrow', system-ui, sans-serif;
   --cer-cond: 'Oswald', 'Arial Narrow', system-ui, sans-serif;
   --cer-quote: 'Barlow Condensed', 'Oswald', system-ui, sans-serif;
+
+  /* SAFE-FRAME UNIT. Every ceremony composition is a vertical stack inside a
+     `justify-center; overflow: hidden` box, so anything that overflows is
+     clipped symmetrically at BOTH edges — the title loses its top and the CTAs
+     fall below the fold with no scrollbar to reach them. Sizing purely off vw
+     is what caused that: at 1600x900 the two 132px title lines plus a 500px
+     hero plus quote plus buttons total well over 900px, and 9vw never notices
+     because the viewport is wide.
+
+     --cer-u is "1vw that degrades on short viewports". At >=16:9 it is exactly
+     1vw, so the authored proportions are untouched on tall displays. Below
+     16:9 it falls back to height, shrinking display type and hero art together
+     so the composition stays whole. Use `calc(N * var(--cer-u))` anywhere a
+     vw-driven size contributes to the vertical stack. */
+  --cer-u: min(1vw, 1.42vh);
 }
 
 /* Crisp, anti-aliased ceremony type. Scoped so we never touch sprite pixels. */

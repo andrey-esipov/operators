@@ -91,7 +91,12 @@ export function eventsForLogEntry(entry: BattleLogEntry, maxHp: number): FightEv
     out.push({ kind: 'whiff', attacker: entry.attacker })
   }
 
-  for (const s of entry.appliedStatuses) {
+  // Defensive: the battle log crosses a serialization boundary (it is persisted
+  // and restored across sessions), so an entry written by an older build can
+  // arrive without this array. An unguarded for-of throws inside the render
+  // path and blanks the entire screen with no recovery — a lost match is worse
+  // than a missing status pip.
+  for (const s of entry.appliedStatuses ?? []) {
     out.push({ kind: 'status', side: entry.attacker === 'a' ? 'b' : 'a', status: s })
   }
   return out

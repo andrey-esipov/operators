@@ -219,7 +219,7 @@ export function PreFight() {
               <div key={`cl${i}`} className="absolute" style={{
                 top: `${30 + i * 14}%`, left: 0, width: 90, height: 8,
                 background: `linear-gradient(90deg, transparent, ${warm})`,
-                ['--chev-from' as string]: '-20vw', ['--chev-to' as string]: '30vw',
+                ['--chev-from' as string]: '-calc(20 * var(--cer-u))', ['--chev-to' as string]: 'calc(30 * var(--cer-u))',
                 animation: `cer-chev-drift ${0.55 + i * 0.05}s ease-out ${i * 0.05}s both`,
               }} />
             ))}
@@ -227,7 +227,7 @@ export function PreFight() {
               <div key={`cr${i}`} className="absolute" style={{
                 top: `${36 + i * 14}%`, right: 0, width: 90, height: 8,
                 background: `linear-gradient(270deg, transparent, ${cool})`,
-                ['--chev-from' as string]: '20vw', ['--chev-to' as string]: '-30vw',
+                ['--chev-from' as string]: 'calc(20 * var(--cer-u))', ['--chev-to' as string]: '-calc(30 * var(--cer-u))',
                 animation: `cer-chev-drift ${0.55 + i * 0.05}s ease-out ${0.1 + i * 0.05}s both`,
               }} />
             ))}
@@ -262,7 +262,7 @@ export function PreFight() {
           className="absolute z-20"
           style={{
             left: '0%', bottom: '-4%',
-            width: 'min(45vw, 580px)', height: 'min(88vh, 850px)',
+            width: 'min(calc(45 * var(--cer-u)), 580px)', height: 'min(calc(49.5 * var(--cer-u)), 850px)',
           }}
         >
           <div
@@ -292,7 +292,7 @@ export function PreFight() {
           className="absolute z-20"
           style={{
             right: '0%', bottom: '-4%',
-            width: 'min(45vw, 580px)', height: 'min(88vh, 850px)',
+            width: 'min(calc(45 * var(--cer-u)), 580px)', height: 'min(calc(49.5 * var(--cer-u)), 850px)',
           }}
         >
           <div
@@ -356,7 +356,7 @@ export function PreFight() {
           style={{ animation: 'cer-hud-in 0.5s cubic-bezier(0.2,0.9,0.25,1) both' }}
         >
           <div className="flex items-center gap-3 mb-2">
-            <div style={{ height: 2, width: 'clamp(40px,7vw,120px)', background: 'linear-gradient(90deg,transparent,rgba(255,255,255,0.7))' }} />
+            <div style={{ height: 2, width: 'clamp(40px,calc(7 * var(--cer-u)),120px)', background: 'linear-gradient(90deg,transparent,rgba(255,255,255,0.7))' }} />
             {[1, 2, 3].map((r) => (
               <div key={r} style={{
                 width: 12, height: 12, transform: 'rotate(45deg)',
@@ -365,16 +365,16 @@ export function PreFight() {
                 border: '1px solid rgba(255,255,255,0.5)',
               }} />
             ))}
-            <div style={{ height: 2, width: 'clamp(40px,7vw,120px)', background: 'linear-gradient(90deg,rgba(255,255,255,0.7),transparent)' }} />
+            <div style={{ height: 2, width: 'clamp(40px,calc(7 * var(--cer-u)),120px)', background: 'linear-gradient(90deg,rgba(255,255,255,0.7),transparent)' }} />
           </div>
-          <Kicker style={{ fontSize: 'clamp(9px,1vw,12px)', letterSpacing: '0.5em', color: 'rgba(255,255,255,0.6)' }}>
+          <Kicker style={{ fontSize: 'clamp(9px,calc(1 * var(--cer-u)),12px)', letterSpacing: '0.5em', color: 'rgba(255,255,255,0.6)' }}>
             {fast ? 'TRAINING' : `ROUND ${round} OF 3`}
           </Kicker>
           <div
             className="cer-type cer-display"
             style={{
               color: '#FFD60A',
-              fontSize: beat === 0 ? 'clamp(30px, 5vw, 66px)' : 'clamp(20px, 2.4vw, 32px)',
+              fontSize: beat === 0 ? 'clamp(30px, calc(5 * var(--cer-u)), 66px)' : 'clamp(20px, calc(2.4 * var(--cer-u)), 32px)',
               lineHeight: 1,
               marginTop: 4,
               letterSpacing: '0.02em',
@@ -389,7 +389,7 @@ export function PreFight() {
           {beat === 0 && (
             <div
               className="cer-type cer-cond"
-              style={{ color: '#FBBF24', fontSize: 'clamp(12px,1.5vw,18px)', fontWeight: 600, letterSpacing: '0.16em', marginTop: 10, textShadow: '2px 2px 0 rgba(0,0,0,0.8)' }}
+              style={{ color: '#FBBF24', fontSize: 'clamp(12px,calc(1.5 * var(--cer-u)),18px)', fontWeight: 600, letterSpacing: '0.16em', marginTop: 10, textShadow: '2px 2px 0 rgba(0,0,0,0.8)' }}
             >
               {flavor.tagline}
             </div>
@@ -407,7 +407,7 @@ export function PreFight() {
             <div
               className="absolute left-1/2 top-1/2"
               style={{
-                width: 'clamp(250px, 37vw, 560px)', height: 'clamp(180px, 27vw, 400px)',
+                width: 'clamp(250px, calc(37 * var(--cer-u)), 560px)', height: 'clamp(180px, calc(27 * var(--cer-u)), 400px)',
                 transform: 'translate(-50%,-50%) rotate(-7deg)',
                 clipPath: 'polygon(14% 0, 100% 6%, 86% 100%, 0 94%)',
                 background: 'linear-gradient(135deg, rgba(10,6,20,0.82), rgba(35,10,30,0.5))',
@@ -418,7 +418,7 @@ export function PreFight() {
             />
             <div className="absolute left-1/2 top-1/2">
               <PowerWord
-                size="clamp(170px, 30vw, 400px)"
+                size="clamp(170px, calc(30 * var(--cer-u)), 400px)"
                 color="#FFD60A"
                 gradient={CER_GRAD.gold}
                 echo="#B3122F"
@@ -450,7 +450,7 @@ export function PreFight() {
                 style={{ transform: 'translate(-50%,-50%)' }}
               >
                 <PowerWord
-                  size="clamp(110px, 19vw, 280px)"
+                  size="clamp(110px, calc(19 * var(--cer-u)), 280px)"
                   color="#FFFFFF"
                   gradient={CER_GRAD.steel}
                   echo="#C81E5B"
@@ -479,7 +479,7 @@ export function PreFight() {
               borderRight: '4px solid #FFD60A',
               color: '#FFD60A',
               fontWeight: 600,
-              fontSize: 'clamp(11px,1.3vw,15px)',
+              fontSize: 'clamp(11px,calc(1.3 * var(--cer-u)),15px)',
               letterSpacing: '0.2em',
               textShadow: '1px 1px 0 rgba(0,0,0,0.8)',
               boxShadow: '0 0 22px rgba(255,214,10,0.3)',

@@ -91,7 +91,7 @@ const RECIPES: Record<HitFlavor, Recipe> = {
     shock: false, shockSize: 0,
     groundRing: 0.9, scorch: 0, dust: 6,
     smokeCount: 4, emberCount: 8,
-    lightPeak: 6, lightDecay: 0.18, lightRange: 7,
+    lightPeak: 9, lightDecay: 0.2, lightRange: 8,
     radial: false,
   },
   heavy: {
@@ -104,7 +104,7 @@ const RECIPES: Record<HitFlavor, Recipe> = {
     shock: true, shockSize: 3.6,
     groundRing: 1.7, scorch: 0.9, dust: 14,
     smokeCount: 10, emberCount: 14,
-    lightPeak: 10, lightDecay: 0.2, lightRange: 10,
+    lightPeak: 16, lightDecay: 0.22, lightRange: 12,
     radial: false,
   },
   crit: {
@@ -117,7 +117,7 @@ const RECIPES: Record<HitFlavor, Recipe> = {
     shock: true, shockSize: 5.4,
     groundRing: 2.6, scorch: 1.4, dust: 22,
     smokeCount: 16, emberCount: 26,
-    lightPeak: 16, lightDecay: 0.26, lightRange: 13,
+    lightPeak: 24, lightDecay: 0.28, lightRange: 15,
     radial: false, starBurst: true,
   },
   combo: {
@@ -130,7 +130,7 @@ const RECIPES: Record<HitFlavor, Recipe> = {
     shock: true, shockSize: 3.2,
     groundRing: 1.5, scorch: 0.6, dust: 11,
     smokeCount: 8, emberCount: 18,
-    lightPeak: 11, lightDecay: 0.18, lightRange: 9,
+    lightPeak: 17, lightDecay: 0.2, lightRange: 11,
     radial: false, combo: true,
   },
   ex: {
@@ -143,7 +143,7 @@ const RECIPES: Record<HitFlavor, Recipe> = {
     shock: true, shockSize: 4.0,
     groundRing: 1.9, scorch: 0.7, dust: 12,
     smokeCount: 10, emberCount: 24,
-    lightPeak: 13, lightDecay: 0.24, lightRange: 12,
+    lightPeak: 21, lightDecay: 0.26, lightRange: 14,
     radial: false, bolt: true,
   },
   ult: {
@@ -156,7 +156,7 @@ const RECIPES: Record<HitFlavor, Recipe> = {
     shock: true, shockSize: 6.0,
     groundRing: 3.0, scorch: 1.6, dust: 26,
     smokeCount: 22, emberCount: 40,
-    lightPeak: 18, lightDecay: 0.32, lightRange: 15,
+    lightPeak: 27, lightDecay: 0.34, lightRange: 17,
     radial: true,
   },
   signature: {
@@ -169,7 +169,7 @@ const RECIPES: Record<HitFlavor, Recipe> = {
     shock: true, shockSize: 6.4,
     groundRing: 3.6, scorch: 2.2, dust: 36,
     smokeCount: 32, emberCount: 54,
-    lightPeak: 22, lightDecay: 0.36, lightRange: 18,
+    lightPeak: 31, lightDecay: 0.38, lightRange: 20,
     radial: false, beam: true,
   },
 }

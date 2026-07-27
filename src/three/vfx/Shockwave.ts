@@ -260,17 +260,17 @@ const WAVE_FRAG = /* glsl */ `
       float reach = 0.98 * ease;
       float along = smoothstep(reach, 0.0, r);                 // full near centre → tip
       float halfw = 0.30 * clamp(1.0 - r / max(reach, 0.001), 0.0, 1.0); // narrows to tip
-      float spike = along * smoothstep(halfw, halfw * 0.15, da);
+      float spike = along * smoothstep(halfw, halfw * 0.08, da);
       float coreline = along * smoothstep(halfw * 0.35, 0.0, da); // bright white spine
       // small crisp impact ring at the base
       float baseRing = ring(r, 0.30 * ease, 0.04 * ease + 0.01);
-      vec3 core = hotCore(r, ang, uColor2, 0.22, uSeed);
-      float coreA = smoothstep(0.22, 0.0, r);
+      vec3 core = hotCore(r, ang, uColor2, 0.20, uSeed);
+      float coreA = smoothstep(0.20, 0.0, r);
       // Spikes own the silhouette; the centre is only a small churning core (not a
       // filled disc) so under heavy bloom the STAR shape survives instead of
       // melting into a solid bright ball.
-      float a = clamp((spike * 0.9 + coreline + baseRing + coreA * 0.55) * grow * fade, 0.0, 1.0);
-      vec3 col = uColor2 * (spike * 2.9 + baseRing * 2.2 + 0.06) + vec3(1.0) * coreline * 1.1 + core;
+      float a = clamp((spike * 0.95 + coreline + baseRing + coreA * 0.32) * grow * fade, 0.0, 1.0);
+      vec3 col = uColor2 * (spike * 3.0 + baseRing * 2.2) + vec3(1.0) * coreline * 1.1 + core * 0.9;
       col *= uIntensity;
       if (a < 0.005) discard;
       gl_FragColor = vec4(col, a);
@@ -392,17 +392,17 @@ const WAVE_FRAG = /* glsl */ `
       float grow = smoothstep(0.0, 0.03, uAge);
       float fade = 1.0 - smoothstep(0.26, 1.0, uAge);
       float ease = smoothstep(0.0, 0.04, uAge);
-      float N = 11.0;                          // many blades = many hits
+      float N = 8.0;                           // fewer, bolder blades — reads as hits
       float sector = 6.28318 / N;
       float rot = uSeed * 2.0 + uAge * 1.4;    // slight swirl — energy whipping round
       float idx = floor((ang + rot + 3.14159) / sector);
       float da = mod(ang + rot + sector * 0.5, sector) - sector * 0.5;
       // per-blade length varies wildly for a ragged, hand-thrown barrage
-      float len = 0.42 + 0.55 * hash(idx + uSeed * 3.0);
+      float len = 0.5 + 0.5 * hash(idx + uSeed * 3.0);
       float reach = len * ease;
       float along = smoothstep(reach, 0.0, r);
-      float halfw = 0.15 * clamp(1.0 - r / max(reach, 0.001), 0.0, 1.0); // narrows to tip
-      float blade = along * smoothstep(halfw, halfw * 0.12, abs(da));
+      float halfw = 0.19 * clamp(1.0 - r / max(reach, 0.001), 0.0, 1.0); // narrows to tip
+      float blade = along * smoothstep(halfw, halfw * 0.1, abs(da));
       float coreline = along * smoothstep(halfw * 0.4, 0.0, abs(da));    // bright spine
       // two expanding hit-rings — the combo count rising
       float g = 1.0 - pow(1.0 - uAge, 2.0);
@@ -410,11 +410,11 @@ const WAVE_FRAG = /* glsl */ `
       float r2 = 0.60 * g;
       float rings = ring(r, r1, 0.03) + ring(r, r2, 0.024) * 0.7;
       rings *= (1.0 - smoothstep(0.4, 1.0, uAge));
-      vec3 core = hotCore(r, ang, uColor2, 0.18, uSeed);
-      float coreA = smoothstep(0.18, 0.0, r);
-      float a = clamp((blade * 0.9 + coreline + rings + coreA) * grow * fade, 0.0, 1.0);
-      vec3 col = uColor2 * (blade * 2.6 + rings * 2.2 + 0.2)
-                 + vec3(1.0) * (coreline * 0.95 + rings * 0.4) + core;
+      vec3 core = hotCore(r, ang, uColor2, 0.16, uSeed);
+      float coreA = smoothstep(0.16, 0.0, r) * 0.7;
+      float a = clamp((blade * 0.95 + coreline + rings + coreA) * grow * fade, 0.0, 1.0);
+      vec3 col = uColor2 * (blade * 2.7 + rings * 2.2)
+                 + vec3(1.0) * (coreline * 0.95 + rings * 0.4) + core * 0.9;
       col *= uIntensity;
       if (a < 0.004) discard;
       gl_FragColor = vec4(col, a);

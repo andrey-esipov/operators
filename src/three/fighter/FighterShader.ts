@@ -93,6 +93,10 @@ export interface FighterUniforms {
   /** Always-on neutral separation kicker that carves the silhouette. */
   uKickColor: { value: THREE.Color }
   uKickIntensity: { value: number }
+  /** 0..1: pull the DEEPEST shadow cores back toward a neutral, near-black
+   *  anchor so a heavily-tinted arena (crisis red) can't leave the fighter
+   *  with no true black — restores the authored black end of the value range. */
+  uShadowAnchor: { value: number }
 
   [key: string]: THREE.IUniform
 }
@@ -155,6 +159,7 @@ export function createFighterUniforms(): FighterUniforms {
     uSaturation: { value: 1.2 },
     uKickColor: { value: new THREE.Color(0xdcecff) },
     uKickIntensity: { value: 1.12 },
+    uShadowAnchor: { value: 0.5 },
   }
 }
 
@@ -251,6 +256,7 @@ export const FIGHTER_FRAGMENT = /* glsl */ `
   uniform float uSaturation;
   uniform vec3  uKickColor;
   uniform float uKickIntensity;
+  uniform float uShadowAnchor;
 
   varying vec2  vUv;
   varying vec3  vWorldPos;
@@ -450,6 +456,12 @@ export const FIGHTER_FRAGMENT = /* glsl */ `
     // stair-step into hard aliasing where a prop edge crosses the pixel grid.
     float specMetal = pow(ndh, 74.0) * 1.15 * (metal + dark * 0.45);
     vec3 specular = keyCol * (specSkin + specSkinHot + specCloth + specMetal) * uKeyIntensity * 0.3 * selfShadow;
+    // Hot specular WHITE cap: a very tight pinpoint that tops the character's
+    // value range at true white (not the key's warm/tinted hue) — the AAA
+    // "blown highlight" on cheekbones, knuckles, hair strands and prop hardware.
+    // Biased toward white so a coloured stage key can't cap the range at orange.
+    float specWhite = pow(ndh, 96.0) * (skin * 0.55 + metal * 1.3 + dark * 0.35 + cloth * 0.12);
+    specular += mix(keyCol, vec3(1.0), 0.78) * specWhite * uKeyIntensity * 0.3 * selfShadow;
     // Sweat sheen at low HP / exertion: extra broad wet highlight, skin only.
     specular += keyCol * pow(ndh, 40.0) * skin * uSweat * 0.6 * uKeyIntensity * 0.3;
     specular *= base.a;
@@ -477,7 +489,7 @@ export const FIGHTER_FRAGMENT = /* glsl */ `
     // off the backdrop. Cool, strong stage rims (teal server floors) already
     // separate well, so this leaves them essentially untouched.
     float stageRimSep = uRimIntensity * clamp(uRimColor.b - uRimColor.r * 0.6, 0.0, 1.0);
-    float kickBoost = 1.0 + (1.0 - smoothstep(0.35, 1.5, stageRimSep)) * 0.5;
+    float kickBoost = 1.0 + (1.0 - smoothstep(0.35, 1.5, stageRimSep)) * 0.62;
     vec3 kicker = uKickColor * uKickIntensity * kickBoost * kickF * kickTop * mix(0.6, 1.0, 1.0 - matte * 0.5);
     // Hold the kicker just inside the linework (so it never haloes the ink
     // outline) but keep enough of it right at the back edge to actually read as
@@ -520,6 +532,15 @@ export const FIGHTER_FRAGMENT = /* glsl */ `
     float gLum = luma(color);
     color = mix(vec3(gLum), color, uSaturation);        // vivid identity
     color = (color - 0.40) * uContrast + 0.40;          // pivot contrast
+    color = max(color, 0.0);
+    // Neutral black anchor: on strongly-tinted stages the coloured ambient bleeds
+    // into every fold, so the deepest shadows read as dark-red/dark-teal instead
+    // of true black. Pull ONLY the darkest cores toward a neutral near-black,
+    // leaving mid-shadows their local colour (a purple jacket still reads purple
+    // in its mid-shadow). Restores the authored black end of the value range and
+    // gives the silhouette real value separation from a same-hue backdrop.
+    float shadowCore = 1.0 - smoothstep(0.02, 0.20, luma(color));
+    color = mix(color, vec3(luma(color) * 0.82), shadowCore * uShadowAnchor);
     color = max(color, 0.0);
 
     // ---- Damage state: grime, fatigue, flush, bruising & sweat ------------

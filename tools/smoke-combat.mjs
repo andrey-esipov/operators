@@ -48,6 +48,7 @@ const browser = await chromium.launch({
 })
 
 const consoleErrors = []
+  const resp404 = []
 const pageErrors = []
 const failedRequests = []
 const shots = []
@@ -55,6 +56,7 @@ const shots = []
 try {
   const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: 1 })
   page.on('pageerror', (e) => pageErrors.push(String(e).slice(0, 400)))
+  page.on('response', (r) => { if (r.status() >= 400) resp404.push(`${r.status()} ${r.url()}`) })
   page.on('console', (m) => {
     if (m.type() === 'error') consoleErrors.push(m.text().slice(0, 400))
   })
@@ -137,7 +139,7 @@ try {
       }),
   )
 
-  console.log(JSON.stringify({ ok: pageErrors.length === 0, render, ...stats, fps, shots, pageErrors: pageErrors.slice(0, 8), failedRequests: failedRequests.slice(0, 12), consoleErrors: consoleErrors.slice(0, 8) }, null, 2))
+  console.log(JSON.stringify({ ok: pageErrors.length === 0, render, ...stats, fps, shots, pageErrors: pageErrors.slice(0, 8), failedRequests: failedRequests.slice(0, 12), consoleErrors: consoleErrors.slice(0, 8), resp404: resp404.slice(0, 12) }, null, 2))
   if (pageErrors.length) process.exitCode = 1
 } catch (err) {
   console.log(JSON.stringify({ ok: false, error: String(err).slice(0, 500), pageErrors: pageErrors.slice(0, 8), consoleErrors: consoleErrors.slice(0, 8) }, null, 2))

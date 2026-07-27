@@ -20,6 +20,7 @@ import { StatusHalo } from '../components/StatusHalo'
 import { HitSparks } from '../components/HitSparks'
 import { youtubeDeepLink } from '../lib/youtube'
 import { Sfx } from '../lib/audio'
+import { fightAudio, type Flavor } from '../audio'
 import { getRenderMode, setRenderMode } from '../lib/renderMode'
 import type { AnnounceMoment, DamageNumber } from '../three/hud/types'
 import { AnimatePresence, motion } from 'framer-motion'
@@ -144,18 +145,52 @@ export function CombatScreen() {
     if (!soundCue) return
     const [primary, ...rest] = soundCue.kind.split('+')
     const hasEx = rest.includes('ex')
-    switch (primary) {
-      case 'crit': Sfx.crit(); break
-      case 'combo': Sfx.combo(); break
-      case 'ult': Sfx.ult(); break
-      case 'heavy': Sfx.heavy(); break
-      case 'ex': Sfx.ex(); break
-      case 'shatter': Sfx.shatter(); break
-      case 'signature': Sfx.signature(); break
-      default: Sfx.light()
+
+    // The synth engine takes real hit dynamics, so drive it from the log entry
+    // that produced this cue rather than firing a flat default.
+    const entry = log[log.length - 1]
+    const damage = entry?.finalDamage ?? 0
+    const target = entry ? (entry.attacker === 'a' ? 'b' : 'a') : 'b'
+    const power = Math.max(0.15, Math.min(1, damage / 110))
+    // Pan toward whoever is taking the hit; they are the on-screen event.
+    const pan = target === 'a' ? -0.5 : 0.5
+
+    if (primary === 'shatter') {
+      fightAudio.shatter({ power, pan })
+    } else {
+      const flavor = (
+        ['light', 'heavy', 'crit', 'combo', 'ex', 'ult', 'signature'] as const
+      ).includes(primary as never)
+        ? (primary as Flavor)
+        : 'light'
+      fightAudio.impact(flavor, { power, damage, pan })
     }
-    if (hasEx && primary !== 'ex') setTimeout(() => Sfx.ex(), 40)
+    if (hasEx && primary !== 'ex') {
+      setTimeout(() => fightAudio.impact('ex', { power: power * 0.8, pan }), 40)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [soundCue?.id])
+
+  // Arena acoustics: each stage gets its own convolution reverb + ambience bed.
+  useEffect(() => {
+    fightAudio.setStage(scenario)
+  }, [scenario])
+
+  // Tension drives the adaptive mix — the closer either fighter is to dying,
+  // the more intimate and pressurised the bus becomes.
+  useEffect(() => {
+    if (!fighterA || !fighterB) return
+    const lowest = Math.min(
+      fighterA.hp / Math.max(1, fighterA.maxHp),
+      fighterB.hp / Math.max(1, fighterB.maxHp),
+    )
+    fightAudio.setTension(Math.max(0, Math.min(1, lowest)))
+  }, [fighterA?.hp, fighterA?.maxHp, fighterB?.hp, fighterB?.maxHp])
+
+  // KO is its own sound event, not just another impact.
+  useEffect(() => {
+    if (koCinematic) fightAudio.ko({ power: 1 })
+  }, [koCinematic?.id])
 
   // Combat log effects: combo banner + hit flash + screen shake + quote callout
   useEffect(() => {

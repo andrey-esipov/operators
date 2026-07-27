@@ -122,5 +122,5 @@ export function buildPlateau(b: StageBuild, cfg: StageConfig, flags: QualityFlag
     b.add(strip)
   }
   overhead(b, cfg, flags, 'plateau')
-  foreground(b, 'plateau')
+  foreground(b, 'plateau', cfg)
 }

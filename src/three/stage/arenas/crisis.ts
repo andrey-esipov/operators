@@ -79,5 +79,5 @@ export function buildCrisis(b: StageBuild, cfg: StageConfig, flags: QualityFlags
     })
   })
   overhead(b, cfg, flags, 'alarm')
-  foreground(b, 'alarm')
+  foreground(b, 'alarm', cfg)
 }

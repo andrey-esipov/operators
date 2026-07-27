@@ -67,5 +67,5 @@ export function buildDistribution(b: StageBuild, cfg: StageConfig, flags: Qualit
     b.add(glow)
   }
   overhead(b, cfg, flags, 'yard')
-  foreground(b, 'yard')
+  foreground(b, 'yard', cfg)
 }

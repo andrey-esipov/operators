@@ -188,5 +188,5 @@ export function buildPrePmf(b: StageBuild, cfg: StageConfig, flags: QualityFlags
     })
   }
   overhead(b, cfg, flags, 'garage')
-  foreground(b, 'garage')
+  foreground(b, 'garage', cfg)
 }

@@ -118,5 +118,5 @@ export function buildAiNative(b: StageBuild, cfg: StageConfig, flags: QualityFla
     ;(projShaft.material as THREE.ShaderMaterial).uniforms.uTime.value = t
   })
   overhead(b, cfg, flags, 'server')
-  foreground(b, 'server')
+  foreground(b, 'server', cfg)
 }

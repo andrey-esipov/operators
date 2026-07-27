@@ -48,5 +48,5 @@ export function buildMonetization(b: StageBuild, cfg: StageConfig, flags: Qualit
     spoke.position.set(9.6 + Math.cos(ang) * 0.0, 5.2, -12.22); spoke.rotation.z = ang; b.add(spoke)
   }
   overhead(b, cfg, flags, 'gold')
-  foreground(b, 'gold')
+  foreground(b, 'gold', cfg)
 }

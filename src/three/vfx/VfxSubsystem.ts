@@ -568,37 +568,49 @@ export class VfxSubsystem implements Subsystem {
     // Central emission is kept lean so the CRYSTAL FACET lines are the brightest
     // feature and survive bloom as a shard shell (instead of a soft cyan orb) even
     // on dark, low-key stages.
-    this.lights.pop(p, C(0xbfe9ff), 11, 0.3, 0.05, 10)
+    this.lights.pop(p, C(0xbfe9ff), 13, 0.13, 0.03, 8)
     // crystalline contact flash — cold, brief, so the CRYSTAL silhouette reads
     this.flashMat.uniforms.uColor.value.copy(white)
     this.flashMat.uniforms.uColor2.value.copy(cyan)
     this.flashMat.uniforms.uSpikes.value = 4.0
     this.flashMat.uniforms.uStreak.value = 2.0
     this.flash.position.copy(p)
-    this.flash.scale.setScalar(1.4)
+    this.flash.scale.setScalar(1.05)
     this.flash.visible = true
-    this.flashMax = 0.17
-    this.flashLife = 0.17
+    this.flashMax = 0.12
+    this.flashLife = 0.12
 
     // hot white contact flare core
     this.additive.emit({
       position: p, count: 1, speed: 0, color: white, color2: cyan,
-      size: 1.0, life: 0.4, gravity: 0, drag: 0.001, shape: 'flare', intensity: 0.8,
+      size: 0.7, life: 0.35, gravity: 0, drag: 0.001, shape: 'flare', intensity: 0.7,
     })
     // sharp white impact star — the instant CRACK read (lean so it doesn't dome)
-    this.waves.spawn('star', p, 4.6, 0.72, white, cyan, 1.3, 1.0)
-    // the big faceted glass pane — shatter's identity, snaps to full size, bright
-    // facet shell so the crystal reads as the dominant structure.
-    this.waves.spawn('crystal', p, 7.8, 0.95, white, cyan, 3.2)
+    this.waves.spawn('star', p, 3.4, 0.72, white, cyan, 1.0, 1.0)
+    // COMPACT faceted glass pane — shatter's identity. Kept small + lean so the
+    // sharp facet edges read as fracturing glass instead of a large filled shell
+    // whose bright rim blooms inward into one flat cyan disc. The read is carried
+    // by the OUTWARD splinter spray below, the way the crit star's spikes punch
+    // into dark space rather than filling a lit ball.
+    this.waves.spawn('crystal', p, 4.4, 0.9, white, cyan, 1.9)
     // a second inner crimson-conviction pane for the two-tone armour rupture
-    this.waves.spawn('crystal', p, 4.8, 0.85, C(0xffd9dd), red, 2.0)
+    this.waves.spawn('crystal', p, 2.9, 0.82, C(0xffd9dd), red, 1.4)
+    // INSTANT splinter shell — a violent wide burst of icy glass shards thrown on
+    // the very first frame so shatter reads as fracturing armour from settle 0 and
+    // the sparse shards fly out into DARK space (structure that survives bloom),
+    // instead of a soft pane that only explodes at beat 2.
+    this.additive.emit({
+      position: p, count: 96, speed: 24, speedVariance: 0.95, color: white, color2: cyan,
+      size: 0.24, sizeVariance: 0.9, life: 0.75, gravity: -10, drag: 0.6, shape: 'shard',
+      intensity: 3.2, jitter: 0.6, spin: 22, stretch: 4.6,
+    })
     this.decals.spawn('ring', feet, 2.6, 0.5, cyan, deep, 1.5)
     this.decals.spawn('scorch', feet, 1.2, 1.4, deep, C(0x08202e), 0.7)
 
     // ── Beat 2 (55ms): the pane EXPLODES into flying glass — hard angular
     // splinters bursting out and skittering on the floor, plus a secondary ring.
     this.schedule(0.055, () => {
-      this.lights.pop(p, cyan, 9, 0.28, 0.05, 10)
+      this.lights.pop(p, cyan, 9, 0.16, 0.04, 9)
       // dense icy splinters bursting outward, stretched & spinning
       this.additive.emit({
         position: p, count: 130, speed: 16, speedVariance: 0.85, color: white, color2: cyan,

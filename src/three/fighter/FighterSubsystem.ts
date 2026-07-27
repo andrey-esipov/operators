@@ -195,9 +195,19 @@ class FighterRig {
         void main() {
           vec2 d = (vUv - 0.5) * vec2(2.0, 2.0);
           float r = length(d * vec2(1.0, 1.45));
+          // Guard the pow: r is EXACTLY 0.0 at the plane's centre texel, and
+          // GLSL pow(x,y) is compiled as exp2(y * log2(x)). log2(0.0) is -INF,
+          // and ANGLE/Metal returns NaN for the resulting 0 * -INF rather than
+          // the mathematically correct 0. That single NaN texel sits dead under
+          // each fighter, and post spreads it into a bright blob that made the
+          // contact shadow *emit* light instead of occluding it - the ground
+          // under the feet measured 5x BRIGHTER with the shadow enabled than
+          // with it hidden. It also explains the long-standing "scene emits NaN
+          // in a horizontal band" report: the band is the two shadow planes.
+          float rs = max(r, 1e-4);
           // Dense AO core directly under the feet + a wide soft penumbra so the
           // footprint reads as ground occlusion, not a hard cutout disc.
-          float core = 1.0 - smoothstep(0.0, 0.62, pow(r, uTight));
+          float core = 1.0 - smoothstep(0.0, 0.62, pow(rs, uTight));
           float soft = 1.0 - smoothstep(0.0, 1.1, r);
           float a = clamp(core * 0.7 + soft * 0.5, 0.0, 1.0);
           gl_FragColor = vec4(uColor, a * uOpacity);

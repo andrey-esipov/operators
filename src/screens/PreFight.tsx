@@ -407,7 +407,7 @@ export function PreFight() {
             <div
               className="absolute left-1/2 top-1/2"
               style={{
-                width: 'clamp(200px, 30vw, 460px)', height: 'clamp(150px, 22vw, 340px)',
+                width: 'clamp(250px, 37vw, 560px)', height: 'clamp(180px, 27vw, 400px)',
                 transform: 'translate(-50%,-50%) rotate(-7deg)',
                 clipPath: 'polygon(14% 0, 100% 6%, 86% 100%, 0 94%)',
                 background: 'linear-gradient(135deg, rgba(10,6,20,0.82), rgba(35,10,30,0.5))',
@@ -418,7 +418,7 @@ export function PreFight() {
             />
             <div className="absolute left-1/2 top-1/2">
               <PowerWord
-                size="clamp(140px, 24vw, 340px)"
+                size="clamp(170px, 30vw, 400px)"
                 color="#FFD60A"
                 gradient={CER_GRAD.gold}
                 echo="#B3122F"

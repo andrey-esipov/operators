@@ -63,7 +63,7 @@ export function RoundEnd() {
           flash. */}
       {!isDraw && (
         <div
-          className="absolute inset-0 pointer-events-none z-40"
+          className="absolute inset-0 pointer-events-none z-30"
           style={{ background: 'white', mixBlendMode: 'screen', opacity: 0, animation: 'cer-hitfreeze 0.34s linear both' }}
         />
       )}
@@ -79,9 +79,12 @@ export function RoundEnd() {
         }}
       />
 
-      {/* Everything shakes hard on impact, then settles. */}
+      {/* Everything shakes hard on impact, then settles. Held ABOVE the white
+          hit-freeze flash (z-40 > z-30) so on the ~120ms money frame the dark
+          keylined K.O. silhouettes crisply against the blown-white arena —
+          the SF6/GGST impact read — instead of washing out with it. */}
       <div
-        className="relative z-10 flex flex-col items-center"
+        className="relative z-40 flex flex-col items-center"
         style={{ animation: 'cer-shake-hard 0.32s ease-out both' }}
       >
         {isPerfect && (

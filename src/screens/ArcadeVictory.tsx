@@ -72,21 +72,22 @@ export function ArcadeVictory() {
       {/* Falling ribbon confetti — dense, and pre-seeded with negative delays so
           the very first frame is already full of falling ribbons, not empty. */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        {Array.from({ length: 140 }).map((_, i) => {
+        {Array.from({ length: 220 }).map((_, i) => {
           const c = CONFETTI[i % CONFETTI.length]
-          const left = (i * 27.3) % 100
-          const w = 4 + (i % 3) * 2
-          const h = 10 + (i % 4) * 5
-          const dur = 2.6 + (i % 5) * 0.6
-          const delay = -((i * 0.21) % dur)
-          const drift = (i % 2 ? 1 : -1) * (6 + (i % 4) * 5)
+          const left = (i * 37.6) % 100
+          const near = i % 5 === 0
+          const w = (near ? 7 : 4) + (i % 3) * 2
+          const h = (near ? 16 : 10) + (i % 4) * 5
+          const dur = (near ? 2.2 : 2.6) + (i % 5) * 0.6
+          const delay = -((i * 0.17) % dur)
+          const drift = (i % 2 ? 1 : -1) * (8 + (i % 5) * 7)
           return (
             <div
               key={i}
               className="absolute"
               style={{
-                left: `${left}%`, top: '-6%', width: w, height: h,
-                background: c, opacity: 0.92,
+                left: `${left}%`, top: '-8%', width: w, height: h,
+                background: c, opacity: near ? 1 : 0.9,
                 boxShadow: `0 0 6px ${c}`,
                 ['--drift' as string]: `${drift}px`,
                 animation: `cer-ribbon ${dur}s linear ${delay}s infinite`,

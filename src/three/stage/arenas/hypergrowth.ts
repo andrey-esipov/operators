@@ -45,6 +45,11 @@ export function buildHypergrowth(b: StageBuild, cfg: StageConfig, flags: Quality
   const stripe = new THREE.Mesh(new THREE.CylinderGeometry(1.53, 1.6, 0.5, 28), glowMat(0x66e6ff, 0.5))
   stripe.position.set(0, 9.5, -13.5)
   b.add(stripe)
+  // charcoal panel-seam rings so the hull reads as a panelled rocket, not a smooth cylinder
+  for (const y of [11.6, 8.6, 6.4]) {
+    const seam = new THREE.Mesh(new THREE.CylinderGeometry(1.53, 1.53, 0.12, 28, 1, true), structureMat({ color: 0x20262c, roughness: 0.55, metalness: 0.7 }))
+    seam.position.set(0, y, -13.5); b.add(seam)
+  }
   // fins
   for (let k = 0; k < 3; k++) {
     const ang = (k / 3) * Math.PI * 2
@@ -94,28 +99,51 @@ export function buildHypergrowth(b: StageBuild, cfg: StageConfig, flags: Quality
   // engine flame — a WHITE-HOT core inside an amber thruster plume. The warm fire
   // against the cool teal deck breaks the monochrome wash and gives the rocket a
   // motivated hero light (was a cold cyan disc that read as a static monument).
-  const flameOuter = new THREE.Mesh(new THREE.CircleGeometry(2.3, 28), glowMat(0xff7a1c, 0.85))
+  const flameOuter = new THREE.Mesh(new THREE.CircleGeometry(2.0, 28), glowMat(0xff7a1c, 0.6))
   flameOuter.position.set(0, 0.16, -13.5); flameOuter.rotation.x = -Math.PI / 2; b.add(flameOuter)
-  const glow = new THREE.Mesh(new THREE.CircleGeometry(1.5, 24), glowMat(0xffd24a, 0.95))
+  const glow = new THREE.Mesh(new THREE.CircleGeometry(1.35, 24), glowMat(0xffd24a, 0.7))
   glow.position.set(0, 0.2, -13.5); glow.rotation.x = -Math.PI / 2; b.add(glow)
-  const core = new THREE.Mesh(new THREE.CircleGeometry(1.15, 24), glowMat(0xffffff, 1.0))
+  const core = new THREE.Mesh(new THREE.CircleGeometry(1.0, 24), glowMat(0xffffff, 0.82))
   core.position.set(0, 0.24, -13.5); core.rotation.x = -Math.PI / 2; b.add(core)
-  // a tight white-hot exhaust plume + a broad amber flame column above it
-  const plume = lightShaft(0.9, 2.1, 3.8, 0xffffff, 0.6)
-  plume.position.set(0, 1.7, -13.5); b.add(plume)
-  const shaft = lightShaft(1.5, 2.7, 4.6, 0xff8a2c, 0.32)
-  shaft.position.set(0, 1.9, -13.5); b.add(shaft)
+  // a tight white-hot exhaust plume + a contained amber flame column above it
+  const plume = lightShaft(0.68, 1.4, 2.6, 0xffffff, 0.4)
+  plume.position.set(0, 1.5, -13.5); b.add(plume)
+  const shaft = lightShaft(1.05, 1.9, 3.4, 0xff8a2c, 0.2)
+  shaft.position.set(0, 1.7, -13.5); b.add(shaft)
   // warm scorched-glow pool spilling forward onto the pad (motivated floor bounce)
-  const scorch = new THREE.Mesh(new THREE.CircleGeometry(4.6, 32), glowMat(0xd9531a, 0.16))
+  const scorch = new THREE.Mesh(new THREE.CircleGeometry(4.2, 32), glowMat(0xd9531a, 0.13))
   scorch.position.set(0, 0.05, -11.4); scorch.rotation.x = -Math.PI / 2; b.add(scorch)
+  // engine embers — a sparse upward stream of glowing particulate for kinetic life
+  const emberN = 64
+  const emberSeed = new Float32Array(emberN)
+  const emberX0 = new Float32Array(emberN)
+  const emberPos = new Float32Array(emberN * 3)
+  for (let i = 0; i < emberN; i++) {
+    emberSeed[i] = Math.random()
+    emberX0[i] = (Math.random() - 0.5) * 1.4
+    emberPos[i * 3] = emberX0[i]; emberPos[i * 3 + 1] = Math.random() * 7; emberPos[i * 3 + 2] = -13.5 + (Math.random() - 0.5) * 1.6
+  }
+  const emberGeo = new THREE.BufferGeometry()
+  emberGeo.setAttribute('position', new THREE.BufferAttribute(emberPos, 3))
+  const embers = new THREE.Points(emberGeo, new THREE.PointsMaterial({ color: 0xffb44a, size: 0.11, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }))
+  b.add(embers)
+  const EMH = 7.5
   b.onUpdate((t) => {
-    const f = 0.72 + 0.28 * Math.abs(Math.sin(t * 5.5) * Math.sin(t * 2.3 + 1))
-    ;(glow.material as THREE.MeshBasicMaterial).opacity = 0.72 * f + 0.2
-    ;(core.material as THREE.MeshBasicMaterial).opacity = 0.85 * f + 0.15
-    ;(flameOuter.material as THREE.MeshBasicMaterial).opacity = 0.62 * f + 0.2
-    ;(scorch.material as THREE.MeshBasicMaterial).opacity = 0.12 * f + 0.06
+    const f = 0.74 + 0.26 * Math.abs(Math.sin(t * 5.5) * Math.sin(t * 2.3 + 1))
+    ;(glow.material as THREE.MeshBasicMaterial).opacity = 0.56 * f + 0.14
+    ;(core.material as THREE.MeshBasicMaterial).opacity = 0.66 * f + 0.12
+    ;(flameOuter.material as THREE.MeshBasicMaterial).opacity = 0.46 * f + 0.14
+    ;(scorch.material as THREE.MeshBasicMaterial).opacity = 0.1 * f + 0.05
     ;(shaft.material as THREE.ShaderMaterial).uniforms.uTime.value = t
     ;(plume.material as THREE.ShaderMaterial).uniforms.uTime.value = t
+    const arr = emberGeo.attributes.position.array as Float32Array
+    for (let i = 0; i < emberN; i++) {
+      const s = emberSeed[i]
+      const y = (s * EMH + t * (0.7 + 0.7 * s)) % EMH
+      arr[i * 3 + 1] = 0.3 + y
+      arr[i * 3] = emberX0[i] + Math.sin(t * 0.8 + s * 40) * 0.7 * (0.25 + y / EMH)
+    }
+    emberGeo.attributes.position.needsUpdate = true
   })
   // control screens — ASYMMETRIC: a tall 2x2 telemetry stack on the left, a low
   // wide status strip plus a big mission-countdown clock on the right.
@@ -139,8 +167,8 @@ export function buildHypergrowth(b: StageBuild, cfg: StageConfig, flags: Quality
   // --- hero foreground: heavy launch hardware hugging the lower frame so the
   // extreme-fg plane reads as a physical place, not two thin lines. Placed at
   // z~5.5-5.9 / x~+-2.7 (the true frame edges) with DOF bokeh separating them. -
-  const fgDark = new THREE.Color(cfg.structure).multiplyScalar(0.34).getHex()
-  const fgMetal = (c: number, r = 0.68, mt = 0.6) => structureMat({ color: c, roughness: r, metalness: mt })
+  const fgDark = new THREE.Color(cfg.structure).multiplyScalar(0.6).getHex()
+  const fgMetal = (c: number, r = 0.62, mt = 0.62) => structureMat({ color: c, roughness: r, metalness: mt })
   // bottom-left hold-down clamp: a chunky strut + an angled arm reaching inward
   const clampBase = new THREE.Mesh(new THREE.BoxGeometry(0.9, 2.4, 0.9), fgMetal(fgDark))
   clampBase.position.set(-2.8, 0.9, 5.7); b.add(clampBase)

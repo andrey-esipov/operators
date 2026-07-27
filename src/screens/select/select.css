@@ -21,6 +21,70 @@
 @import url('https://fonts.googleapis.com/css2?family=Anton&family=Oswald:wght@400;500;600;700&family=Barlow+Condensed:ital,wght@0,600;0,700;1,700&display=swap');
 
 /* ── Root, palette, type tokens ─────────────────────────────────────── */
+/* ── Locked-in VS event ─────────────────────────────────────────────── */
+.sel-root.is-both-locked .sel-grid {
+  filter: blur(3px) brightness(0.4) saturate(0.7);
+  transform: scale(0.97);
+  transition: filter 260ms ease, transform 260ms ease;
+}
+.sel-root.is-both-locked .sel-rostermod::before { opacity: 0.3; }
+.sel-vsburst {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  overflow: hidden;
+}
+.sel-vsburst-slash {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 220%;
+  height: 78px;
+  transform-origin: center;
+}
+.sel-vsburst-slash-a {
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--sel-p1, #e63946) 85%, transparent) 45%, var(--sel-p1, #e63946) 50%, transparent 55%);
+  transform: translate(-50%, -50%) rotate(-12deg) translateY(-64px);
+  animation: selVsSlashA 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.sel-vsburst-slash-b {
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--sel-p2, #00b4d8) 85%, transparent) 45%, var(--sel-p2, #00b4d8) 50%, transparent 55%);
+  transform: translate(-50%, -50%) rotate(-12deg) translateY(64px);
+  animation: selVsSlashB 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes selVsSlashA {
+  0% { opacity: 0; transform: translate(-120%, -50%) rotate(-12deg) translateY(-64px); }
+  100% { opacity: 0.9; transform: translate(-50%, -50%) rotate(-12deg) translateY(-64px); }
+}
+@keyframes selVsSlashB {
+  0% { opacity: 0; transform: translate(20%, -50%) rotate(-12deg) translateY(64px); }
+  100% { opacity: 0.9; transform: translate(-50%, -50%) rotate(-12deg) translateY(64px); }
+}
+.sel-vsburst-vs {
+  position: relative;
+  font-size: clamp(140px, 21vw, 340px);
+  line-height: 0.72;
+  letter-spacing: -0.02em;
+  color: #fff;
+  background: linear-gradient(180deg, #fff6cf 0%, #ffd60a 46%, #f08a00 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  transform: skewX(-8deg);
+  filter: drop-shadow(0 0 40px rgba(255, 200, 40, 0.7)) drop-shadow(6px 8px 0 rgba(0, 0, 0, 0.85));
+  animation: selVsSlam 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes selVsSlam {
+  0% { opacity: 0; transform: skewX(-8deg) scale(2.6); filter: drop-shadow(0 0 0 rgba(255, 200, 40, 0)) blur(6px); }
+  55% { opacity: 1; transform: skewX(-8deg) scale(0.9); }
+  70% { transform: skewX(-8deg) scale(1.06); }
+  100% { opacity: 1; transform: skewX(-8deg) scale(1); filter: drop-shadow(0 0 40px rgba(255, 200, 40, 0.7)) drop-shadow(6px 8px 0 rgba(0, 0, 0, 0.85)); }
+}
+
 .sel-root {
   position: relative;
   width: 100%;
@@ -613,10 +677,27 @@
 }
 .sel-cta:hover { transform: translateY(-3px) scale(1.02); filter: brightness(1.09); }
 .sel-cta:active { transform: translateY(0) scale(0.99); }
-.sel-cta-ready { animation: selCtaReady 1.4s ease-in-out infinite; }
+.sel-cta-ready { position: relative; overflow: hidden; animation: selCtaReady 1.2s ease-in-out infinite; }
 @keyframes selCtaReady {
-  0%, 100% { box-shadow: 0 0 0 2px rgba(255, 214, 10, 0.5), 0 0 18px rgba(255, 214, 10, 0.4), inset 0 2px 0 rgba(255, 255, 255, 0.5); }
-  50% { box-shadow: 0 0 0 2px rgba(255, 214, 10, 0.9), 0 0 34px rgba(255, 214, 10, 0.8), inset 0 2px 0 rgba(255, 255, 255, 0.5); }
+  0%, 100% { box-shadow: 0 0 0 2px rgba(255, 214, 10, 0.55), 0 0 20px rgba(255, 214, 10, 0.45), inset 0 2px 0 rgba(255, 255, 255, 0.5); }
+  50% { box-shadow: 0 0 0 3px rgba(255, 230, 120, 1), 0 0 46px rgba(255, 214, 10, 0.95), inset 0 2px 0 rgba(255, 255, 255, 0.5); }
+}
+/* Premium light sheen sweeping across the FIGHT trigger. */
+.sel-cta-ready::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -70%;
+  width: 45%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.6), transparent);
+  transform: skewX(-18deg);
+  animation: selCtaSheen 2.2s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes selCtaSheen {
+  0% { left: -70%; }
+  55%, 100% { left: 150%; }
 }
 
 /* ── Header matchup lockup — the building VS moment ─────────────────── */
@@ -1011,6 +1092,8 @@
   .sel-hero-figure, .sel-namewrap, .sel-stage-preview,
   .sel-plate.is-active, .sel-cell.is-confirm, .sel-cell.is-cursor,
   .sel-stage-random.is-random-on, .sel-stage-ceremony,
+  .sel-stage-random::before, .sel-cta-ready::before, .sel-matchup-vs,
+  .sel-vsburst-vs, .sel-vsburst-slash,
   .sel-cta-ready { animation: none; }
   .sel-cell, .sel-cta, .sel-btn, .sel-tab, .sel-stagecard { transition: none; }
   .sel-cell:hover, .sel-cell.is-cursor { transform: none; }

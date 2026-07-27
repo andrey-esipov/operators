@@ -310,8 +310,8 @@ function StagePreview({
             >
               RANDOM<br />DRAW
             </div>
-            <p className="sel-cond relative" style={{ fontSize: 17, color: 'rgba(255,255,255,0.8)', marginTop: 14, maxWidth: '24ch', lineHeight: 1.2, textShadow: '1px 1px 0 #000' }}>
-              Hover an arena to preview it, or hit FIGHT and let the dice decide.
+            <p className="sel-cond relative" style={{ fontSize: 15, color: 'rgba(255,255,255,0.7)', marginTop: 14, maxWidth: '22ch', lineHeight: 1.2, letterSpacing: '0.16em', textTransform: 'uppercase', textShadow: '1px 1px 0 #000' }}>
+              The dice decide the battleground
             </p>
           </div>
         )}
@@ -349,17 +349,12 @@ function StagePreview({
             One of nine battlegrounds is chosen at random when the match begins. Stage bonuses still apply — pick deliberately to swing the odds.
           </p>
         ) : (
-          <>
-            <p className="sel-cond" style={{ fontSize: 17, color: 'rgba(255,255,255,0.9)', lineHeight: 1.22, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden', textShadow: '1px 1px 0 #000' }}>
-              {scenario.longDescription}
-            </p>
-            <div
-              className="sel-cond"
-              style={{ marginTop: 10, padding: '7px 12px', fontStyle: 'italic', fontSize: 16, color: '#fff', background: `${scenario.accent}22`, borderLeft: `3px solid ${scenario.accent}`, textShadow: '1px 1px 0 #000' }}
-            >
-              &ldquo;{scenario.flavorQuote}&rdquo;
-            </div>
-          </>
+          <div
+            className="sel-name-face"
+            style={{ fontSize: 'clamp(17px, 1.5vw, 22px)', color: '#fff', lineHeight: 1.06, letterSpacing: '0.01em', paddingLeft: 12, borderLeft: `4px solid ${scenario.accent}`, textShadow: `2px 2px 0 #000, 0 0 18px ${scenario.accent}55` }}
+          >
+            &ldquo;{scenario.flavorQuote}&rdquo;
+          </div>
         )}
 
         {/* Stage bonuses */}

@@ -138,7 +138,7 @@ export function CharacterSelect() {
       if (selectedA) {
         setSelectedSide('a', selectedA)
         setSelectedSide('b', id)
-        setTimeout(() => useGame.getState().setPhase('stage-select'), 320)
+        setTimeout(() => useGame.getState().setPhase('stage-select'), 1150)
       }
     }
   }
@@ -205,10 +205,11 @@ export function CharacterSelect() {
   const p1Fighter: FighterDef | null = selectedA ? (getFighter(selectedA) ?? null) : (side === 'a' ? (hoveredFighter ?? null) : null)
   const p2Fighter: FighterDef | null = selectedB ? (getFighter(selectedB) ?? null) : (side === 'b' ? (hoveredFighter ?? null) : null)
   const numOf = (f: FighterDef | null) => (f ? String(Math.max(0, ROSTER_ORDER.indexOf(f.id)) + 1).padStart(2, '0') : '00')
+  const bothLocked = !singlePickerMode && !!selectedA && !!selectedB
 
   return (
     <div
-      className="sel-root flex flex-col"
+      className={`sel-root flex flex-col${bothLocked ? ' is-both-locked' : ''}`}
       style={{
         ['--sel-accent' as string]: heroAccent,
         ['--sel-side' as string]: sideColor,
@@ -450,6 +451,15 @@ export function CharacterSelect() {
           />
         )}
       </div>
+
+      {/* Locked-in VS event — the grid recedes and a colossal VS slams in. */}
+      {bothLocked && p1Fighter && p2Fighter && (
+        <div className="sel-vsburst" aria-hidden>
+          <div className="sel-vsburst-slash sel-vsburst-slash-a" />
+          <div className="sel-vsburst-slash sel-vsburst-slash-b" />
+          <div className="sel-vsburst-vs sel-name-face">VS</div>
+        </div>
+      )}
     </div>
   )
 }

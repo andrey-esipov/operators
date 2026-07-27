@@ -105,11 +105,12 @@ export function MatchEnd() {
 
   return (
     <div className="cer-anim relative w-full h-full flex flex-col items-center justify-center overflow-hidden px-6 py-4" style={{ background: '#05030b' }}>
-      {/* Real stage backdrop keyed to the winner's colour. */}
+      {/* Real stage backdrop — state-graded: warm gold for a win, cold steel
+          for a loss, so the two results read as opposite moods at a glance. */}
       <StageBackdrop
         scenario={scenario}
-        tint={arcadePlayerLost ? '#E63946' : accent}
-        dim={arcadePlayerLost ? 0.26 : 0.36}
+        tint={arcadePlayerLost ? '#2E5C8A' : '#F7A400'}
+        dim={arcadePlayerLost ? 0.24 : 0.36}
       />
       {!arcadePlayerLost && <div className="cer-rays" style={{ opacity: 0.16 }} />}
       <div className="cer-grain" />
@@ -118,9 +119,11 @@ export function MatchEnd() {
       {/* RESULT WORD — enormous, crashes down from the top. */}
       <div className="relative z-10" style={{ animation: 'cer-shake-hard 0.3s ease-out both' }}>
         <PowerWord
-          size={arcadePlayerLost ? 'clamp(64px, 11vw, 150px)' : 'clamp(70px, 12vw, 168px)'}
+          size={arcadePlayerLost ? 'clamp(78px, 13.5vw, 200px)' : 'clamp(86px, 15vw, 224px)'}
           color={arcadePlayerLost ? '#FF6B7D' : '#FFFFFF'}
           gradient={arcadePlayerLost ? CER_GRAD.crimson : CER_GRAD.gold}
+          echo={arcadePlayerLost ? '#3a0d1a' : '#B3122F'}
+          echoOffset="0.08em"
           glow={arcadePlayerLost ? '#E63946' : '#F77F00'}
           glow2={arcadePlayerLost ? '#7209B7' : '#E63946'}
           skew={-8}
@@ -286,20 +289,20 @@ function StatTile({ label, value, unit, accent, delay }: { label: string; value:
     <div
       className="cer-type relative"
       style={{
-        minWidth: 148,
-        padding: '10px 20px 12px',
+        minWidth: 190,
+        padding: '14px 26px 16px',
         background: 'linear-gradient(160deg, rgba(12,8,20,0.9), rgba(20,10,28,0.75))',
         border: '1px solid rgba(255,255,255,0.14)',
-        borderTop: `3px solid ${accent}`,
-        clipPath: 'polygon(0 0, 100% 0, 100% 100%, 10px 100%, 0 calc(100% - 10px))',
+        borderTop: `4px solid ${accent}`,
+        clipPath: 'polygon(0 0, 100% 0, 100% 100%, 12px 100%, 0 calc(100% - 12px))',
         boxShadow: `0 0 18px ${accent}33, inset 0 0 18px rgba(0,0,0,0.5)`,
         animation: `cer-tile-pop 0.45s cubic-bezier(0.2,0.9,0.3,1) ${delay}s both`,
       }}
     >
-      <div className="cer-cond" style={{ fontSize: 'clamp(8px,0.9vw,11px)', fontWeight: 600, letterSpacing: '0.22em', color: accent }}>{label}</div>
-      <div className="flex items-baseline gap-1 mt-1">
-        <span className="cer-display" style={{ fontSize: 'clamp(26px,3.2vw,44px)', color: '#fff', lineHeight: 0.9, textShadow: `0 0 14px ${accent}66` }}>{value}</span>
-        <span className="cer-cond" style={{ fontSize: 'clamp(9px,1vw,13px)', fontWeight: 600, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.6)' }}>{unit}</span>
+      <div className="cer-cond" style={{ fontSize: 'clamp(10px,1.15vw,14px)', fontWeight: 700, letterSpacing: '0.24em', color: accent }}>{label}</div>
+      <div className="flex items-baseline gap-1.5 mt-1">
+        <span className="cer-display" style={{ fontSize: 'clamp(38px,4.6vw,64px)', color: '#fff', lineHeight: 0.86, textShadow: `0 0 14px ${accent}66` }}>{value}</span>
+        <span className="cer-cond" style={{ fontSize: 'clamp(11px,1.25vw,16px)', fontWeight: 700, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.62)' }}>{unit}</span>
       </div>
     </div>
   )

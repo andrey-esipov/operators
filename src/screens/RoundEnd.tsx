@@ -54,7 +54,7 @@ export function RoundEnd() {
 
   return (
     <div className="cer-anim relative w-full h-full flex items-center justify-center overflow-hidden" style={{ background: '#05030b' }}>
-      <StageBackdrop scenario={scenario} tint={accent} dim={isPerfect ? 0.4 : 0.32} />
+      <StageBackdrop scenario={scenario} tint={isPerfect ? '#F7A400' : '#F0431F'} dim={isPerfect ? 0.4 : 0.32} />
       <div className="cer-rays" style={{ opacity: 0.18 }} />
       <div className="cer-grain" />
       {/* Hard white impact flash + a second faster flash for percussion. */}
@@ -109,9 +109,11 @@ export function RoundEnd() {
             animation: 'cer-wipe-right 0.3s ease-out 0.1s both',
           }} />
           <PowerWord
-            size={isDraw ? 'clamp(64px, 13vw, 180px)' : 'clamp(90px, 18vw, 260px)'}
+            size={isDraw ? 'clamp(64px, 13vw, 180px)' : 'clamp(110px, 21vw, 300px)'}
             color="#FFFFFF"
-            gradient={isDraw ? CER_GRAD.steel : CER_GRAD.steel}
+            gradient={isDraw ? CER_GRAD.ice : CER_GRAD.steel}
+            echo={isDraw ? '#1f6f88' : '#C81020'}
+            echoOffset="0.08em"
             glow="#F77F00"
             glow2="#E63946"
             skew={-8}

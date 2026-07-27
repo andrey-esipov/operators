@@ -261,6 +261,7 @@
 /* base fill sits above the chroma ghosts */
 .cer-pw__fill { position: relative; z-index: 3; }
 .cer-pw__metal { position: relative; z-index: 4; pointer-events: none; }
+.cer-pw__echo { position: relative; z-index: 0; pointer-events: none; }
 .cer-pw__ghost { position: relative; z-index: 1; mix-blend-mode: screen; pointer-events: none; }
 .cer-pw__ghost--r { color: #ff2d6b; transform: translate(-0.055em, 0.006em); }
 .cer-pw__ghost--c { color: #21e6ff; transform: translate(0.055em, -0.006em); }

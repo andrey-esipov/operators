@@ -92,25 +92,33 @@ export function StageBackdrop({
         className="absolute inset-0 w-full h-full object-cover"
         style={{
           imageRendering: 'pixelated',
-          // Desaturate + crush the busy teal art so it reads as a graded
-          // backdrop, not a competing midground — the callout must own contrast.
-          filter: `brightness(${dim}) saturate(0.6) contrast(1.22)`,
+          // Crush the busy stage art hard so the authored state grade — not the
+          // raw teal/green pixels — owns the frame. Low saturation lets the tint
+          // layers below unify the whole backdrop to one graphic hue.
+          filter: `brightness(${dim}) saturate(0.28) contrast(1.24)`,
           transform: 'scale(1.06)',
         }}
       />
-      {/* Duotone grade wash — pushes the whole frame toward the screen's key
-          colour so it stops reading muddy and gains a graphic, authored grade. */}
+      {/* Duotone grade — a `color` blend unifies the whole backdrop to the
+          screen's key hue (warm gold win / cold steel loss / hot red KO) so no
+          two states read alike and nothing looks muddy. */}
       {tint && (
         <div
           className="absolute inset-0"
-          style={{ background: tint, mixBlendMode: 'overlay', opacity: 0.5 }}
+          style={{ background: tint, mixBlendMode: 'color', opacity: 0.72 }}
+        />
+      )}
+      {tint && (
+        <div
+          className="absolute inset-0"
+          style={{ background: tint, mixBlendMode: 'soft-light', opacity: 0.5 }}
         />
       )}
       {tint && (
         <div
           className="absolute inset-0"
           style={{
-            background: `radial-gradient(ellipse at 50% 46%, ${tint}66 0%, ${tint}1f 32%, transparent 62%)`,
+            background: `radial-gradient(ellipse at 50% 46%, ${tint}59 0%, ${tint}1a 32%, transparent 60%)`,
             mixBlendMode: 'screen',
           }}
         />

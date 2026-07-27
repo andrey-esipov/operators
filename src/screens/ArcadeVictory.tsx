@@ -28,7 +28,7 @@ export function ArcadeVictory() {
 
   return (
     <div className="cer-anim relative w-full h-full flex flex-col items-center justify-center overflow-hidden px-6 py-4" style={{ background: '#05030b' }}>
-      <StageBackdrop scenario={scenario} tint={accent} dim={0.36} />
+      <StageBackdrop scenario={scenario} tint="#F7A400" dim={0.36} />
       <div className="cer-rays" style={{ opacity: 0.26 }} />
       <div className="cer-grain" />
       <ImpactFlash duration={0.3} />
@@ -59,11 +59,11 @@ export function ArcadeVictory() {
 
       {/* TITLE — ARCADE / COMPLETE, two heavy lines, staggered crash. */}
       <div className="relative z-10 flex flex-col items-center" style={{ animation: 'cer-shake-hard 0.3s ease-out both' }}>
-        <PowerWord size="clamp(52px, 8vw, 118px)" color="#FFD60A" gradient={CER_GRAD.gold} glow="#F77F00" glow2="#E63946" skew={-8} entrance="ko" live idle>
+        <PowerWord size="clamp(58px, 9vw, 132px)" color="#FFD60A" gradient={CER_GRAD.gold} echo="#B3122F" echoOffset="0.08em" glow="#F77F00" glow2="#E63946" skew={-8} entrance="ko" live idle>
           ARCADE
         </PowerWord>
         <div style={{ marginTop: '-0.12em' }}>
-          <PowerWord size="clamp(52px, 8vw, 118px)" color="#FFFFFF" gradient={CER_GRAD.steel} glow="#FFD60A" glow2="#F77F00" skew={-8} entrance="slam" delay={0.12} live idle>
+          <PowerWord size="clamp(58px, 9vw, 132px)" color="#FFFFFF" gradient={CER_GRAD.steel} echo="#7A1F6B" echoOffset="0.08em" glow="#FFD60A" glow2="#F77F00" skew={-8} entrance="slam" delay={0.12} live idle>
             COMPLETE
           </PowerWord>
         </div>

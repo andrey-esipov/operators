@@ -65,6 +65,8 @@ export function PowerWord({
   chroma = true,
   idle = false,
   gradient,
+  echo,
+  echoOffset = '0.11em',
   className = '',
   style,
 }: {
@@ -82,6 +84,8 @@ export function PowerWord({
   chroma?: boolean
   idle?: boolean
   gradient?: string
+  echo?: string
+  echoOffset?: string
   className?: string
   style?: CSSProperties
 }) {
@@ -120,6 +124,20 @@ export function PowerWord({
         ...style,
       }}
     >
+      {echo && (
+        <span
+          className="cer-pw__layer cer-pw__echo cer-display"
+          aria-hidden
+          style={{
+            fontSize: size,
+            color: echo,
+            transform: `translate(${echoOffset}, ${echoOffset})`,
+            textShadow: `${ringShadow(0.024, echo)}, 0 0 clamp(6px,1vw,16px) ${echo}`,
+          }}
+        >
+          {children}
+        </span>
+      )}
       {chroma && (
         <>
           <span className="cer-pw__layer cer-pw__ghost cer-pw__ghost--r cer-display" style={{ fontSize: size }} aria-hidden>

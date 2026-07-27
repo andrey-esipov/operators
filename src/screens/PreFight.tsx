@@ -244,7 +244,9 @@ export function PreFight() {
             }}
           >
             <div className="cer-breathe-slow" style={{ width: '100%', height: '100%' }}>
-              <Sprite fighter={a} side="a" state="stance" />
+              <div style={{ width: '100%', height: '100%', transform: 'scale(1.16)', transformOrigin: '38% 100%' }}>
+                <Sprite fighter={a} side="a" state="stance" />
+              </div>
             </div>
             <FloorShadow />
           </div>
@@ -274,7 +276,9 @@ export function PreFight() {
             }}
           >
             <div className="cer-breathe-slow" style={{ width: '100%', height: '100%' }}>
-              <Sprite fighter={b} side="b" state="stance" />
+              <div style={{ width: '100%', height: '100%', transform: 'scale(1.16)', transformOrigin: '62% 100%' }}>
+                <Sprite fighter={b} side="b" state="stance" />
+              </div>
             </div>
             <FloorShadow />
           </div>
@@ -387,6 +391,8 @@ export function PreFight() {
                 size="clamp(140px, 24vw, 340px)"
                 color="#FFD60A"
                 gradient={CER_GRAD.gold}
+                echo="#B3122F"
+                echoOffset="0.09em"
                 glow="#F77F00"
                 glow2="#E63946"
                 skew={0}
@@ -417,6 +423,7 @@ export function PreFight() {
                   size="clamp(110px, 19vw, 280px)"
                   color="#FFFFFF"
                   gradient={CER_GRAD.steel}
+                  echo="#C81E5B"
                   glow="#F72585"
                   glow2="#FFD60A"
                   skew={-8}

@@ -97,6 +97,14 @@ try {
       mat: o.material ? (o.material.name || o.material.type) : null,
       blending: o.material ? o.material.blending : null,
       geo: o.geometry ? o.geometry.type : null,
+      // Uniform signature + uMode + scale. A scene full of pooled additive quads
+      // all report as "Mesh"/"PlaneGeometry", which makes an offender impossible
+      // to trace back to the code that spawned it. The uniform key list is a
+      // reliable fingerprint for which shader this is, and uMode picks the branch
+      // inside multi-mode shaders like Shockwave.
+      uni: o.material && o.material.uniforms ? Object.keys(o.material.uniforms).sort().join(',') : null,
+      uMode: o.material && o.material.uniforms && o.material.uniforms.uMode ? o.material.uniforms.uMode.value : null,
+      scale: +o.scale.x.toFixed(2),
       count: o.isInstancedMesh ? o.count : (o.isPoints ? (o.geometry?.attributes?.position?.count ?? null) : null),
       type: o.type,
     })

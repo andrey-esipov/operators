@@ -218,21 +218,34 @@ const WAVE_FRAG = /* glsl */ `
       float rays = pow(0.5 + 0.5 * sin(ang * 10.0 + uSeed * 6.0), 26.0);
       rays += pow(0.5 + 0.5 * sin(ang * 20.0 + 1.7 + uSeed), 34.0) * 0.4;
       float rayLen = 0.55 + 0.45 * hash(floor((ang + 3.14159) / 6.2831 * 10.0) + uSeed);
-      // rays reach outward from just past the core and taper to nothing
-      float along = smoothstep(rayLen, 0.12, r) * smoothstep(0.07, 0.2, r);
+      // rays reach outward from OUTSIDE the body and taper to nothing. The inner
+      // start radius (0.30 of a 5.4-unit quad = ~1.6 world units) is deliberately
+      // clear of the defender's torso: the whole justification for exempting this
+      // burst from CONTACT_CAP is that thin structure reads ACROSS a silhouette,
+      // and that only holds if the structure is thin where the character is. When
+      // the rays began at r=0.07 their dense roots piled up on the chest and the
+      // burst measured -11.2 wash on the defender -- the single worst offender of
+      // any object in the game. Radiating from around him instead costs nothing
+      // visually and is the difference between a sunburst and a gold ball.
+      float along = smoothstep(rayLen, 0.34, r) * smoothstep(0.30, 0.46, r);
       rays *= along;
       rays *= 0.7 + 0.55 * fbm(vec2(ang * 5.0, r * 3.0 - uAge * 3.0) + uSeed);
-      // crisp expanding golden ring — the super's shock front
-      float ringR = 0.28 + 0.58 * (1.0 - pow(1.0 - uAge, 2.0));
+      // crisp expanding golden ring — the super's shock front. Starts outside the
+      // torso for the same reason the rays do; a solid ring sweeping across the
+      // chest is not thin structure no matter how crisp it is.
+      float ringR = 0.44 + 0.46 * (1.0 - pow(1.0 - uAge, 2.0));
       float goldRing = ring(r, ringR, 0.05) * (1.0 - smoothstep(0.55, 1.0, uAge));
-      // small, defined churning core (never a big flat disc)
-      vec3 core = hotCore(r, ang, uColor2, 0.14, uSeed);
-      float coreA = smoothstep(0.14, 0.0, r);
+      // Small churning core. Kept TINY and DIM on purpose: at radius 0.14 of a
+      // 5.4-unit quad this was a 1.5-unit solid gold ball sitting on the
+      // defender's chest, and bloom turned it into the blob that made ult read
+      // worse than a crit despite ult having the better-designed wave.
+      vec3 core = hotCore(r, ang, uColor2, 0.085, uSeed);
+      float coreA = smoothstep(0.085, 0.0, r);
       float body = rays + goldRing * 0.85;
-      float a = clamp((body + coreA * 0.28) * grow * fade, 0.0, 1.0);
+      float a = clamp((body + coreA * 0.13) * grow * fade, 0.0, 1.0);
       // Sharp sparse rays own the frame; the central core is kept very dim so it
       // never blooms into a solid dome that swallows the god-ray silhouette.
-      vec3 col = uColor2 * (body * 2.6) + vec3(1.0) * goldRing * 0.28 + core * 0.22;
+      vec3 col = uColor2 * (body * 2.6) + vec3(1.0) * goldRing * 0.28 + core * 0.10;
       col *= uIntensity;
       if (a < 0.004) discard;
       gl_FragColor = vec4(col, a);

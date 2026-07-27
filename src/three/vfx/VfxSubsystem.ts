@@ -594,9 +594,13 @@ export class VfxSubsystem implements Subsystem {
       this.waves.spawn('shock', shockPos, capSize(r.shockSize * 0.78 * scale, CONTACT_CAP), 0.86, core, energy, 1.7 * mult, 1.18)
       // small tinted core behind the ring so the centre has mass (kills the donut)
       this.waves.spawn('halo', p, capSize(r.shockSize * 0.28 * scale, CORE_CAP), 0.5, core, energy, 0.75 * mult)
-    } else {
+    } else if (!r.radial) {
       // LIGHT: a compact but crisp snap — small energy bloom + a tiny sharp star.
       // Kept alive ~0.9s so even the weakest hit reads on capture, not a bloom dot.
+      // Guarded on !radial: ult sets shock AND radial, so it used to fall through
+      // to this fallback and get the light-hit halo + star stacked UNDER its own
+      // sunburst -- five overlapping waves on one contact point, which is why ult
+      // washed out the defender harder than a crit did.
       this.waves.spawn('halo', p, capSize(1.5 * scale, CORE_CAP), 0.9, core, energy, 1.1 * mult)
       this.waves.spawn('star', p, capSize(2.6 * scale, CONTACT_CAP), 0.9, C(0xffffff), energy, 1.9 * mult)
     }
@@ -605,9 +609,17 @@ export class VfxSubsystem implements Subsystem {
       // overlaid star was removed: it piled a second radial burst onto the centre
       // and helped bloom it into a ball. Rays now own the silhouette; a thin gold
       // shaft of light adds a vertical accent that survives bloom.
-      this.waves.spawn('radial', p, r.shockSize * 1.0 * scale, 0.95, C(0xffffff), energy, 1.15)
+      //
+      // The rays USED to be exempt from CONTACT_CAP on the theory that thin
+      // structure reads across a silhouette instead of occluding it. Measurement
+      // refuted that: at 5.36 units the burst was the single worst offender of any
+      // object in the game (-11.8 wash on the defender, and hiding it restored
+      // 100% of the lost detail). It is capped like everything else now. A super
+      // is still allowed to be the brightest thing on screen -- it just is not
+      // allowed to be wider than the person it lands on.
+      this.waves.spawn('radial', p, capSize(r.shockSize * 1.0 * scale, CONTACT_CAP), 0.95, C(0xffffff), energy, 1.15)
       this.waves.spawn('beam', p, r.shockSize * 1.05 * scale, 0.8, C(0xffffff), energy, 0.85, 0.42)
-      this.waves.spawn('shock', p, r.shockSize * 1.0 * scale, 0.9, core, ember, 0.55, 1.0)
+      this.waves.spawn('shock', p, capSize(r.shockSize * 0.7 * scale, CONTACT_CAP), 0.9, core, ember, 0.55, 1.0)
     }
 
     // 7. ground reaction

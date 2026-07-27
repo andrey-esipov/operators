@@ -602,7 +602,16 @@ export const FIGHTER_FRAGMENT = /* glsl */ `
     //    character's shape survives the brightest frame of the game.
     vec3 toFlash = uFlashPos.xyz - vWorldPos;
     float dist = length(toFlash);
-    float rawAtten = uFlashIntensity / (1.0 + dist * dist * 1.6);
+    // LightRig authors flashIntensity for a THREE.PointLight, which applies its
+    // own distance/decay curve in world units. This shader rolls its own
+    // falloff, so the same number means something completely different here: a
+    // crit's peak of ~36 arrived as ~25 at the chest. Rescaled so the soft knee
+    // below actually operates in its linear region across the body. Without
+    // this the term pins at FLASH_MAX on every fragment, which removes the
+    // falloff entirely and the flash reads as a coat of white paint rather than
+    // as light arriving from the point of contact.
+    const float FLASH_DRIVE = 0.055;
+    float rawAtten = uFlashIntensity * FLASH_DRIVE / (1.0 + dist * dist * 1.6);
     const float FLASH_MAX = 1.15;
     const float FLASH_KNEE = FLASH_MAX * 0.55;
     float atten = rawAtten <= FLASH_KNEE

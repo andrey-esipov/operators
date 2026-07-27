@@ -365,7 +365,7 @@ class FighterRig {
 
   // ---- frame -------------------------------------------------------------
 
-  update(dt: number, vs: FighterVisualState, time: number, light: LightRig | undefined, camera: THREE.PerspectiveCamera, animScale = 1) {
+  update(dt: number, vs: FighterVisualState, time: number, light: LightRig | undefined, camera: THREE.PerspectiveCamera, animScale = 1, realDt = dt) {
     if (!this.ready) return
     const c = this.ch
     // Hitstop: freeze the procedural animation (springs, timelines, idle) for a
@@ -397,7 +397,11 @@ class FighterRig {
     // bounding box was 43% pure white on a crit and the character had no
     // readable form at all. Decay rate is tuned so the flash is effectively
     // gone by ~70ms regardless of how long the freeze runs.
-    c.flash *= Math.exp(-dt * 38)
+    //
+    // Note `dt` here is ALREADY the engine's hitstop-scaled dt -- this rig then
+    // scales it a second time by animScale. Using either of those leaves the
+    // flash frozen, which is why this takes realDt explicitly.
+    c.flash *= Math.exp(-realDt * 38)
 
     // --- Scripted attack: anticipation → contact → follow-through ----------
     // A pure spring can't do a proper wind-up (pull back before you punch), so
@@ -632,7 +636,7 @@ export class FighterSubsystem implements Subsystem {
         void rig.setPose(vs.pose, vs.id)
       }
       rig.setShattered(vs.shattered)
-      rig.update(dt, vs, this.time, this.light, this.ctx.camera, this.timeScale)
+      rig.update(dt, vs, this.time, this.light, this.ctx.camera, this.timeScale, this.ctx.realDt())
     }
   }
 

@@ -203,7 +203,9 @@ export function PreFight() {
               animation: beat >= 1 ? 'cer-slam-left 0.6s cubic-bezier(0.2,0.9,0.25,1) both' : undefined,
             }}
           >
-            <Sprite fighter={a} side="a" state="stance" />
+            <div className="cer-breathe-slow" style={{ width: '100%', height: '100%' }}>
+              <Sprite fighter={a} side="a" state="stance" />
+            </div>
             <FloorShadow />
           </div>
           {beat === 1 && (
@@ -231,7 +233,9 @@ export function PreFight() {
               animation: beat >= 1 ? 'cer-slam-right 0.6s cubic-bezier(0.2,0.9,0.25,1) 0.18s both' : undefined,
             }}
           >
-            <Sprite fighter={b} side="b" state="stance" />
+            <div className="cer-breathe-slow" style={{ width: '100%', height: '100%' }}>
+              <Sprite fighter={b} side="b" state="stance" />
+            </div>
             <FloorShadow />
           </div>
           {beat === 1 && (

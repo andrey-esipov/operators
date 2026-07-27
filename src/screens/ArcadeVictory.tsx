@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import './ceremony/devExpose'
 import './ceremony/ceremony.css'
-import { ImpactFlash } from './ceremony/CeremonyFX'
+import { ImpactFlash, StageBackdrop, WinnerFloor } from './ceremony/CeremonyFX'
 import { useGame } from '../state/game'
 import { getFighter } from '../data/fighters'
 import { Sprite } from '../components/Sprite'
@@ -13,6 +13,7 @@ export function ArcadeVictory() {
   const selectedA = useGame((s) => s.selectedA)
   const quoteBank = useGame((s) => s.quoteBank)
   const resetMatch = useGame((s) => s.resetMatch)
+  const scenario = useGame((s) => s.scenario)
 
   useEffect(() => {
     Sfx.victory()
@@ -26,13 +27,8 @@ export function ArcadeVictory() {
 
   return (
     <div className="cer-anim relative w-full h-full flex flex-col items-center justify-center overflow-hidden px-6 py-4">
-      <div
-        className="absolute inset-0"
-        style={{
-          background: 'radial-gradient(circle at 50% 40%, #FFD60A33 0%, #F77F0033 38%, #1A0F2E 78%, #0F0A1A 100%)',
-        }}
-      />
-      <div className="cer-rays" style={{ opacity: 0.6 }} />
+      <StageBackdrop scenario={scenario} tint={accent} dim={0.42} />
+      <div className="cer-rays" style={{ opacity: 0.28 }} />
       <ImpactFlash duration={0.3} />
 
       {/* Falling confetti. */}
@@ -116,8 +112,14 @@ export function ArcadeVictory() {
               animation: 'cer-spotlight 2.6s ease-in-out infinite',
             }}
           />
-          <div style={{ width: 'min(28vw, 300px)', height: 'min(38vh, 300px)', filter: `drop-shadow(0 0 36px ${accent})` }}>
-            <Sprite fighter={player} side="a" state="win" />
+          <div className="relative" style={{ width: 'min(32vw, 340px)', height: 'min(46vh, 360px)' }}>
+            <div
+              className="cer-breathe"
+              style={{ width: '100%', height: '100%', filter: `drop-shadow(0 0 36px ${accent})` }}
+            >
+              <Sprite fighter={player} side="a" state="win" />
+            </div>
+            <WinnerFloor color={accent} />
           </div>
           <div
             className="font-display tracking-widest mt-1"

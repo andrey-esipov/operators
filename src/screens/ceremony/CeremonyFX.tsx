@@ -48,6 +48,7 @@ export function ImpactFlash({ delay = 0, duration = 0.28 }: { delay?: number; du
 }
 
 export function SpeedStreaks({ color = 'rgba(255,255,255,0.55)' }: { color?: string }) {
+
   return (
     <div className="absolute inset-0 pointer-events-none overflow-hidden">
       {[10, 28, 46, 62, 78, 90].map((top, i) => (
@@ -65,5 +66,69 @@ export function SpeedStreaks({ color = 'rgba(255,255,255,0.55)' }: { color?: str
         />
       ))}
     </div>
+  )
+}
+
+/**
+ * Real stage backdrop for the result screens. Reuses the same pixel-art stage
+ * art the fight/VS screens use, heavily darkened with a vignette so the winner
+ * pops and text stays readable. Grounds the ceremony in the arena instead of a
+ * flat gradient void. `tint` adds a soft accent wash keyed to the winner.
+ */
+export function StageBackdrop({
+  scenario,
+  tint,
+  dim = 0.4,
+}: {
+  scenario: string
+  tint?: string
+  dim?: number
+}) {
+  return (
+    <div className="absolute inset-0 overflow-hidden">
+      <img
+        src={`/stages/${scenario}.png`}
+        alt=""
+        className="absolute inset-0 w-full h-full object-cover"
+        style={{
+          imageRendering: 'pixelated',
+          filter: `brightness(${dim}) saturate(1.05) contrast(1.05)`,
+          transform: 'scale(1.06)',
+        }}
+      />
+      {tint && (
+        <div
+          className="absolute inset-0"
+          style={{
+            background: `radial-gradient(ellipse at 50% 48%, ${tint}55 0%, ${tint}18 34%, transparent 64%)`,
+            mixBlendMode: 'screen',
+          }}
+        />
+      )}
+      <div
+        className="absolute inset-0"
+        style={{ background: 'radial-gradient(ellipse at center, transparent 18%, rgba(0,0,0,0.8) 100%)' }}
+      />
+      <div className="absolute inset-0 pointer-events-none crt-overlay" />
+    </div>
+  )
+}
+
+/** Warm elliptical pool the winner stands in — sells weight on the ground. */
+export function WinnerFloor({ color }: { color: string }) {
+  return (
+    <div
+      className="absolute pointer-events-none"
+      style={{
+        left: '50%',
+        bottom: '-2%',
+        width: '78%',
+        height: 34,
+        transform: 'translateX(-50%)',
+        background: `radial-gradient(ellipse at center, ${color}cc 0%, ${color}44 45%, transparent 72%)`,
+        filter: 'blur(2px)',
+        animation: 'cer-floor-pulse 2.8s ease-in-out infinite',
+      }}
+    />
   )
 }

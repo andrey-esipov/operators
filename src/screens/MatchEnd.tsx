@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import './ceremony/devExpose'
 import './ceremony/ceremony.css'
-import { ImpactFlash } from './ceremony/CeremonyFX'
+import { ImpactFlash, StageBackdrop, WinnerFloor } from './ceremony/CeremonyFX'
 import { useGame } from '../state/game'
 import { getFighter } from '../data/fighters'
 import { Sprite } from '../components/Sprite'
@@ -19,6 +19,7 @@ export function MatchEnd() {
   const arcadeStep = useGame((s) => s.arcadeStep)
   const nextArcadeFight = useGame((s) => s.nextArcadeFight)
   const setPhase = useGame((s) => s.setPhase)
+  const scenario = useGame((s) => s.scenario)
 
   useEffect(() => {
     if (roundsWon.a >= 2) Sfx.victory()
@@ -91,18 +92,13 @@ export function MatchEnd() {
 
   return (
     <div className="cer-anim relative w-full h-full flex flex-col items-center justify-center overflow-hidden px-6 py-4">
-      {/* Background keyed to the winner's colour. */}
-      <div
-        className="absolute inset-0"
-        style={{
-          background: arcadePlayerLost
-            ? 'radial-gradient(circle at 50% 40%, #55111d 0%, #1A0F0F 60%, #0F0A0A 100%)'
-            : winnerSide === 'a'
-              ? `radial-gradient(circle at 50% 40%, ${accent}55 0%, #1A0F2E 58%, #0F0A1A 100%)`
-              : `radial-gradient(circle at 50% 40%, ${accent}55 0%, #0F1A2E 58%, #0F0A1A 100%)`,
-        }}
+      {/* Real stage backdrop keyed to the winner's colour. */}
+      <StageBackdrop
+        scenario={scenario}
+        tint={arcadePlayerLost ? '#E63946' : accent}
+        dim={arcadePlayerLost ? 0.3 : 0.4}
       />
-      {!arcadePlayerLost && <div className="cer-rays" style={{ opacity: 0.45 }} />}
+      {!arcadePlayerLost && <div className="cer-rays" style={{ opacity: 0.2 }} />}
       <ImpactFlash duration={0.25} />
 
       {/* TITLE — crashes down from the top. */}
@@ -141,7 +137,7 @@ export function MatchEnd() {
           className="flex flex-col items-center"
           style={{ animation: 'cer-loser-in 0.5s ease-out 0.2s both' }}
         >
-          <div style={{ width: 'min(15vw, 140px)', height: 'min(18vh, 140px)' }}>
+          <div style={{ width: 'min(18vw, 165px)', height: 'min(23vh, 175px)' }}>
             <Sprite fighter={loser} side={winnerSide === 'a' ? 'b' : 'a'} state="lose" />
           </div>
           <div className="font-display text-xs tracking-widest mt-1 text-white/55">{loser.shortName}</div>
@@ -164,11 +160,16 @@ export function MatchEnd() {
           />
           <div
             style={{
-              width: 'min(30vw, 300px)', height: 'min(38vh, 300px)', position: 'relative',
-              filter: `drop-shadow(0 0 34px ${accent})`,
+              width: 'min(32vw, 330px)', height: 'min(44vh, 340px)', position: 'relative',
             }}
           >
-            <Sprite fighter={winner} side={winnerSide} state="win" />
+            <div
+              className="cer-breathe"
+              style={{ width: '100%', height: '100%', filter: `drop-shadow(0 0 34px ${accent})` }}
+            >
+              <Sprite fighter={winner} side={winnerSide} state="win" />
+            </div>
+            <WinnerFloor color={accent} />
           </div>
           <div
             className="font-display tracking-widest mt-1"

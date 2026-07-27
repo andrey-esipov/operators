@@ -144,6 +144,28 @@
   100% { transform: translateY(0);    opacity: 1; }
 }
 
+/* Subtle breathing/idle so the winner sprite reads as alive, not frozen.
+   Amplitude kept tiny so pixel art stays crisp. Composes on the inner sprite
+   box while the outer container runs the one-shot hero-rise entrance. */
+@keyframes cer-breathe {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50%      { transform: translateY(-1.4%) scale(1.014); }
+}
+.cer-breathe { animation: cer-breathe 2.8s ease-in-out infinite; will-change: transform; }
+
+/* Slower, shallower breathing for the standing pre-fight fighters. */
+@keyframes cer-breathe-slow {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50%      { transform: translateY(-0.8%) scale(1.008); }
+}
+.cer-breathe-slow { animation: cer-breathe-slow 3.4s ease-in-out infinite; will-change: transform; }
+
+/* Warm ground pool the winner stands in. */
+@keyframes cer-floor-pulse {
+  0%, 100% { opacity: 0.55; transform: translateX(-50%) scaleX(1); }
+  50%      { opacity: 0.8;  transform: translateX(-50%) scaleX(1.08); }
+}
+
 /* Radiant burst rays rotating slowly behind a champion. */
 @keyframes cer-rays {
   0%   { transform: translate(-50%, -50%) rotate(0deg); }

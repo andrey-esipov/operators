@@ -212,27 +212,28 @@ function oneHit(
       gg.gain.linearRampToValueAtTime(bg.level, bWhen + 0.002)
       for (let i = 1; i <= steps; i++) {
         const t = bWhen + (bedDur * i) / steps
-        const decay = Math.pow(1 - i / (steps + 1), 1.6) // overall fade
-        const jitter = 0.45 + 1.0 * rnd() // irregular texture
+        // gentler fade + a modest sustain floor: late-tail noise stays present
+        // but not so loud it crushes the transient crest.
+        const decay = 0.08 + 0.92 * Math.pow(1 - i / (steps + 1), 1.15)
+        const jitter = 0.5 + 0.9 * rnd() // irregular texture
         gg.gain.linearRampToValueAtTime(Math.max(0.0001, bg.level * decay * jitter), t)
       }
-      gg.gain.exponentialRampToValueAtTime(0.0001, bWhen + bedDur + 0.005)
+      gg.gain.exponentialRampToValueAtTime(0.0001, bWhen + bedDur + 0.02)
       src.start(bWhen); src.stop(bWhen + bedDur + 0.02)
       end = Math.max(end, bWhen + bedDur)
 
-      // Debris air: a quieter, brighter, STEREO-decorrelated pair riding the same
-      // tail — restores tail width + high texture (physical shards) while the low
-      // bed stays mono and tight. Level scales with the main grit.
-      for (const side of [-0.55, 0.55]) {
+      // Debris air: a brighter, STEREO-decorrelated pair riding the tail — restores
+      // tail width + high texture (physical shards) while the low bed stays mono.
+      for (const side of [-0.7, 0.7]) {
         const dnb = noiseBuffer(ctx, bedDur * 1.4, { color: 'white', stereo: false, seed: seed + 411 + (side < 0 ? 0 : 37) })
         const dv = bufferVoice(ctx, dnb)
-        const dhp = ctx.createBiquadFilter(); dhp.type = 'highpass'; dhp.frequency.value = 1600; dhp.Q.value = 0.5
+        const dhp = ctx.createBiquadFilter(); dhp.type = 'highpass'; dhp.frequency.value = 1300; dhp.Q.value = 0.5
         const dpan = ctx.createStereoPanner(); dpan.pan.value = clamp(pan + side, -1, 1)
         dv.gain.disconnect(); dv.src.connect(dv.gain); dv.gain.connect(dhp); dhp.connect(dpan); dpan.connect(g)
-        const dl = bg.level * 0.5
+        const dl = bg.level * 0.7
         dv.gain.gain.setValueAtTime(0.0001, bWhen)
         dv.gain.gain.linearRampToValueAtTime(dl, bWhen + 0.002)
-        dv.gain.gain.exponentialRampToValueAtTime(0.0001, bWhen + bedDur * 0.85)
+        dv.gain.gain.exponentialRampToValueAtTime(0.0001, bWhen + bedDur * 0.9)
         dv.src.start(bWhen); dv.src.stop(bWhen + bedDur + 0.02)
       }
     }
@@ -283,36 +284,53 @@ function oneHit(
     }
   }
 
-  // 5) RING — inharmonic partials (metal/glass/energy), optionally spread across
-  //    the stereo field. Each partial gets an irregular amplitude flutter so it
-  //    shimmers/beats instead of sitting as a static horizontal rail.
+  // 5) RING — inharmonic modes (metal/glass/energy). Built as NOISE-EXCITED
+  //    RESONATORS (a noise burst through a high-Q bandpass) with slow frequency
+  //    DRIFT + randomized per-mode decay, so each mode is a shimmering,
+  //    non-stationary partial rather than a clean horizontal rail. A faint pure
+  //    oscillator adds just enough pitch definition.
   if (spec.ring) {
     const r = spec.ring
     const spread = r.spread ?? 0
     const rnd = mulberryLite(seed + 907)
     r.partials.forEach((f, i) => {
-      const { osc, gain } = oscVoice(ctx, r.type ?? 'sine', f)
       const lvl = r.level * (1 - i / (r.partials.length + 1))
-      const dur = r.dur * (0.6 + 0.4 * (1 - i / r.partials.length))
+      const dur = r.dur * (0.55 + 0.5 * (1 - i / r.partials.length)) * (0.8 + 0.4 * rnd())
+      let dest: AudioNode = g
       if (spread > 0) {
         const rp = ctx.createStereoPanner()
         rp.pan.value = clamp(pan + (i % 2 === 0 ? -spread : spread) * (0.6 + 0.4 * (i / r.partials.length)), -1, 1)
-        gain.disconnect(); gain.connect(rp); rp.connect(g)
-      } else {
-        gain.connect(g)
+        rp.connect(g); dest = rp
       }
-      gain.gain.setValueAtTime(0.0001, when + 0.001)
-      gain.gain.linearRampToValueAtTime(lvl, when + 0.004)
-      // flutter: a few irregular level dips over the decay so it isn't a clean rail
+      // resonator: noise → high-Q bandpass that rings at f, with drift. Stereo-
+      // decorrelated excitation so the mode has natural width without railing.
+      const nb = noiseBuffer(ctx, dur * 1.5, { color: 'white', stereo: true, seed: seed + 1201 + i * 13 })
+      const { src, gain: ng } = bufferVoice(ctx, nb)
+      const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'
+      const Q = 16 + 14 * rnd()
+      bp.Q.value = Q
+      const drift = 0.97 + 0.06 * rnd()
+      bp.frequency.setValueAtTime(f * (1.01 + 0.02 * rnd()), when + 0.001)
+      bp.frequency.exponentialRampToValueAtTime(Math.max(120, f * drift), when + dur)
+      src.connect(ng); ng.disconnect(); ng.connect(bp); bp.connect(dest)
+      ng.gain.setValueAtTime(0.0001, when + 0.001)
+      ng.gain.linearRampToValueAtTime(lvl * 1.5, when + 0.004)
       const steps = 6
       for (let s = 1; s <= steps; s++) {
         const t = when + 0.004 + (dur - 0.004) * (s / steps)
-        const decay = Math.pow(1 - s / (steps + 1), 1.5)
+        const decay = Math.pow(1 - s / (steps + 1), 1.7) // snappier → higher crest
         const jit = 0.4 + 0.9 * rnd()
-        gain.gain.linearRampToValueAtTime(Math.max(0.0001, lvl * decay * jit), t)
+        ng.gain.linearRampToValueAtTime(Math.max(0.0001, lvl * 1.5 * decay * jit), t)
       }
-      gain.gain.exponentialRampToValueAtTime(0.0001, when + dur + 0.005)
-      osc.start(when + 0.001); osc.stop(when + dur + 0.02)
+      ng.gain.exponentialRampToValueAtTime(0.0001, when + dur + 0.005)
+      src.start(when + 0.001); src.stop(when + dur + 0.02)
+      // faint pure tone for pitch definition (low level so it doesn't rail)
+      const { osc, gain: og } = oscVoice(ctx, r.type ?? 'sine', f)
+      og.connect(dest)
+      og.gain.setValueAtTime(0.0001, when + 0.001)
+      og.gain.linearRampToValueAtTime(lvl * 0.3, when + 0.004)
+      og.gain.exponentialRampToValueAtTime(0.0001, when + dur * 0.7)
+      osc.start(when + 0.001); osc.stop(when + dur * 0.7 + 0.02)
       end = Math.max(end, when + dur)
     })
   }
@@ -347,9 +365,9 @@ function heavySpec(p: number): HitSpec {
     crack: { level: 1.15, punch: 3.0, hp: 1500, lp: 9000, attack: 0.0009, dur: 0.010, color: 'white' },
     sizzle: { level: 0.55, hp: 2000, dur: 0.09, color: 'pink' },
     body: { level: 0.95, f0: 120, f1: 44, dur: 0.24, type: 'sine', partial: 2.7, partialLevel: 0.28 },
-    bodyGrit: { level: 0.85, lp: 650, dur: 0.16 },
-    sub: { level: 0.72, f0: 56, f1: 30, dur: 0.3 },
-    texture: { level: 0.74, bp: 1500, q: 0.85, dur: 0.15, color: 'pink', spread: 1.0, haas: 0.009 },
+    bodyGrit: { level: 0.85, lp: 620, dur: 0.16 },
+    sub: { level: 1.05, f0: 56, f1: 30, dur: 0.3 },
+    texture: { level: 0.6, bp: 1300, q: 0.85, dur: 0.15, color: 'pink', spread: 1.0, haas: 0.009 },
     ring: { level: 0.16, partials: [178, 267, 401, 590], dur: 0.22, type: 'sine', spread: 0.5 },
     drive: 0.28,
     reverbSend: 0.28,
@@ -358,7 +376,7 @@ function heavySpec(p: number): HitSpec {
 
 function critSpec(p: number): HitSpec {
   return {
-    gain: 1.05 * (0.85 + 0.35 * p),
+    gain: 1.2 * (0.85 + 0.35 * p),
     // bone-crack identity: darker & more percussive than ex, metallic short ring.
     crack: { level: 1.1, punch: 3.2, hp: 2400, attack: 0.0006, dur: 0.007, color: 'white' },
     sizzle: { level: 0.5, hp: 3400, dur: 0.07, color: 'pink', spread: 0.8 },
@@ -374,7 +392,7 @@ function critSpec(p: number): HitSpec {
 
 function exSpec(p: number): HitSpec {
   return {
-    gain: 1.15 * (0.85 + 0.3 * p),
+    gain: 1.5 * (0.85 + 0.3 * p),
     // electric identity: bright, buzzy, sawtooth body + a long fluttering buzz.
     crack: { level: 0.98, punch: 2.6, hp: 3800, attack: 0.0005, dur: 0.006, color: 'blue' },
     sizzle: { level: 0.58, hp: 4400, dur: 0.1, color: 'blue', spread: 0.95 },
@@ -456,20 +474,24 @@ export function renderImpact(
         const send = ctx.createGain(); send.gain.value = 0.4
         g.connect(send); send.connect(routing.reverb)
       }
-      for (let i = 0; i < 18; i++) {
-        const f = 1400 + rnd() * 6000
-        const osc = ctx.createOscillator()
-        osc.type = 'sine'
-        osc.frequency.value = f
-        const gg = ctx.createGain()
+      // glass cloud — shards as short NOISE-EXCITED resonators (high-Q bandpass
+      // on white noise) with dispersion + pitch drift, so they read as fracturing
+      // debris rather than a bank of stationary sine rails.
+      for (let i = 0; i < 20; i++) {
+        const f = 1400 + rnd() * 6200
+        const nb2 = noiseBuffer(ctx, 0.7, { color: 'white', stereo: true, seed: seed + 200 + i * 7 })
+        const sv = bufferVoice(ctx, nb2)
+        const bp2 = ctx.createBiquadFilter(); bp2.type = 'bandpass'; bp2.Q.value = 22 + rnd() * 26
+        const t0 = when + 0.006 + rnd() * 0.14
+        const dur = 0.08 + rnd() * 0.34
+        bp2.frequency.setValueAtTime(f * (1.02 + rnd() * 0.04), t0)
+        bp2.frequency.exponentialRampToValueAtTime(Math.max(600, f * (0.9 + rnd() * 0.06)), t0 + dur)
         const gp = ctx.createStereoPanner(); gp.pan.value = clamp(pan + (rnd() * 2 - 1) * 0.95, -1, 1)
-        osc.connect(gg); gg.connect(gp); gp.connect(g)
-        const t0 = when + 0.01 + rnd() * 0.12
-        const dur = 0.12 + rnd() * 0.5
-        gg.gain.setValueAtTime(0.0001, t0)
-        gg.gain.linearRampToValueAtTime(0.12 + rnd() * 0.12, t0 + 0.003)
-        gg.gain.exponentialRampToValueAtTime(0.0001, t0 + dur)
-        osc.start(t0); osc.stop(t0 + dur + 0.02)
+        sv.gain.disconnect(); sv.src.connect(sv.gain); sv.gain.connect(bp2); bp2.connect(gp); gp.connect(g)
+        sv.gain.gain.setValueAtTime(0.0001, t0)
+        sv.gain.gain.linearRampToValueAtTime(0.5 + rnd() * 0.5, t0 + 0.002)
+        sv.gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur)
+        sv.src.start(t0); sv.src.stop(t0 + dur + 0.02)
         end = Math.max(end, t0 + dur)
       }
       // crackle
@@ -484,32 +506,32 @@ export function renderImpact(
     }
 
     case 'ult': {
-      // Cinematic 3-stage: (a) rising pre-whoosh, (b) enormous impact with
-      // sub drop + drive, (c) rumbling decay tail.
+      // Cinematic 3-stage: (a) short rising pre-whoosh that DUCKS to near-silence
+      // just before impact (the beat of silence makes the hit enormous and gives
+      // a genuine sub-5ms transient), (b) enormous impact, (c) rumbling tail.
       let end = when
-      // (a) whoosh riser over ~0.35s BEFORE the hit lands at when+0.35
-      const hitAt = when + 0.35
-      const nb = noiseBuffer(ctx, 0.4, { color: 'pink', seed: seed + 5 })
+      const hitAt = when + 0.16
+      const nb = noiseBuffer(ctx, 0.24, { color: 'pink', seed: seed + 5 })
       const { src, gain } = bufferVoice(ctx, nb)
       const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 1.2
       bp.frequency.setValueAtTime(300, when)
-      bp.frequency.exponentialRampToValueAtTime(4500, hitAt)
+      bp.frequency.exponentialRampToValueAtTime(4500, hitAt - 0.03)
       gain.disconnect(); src.connect(gain); gain.connect(bp)
       const wpan = ctx.createStereoPanner(); wpan.pan.value = pan
       bp.connect(wpan); wpan.connect(routing.out)
       if (routing.reverb) { const s = ctx.createGain(); s.gain.value = 0.3; wpan.connect(s); s.connect(routing.reverb) }
       gain.gain.setValueAtTime(0.0001, when)
-      gain.gain.exponentialRampToValueAtTime(0.5, hitAt)
-      gain.gain.exponentialRampToValueAtTime(0.0001, hitAt + 0.05)
-      src.start(when); src.stop(hitAt + 0.1)
+      gain.gain.exponentialRampToValueAtTime(0.42, hitAt - 0.03)
+      gain.gain.exponentialRampToValueAtTime(0.0002, hitAt - 0.006) // DUCK to silence
+      src.start(when); src.stop(hitAt + 0.02)
       // (b) the impact
       const big: HitSpec = {
-        gain: 1.05, 
-        crack: { level: 1.0, punch: 3.2, hp: 1400, lp: 11000, attack: 0.0016, dur: 0.014, color: 'white' },
+        gain: 1.15, 
+        crack: { level: 1.05, punch: 3.4, hp: 1400, lp: 11000, attack: 0.0016, dur: 0.014, color: 'white' },
         sizzle: { level: 0.6, hp: 1800, dur: 0.14, color: 'white' },
-        body: { level: 1.0, f0: 140, f1: 48, dur: 0.5, type: 'sine', partial: 2.6, partialLevel: 0.3 },
-        bodyGrit: { level: 0.85, lp: 600, dur: 0.18 },
-        sub: { level: 0.95, f0: 70, f1: 26, dur: 0.9 },
+        body: { level: 1.15, f0: 115, f1: 44, dur: 0.5, type: 'sine', partial: 2.6, partialLevel: 0.3 },
+        bodyGrit: { level: 0.9, lp: 600, dur: 0.32 },
+        sub: { level: 1.25, f0: 62, f1: 24, dur: 0.9 },
         texture: { level: 0.62, bp: 1400, q: 0.8, dur: 0.4, color: 'brown', spread: 0.9, haas: 0.011 },
         ring: { level: 0.26, partials: [96, 151, 233, 337], dur: 0.6, type: 'sine', spread: 0.5 },
         drive: 0.45,
@@ -536,26 +558,28 @@ export function renderImpact(
       // (grab-slam: a mid crack, then 90ms later the full body drop), capped by
       // a bright ascending sparkle arp. Distinct rhythm + spectral core vs ult.
       let end = when
-      const chargeDur = 0.42
+      const chargeDur = 0.18
       const hit1 = when + chargeDur           // first (mid) impact
-      const hit2 = hit1 + 0.11                 // second (full) impact — the drop
+      const hit2 = hit1 + 0.1                  // second (full) impact — the drop
 
-      // (a) rising charge: detuned saw power chord sweeping up under a resonant LP
+      // (a) rising charge: detuned saw power chord sweeping up under a resonant LP,
+      //     DUCKED to near-silence just before hit1 so the impact rises from a beat
+      //     of silence (real sub-5ms transient + a bigger-feeling slam).
       const chord = [55, 82.4, 110, 138.6, 164.8]
       const swell = ctx.createGain(); swell.gain.value = 0.0001
       const clp = ctx.createBiquadFilter(); clp.type = 'lowpass'; clp.Q.value = 6
       clp.frequency.setValueAtTime(180, when)
-      clp.frequency.exponentialRampToValueAtTime(2600, hit1)
+      clp.frequency.exponentialRampToValueAtTime(2600, hit1 - 0.02)
       swell.connect(clp)
       const cpan = ctx.createStereoPanner(); cpan.pan.value = pan; clp.connect(cpan); cpan.connect(routing.out)
       if (routing.reverb) { const s = ctx.createGain(); s.gain.value = 0.35; cpan.connect(s); s.connect(routing.reverb) }
       swell.gain.setValueAtTime(0.0001, when)
-      swell.gain.exponentialRampToValueAtTime(0.3, hit1)
-      swell.gain.exponentialRampToValueAtTime(0.0001, hit1 + 0.12)
+      swell.gain.exponentialRampToValueAtTime(0.3, hit1 - 0.02)
+      swell.gain.exponentialRampToValueAtTime(0.0002, hit1 - 0.005) // DUCK to silence
       chord.forEach((f, i) => {
         const o = ctx.createOscillator(); o.type = 'sawtooth'
         o.frequency.value = f * (1 + (i - 2) * 0.004) // slight detune spread
-        o.connect(swell); o.start(when); o.stop(hit1 + 0.14)
+        o.connect(swell); o.start(when); o.stop(hit1 + 0.02)
       })
 
       // (b) DOUBLE impact
@@ -577,19 +601,26 @@ export function renderImpact(
       }
       end = Math.max(end, oneHit(ctx, routing, hit2, s2, pan, seed + 11))
 
-      // (c) ascending sparkle arp (bright, resolves upward), hard-panned wide
+      // (c) ascending sparkle arp — bright triangle notes with a touch of pitch
+      // drift + vibrato so they shimmer instead of sitting as clean rails.
       const spk = [1568, 1976, 2637, 3520, 4699]
+      const arng = mulberryLite(seed + 55)
       spk.forEach((f, i) => {
         const o = ctx.createOscillator(); o.type = 'triangle'; o.frequency.value = f
+        const t0 = hit2 + 0.18 + i * 0.07
+        o.frequency.setValueAtTime(f * (1.01 + arng() * 0.01), t0)
+        o.frequency.exponentialRampToValueAtTime(f * (0.985 + arng() * 0.01), t0 + 0.32)
+        const vib = ctx.createOscillator(); vib.type = 'sine'; vib.frequency.value = 6 + arng() * 4
+        const vibG = ctx.createGain(); vibG.gain.value = f * 0.006
+        vib.connect(vibG); vibG.connect(o.frequency); vib.start(t0); vib.stop(t0 + 0.35)
         const gg = ctx.createGain()
         const sp = ctx.createStereoPanner(); sp.pan.value = clamp(pan + (i % 2 ? 0.8 : -0.8), -1, 1)
         o.connect(gg); gg.connect(sp); sp.connect(routing.out)
-        const t0 = hit2 + 0.18 + i * 0.07
         gg.gain.setValueAtTime(0.0001, t0)
         gg.gain.linearRampToValueAtTime(0.12, t0 + 0.008)
-        gg.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.45)
-        o.start(t0); o.stop(t0 + 0.5)
-        end = Math.max(end, t0 + 0.45)
+        gg.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.32)
+        o.start(t0); o.stop(t0 + 0.36)
+        end = Math.max(end, t0 + 0.32)
       })
       return end + IMPACT_END_PAD
     }

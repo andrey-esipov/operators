@@ -71,9 +71,10 @@ function rosterProjection(secPerFrame: number): void {
 async function main() {
   const args = process.argv.slice(2)
   const force = args.includes('--force')
+  const offline = args.includes('--offline')
   const all = args.includes('--all')
   const ids = all ? allRosterIds() : args.filter((a) => !a.startsWith('--'))
-  if (!ids.length) throw new Error('usage: batch-animations.ts <id...> | --all [--force]')
+  if (!ids.length) throw new Error('usage: batch-animations.ts <id...> | --all [--force] [--offline]')
 
   // Start from a conservative wall-time guess, refine it from measured runs.
   let secPerFrame = 30
@@ -87,7 +88,7 @@ async function main() {
     const id = ids[i]
     console.log(`\n[${i + 1}/${ids.length}] ${id} …`)
     try {
-      const s = await generateFighter(id, { force, log: (m) => console.log(m) })
+      const s = await generateFighter(id, { force, offline, log: (m) => console.log(m) })
       summaries.push(s)
       if (s.generated + s.regenerations > 0) {
         totalFramesGenerated += s.generated + s.regenerations
@@ -110,16 +111,18 @@ async function main() {
   console.log('BATCH REPORT')
   const totalFrames = summaries.reduce((n, s) => n + s.frames.length, 0)
   const totalFailed = summaries.reduce((n, s) => n + s.failedFrames.length, 0)
+  const totalMissing = summaries.reduce((n, s) => n + s.missingFrames.length, 0)
   const totalWarned = summaries.reduce((n, s) => n + s.warnedFrames.length, 0)
   const totalRegen = summaries.reduce((n, s) => n + s.regenerations, 0)
   console.log(`  fighters ok:     ${summaries.length}/${ids.length}`)
   console.log(`  frames total:    ${totalFrames}`)
   console.log(`  hard failures:   ${totalFailed} (${totalFrames ? ((totalFailed / totalFrames) * 100).toFixed(1) : '0'}%) — frames kept as best-of-3`)
+  console.log(`  missing frames:  ${totalMissing} (dropped from atlas — safety blocks / offline gaps)`)
   console.log(`  regenerations:   ${totalRegen} (frames that needed at least one retry)`)
   console.log(`  aspect warnings: ${totalWarned} (flagged for review, not auto-rejected)`)
   for (const s of summaries) {
-    if (s.failedFrames.length || s.warnedFrames.length || !s.anchorsOk) {
-      console.log(`   · ${s.id}: ${s.failedFrames.length ? 'fail[' + s.failedFrames.join(',') + '] ' : ''}${s.warnedFrames.length ? 'warn[' + s.warnedFrames.join(',') + '] ' : ''}${s.anchorsOk ? '' : 'ANCHOR-DRIFT'}`)
+    if (s.failedFrames.length || s.missingFrames.length || s.warnedFrames.length || !s.anchorsOk) {
+      console.log(`   · ${s.id}: ${s.failedFrames.length ? 'fail[' + s.failedFrames.join(',') + '] ' : ''}${s.missingFrames.length ? 'missing[' + s.missingFrames.join(',') + '] ' : ''}${s.warnedFrames.length ? 'warn[' + s.warnedFrames.join(',') + '] ' : ''}${s.anchorsOk ? '' : 'ANCHOR-DRIFT'}`)
     }
   }
   if (totalFramesGenerated > 0) rosterProjection(secPerFrame)

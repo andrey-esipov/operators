@@ -252,39 +252,48 @@ export function MatchEnd() {
         ]}
       />
 
-      <div
-        className="relative z-10 mt-3 flex gap-4 flex-wrap justify-center"
-        style={{ animation: 'cer-rise-fade 0.45s ease-out 0.95s both' }}
-      >
+      {/* CTAs — arcade prompts, not web buttons. Utility UI arrives LAST, after
+          the hero shot and stats have landed, so the frame reads as a poster
+          first and an interface second. */}
+      <div className="relative z-10 mt-4 flex gap-4 flex-wrap justify-center items-center">
         {arcadePlayerWon && (
           <button
             onClick={handleContinue}
-            className="cer-btn cer-type px-8 py-3"
+            className="cer-btn cer-cond px-9 py-3"
             style={{
-              background: `linear-gradient(180deg, ${accent}, ${accent}aa)`,
-              color: '#0a0612',
-              fontSize: 'clamp(13px,1.5vw,17px)',
-              border: '2px solid #fff',
-              boxShadow: `0 6px 0 rgba(0,0,0,0.5), 0 0 24px ${accent}88`,
-              textShadow: '0 1px 0 rgba(255,255,255,0.4)',
+              background: 'linear-gradient(180deg, rgba(24,16,4,0.92), rgba(10,7,3,0.94))',
+              color: accent,
+              fontSize: 'clamp(14px,1.55vw,19px)',
+              fontWeight: 800,
+              letterSpacing: '0.16em',
+              border: `2px solid ${accent}`,
+              clipPath: 'polygon(12px 0, 100% 0, calc(100% - 12px) 100%, 0 100%)',
+              boxShadow: `0 0 24px ${accent}55, inset 0 0 20px ${accent}1f`,
+              textShadow: `0 0 12px ${accent}66`,
+              animation: 'cer-rise-fade 0.4s ease-out 1.45s both',
             }}
           >
-            {isFinalBoss ? 'CLAIM YOUR PRIZE →' : `NEXT STAGE → (${secondsLeft}s)`}
+            {isFinalBoss ? '▸ CLAIM YOUR PRIZE' : `▸ NEXT STAGE  ·  ${secondsLeft}s`}
           </button>
         )}
         {!arcadePlayerWon && (
           <button
             onClick={() => { Sfx.menuSelect(); resetMatch() }}
-            className="cer-btn cer-type px-8 py-3"
+            className="cer-btn cer-cond px-9 py-3"
             style={{
-              background: 'linear-gradient(180deg, #E63946, #7209B7)',
-              color: '#fff',
-              fontSize: 'clamp(13px,1.5vw,17px)',
-              border: '2px solid rgba(255,255,255,0.9)',
-              boxShadow: '0 6px 0 rgba(0,0,0,0.5), 0 0 22px rgba(230,57,70,0.6)',
+              background: 'linear-gradient(180deg, rgba(10,18,32,0.92), rgba(6,10,20,0.94))',
+              color: '#BBD0EC',
+              fontSize: 'clamp(14px,1.55vw,19px)',
+              fontWeight: 800,
+              letterSpacing: '0.16em',
+              border: '2px solid #3E6DA0',
+              clipPath: 'polygon(12px 0, 100% 0, calc(100% - 12px) 100%, 0 100%)',
+              boxShadow: '0 0 22px rgba(62,109,160,0.5), inset 0 0 20px rgba(62,109,160,0.14)',
+              textShadow: '0 0 12px rgba(157,184,222,0.5)',
+              animation: 'cer-rise-fade 0.4s ease-out 1.45s both',
             }}
           >
-            REMATCH / MENU
+            ▸ REMATCH
           </button>
         )}
         <ShareButton
@@ -362,16 +371,19 @@ function ShareButton({
   return (
     <button
       onClick={tweet}
-      className="cer-btn cer-type px-8 py-3"
+      className="cer-btn cer-cond px-5 py-2.5"
       style={{
-        background: 'linear-gradient(180deg, #00B4D8, #0077B6)',
-        color: '#fff',
-        fontSize: 'clamp(13px,1.5vw,17px)',
-        border: '2px solid rgba(255,255,255,0.9)',
-        boxShadow: '0 6px 0 rgba(0,0,0,0.5), 0 0 22px rgba(0,180,216,0.5)',
+        background: 'transparent',
+        color: 'rgba(255,255,255,0.5)',
+        fontSize: 'clamp(11px,1.2vw,14px)',
+        fontWeight: 700,
+        letterSpacing: '0.2em',
+        border: '1.5px solid rgba(255,255,255,0.22)',
+        clipPath: 'polygon(9px 0, 100% 0, calc(100% - 9px) 100%, 0 100%)',
+        animation: 'cer-rise-fade 0.4s ease-out 1.75s both',
       }}
     >
-      ↗ TWEET RESULT
+      ↗ SHARE
     </button>
   )
 }

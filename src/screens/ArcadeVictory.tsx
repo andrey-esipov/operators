@@ -33,6 +33,42 @@ export function ArcadeVictory() {
       <div className="cer-grain" />
       <ImpactFlash duration={0.3} />
 
+      {/* Ending-card frame — a thin double keyline with clipped corners that
+          brackets the whole tableau. This is the device that makes the arcade
+          finale read as a bespoke ENDING card, not the in-run stage-clear
+          composition reused. */}
+      <div
+        aria-hidden
+        className="absolute pointer-events-none z-20"
+        style={{
+          inset: '18px',
+          border: '2px solid rgba(255,214,10,0.42)',
+          clipPath: 'polygon(26px 0, 100% 0, 100% calc(100% - 26px), calc(100% - 26px) 100%, 0 100%, 0 26px)',
+          boxShadow: 'inset 0 0 60px rgba(0,0,0,0.55)',
+          animation: 'cer-rise-fade 0.6s ease-out 0.2s both',
+        }}
+      />
+      <div
+        aria-hidden
+        className="absolute pointer-events-none z-20"
+        style={{ inset: '24px', border: '1px solid rgba(255,214,10,0.16)' }}
+      />
+      {/* Finale ribbon — top-left corner tab naming the mode/culmination. */}
+      <div
+        className="cer-cond absolute z-20"
+        style={{
+          top: 26, left: 26, padding: '5px 16px 5px 14px',
+          background: 'linear-gradient(180deg, #FFD60A, #F77F00)',
+          color: '#160c02', fontWeight: 800, fontSize: 'clamp(10px,1.05vw,13px)',
+          letterSpacing: '0.26em',
+          clipPath: 'polygon(0 0, 100% 0, calc(100% - 12px) 100%, 0 100%)',
+          boxShadow: '0 3px 12px rgba(0,0,0,0.5)',
+          animation: 'cer-wipe-right 0.45s cubic-bezier(0.16,0.9,0.3,1) 0.3s both',
+        }}
+      >
+        ARCADE MODE · FINALE
+      </div>
+
       {/* Falling ribbon confetti — dense, and pre-seeded with negative delays so
           the very first frame is already full of falling ribbons, not empty. */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
@@ -154,32 +190,38 @@ export function ArcadeVictory() {
       </div>
 
       <div
-        className="relative z-10 mt-5 flex gap-4 flex-wrap justify-center"
-        style={{ animation: 'cer-rise-fade 0.45s ease-out 0.8s both' }}
+        className="relative z-10 mt-5 flex gap-4 flex-wrap justify-center items-center"
       >
         <button
           onClick={() => { Sfx.menuSelect(); useGame.getState().setPhase('generate-fighter') }}
-          className="cer-btn cer-type px-9 py-4"
+          className="cer-btn cer-cond px-9 py-3.5"
           style={{
-            background: 'linear-gradient(180deg, #F72585, #7209B7)',
-            color: '#fff',
-            fontSize: 'clamp(14px,1.6vw,18px)',
-            border: '2px solid rgba(255,255,255,0.9)',
-            boxShadow: '0 6px 0 rgba(0,0,0,0.5), 0 0 26px rgba(247,37,133,0.6)',
+            background: 'linear-gradient(180deg, rgba(24,16,4,0.92), rgba(10,7,3,0.94))',
+            color: '#FFD60A',
+            fontSize: 'clamp(14px,1.6vw,19px)',
+            fontWeight: 800,
+            letterSpacing: '0.16em',
+            border: '2px solid #FFD60A',
+            clipPath: 'polygon(12px 0, 100% 0, calc(100% - 12px) 100%, 0 100%)',
+            boxShadow: '0 0 26px rgba(255,214,10,0.5), inset 0 0 20px rgba(255,214,10,0.16)',
+            textShadow: '0 0 12px rgba(247,127,0,0.6)',
+            animation: 'cer-rise-fade 0.45s ease-out 0.8s both',
           }}
         >
-          ★ UNLOCK YOURSELF →
+          ★ UNLOCK YOURSELF
         </button>
         <button
           onClick={() => { Sfx.menuSelect(); resetMatch() }}
-          className="cer-btn cer-type px-9 py-4"
+          className="cer-btn cer-cond px-6 py-3"
           style={{
-            background: `linear-gradient(180deg, ${accent}, ${accent}aa)`,
-            color: '#0a0612',
-            fontSize: 'clamp(14px,1.6vw,18px)',
-            border: '2px solid #fff',
-            boxShadow: `0 6px 0 rgba(0,0,0,0.5), 0 0 24px ${accent}88`,
-            textShadow: '0 1px 0 rgba(255,255,255,0.4)',
+            background: 'transparent',
+            color: 'rgba(255,255,255,0.55)',
+            fontSize: 'clamp(12px,1.35vw,16px)',
+            fontWeight: 700,
+            letterSpacing: '0.2em',
+            border: '1.5px solid rgba(255,255,255,0.26)',
+            clipPath: 'polygon(10px 0, 100% 0, calc(100% - 10px) 100%, 0 100%)',
+            animation: 'cer-rise-fade 0.45s ease-out 1s both',
           }}
         >
           MAIN MENU

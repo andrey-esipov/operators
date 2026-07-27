@@ -193,8 +193,8 @@ export function screenWall(
  *  bottom corners (z≈6.3, heavy DOF bokeh), themed per stage, dark but rim-lit
  *  with a thin emissive accent so they frame without covering the fighters. */
 export function foreground(b: StageBuild, style: OverheadStyle, cfg: StageConfig) {
-  const dark = new THREE.Color(cfg.structure).multiplyScalar(0.62).getHex()
-  const darker = new THREE.Color(cfg.structure).multiplyScalar(0.4).getHex()
+  const dark = new THREE.Color(cfg.structure).multiplyScalar(0.72).getHex()
+  const darker = new THREE.Color(cfg.structure).multiplyScalar(0.52).getHex()
   const Z = 4.8   // edge-pylon depth (in-frame, moderate bokeh)
   const ZC = 6.4  // corner-mass depth (closer, heavy bokeh)
 
@@ -249,16 +249,22 @@ export function foreground(b: StageBuild, style: OverheadStyle, cfg: StageConfig
       break
     }
     case 'gold': {
-      // fluted stanchions with a velvet-rope swag + a bottom-corner plinth
+      // fluted stanchions at both edges + short velvet ropes draping into the
+      // bottom CORNERS (never across the centre, so nothing crosses the
+      // fighters) + gilded corner plinths on both sides.
       cyl(0.22, 4.4, -3.25, 2.0, Z, 0x2a2010)
       cyl(0.22, 4.4, 3.25, 2.0, Z, 0x2a2010)
       accent(0.12, 3.8, -3.02, 2.0, Z, cfg.trim, 0.7)
       accent(0.12, 3.8, 3.02, 2.0, Z, cfg.trim, 0.7)
-      const arcMat = structureMat({ color: 0x3a0f0f, roughness: 0.9, metalness: 0.1 })
-      const swag = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([new THREE.Vector3(-3.1, 3.4, Z), new THREE.Vector3(0, 2.4, Z + 0.2), new THREE.Vector3(3.1, 3.4, Z)]), 24, 0.09, 8, false), arcMat)
-      b.add(swag)
+      const ropeMat = structureMat({ color: 0x4a1414, roughness: 0.9, metalness: 0.1 })
+      const ropeL = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([new THREE.Vector3(-3.25, 2.5, Z), new THREE.Vector3(-2.5, 1.0, ZC - 0.4), new THREE.Vector3(-1.6, 1.7, ZC)]), 20, 0.075, 8, false), ropeMat)
+      b.add(ropeL)
+      const ropeR = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([new THREE.Vector3(3.25, 2.5, Z), new THREE.Vector3(2.5, 1.0, ZC - 0.4), new THREE.Vector3(1.6, 1.7, ZC)]), 20, 0.075, 8, false), ropeMat)
+      b.add(ropeR)
       box(1.6, 1.2, 1.4, 2.7, 0.35, ZC, darker)
+      box(1.6, 1.2, 1.4, -2.7, 0.35, ZC, darker)
       accent(1.5, 0.06, 2.7, 1.02, ZC, cfg.trim, 0.6)
+      accent(1.5, 0.06, -2.7, 1.02, ZC, cfg.trim, 0.6)
       break
     }
     case 'alarm': {
@@ -290,11 +296,12 @@ export function foreground(b: StageBuild, style: OverheadStyle, cfg: StageConfig
       break
     }
     case 'plateau': {
-      // a stalled monolith edge left + a drooping banner cable right
+      // a stalled monolith edge left + a drooping banner cable kept high on the
+      // RIGHT so it frames the top corner without crossing the fighter's head
       box(0.9, 5.4, 0.8, -3.3, 2.2, Z, darker)
       accent(0.1, 4.6, -2.9, 2.2, Z, cfg.trim, 0.5)
       const cable = structureMat({ color: darker, roughness: 0.9, metalness: 0.1 })
-      const droop = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([new THREE.Vector3(0.4, 3.6, Z), new THREE.Vector3(2.2, 2.4, Z + 0.2), new THREE.Vector3(3.4, 3.2, Z)]), 20, 0.06, 6, false), cable)
+      const droop = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([new THREE.Vector3(0.8, 4.4, Z), new THREE.Vector3(2.4, 3.5, Z + 0.2), new THREE.Vector3(3.5, 4.2, Z)]), 20, 0.06, 6, false), cable)
       b.add(droop)
       box(1.7, 1.0, 1.3, 2.7, 0.3, ZC, dark, 0.03)
       break

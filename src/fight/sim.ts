@@ -62,11 +62,14 @@ import {
   ROUND_END_FRAMES,
   ROUND_TIME_FRAMES,
   ROUNDS_TO_WIN,
+  STAGE_HALF_W,
   START_X,
   VEL_EPSILON,
   WAKEUP_FRAMES,
   WALK_BACK_SPEED,
   WALK_FWD_SPEED,
+  WALL_BOUNCE_DAMP,
+  WALL_BOUNCE_MIN_VEL,
 } from './constants'
 
 const ALL_BUTTONS: Button[] = ['lp', 'mp', 'hp', 'lk', 'mk', 'hk']
@@ -396,6 +399,29 @@ function resolveCollisions(s: FightState, defs: [FighterDef, FighterDef]): void 
   clampToStage(f1, h1)
 }
 
+/**
+ * Wall-bounce for airborne juggle victims. Runs after integration but before the
+ * clamp: if a launched fighter has crossed the wall plane with real speed, it
+ * rebounds and reports a wall-bounce for the renderer to shake on. Only juggled
+ * fighters bounce — a grounded fighter just walks into the wall and stops.
+ */
+function resolveWallBounce(
+  s: FightState, defs: [FighterDef, FighterDef], events: FightEvent[],
+): void {
+  for (let i = 0; i < 2; i++) {
+    const f = s.fighters[i]
+    if (f.grounded || f.stance !== 'juggle') continue
+    const half = pushWidth(f, defs[i]) / 2
+    const min = -STAGE_HALF_W + half
+    const max = STAGE_HALF_W - half
+    const intoLeft = f.pos.x <= min && f.vel.x < -WALL_BOUNCE_MIN_VEL
+    const intoRight = f.pos.x >= max && f.vel.x > WALL_BOUNCE_MIN_VEL
+    if (!intoLeft && !intoRight) continue
+    f.vel.x = -f.vel.x * WALL_BOUNCE_DAMP
+    events.push({ type: 'wall-bounce', at: { x: f.pos.x, y: f.pos.y + 60 }, who: i as 0 | 1 })
+  }
+}
+
 function updateFacing(s: FightState): void {
   const [f0, f1] = s.fighters
   for (let i = 0; i < 2; i++) {
@@ -555,6 +581,7 @@ export function step(state: FightState, inputs: [InputFrame, InputFrame]): StepR
     processActions(s, i, defs[i], inputs[i], relDirs[i], prevRels[i], events)
   }
   for (let i = 0; i < 2; i++) integrate(s.fighters[i], defs[i], events)
+  resolveWallBounce(s, defs, events)
   resolveCollisions(s, defs)
   resolveCombat(s, defs, relDirs, events)
 

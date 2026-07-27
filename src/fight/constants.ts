@@ -65,6 +65,15 @@ export const PUSHBOX_H = 170
 export const GROUND_FRICTION = 0.82
 export const AIR_DRAG = 0.98
 
+/**
+ * Wall bounce. A juggled fighter slammed into the wall hard enough rebounds off
+ * it — the combo-extending "wall splat" of a modern fighter. DAMP is how much
+ * horizontal speed survives the bounce; MIN_VEL gates it so a gentle drift into
+ * the corner just pins (and only pins once) instead of pinballing.
+ */
+export const WALL_BOUNCE_DAMP = 0.5
+export const WALL_BOUNCE_MIN_VEL = 3.0
+
 /** A hit stops decaying knockback below this so tiny drifts don't linger. */
 export const VEL_EPSILON = 0.05
 

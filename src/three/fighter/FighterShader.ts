@@ -492,11 +492,18 @@ export const FIGHTER_FRAGMENT = /* glsl */ `
     // Stage-rim-aware separation: when the stage's OWN rim is warm and/or dim it
     // gives the silhouette almost no cool back-edge (e.g. warm office/loft
     // stages), so lean harder on the neutral kicker to keep the fighter carved
-    // off the backdrop. Cool, strong stage rims (teal server floors) already
-    // separate well, so this leaves them essentially untouched.
+    // off the backdrop. Cool, strong stage rims (teal server floors) help, but a
+    // strong cool rim on a DARK-suited fighter against a DARK cool backdrop
+    // (ai-native) is the cool analogue of crisis' red-on-red — same-hue, so it
+    // barely separates. So keep a solid neutral-kicker FLOOR on every stage (a
+    // near-white edge carves the silhouette against any hue) and only add extra
+    // boost when the stage rim is warm/dim.
     float stageRimSep = uRimIntensity * clamp(uRimColor.b - uRimColor.r * 0.6, 0.0, 1.0);
-    float kickBoost = 1.0 + (1.0 - smoothstep(0.35, 1.5, stageRimSep)) * 0.62;
-    vec3 kicker = uKickColor * uKickIntensity * kickBoost * kickF * kickTop * mix(0.6, 1.0, 1.0 - matte * 0.5);
+    float kickBoost = 1.18 + (1.0 - smoothstep(0.35, 1.5, stageRimSep)) * 0.5;
+    // Dark materials (black suits, dark denim) have the least internal value
+    // range to separate on, so give them a touch more of the carving edge.
+    float kickMat = mix(0.6, 1.0, 1.0 - matte * 0.5) + dark * 0.16;
+    vec3 kicker = uKickColor * uKickIntensity * kickBoost * kickF * kickTop * kickMat;
     // Hold the kicker just inside the linework (so it never haloes the ink
     // outline) but keep enough of it right at the back edge to actually read as
     // separation, and clamp to sprite alpha so it can't spill past the silhouette.

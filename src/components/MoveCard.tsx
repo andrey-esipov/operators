@@ -108,6 +108,7 @@ export function MoveCard({
     >
       <div className="mc-head">
         <span className="mc-cat">{TYPE_LABEL[move.type]}</span>
+        {isUltimate && <span className="mc-super-tag">SUPER ART</span>}
         {hotkey && (
           <span className="mc-key" title={`Press ${hotkey} to cast${exAvailable ? ` (Shift+${hotkey} for EX)` : ''}`}>
             {hotkey}
@@ -139,8 +140,6 @@ export function MoveCard({
           </span>
         </div>
 
-        <div className="mc-desc">{move.description}</div>
-
         {(move.readsType || signatureHint || signatureReady) && (
           <div className="mc-chips">
             {move.readsType && <span className="mc-chip mc-chip-reads">READS {move.readsType.toUpperCase()}</span>}
@@ -152,6 +151,21 @@ export function MoveCard({
             {signatureReady && <span className="mc-chip mc-chip-sig is-ready">SIGNATURE +50%</span>}
           </div>
         )}
+
+        {ultGated && isUltimate && (
+          <div className="mc-lock">
+            <div className="mc-lock-row">
+              <span className="mc-lock-tag">
+                <span className="mc-lock-ico" />
+                CHARGE SUPER
+              </span>
+              <span className="mc-lock-sub">{Math.round(Math.min(100, superMeter))}/100</span>
+            </div>
+            <div className="mc-lock-meter">
+              <div className="mc-lock-fill" style={{ width: `${Math.min(100, Math.max(0, superMeter))}%` }} />
+            </div>
+          </div>
+        )}
       </div>
 
       {comboReady && <div className="mc-badge mc-badge-combo">COMBO READY</div>}
@@ -160,21 +174,6 @@ export function MoveCard({
       {onCooldown && (
         <div className="mc-veil">
           <div className="mc-veil-txt">{cooldown >= 99 ? 'NEXT ROUND' : `CD ${cooldown}T`}</div>
-        </div>
-      )}
-
-      {ultGated && isUltimate && (
-        <div className="mc-lock">
-          <div className="mc-lock-row">
-            <span className="mc-lock-tag">
-              <span className="mc-lock-ico" />
-              CHARGE SUPER
-            </span>
-            <span className="mc-lock-sub">{Math.round(Math.min(100, superMeter))}/100</span>
-          </div>
-          <div className="mc-lock-meter">
-            <div className="mc-lock-fill" style={{ width: `${Math.min(100, Math.max(0, superMeter))}%` }} />
-          </div>
         </div>
       )}
     </button>

@@ -70,9 +70,16 @@ const setPhase = async (phase, extra = {}) => {
   )
 }
 
-await setPhase('character-select')
+await setPhase('character-select', { mode: 'versus' })
 await sleep(2200)
 await shot('02-character-select')
+
+// Arcade is the default single-player path, and it renders a DIFFERENT select
+// layout (the P2 bay collapses and the roster takes the space). Capturing only
+// the versus layout left the layout most players see unreviewed.
+await setPhase('character-select', { mode: 'arcade', selectedA: null, selectedB: null })
+await sleep(2200)
+await shot('02b-character-select-arcade')
 
 await setPhase('stage-select', { selectedA: 'lenny', selectedB: 'brian' })
 await sleep(2200)

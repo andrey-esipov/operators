@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import type { QualityFlags } from '../../core/QualityManager'
 import type { StageConfig } from '../StageRegistry'
-import { StageBuild, structureMat, glowMat, makeScreen, lightShaft } from '../StageKit'
+import { StageBuild, structureMat, glowMat, makeScreen, lightShaft, type ScreenMode } from '../StageKit'
 import { overhead, screenWall, foreground } from './StageSet'
 
 export function buildCrisis(b: StageBuild, cfg: StageConfig, flags: QualityFlags) {
@@ -55,19 +55,20 @@ export function buildCrisis(b: StageBuild, cfg: StageConfig, flags: QualityFlags
   }
   // rotating warning beacons — different height, depth and phase per side so the
   // pair never reads as a mirror.
-  const beaconPlan: { x: number; postH: number; y: number; z: number }[] = [
-    { x: -6.9, postH: 9.2, y: 8.9, z: -8.4 },
-    { x: 6.2, postH: 6.6, y: 6.6, z: -7.2 },
+  const beaconPlan: { x: number; postH: number; y: number; z: number; color: number }[] = [
+    { x: -6.9, postH: 9.2, y: 8.9, z: -8.4, color: 0xef233c },
+    { x: 6.2, postH: 6.6, y: 6.6, z: -7.2, color: 0xffa028 },
   ]
   beaconPlan.forEach((bp, bi) => {
     const post = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, bp.postH, 10), structureMat({ color: cfg.structure, roughness: 0.7, metalness: 0.5 }))
     post.position.set(bp.x, bp.postH / 2, bp.z)
     b.add(post)
-    const beacon = new THREE.Mesh(new THREE.SphereGeometry(0.35, 12, 10), glowMat(0xef233c, 1))
+    const beacon = new THREE.Mesh(new THREE.SphereGeometry(0.35, 12, 10), glowMat(bp.color, 1))
     beacon.position.set(bp.x, bp.y, bp.z)
     b.add(beacon)
-    const beam = lightShaft(0.3, 1.6, 5, 0xef233c, 0.8)
+    const beam = lightShaft(0.3, 1.6, 5, bp.color, 0.8)
     beam.position.set(bp.x, bp.y - 2.7, bp.z)
+    beam.rotation.z = bi === 0 ? 0.5 : -0.5
     b.add(beam)
     b.onUpdate((t) => {
       const p = 0.5 + 0.5 * Math.sin(t * 5 + bi * 2.3)
@@ -75,9 +76,51 @@ export function buildCrisis(b: StageBuild, cfg: StageConfig, flags: QualityFlags
       const bm = beam.material as THREE.ShaderMaterial
       bm.uniforms.uTime.value = t
       bm.uniforms.uOpacity.value = 0.3 + p * 0.7
-      beam.rotation.y = t * 2 + bi
+      beam.rotation.y = t * 1.6 + bi
     })
   })
+
+  // -------------------------------------------------------------------------
+  // Depth-fill: the band directly behind the play plane was empty red haze, and
+  // the whole room read monochrome. Add a mid-ground alert-cabinet bank (with a
+  // cool-cyan status readout mixed into the red so the palette breathes) plus
+  // amber floor hazard pulses running toward camera for depth and motion.
+  // -------------------------------------------------------------------------
+  const alertModes: ScreenMode[] = ['alert', 'ekg', 'data']
+  const alertHues = [0xff5a3c, 0xffb04c, 0x6fd0ff]
+  for (const sign of [-1, 1]) {
+    for (let i = 0; i < 2; i++) {
+      const cx = sign * (3.5 + i * 1.95)
+      const cz = -5.6 - i * 0.4
+      const ch = 2.1 - i * 0.2
+      const cab = new THREE.Mesh(new THREE.BoxGeometry(1.6, ch, 1.2), structureMat({ color: 0x1a0e0e, roughness: 0.6, metalness: 0.5 }))
+      cab.position.set(cx, ch / 2, cz); cab.castShadow = true; b.add(cab)
+      const hue = alertHues[(i + (sign < 0 ? 0 : 2)) % alertHues.length]
+      const scr = makeScreen(1.35, ch - 0.5, alertModes[i % alertModes.length], hue, 0xffd0a0, 0.9, i * 9 + sign * 4)
+      scr.mesh.position.set(cx, ch / 2 + 0.08, cz + 0.62); b.add(scr.mesh)
+      b.onUpdate((t) => (scr.mat.uniforms.uTime.value = t))
+      const strip = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.08, 0.08), glowMat(hue, 0.7))
+      strip.position.set(cx, ch + 0.02, cz + 0.5); b.add(strip)
+    }
+  }
+  const laneXs = [-5.5, -2.3, 2.3, 5.5]
+  for (const lx of laneXs) {
+    const lane = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.02, 16), glowMat(0x5a1810, 0.5))
+    lane.position.set(lx, 0.02, -4); b.add(lane)
+  }
+  const pulses: THREE.Mesh[] = []
+  for (let p = 0; p < 8; p++) {
+    const lx = laneXs[p % laneXs.length]
+    const pk = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.03, 1.0), glowMat(0xff7a2c, 0.9))
+    pk.position.set(lx, 0.03, -4); pulses.push(pk); b.add(pk)
+  }
+  b.onUpdate((t) => {
+    for (let p = 0; p < pulses.length; p++) {
+      const sp = 3.0 + (p % 3) * 1.3
+      pulses[p].position.z = ((t * sp + p * 3.3) % 18) - 12
+    }
+  })
+
   overhead(b, cfg, flags, 'alarm')
   foreground(b, 'alarm', cfg)
 }

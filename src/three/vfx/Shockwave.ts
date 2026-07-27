@@ -264,10 +264,13 @@ const WAVE_FRAG = /* glsl */ `
       float coreline = along * smoothstep(halfw * 0.35, 0.0, da); // bright white spine
       // small crisp impact ring at the base
       float baseRing = ring(r, 0.30 * ease, 0.04 * ease + 0.01);
-      vec3 core = hotCore(r, ang, uColor2, 0.24, uSeed);
-      float coreA = smoothstep(0.24, 0.0, r);
-      float a = clamp((spike * 0.85 + coreline + baseRing + coreA) * grow * fade, 0.0, 1.0);
-      vec3 col = uColor2 * (spike * 2.8 + baseRing * 2.2 + 0.2) + vec3(1.0) * coreline * 1.15 + core;
+      vec3 core = hotCore(r, ang, uColor2, 0.22, uSeed);
+      float coreA = smoothstep(0.22, 0.0, r);
+      // Spikes own the silhouette; the centre is only a small churning core (not a
+      // filled disc) so under heavy bloom the STAR shape survives instead of
+      // melting into a solid bright ball.
+      float a = clamp((spike * 0.9 + coreline + baseRing + coreA * 0.55) * grow * fade, 0.0, 1.0);
+      vec3 col = uColor2 * (spike * 2.9 + baseRing * 2.2 + 0.06) + vec3(1.0) * coreline * 1.1 + core;
       col *= uIntensity;
       if (a < 0.005) discard;
       gl_FragColor = vec4(col, a);

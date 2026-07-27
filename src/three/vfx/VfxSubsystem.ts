@@ -642,19 +642,20 @@ export class VfxSubsystem implements Subsystem {
     this.flashMat.uniforms.uSpikes.value = 2.2
     this.flashMat.uniforms.uStreak.value = 3.0
     this.flash.position.copy(p)
-    this.flash.scale.setScalar(2.5)
+    this.flash.scale.setScalar(1.4)
     this.flash.visible = true
-    this.flashMax = 0.18
-    this.flashLife = 0.18
+    this.flashMax = 0.16
+    this.flashLife = 0.16
     this.additive.emit({
       position: p, count: 1, speed: 0, color: gold, color2: orange,
-      size: 2.4, life: 0.32, gravity: 0, drag: 0.001, shape: 'flare', intensity: 2.2,
+      size: 1.3, life: 0.3, gravity: 0, drag: 0.001, shape: 'flare', intensity: 1.4,
     })
-    // hero directional gold star — the defining KO silhouette (sized to leave the
-    // launching fighter readable rather than swallowing the whole zoomed frame)
-    this.waves.spawn('star', p, 8, 1.0, white, gold, 2.0, 1.5)
+    // hero directional gold star — the defining KO silhouette. Sized LARGE so its
+    // spikes punch out well past the central hot mass (otherwise bloom fills the
+    // gaps and the money shot reads as a blob instead of a star).
+    this.waves.spawn('star', p, 10.5, 1.0, white, gold, 1.5, 1.5)
     // directional compression front punched along the launch vector
-    this.waves.spawn('shock', p.clone().add(launch.clone().multiplyScalar(0.7)), 8.5, 0.95, white, orange, 1.6, 1.4)
+    this.waves.spawn('shock', p.clone().add(launch.clone().multiplyScalar(0.7)), 9.0, 0.95, white, orange, 0.85, 1.4)
     // immediate impact crater on the floor so the ground registers the finish
     this.decals.spawn('scorch', feet, 3.0, 2.4, orange, C(0x180402), 1.1)
     this.decals.spawn('ring', feet, 3.4, 0.5, gold, orange, 1.6)
@@ -672,13 +673,13 @@ export class VfxSubsystem implements Subsystem {
       this.additive.emit({
         position: p, count: 240, speed: 21, speedVariance: 0.85, direction: launch, spread: 1.15,
         color: white, color2: orange, size: 0.13, sizeVariance: 0.9, life: 1.1, lifeVariance: 0.4,
-        gravity: -14, drag: 1.1, shape: 'spark', stretch: 4.2, intensity: 3.2, jitter: 0.4, spin: 9,
+        gravity: -14, drag: 1.1, shape: 'spark', stretch: 4.2, intensity: 2.7, jitter: 0.4, spin: 9,
       })
       // a radial minority so it still bursts in all directions
       this.additive.emit({
         position: p, count: 90, speed: 17, speedVariance: 0.85, color: white, color2: orange,
         size: 0.12, sizeVariance: 0.9, life: 1.0, lifeVariance: 0.4, gravity: -14, drag: 1.2,
-        shape: 'spark', stretch: 3.4, intensity: 3.0, jitter: 0.4, spin: 9,
+        shape: 'spark', stretch: 3.4, intensity: 2.5, jitter: 0.4, spin: 9,
       })
       this.additive.emit({
         position: p, count: 70, speed: 16, speedVariance: 0.7, direction: launch,

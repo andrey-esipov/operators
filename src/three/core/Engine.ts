@@ -324,15 +324,17 @@ export class Engine {
       this.virtualNow += dtMs
       this.frame(this.virtualNow)
     }
-    if (wasRunning) {
-      // Rebase any in-flight hitstop from the virtual clock back onto the wall
-      // clock, otherwise a freeze scheduled during stepping either expires
-      // instantly or hangs, depending on which way the two clocks drifted.
-      const real = performance.now()
-      if (this.hitstopUntil > 0) this.hitstopUntil += real - (this.virtualNow ?? real)
-      this.virtualNow = null
-      this.start()
-    }
+    // Rebase off the virtual clock unconditionally. Doing this only when the
+    // engine happened to be running leaked `virtualNow` forward: a later
+    // start() would read this.now(), still get the (ahead) virtual value, seed
+    // lastTime with it, and the first real rAF frame would then compute a
+    // negative dt. Stepping a stopped engine is exactly what the lab and the
+    // screenshot harness do, so this was the common path, not the rare one.
+    const real = performance.now()
+    if (this.hitstopUntil > 0) this.hitstopUntil += real - (this.virtualNow ?? real)
+    this.virtualNow = null
+    this.lastTime = real
+    if (wasRunning) this.start()
   }
 
   /**
@@ -371,7 +373,14 @@ export class Engine {
   }
 
   private frame(now: number) {
-    const rawDt = Math.min(0.1, (now - this.lastTime) / 1000)
+    // Clamp BOTH ends. The upper bound is the long-standing GC/tab-restore
+    // guard. The lower bound matters just as much: `now` is the rAF timestamp
+    // but `lastTime` can be left on the virtual step clock (see stepFixed), and
+    // when that clock has run ahead of wall time the subtraction goes negative.
+    // Measured -336ms in the lab. A negative dt runs every spring, timer and
+    // integrator in the engine BACKWARDS -- camera modes never reach their end
+    // and hitstop envelopes invert. Never let one reach a subsystem.
+    const rawDt = Math.max(0, Math.min(0.1, (now - this.lastTime) / 1000))
     this.lastTime = now
     // Hitstop overrides the eased time scale while it's active. Measured in
     // unscaled wall time so the freeze can't stretch itself.

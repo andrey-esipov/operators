@@ -383,7 +383,7 @@ export function CharacterSelect() {
           </div>
 
           {/* Roster */}
-          <div className="relative flex flex-col flex-1 min-w-0 min-h-0">
+          <div className="sel-rostermod relative flex flex-col flex-1 min-w-0 min-h-0">
             <div className="sel-h flex-shrink-0 flex items-center justify-between" style={{ fontSize: 9, letterSpacing: '0.18em', color: 'rgba(255,255,255,0.42)', marginBottom: 5, textShadow: '1px 1px 0 #000' }}>
               <span>{filteredRoster.length === totalRoster ? `${totalRoster} OPERATORS` : `${filteredRoster.length} / ${totalRoster} MATCH`}</span>
               <span style={{ color: 'rgba(255,255,255,0.3)' }}>◄ ► ▲ ▼ MOVE · ENTER LOCK</span>

@@ -304,9 +304,25 @@ export function CharacterSelect() {
                   <Sprite fighter={hoveredFighter} side={side} state="stance" />
                 </div>
               </div>
-              {/* Era badge top-left */}
+              {/* Player-identity tab — asserts P1/P2 by side colour regardless of
+                  the character-specific accent behind the fighter. */}
+              {!singlePickerMode && (
+                <div
+                  className="absolute top-3 left-3 z-10 font-display text-[9px] tracking-widest px-2.5 py-1.5"
+                  style={{
+                    color: '#fff',
+                    background: `linear-gradient(180deg, ${sideColor}, ${sideColor}bb)`,
+                    boxShadow: `inset 0 1px 0 rgba(255,255,255,0.4), 0 2px 8px rgba(0,0,0,0.6), 0 0 16px ${sideColor}88`,
+                    clipPath: 'polygon(0 0, 100% 0, calc(100% - 8px) 100%, 0 100%)',
+                    textShadow: '1px 1px 0 rgba(0,0,0,0.6)',
+                  }}
+                >
+                  ▸ {SIDE_LABEL[side]}
+                </div>
+              )}
+              {/* Era badge top-right */}
               <div
-                className="absolute top-3 left-3 font-display text-[8px] tracking-widest px-2 py-1"
+                className="absolute top-3 right-3 z-10 font-display text-[8px] tracking-widest px-2 py-1"
                 style={{
                   color: '#FCBF49',
                   background: 'rgba(0,0,0,0.5)',
@@ -362,8 +378,12 @@ export function CharacterSelect() {
             </div>
           )}
 
-          {/* FILTER BAR */}
-          <div className="flex-shrink-0 flex flex-col gap-2">
+          {/* FILTER BAR — housed in one material panel so it reads as an
+              arcade control cluster, not a row of free-floating web chips. */}
+          <div
+            className="sel-panel flex-shrink-0 flex flex-col gap-2 px-3 py-2"
+            style={{ clipPath: 'polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px)' }}
+          >
             <div className="flex flex-wrap items-center gap-1.5">
               <span className="font-display text-[8px] tracking-widest text-white/40 pr-1">DISCIPLINE</span>
               {DISCIPLINE_FILTER_ORDER.map((d) => (
@@ -394,7 +414,7 @@ export function CharacterSelect() {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="search name · framework…"
+            placeholder="search…"
             className="px-2 py-1 font-body text-base text-white placeholder:text-white/30 flex-shrink"
             style={{
               background: 'rgba(0,0,0,0.45)',
@@ -505,9 +525,16 @@ export function CharacterSelect() {
                       ? `0 0 18px ${sideColor}cc, inset 0 -16px 20px -12px ${f.accent}, inset 0 1px 0 rgba(255,255,255,0.16)`
                       : marquee
                       ? `0 0 12px #FFD60A55, inset -2px -2px 0 rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.08)`
-                      : 'inset -2px -2px 0 rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.08)',
+                      : 'inset 0 2px 0 rgba(255,255,255,0.12), inset -2px -3px 0 rgba(0,0,0,0.55), 0 4px 9px rgba(0,0,0,0.5)',
                     cursor: isLocked ? 'not-allowed' : 'pointer',
-                    opacity: isLocked ? 0.4 : 1,
+                    opacity: isLocked ? 0.4 : (isCursor || selByA || selByB || marquee) ? 1 : 0.7,
+                    filter: isLocked
+                      ? 'none'
+                      : isCursor
+                      ? 'brightness(1.14) saturate(1.06)'
+                      : (selByA || selByB || marquee)
+                      ? 'none'
+                      : 'brightness(0.58) saturate(0.85)',
                     minHeight: 84,
                   }}
                 >
@@ -627,7 +654,7 @@ function FilterChip({
       <span
         aria-hidden
         className="inline-block mr-1.5 align-middle"
-        style={{ width: 6, height: 6, background: color, boxShadow: `0 0 5px ${color}` }}
+        style={{ width: 6, height: 6, background: color, boxShadow: active ? `0 0 5px ${color}` : 'none', opacity: active ? 1 : 0.45 }}
       />
       {label}
       <span className="ml-1.5" style={{ opacity: active ? 1 : 0.55 }}>
@@ -672,11 +699,11 @@ function HeroNameplate({
       <div className="flex items-end justify-between gap-2">
         <div className="min-w-0">
           <div
-            className="font-display leading-tight"
+            className="font-display leading-none"
             style={{
-              fontSize: 'clamp(15px, 1.7vw, 24px)',
+              fontSize: 'clamp(20px, 2.6vw, 36px)',
               color: '#fff',
-              textShadow: `2px 2px 0 #000, 0 0 18px ${fighter.accent}88`,
+              textShadow: `3px 3px 0 #000, 0 0 22px ${fighter.accent}aa`,
               display: '-webkit-box',
               WebkitLineClamp: 2,
               WebkitBoxOrient: 'vertical',

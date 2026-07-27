@@ -201,7 +201,7 @@
   transition: transform 130ms cubic-bezier(0.2, 0.9, 0.3, 1), box-shadow 130ms ease, border-color 130ms ease;
 }
 .sel-cell:hover { transform: translateY(-3px) scale(1.06); z-index: 5; }
-.sel-cell-cursor { transform: translateY(-3px) scale(1.08); z-index: 6; }
+.sel-cell-cursor { transform: translateY(-4px) scale(1.13); z-index: 6; }
 
 /* Confirmed-pick ceremony flash. */
 .sel-confirm-pop { animation: selConfirmPop 420ms cubic-bezier(0.2, 0.9, 0.3, 1); }

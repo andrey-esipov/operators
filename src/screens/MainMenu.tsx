@@ -117,6 +117,9 @@ export function MainMenu() {
   // Selection state for the primary nav (mouse + keyboard unified).
   const [activeId, setActiveId] = useState('story')
   const [leaving, setLeaving] = useState(false)
+  // Which device the player is currently steering with. Keyboard/gamepad gets a
+  // distinct targeting reticle; mouse gets a lighter hover. Drives `.mm-kbd`.
+  const [kbNav, setKbNav] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
 
   // Authored menu-out transition, then navigate.
@@ -154,7 +157,9 @@ export function MainMenu() {
   // Roving keyboard nav across every menu control, in visual order.
   const onKeyDown = useCallback((e: React.KeyboardEvent) => {
     const key = e.key
+    if (['Tab', 'Enter', ' '].includes(key)) setKbNav(true)
     if (!['ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight'].includes(key)) return
+    setKbNav(true)
     const items = Array.from(
       rootRef.current?.querySelectorAll<HTMLButtonElement>('[data-menu-item]') ?? [],
     )
@@ -186,8 +191,10 @@ export function MainMenu() {
   return (
     <div
       ref={rootRef}
-      className={`mm-root ${animClass} ${leaving ? 'mm-leaving' : ''}`}
+      className={`mm-root ${animClass} ${leaving ? 'mm-leaving' : ''} ${kbNav ? 'mm-kbd' : ''}`}
       onKeyDown={onKeyDown}
+      onPointerMove={() => kbNav && setKbNav(false)}
+      onPointerDown={() => kbNav && setKbNav(false)}
     >
       {/* ── Background: depth-of-field hero art ── */}
       <img

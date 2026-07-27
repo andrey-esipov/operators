@@ -57,7 +57,7 @@
   object-fit: cover;
   object-position: 64% 36%;
   image-rendering: pixelated;
-  filter: brightness(0.26) contrast(1.02) saturate(0.62) blur(3px);
+  filter: brightness(0.34) contrast(1.0) saturate(0.74) blur(2.5px);
   transform: scale(1.05);
   will-change: transform;
   z-index: 0;
@@ -73,9 +73,9 @@
 .mm-grade {
   position: absolute; inset: 0; z-index: 1; pointer-events: none;
   background:
-    radial-gradient(120% 85% at 82% 34%, rgba(255,140,40,0.20) 0%, transparent 46%),
-    radial-gradient(90% 80% at 20% 90%, rgba(120,40,140,0.30) 0%, transparent 55%),
-    linear-gradient(180deg, rgba(8,4,18,0.55) 0%, transparent 34%, transparent 62%, rgba(6,3,12,0.85) 100%);
+    radial-gradient(120% 85% at 82% 34%, rgba(255,150,60,0.16) 0%, transparent 48%),
+    radial-gradient(90% 80% at 20% 90%, rgba(96,40,120,0.18) 0%, transparent 56%),
+    linear-gradient(180deg, rgba(9,8,22,0.5) 0%, transparent 36%, transparent 64%, rgba(7,6,16,0.8) 100%);
 }
 /* Left content zone: a near-solid readable band with a diagonal trailing
    edge, so the type never fights the art. This is the fix for illegibility. */
@@ -126,8 +126,8 @@
 .mm-vignette {
   position: absolute; inset: 0; z-index: 4; pointer-events: none;
   background:
-    linear-gradient(180deg, rgba(0,0,0,0.7) 0%, transparent 12%, transparent 86%, rgba(0,0,0,0.82) 100%),
-    radial-gradient(130% 110% at 60% 45%, transparent 52%, rgba(0,0,0,0.66) 100%);
+    linear-gradient(180deg, rgba(8,7,20,0.6) 0%, transparent 13%, transparent 87%, rgba(7,6,16,0.74) 100%),
+    radial-gradient(135% 115% at 60% 45%, transparent 56%, rgba(7,6,18,0.56) 100%);
 }
 /* Fine grain + scanlines for film / arcade texture (very subtle). */
 .mm-grain {
@@ -153,6 +153,29 @@
   0%, 100% { transform: translateX(-10%) skewX(-14deg); opacity: 0; }
   46%      { opacity: 0.7; }
   70%      { transform: translateX(320%) skewX(-14deg); opacity: 0; }
+}
+
+/* Drifting warm embers — living atmosphere over the focal (right) zone.
+   Sparse motes so it reads as heat/dust, never as noise. */
+.mm-embers {
+  position: absolute; inset: 0; z-index: 5; pointer-events: none;
+  opacity: 0.5; mix-blend-mode: screen;
+  background-image:
+    radial-gradient(2px 2px at 62% 78%, rgba(255,196,90,0.9), transparent 60%),
+    radial-gradient(1.6px 1.6px at 74% 64%, rgba(255,150,60,0.8), transparent 60%),
+    radial-gradient(1.4px 1.4px at 55% 52%, rgba(255,220,140,0.7), transparent 60%),
+    radial-gradient(2.2px 2.2px at 82% 84%, rgba(255,120,50,0.7), transparent 60%),
+    radial-gradient(1.5px 1.5px at 68% 40%, rgba(255,180,90,0.6), transparent 60%),
+    radial-gradient(1.3px 1.3px at 90% 58%, rgba(255,160,70,0.6), transparent 60%),
+    radial-gradient(1.8px 1.8px at 58% 30%, rgba(255,210,120,0.5), transparent 60%);
+  background-repeat: no-repeat;
+}
+.mm-embers.mm-anim { animation: mmEmbers 14s linear infinite; }
+@keyframes mmEmbers {
+  0%   { transform: translateY(0); opacity: 0.0; }
+  12%  { opacity: 0.55; }
+  88%  { opacity: 0.5; }
+  100% { transform: translateY(-42px); opacity: 0.0; }
 }
 
 /* Corner registration ticks — HUD framing. */
@@ -298,17 +321,17 @@
 .mm-item-label {
   display: block;
   font-family: var(--mm-menu); font-weight: 400;
-  font-size: clamp(28px, 4.4vh, 42px); line-height: 0.86;
+  font-size: clamp(26px, 3.8vh, 36px); line-height: 0.86;
   letter-spacing: 0.012em; text-transform: uppercase;
   transform: skewX(-6deg); transform-origin: left center;
-  color: var(--mm-ink); opacity: 0.78;
+  color: var(--mm-ink); opacity: 0.7;
   transition: opacity 0.16s ease, text-shadow 0.16s ease, letter-spacing 0.18s ease;
 }
 .mm-item-sub {
   display: block; max-width: 42ch;
-  font-family: var(--mm-cond); font-weight: 500;
-  font-size: clamp(12px, 1.55vh, 15px); letter-spacing: 0.02em;
-  color: var(--mm-dim); margin-top: 6px; line-height: 1.15;
+  font-family: var(--mm-body); font-weight: 500;
+  font-size: clamp(13px, 1.6vh, 15.5px); letter-spacing: 0.005em;
+  color: var(--mm-dim); margin-top: 6px; line-height: 1.25;
   opacity: 0; max-height: 0; overflow: hidden;
   transition: opacity 0.18s ease, max-height 0.24s ease, margin-top 0.18s ease;
 }
@@ -343,9 +366,16 @@
 }
 
 /* PRIMARY (Story) — always visibly the winner. */
-.mm-item.mm-primary { padding-top: clamp(12px, 1.9vh, 20px); padding-bottom: clamp(12px, 1.9vh, 20px); }
-.mm-item.mm-primary .mm-item-label { font-size: clamp(44px, 6.6vh, 64px); opacity: 0.96; letter-spacing: 0.005em; }
-.mm-item.mm-primary .mm-item-sub { opacity: 1; max-height: 40px; color: #D9C7FF; }
+.mm-item.mm-primary { padding-top: clamp(14px, 2.1vh, 22px); padding-bottom: clamp(18px, 2.6vh, 28px); }
+.mm-item.mm-primary .mm-item-label { font-size: clamp(46px, 6.8vh, 60px); opacity: 0.98; letter-spacing: 0.004em; }
+.mm-item.mm-primary .mm-item-sub { opacity: 1; max-height: 40px; color: #E4D6FF; }
+/* Full-bleed selection underbar — the strongest single mark in the frame. */
+.mm-item.mm-primary::after {
+  content: ""; position: absolute; left: clamp(14px, 1.3vw, 22px); bottom: clamp(6px, 1vh, 12px);
+  width: clamp(230px, 88%, 460px); height: 4px;
+  background: linear-gradient(90deg, var(--mm-magenta) 0%, var(--mm-amber) 62%, transparent 100%);
+  box-shadow: 0 0 16px rgba(255,46,136,0.7), 0 0 30px rgba(255,140,40,0.35);
+}
 .mm-item.mm-primary .mm-index { color: color-mix(in srgb, var(--accent,#FF2E88) 70%, #fff); }
 .mm-item.mm-primary .mm-item-tag {
   color: #0a0714;
@@ -489,7 +519,7 @@
   align-self: center;
   margin-bottom: clamp(30px, 6vh, 80px);
   font-family: var(--mm-display);
-  font-size: clamp(64px, 12vh, 138px); line-height: 1;
+  font-size: clamp(56px, 10vh, 116px); line-height: 1;
   background: linear-gradient(180deg, #FFFFFF 0%, #FFE07A 40%, #FF9A1F 72%, #FF3B6B 100%);
   -webkit-background-clip: text; background-clip: text; color: transparent;
   -webkit-text-stroke: 3px #0a0510;
@@ -582,8 +612,8 @@
 .ss-grade {
   position: absolute; inset: 0; pointer-events: none;
   background:
-    radial-gradient(120% 90% at 50% 42%, rgba(20,10,36,0.28) 0%, rgba(9,5,18,0.72) 62%, rgba(6,3,12,0.92) 100%),
-    linear-gradient(180deg, rgba(0,0,0,0.6) 0%, transparent 20%, transparent 78%, rgba(0,0,0,0.85) 100%);
+    radial-gradient(120% 92% at 50% 42%, rgba(20,12,38,0.14) 0%, rgba(10,7,22,0.62) 64%, rgba(8,6,18,0.86) 100%),
+    linear-gradient(180deg, rgba(8,7,20,0.55) 0%, transparent 22%, transparent 76%, rgba(7,6,16,0.82) 100%);
 }
 .ss-scan {
   position: absolute; inset: 0; pointer-events: none;
@@ -624,18 +654,18 @@
 .ss-cta {
   margin-top: clamp(48px, 8vh, 96px);
   font-family: var(--mm-display);
-  font-size: clamp(34px, 6vh, 68px); letter-spacing: 0.04em;
-  color: #fff; transform: skewX(-6deg);
-  text-shadow: 0 0 22px rgba(255,194,61,0.7), 3px 4px 0 rgba(0,0,0,0.6);
+  font-size: clamp(38px, 6.2vh, 70px); letter-spacing: 0.04em;
+  color: #FFF6E0; transform: skewX(-6deg);
+  text-shadow: 0 0 22px rgba(255,194,61,0.65), 3px 4px 0 rgba(0,0,0,0.6);
 }
 .ss-cta b {
   color: var(--mm-amber); font-weight: 400; margin: 0 0.28em;
   -webkit-text-stroke: 0;
 }
-.ss-cta-anim { animation: ssStrobe 1.05s steps(1) infinite; }
+.ss-cta-anim { animation: ssStrobe 1.6s ease-in-out infinite; }
 @keyframes ssStrobe {
-  0%, 64% { opacity: 1; }
-  65%, 100% { opacity: 0.28; }
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.62; }
 }
 .ss-sub {
   margin-top: 20px;
@@ -676,8 +706,8 @@
 .am-vignette {
   position: absolute; inset: 0; pointer-events: none; z-index: 39;
   background:
-    linear-gradient(180deg, rgba(0,0,0,0.6) 0%, transparent 14%, transparent 84%, rgba(0,0,0,0.8) 100%),
-    radial-gradient(120% 100% at 50% 44%, transparent 54%, rgba(0,0,0,0.6) 100%);
+    linear-gradient(180deg, rgba(8,7,20,0.52) 0%, transparent 15%, transparent 83%, rgba(7,6,16,0.76) 100%),
+    radial-gradient(122% 102% at 50% 44%, transparent 56%, rgba(7,6,18,0.5) 100%);
 }
 .am-eyebrow {
   font-family: var(--mm-ui); font-weight: 600;

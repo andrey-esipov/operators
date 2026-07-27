@@ -321,6 +321,7 @@ export function MainMenu() {
       <div className="mm-panel-edge" />
       <div className="mm-vignette" />
       <div className={`mm-sweep ${animClass}`} />
+      <div className={`mm-embers ${animClass}`} aria-hidden />
       <div className="mm-scan" />
       <div className="mm-grain" />
       <div className="mm-corners" aria-hidden>

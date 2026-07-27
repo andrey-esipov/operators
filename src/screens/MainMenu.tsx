@@ -9,9 +9,7 @@ import {
 import { useGame } from '../state/game'
 import { Sfx } from '../lib/audio'
 import { FIGHTERS, FEATURED_ROSTER, getFighter } from '../data/fighters'
-import { SCENARIO_ORDER } from '../data/scenarios'
 import { Sprite } from '../components/Sprite'
-import { PULL_QUOTES } from '../data/pull-quotes'
 import { AttractMode } from './AttractMode'
 import { prefetchScreen } from './registry'
 import type { Phase } from '../types'
@@ -89,22 +87,6 @@ export function MainMenu() {
   const difficulty = useGame((s) => s.difficulty)
   const setDifficulty = useGame((s) => s.setDifficulty)
 
-  // Hand-curated pull quotes, shuffled once, cycled every 7s.
-  const allQuotes = useMemo(() => {
-    const arr = [...PULL_QUOTES]
-    for (let i = arr.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1))
-      ;[arr[i], arr[j]] = [arr[j], arr[i]]
-    }
-    return arr
-  }, [])
-  const [quoteIdx, setQuoteIdx] = useState(0)
-  useEffect(() => {
-    if (allQuotes.length === 0) return
-    const id = setInterval(() => setQuoteIdx((i) => (i + 1) % allQuotes.length), 7000)
-    return () => clearInterval(id)
-  }, [allQuotes.length])
-
   // Featured fighters — only ones with hand-curated sprite art.
   const featured = useMemo(() => {
     const out = FEATURED_ROSTER.map((id) => getFighter(id)).filter(
@@ -169,14 +151,6 @@ export function MainMenu() {
       window.removeEventListener('pointermove', onMove)
     }
   }, [attract])
-
-  // Operator of the Day — deterministic from today's date.
-  const operatorOfDay = useMemo(() => {
-    const today = new Date().toISOString().slice(0, 10)
-    let h = 0
-    for (let i = 0; i < today.length; i++) h = (h * 31 + today.charCodeAt(i)) >>> 0
-    return featured[h % featured.length]
-  }, [featured])
 
   const [leaving, setLeaving] = useState(false)
   const [kbNav, setKbNav] = useState(false)
@@ -289,7 +263,6 @@ export function MainMenu() {
     [activeIndex, activate],
   )
 
-  const currentQuote = allQuotes[quoteIdx]
   const focusFighter = featured[focusIdx % featured.length]
   const opposingFighter = featured[(focusIdx + Math.floor(featured.length / 2)) % featured.length]
 
@@ -328,12 +301,6 @@ export function MainMenu() {
         <span /><span /><span /><span />
       </div>
 
-      {/* Operator of the Day */}
-      <div className="mm-otd" style={{ ['--accent' as string]: operatorOfDay.accent }}>
-        <span className="mm-otd-k">◆ Operator of the Day</span>
-        <span className="mm-otd-v">{operatorOfDay.shortName}</span>
-      </div>
-
       <div className="mm-stage">
         {/* ── LEFT: brand + nav + utility ── */}
         <div className="mm-left">
@@ -348,12 +315,6 @@ export function MainMenu() {
               OPERATORS
             </h1>
             <span className={`mm-logo-slash ${animClass ? 'mm-in d2' : ''}`} />
-            <div className={`mm-tagline ${animClass ? 'mm-in d3' : ''}`}>
-              <b>{FIGHTERS.length}</b> Operators · <b>
-                {FIGHTERS.reduce((s, f) => s + f.moves.length + 1, 0)}
-              </b>{' '}
-              Frameworks · <b>{SCENARIO_ORDER.length}</b> Stages
-            </div>
           </div>
 
           {/* Primary navigation — one clear winner (STORY), then modes. */}
@@ -399,21 +360,8 @@ export function MainMenu() {
             ))}
           </nav>
 
-          {/* Lower cluster: rotating quote + de-emphasised utilities. */}
+          {/* Lower cluster: de-emphasised utilities. */}
           <div className="mm-lower">
-            <div className={`mm-quote ${animClass ? 'mm-quote-in' : ''}`} key={quoteIdx}>
-              {currentQuote ? (
-                <span>
-                  &ldquo;{currentQuote.quote}&rdquo;
-                  <cite>
-                    {currentQuote.who} · {currentQuote.episode}
-                  </cite>
-                </span>
-              ) : (
-                <span style={{ opacity: 0.4 }}>…loading verbatim quotes…</span>
-              )}
-            </div>
-
             <div className="mm-util">
               <div className="mm-util-row">
                 <span className="mm-util-label">Library</span>
@@ -489,13 +437,6 @@ export function MainMenu() {
         <span>
           <kbd>⏎</kbd> Select
         </span>
-      </div>
-
-      <div className="mm-foot">
-        <span className="dot">●</span> Insert Coin
-        <span className="dot">●</span> #LennysBuildathon
-        <span className="spacer" />
-        Operators v1.0
       </div>
     </div>
   )

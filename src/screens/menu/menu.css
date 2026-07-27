@@ -57,7 +57,7 @@
   object-fit: cover;
   object-position: 64% 36%;
   image-rendering: pixelated;
-  filter: brightness(0.34) contrast(1.0) saturate(0.74) blur(2.5px);
+  filter: brightness(0.42) contrast(1.02) saturate(0.8) blur(2.2px);
   transform: scale(1.05);
   will-change: transform;
   z-index: 0;
@@ -73,24 +73,24 @@
 .mm-grade {
   position: absolute; inset: 0; z-index: 1; pointer-events: none;
   background:
-    radial-gradient(120% 85% at 82% 34%, rgba(255,150,60,0.16) 0%, transparent 48%),
-    radial-gradient(90% 80% at 20% 90%, rgba(96,40,120,0.18) 0%, transparent 56%),
-    linear-gradient(180deg, rgba(9,8,22,0.5) 0%, transparent 36%, transparent 64%, rgba(7,6,16,0.8) 100%);
+    radial-gradient(120% 85% at 82% 34%, rgba(255,150,60,0.18) 0%, transparent 50%),
+    radial-gradient(90% 80% at 20% 90%, rgba(96,40,120,0.16) 0%, transparent 58%),
+    linear-gradient(180deg, rgba(9,8,22,0.42) 0%, transparent 40%, transparent 68%, rgba(7,6,16,0.68) 100%);
 }
 /* Left content zone: a near-solid readable band with a diagonal trailing
    edge, so the type never fights the art. This is the fix for illegibility. */
 .mm-panel {
   position: absolute;
   inset: 0 auto 0 0;
-  width: min(48%, 780px);
+  width: min(41%, 700px);
   z-index: 2;
   background:
     linear-gradient(100deg,
       rgba(7,4,14,0.97) 0%,
-      rgba(9,5,18,0.95) 42%,
-      rgba(11,6,22,0.86) 74%,
+      rgba(9,5,18,0.94) 40%,
+      rgba(11,6,22,0.78) 72%,
       rgba(11,6,22,0.0) 100%);
-  clip-path: polygon(0 0, 100% 0, calc(100% - 90px) 100%, 0 100%);
+  clip-path: polygon(0 0, 100% 0, calc(100% - 120px) 100%, 0 100%);
 }
 /* Glowing diagonal seam on the panel edge. */
 /* Structural angled rail on the panel edge — a chunky matte bar carrying
@@ -102,32 +102,32 @@
 }
 .mm-panel-edge::before {
   content: ""; position: absolute; top: -6%; bottom: -6%;
-  left: min(48%, 780px);
-  width: 26px; height: 112%;
-  transform: translateX(-104px) skewX(-9.4deg);
+  left: min(41%, 700px);
+  width: 20px; height: 112%;
+  transform: translateX(-108px) skewX(-9.4deg);
   transform-origin: top;
   background:
-    repeating-linear-gradient(-45deg, rgba(255,194,61,0.16) 0 7px, transparent 7px 15px),
-    linear-gradient(180deg, rgba(9,5,18,0.96), rgba(14,8,26,0.9));
-  box-shadow: -14px 0 34px rgba(0,0,0,0.55), inset 0 0 0 1px rgba(255,194,61,0.14);
+    repeating-linear-gradient(-45deg, rgba(255,194,61,0.13) 0 7px, transparent 7px 15px),
+    linear-gradient(180deg, rgba(9,5,18,0.9), rgba(14,8,26,0.82));
+  box-shadow: -14px 0 30px rgba(0,0,0,0.45), inset 0 0 0 1px rgba(255,194,61,0.12);
 }
 .mm-panel-edge::after {
   content: ""; position: absolute; top: 8%; bottom: 8%;
-  left: min(48%, 780px);
+  left: min(41%, 700px);
   width: 2px; height: 84%;
-  transform: translateX(-82px) skewX(-9.4deg);
+  transform: translateX(-88px) skewX(-9.4deg);
   transform-origin: top;
-  background: linear-gradient(180deg, transparent, rgba(255,120,150,0.55) 26%, rgba(255,180,80,0.55) 74%, transparent);
-  box-shadow: 0 0 10px rgba(255,110,60,0.28);
-  opacity: 0.7;
+  background: linear-gradient(180deg, transparent, rgba(255,120,150,0.5) 26%, rgba(255,180,80,0.5) 74%, transparent);
+  box-shadow: 0 0 10px rgba(255,110,60,0.24);
+  opacity: 0.6;
 }
 
 /* Vignette + letterbox to frame the whole composition. */
 .mm-vignette {
   position: absolute; inset: 0; z-index: 4; pointer-events: none;
   background:
-    linear-gradient(180deg, rgba(8,7,20,0.6) 0%, transparent 13%, transparent 87%, rgba(7,6,16,0.74) 100%),
-    radial-gradient(135% 115% at 60% 45%, transparent 56%, rgba(7,6,18,0.56) 100%);
+    linear-gradient(180deg, rgba(8,7,20,0.5) 0%, transparent 15%, transparent 88%, rgba(7,6,16,0.62) 100%),
+    radial-gradient(140% 120% at 62% 46%, transparent 62%, rgba(7,6,18,0.44) 100%);
 }
 /* Fine grain + scanlines for film / arcade texture (very subtle). */
 .mm-grain {
@@ -193,7 +193,7 @@
 .mm-stage {
   position: absolute; inset: 0; z-index: 10;
   display: grid;
-  grid-template-columns: min(48%, 780px) 1fr;
+  grid-template-columns: min(41%, 700px) 1fr;
 }
 .mm-left {
   position: relative;
@@ -212,9 +212,9 @@
 .mm-right::before {
   content: ""; position: absolute; inset: 0; z-index: 0; pointer-events: none;
   background:
-    radial-gradient(58% 52% at 60% 46%, rgba(255,196,120,0.22) 0%, rgba(255,140,60,0.08) 34%, transparent 62%),
-    radial-gradient(70% 44% at 60% 92%, rgba(120,52,120,0.34) 0%, rgba(60,26,64,0.12) 46%, transparent 74%),
-    linear-gradient(180deg, rgba(6,3,12,0.62) 0%, rgba(8,4,16,0.16) 26%, transparent 46%, rgba(8,4,16,0.28) 82%, rgba(6,3,12,0.66) 100%);
+    radial-gradient(56% 54% at 56% 44%, rgba(255,200,124,0.28) 0%, rgba(255,140,60,0.1) 36%, transparent 64%),
+    radial-gradient(70% 44% at 56% 92%, rgba(128,56,128,0.4) 0%, rgba(60,26,64,0.14) 46%, transparent 74%),
+    linear-gradient(180deg, rgba(6,3,12,0.5) 0%, rgba(8,4,16,0.1) 26%, transparent 48%, rgba(8,4,16,0.22) 82%, rgba(6,3,12,0.54) 100%);
 }
 
 /* ── Brand / logotype ───────────────────────────────────────────────── */
@@ -331,8 +331,8 @@
   font-size: clamp(23px, 3.4vh, 33px); line-height: 0.92;
   letter-spacing: 0.008em; text-transform: uppercase;
   transform: skewX(-8deg); transform-origin: left center;
-  color: var(--mm-ink); opacity: 0.62;
-  transition: opacity 0.16s ease, text-shadow 0.16s ease, letter-spacing 0.18s ease;
+  color: var(--mm-ink); opacity: 0.5;
+  transition: opacity 0.16s ease, text-shadow 0.16s ease, letter-spacing 0.18s ease, transform 0.18s cubic-bezier(0.2,0.8,0.2,1);
 }
 .mm-item-sub {
   display: block; max-width: 42ch;
@@ -362,7 +362,15 @@
 .mm-item:hover .mm-item-label,
 .mm-item.mm-on .mm-item-label {
   opacity: 1; color: #fff;
-  text-shadow: 0 0 18px color-mix(in srgb, var(--accent, #FF2E88) 65%, transparent);
+  text-shadow:
+    0 0 1px color-mix(in srgb, var(--mm-amber) 80%, #fff),
+    0 0 18px color-mix(in srgb, var(--accent, #FF2E88) 65%, transparent);
+}
+/* Selected non-primary items grow via transform (no layout reflow, so the
+   moving cursor stays perfectly aligned). */
+.mm-item.mm-on:not(.mm-primary) .mm-item-label,
+.mm-item:hover:not(.mm-primary) .mm-item-label {
+  transform: skewX(-8deg) scale(1.12);
 }
 .mm-item:hover .mm-index,
 .mm-item.mm-on .mm-index { color: var(--accent, #FF2E88); }
@@ -462,9 +470,9 @@
 .mm-show {
   position: relative; z-index: 11;
   display: flex; align-items: flex-end; justify-content: center;
-  gap: clamp(6px, 2vw, 40px);
+  gap: clamp(6px, 1.6vw, 32px);
   width: 100%; height: 100%;
-  padding: 0 clamp(20px, 3vw, 60px) clamp(96px, 15vh, 168px);
+  padding: 0 clamp(14px, 2vw, 40px) clamp(96px, 15vh, 168px) clamp(0px, 1vw, 24px);
 }
 .mm-show-tag {
   position: absolute; top: clamp(64px, 11vh, 120px); left: 0; right: 0;
@@ -484,7 +492,7 @@
 .mm-fighter {
   position: relative;
   display: flex; flex-direction: column; align-items: center;
-  width: clamp(200px, 20vw, 320px);
+  width: clamp(240px, 24vw, 400px);
 }
 .mm-fighter-art {
   position: relative; width: 100%; aspect-ratio: 3 / 4;

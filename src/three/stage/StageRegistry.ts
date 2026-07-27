@@ -148,7 +148,7 @@ export const STAGES: Record<ScenarioId, StageConfig> = {
       0x0f0620,
       1.0,
     ),
-    floor: { color: 0x191922, roughness: 0.3, metalness: 0.3, reflectivity: 0.68, gridColor: 0xf72585, gridIntensity: 0.7, pattern: 0 },
+    floor: { color: 0x201b2b, roughness: 0.3, metalness: 0.3, reflectivity: 0.82, gridColor: 0xf72585, gridIntensity: 1.0, pattern: 0 },
     shaftColor: 0xc766ff,
     shaftIntensity: 0.62,
     motes: { color: 0xe0a0ff, density: 0.8, drift: 0.28 },

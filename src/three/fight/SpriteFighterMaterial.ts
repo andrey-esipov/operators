@@ -275,6 +275,15 @@ const FRAG = /* glsl */ `
     vec3 albedo = base.rgb;
     vec3 color = albedo * (ambient + diffuse * ao + fill * ao) + rim * (0.5 + 0.5 * albedo) + flash;
 
+    // Soft highlight knee on the lit body. The fighter is bloom-excluded, so
+    // pale fabrics (lenny's shirt, chesky's shoes) don't smear — but a strong
+    // key still pushes them to a flat clipped white that loses the weave.
+    // Compress only the top end so mid-value cloth keeps its gradient; midtones
+    // are untouched, and this runs BEFORE the hit-flash / KO burn so those
+    // intentional highlights stay hot.
+    vec3 over = max(color - 0.82, 0.0);
+    color = min(color, vec3(0.82)) + over / (1.0 + over * 1.4);
+
     // KO dissolve: burn the silhouette away from the edges inward with a hot rim.
     if (uDissolve > 0.0) {
       float n = hash(floor(vUv / uTexel * 0.25));

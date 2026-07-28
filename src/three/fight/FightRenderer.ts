@@ -11,6 +11,7 @@ import type {
 import { DT } from '../../fight/types'
 import type { ScenarioId, Side } from '../../types'
 import type { FightRenderState, FighterVisualState, EngineContext } from '../types'
+import { WORLD } from '../types'
 import { Engine } from '../core/Engine'
 import { LightRig } from '../lighting/LightRig'
 import { StageSubsystem } from '../stage/StageSubsystem'
@@ -495,7 +496,14 @@ function heightWorld(): number {
   // jumping fighter's head is feetWorldY + this constant. Adding pos.y a second
   // time double-counts the entire jump/juggle height, which doubled topY, blew
   // zForY past the dolly clamp and shrank both fighters to a ~5% smear on every
-  // launch — then lurched back in on landing. marginY already reserves the
-  // headroom a jump needs.
-  return 1.9
+  // launch — then lurched back in on landing.
+  //
+  // This is the fighter's FULL height (≈ WORLD.FIGHTER_HEIGHT), not the chest.
+  // It was 1.9 (roughly chest height), which under-reported the head by ~1.5
+  // world units: the camera framed to the chest and let the actual head ride
+  // out of the top edge on any launch (measured: a modest juggle pinned the
+  // launched head at the very top row, maxY 0.994 = cropped). Reporting the true
+  // head lets FightCamera's containment solve for a dolly distance that actually
+  // keeps the launched fighter in frame.
+  return WORLD.FIGHTER_HEIGHT
 }

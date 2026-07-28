@@ -41,7 +41,6 @@ export class FightCamera {
   private tmpLook = new THREE.Vector3()
 
   // Framing tuning (world units).
-  private readonly baseY = WORLD.CAMERA.target[1]
   // Where the lens actually aims at rest. Aiming near mid-torso (a touch below
   // the chest) with the camera only slightly above it keeps the lens close to
   // level, which drops the fighters' feet into the lower ~15% of the frame and
@@ -51,43 +50,32 @@ export class FightCamera {
   private readonly aimY = 1.62
   private readonly camBaseY = 2.12
   private readonly minZ = 6.5
-  private readonly maxZ = 15.5
+  private readonly maxZ = 16.5
   // Horizontal breathing room (world units) added beyond the fighters' spread
   // before the camera has to dolly back. Kept fairly tight so widely-spaced
   // neutral/intro beats still fill the frame instead of pulling back into a
   // small-fighters-with-a-dead-floor-band composition — SF6/3S keep the pair
   // large in frame even at range.
   private readonly marginX = 1.45
-  private readonly marginY = 1.9
-  // Vertical follow (jumps / juggles). The camera must always keep the grounded
-  // fighter — the one actually acting — readable, so a launched opponent is
-  // followed only so far before it is allowed to ride toward the top edge
-  // rather than dollying the whole scene out until both fighters are specks.
-  //   maxRiseFit  caps how much airborne height feeds the framing, in world
-  //               units above rest (~3.5 ≈ a tall jump). Beyond it the fighter
-  //               rises in frame instead of shrinking everyone.
-  //   vFollow     how fast the frame dollies out per unit of (capped) rise.
-  //   vLookFollow how fast the aim pans up. Kept below vFollow so the growing
-  //               frustum always outruns the pan and the grounded feet never
-  //               fall off the bottom edge.
-  //   vCamFollow  how fast the camera itself lifts (a touch under the aim pan).
-  //
-  // These are deliberately gentle. A jump raises topY, which raises halfSpanY
-  // and dollies the camera out — but if that term is too strong the whole scene
-  // shrinks every time anyone leaves the ground (measured: a mid jump zoomed the
-  // pair out ~26% on the mock, and worse in real matches where a launch stacks
-  // on horizontal separation, reading as a lurch). A fighting-game camera keeps
-  // the scale far more stable through a jump and lets the airborne fighter ride
-  // up in frame instead. So the vertical dolly-out per unit of rise is kept low;
-  // the invariant vCamFollow < vLookFollow < vFollow is preserved so the growing
-  // frustum still outruns the aim pan and the grounded fighter's feet never fall
-  // off the bottom edge. NOTE: for a grounded pair vRise is 0, so every term
-  // below multiplies to nothing — this tuning is provably a no-op on all
-  // grounded frames and only softens the airborne zoom-out.
-  private readonly maxRiseFit = 3.5
-  private readonly vFollow = 0.24
-  private readonly vLookFollow = 0.2
-  private readonly vCamFollow = 0.16
+  // Vertical containment (jumps / juggles). Unlike the old "follow the launch a
+  // little, then let it ride off the top" tuning — which grew the frame slower
+  // than the fighter rose and so mathematically GUARANTEED a crop at the apex —
+  // the frame is now sized to always contain both fighters. headTop/footBot are
+  // the world-unit margins reserved above the highest head and below the
+  // grounded feet; the dolly distance is solved directly from them (see
+  // update()). They are kept SMALL on purpose: a grounded pair (topY ≈ full
+  // fighter height) then solves to almost exactly minZ, preserving the tight,
+  // already-good neutral/footsies framing, while a launch raises topY and pulls
+  // the camera OUT just enough to keep the airborne fighter in frame — it never
+  // amputates it, and never shrinks the pair into a smear.
+  private readonly headTop = 0.4
+  private readonly footBot = 0.15
+  // Rate-limited dolly distance (world units), kept as state so the zoom can be
+  // velocity-clamped frame to frame: it may WIDEN quickly (to catch a launch
+  // before it crops) but RECOVERS slowly, so the frame can never oscillate
+  // medium -> extreme -> tiny the way an unclamped spring chasing a jumpy target
+  // does. This clamp is the actual fix for the zoom-oscillation tell.
+  private zFramed = 9.6
 
   constructor(cam: THREE.PerspectiveCamera, bounds: StageBounds) {
     this.cam = cam
@@ -117,23 +105,45 @@ export class FightCamera {
     const midX = (f.ax + f.bx) * 0.5
     const sep = Math.abs(f.ax - f.bx)
 
-    // Distance needed to fit both fighters horizontally, and to follow vertical
-    // action, at the current fov/aspect. Take whichever needs more room.
+    // --- Vertical containment -------------------------------------------
+    // Size the frame so both fighters sit between footBot (below the grounded
+    // feet, world y ~0) and headTop (above the highest head, world y = topY).
+    // Showing the launched head AND the grounded feet needs a vertical half-span
+    // of (topY + headTop + footBot)/2, which converts to a dolly distance zForY.
+    // A launch raises topY -> zForY grows -> the camera pulls OUT to contain it,
+    // instead of the fighter riding off the top edge.
     const vfov = THREE.MathUtils.degToRad(this.cam.fov)
-    const halfSpanX = sep * 0.5 + this.marginX
-    // Capped vertical follow: rise is how far the higher fighter is above rest;
-    // vRise clamps it so a big launch stops pulling the dolly out and instead
-    // lets that fighter ride toward the top of frame (see field notes).
-    const rise = Math.max(0, f.topY - this.baseY)
-    const vRise = Math.min(rise, this.maxRiseFit)
-    const halfSpanY = this.marginY + vRise * this.vFollow
     const tanV = Math.tan(vfov * 0.5)
     const tanH = tanV * this.cam.aspect
+    // Dynamic headroom: topY is fed as feet + a FIXED fighter height, but wild
+    // airborne poses (a juggle arch, a knockdown tumble) paint noticeably taller
+    // than a standing fighter at the same feet height — a fixed headroom left the
+    // juggle head kissing the top edge (maxY 0.994) even when the standing pose
+    // one frame earlier had room. So reserve extra headroom in proportion to how
+    // far off the floor the higher fighter is (rise = topY - grounded head): none
+    // when grounded (footsies framing untouched), growing as a launch lifts a
+    // fighter into the poses that need it.
+    const rise = Math.max(0, f.topY - WORLD.FIGHTER_HEIGHT)
+    const headTop = this.headTop + rise * 0.6
+    const zForY = (f.topY + headTop + this.footBot) / (2 * Math.max(0.0001, tanV))
+
+    // --- Horizontal containment -----------------------------------------
+    const halfSpanX = sep * 0.5 + this.marginX
     const zForX = halfSpanX / Math.max(0.0001, tanH)
-    const zForY = halfSpanY / Math.max(0.0001, tanV)
-    let z = clamp(Math.max(zForX, zForY), this.minZ, this.maxZ)
-    // Sustained push from the action (supers/big hits) tightens the frame.
-    z -= f.pushIn * 1.6
+
+    // Desired dolly distance: whichever axis needs more room, fenced to range.
+    const zDesired = clamp(Math.max(zForX, zForY), this.minZ, this.maxZ)
+
+    // --- Zoom velocity clamp (the fix for the oscillation tell) ----------
+    // The frame may traverse its full range no faster than ~0.3s when WIDENING
+    // (fast enough to catch a launch before it crops) and ~1.0s when RECOVERING
+    // (slow enough it never reads as a lurch). This turns the old undamped
+    // medium -> extreme -> tiny swing into a controlled pull-out-and-settle.
+    const range = this.maxZ - this.minZ
+    const widening = zDesired > this.zFramed
+    const maxStep = (range / (widening ? 0.3 : 1.0)) * dt
+    this.zFramed += clamp(zDesired - this.zFramed, -maxStep, maxStep)
+    const z = this.zFramed
 
     // Horizontal follow, fenced so the frustum edge never passes the stage wall.
     const halfViewX = z * tanH
@@ -141,20 +151,39 @@ export class FightCamera {
     const hi = this.bounds.maxX - halfViewX
     const camX = lo <= hi ? clamp(midX, lo, hi) : midX
 
-    // Follow the vertical action with the capped rise so the aim and camera pan
-    // up in lockstep with the (bounded) dolly — never far enough to push the
-    // grounded fighter's feet off the bottom edge.
-    const lookY = this.aimY + vRise * this.vLookFollow
-    const camY = this.camBaseY + vRise * this.vCamFollow
+    // --- Aim pan --------------------------------------------------------
+    // At neutral the aim rests exactly at aimY (the tuned low aim that hides the
+    // floor's front edge). It pans UP only as a launch actually opens the frame:
+    // openFrac ramps 0 -> 1 as the rate-limited dolly reaches the distance the
+    // launch needs, so the aim follows the zoom rather than racing ahead of it
+    // (which would crop the head mid-ramp). This keeps the grounded feet pinned
+    // near footBot while the launched head stays under the top edge.
+    const panTarget = Math.max(0, (f.topY + headTop - this.footBot) * 0.5 - this.aimY)
+    const openFrac = clamp((z - this.minZ) / 1.5, 0, 1)
+    const panUp = panTarget * openFrac
+    const lookY = this.aimY + panUp
+    const camY = this.camBaseY + panUp * 0.5
 
-    // Springs give the operator mass — snappy but never jittery.
-    const targetPos = this.tmpPos.set(camX, camY, z + this.dolly.value)
+    // A small, snappy motivated punch-in on impact (~3% of z). Deliberately
+    // tiny: the old sustained pushIn * 1.6 pulled ~10-18% and fought the launch
+    // framing, which is what produced the medium -> extreme -> tiny swing.
+    const punch = f.pushIn * 0.4
+
+    // The spring gives the operator horizontal mass (x/y lead the action with a
+    // little lag). The DOLLY (z) is deliberately NOT spring-smoothed here: it is
+    // already velocity-clamped by the rate limiter above, and stacking a ~0.4s
+    // spring on top of that lagged the zoom so far behind a short launch that the
+    // frame never opened in time and the head still cropped. Feeding the
+    // rate-limited zFramed straight to z keeps the zoom both damped (by the
+    // clamp) AND responsive enough to contain a brief pop, while a fast, snappy
+    // punch-in rides on top for impact.
+    const targetPos = this.tmpPos.set(camX, camY, z)
     const targetLook = this.tmpLook.set(camX, lookY, 0)
-    // Position is a touch looser than the look target so the frame leads slightly.
     this.pos.step(targetPos, 9.0, 1.0, dt)
     this.look.step(targetLook, 12.0, 1.0, dt)
     // Ease the dolly impulse back to rest.
     this.dolly.step(0, 11.0, 0.85, dt)
+    const camZ = z - punch + this.dolly.value
 
     // Handheld micro-drift + impact shake, additive on top of the spring value.
     this.shake = Math.max(0, this.shake - dt * 2.2)
@@ -162,7 +191,7 @@ export class FightCamera {
     const dx = fbm1(this.t * 1.3, 11) * drift + this.shakeDir.x * this.shake * 0.6 * Math.sin(this.t * 90)
     const dy = fbm1(this.t * 1.1, 37) * drift + this.shakeDir.y * this.shake * 0.6 * Math.sin(this.t * 84)
 
-    this.cam.position.set(this.pos.value.x + dx, this.pos.value.y + dy, this.pos.value.z)
+    this.cam.position.set(this.pos.value.x + dx, this.pos.value.y + dy, camZ)
     this.cam.lookAt(this.look.value.x + dx * 0.4, this.look.value.y + dy * 0.4, this.look.value.z)
     this.cam.updateProjectionMatrix()
   }

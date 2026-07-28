@@ -71,7 +71,25 @@ export interface AnimQuery {
   move?: { id: string; frame: number }
   /** Global sim frame counter, for looping clips. */
   globalFrame: number
+  /** Frames elapsed inside the current reaction. See `FighterView`. */
+  reactionFrame?: number
 }
+
+/**
+ * Stances a fighter is *put into* rather than chooses. The victim of a hit
+ * carries no `move`, so these have no clock unless one is supplied -- and every
+ * one of their clips is non-looping, which is the dangerous combination:
+ * `frameAt` clamps a non-looping clip at `min(elapsed, total - 1)`, and
+ * `globalFrame` is an unbounded running counter, so the clamp is always hit.
+ * The whole reaction collapses to its final frame, permanently.
+ *
+ * That is what made a 5-key hurt animation invisible: the struck fighter
+ * snapped straight to the last recovery pose and held it, so the critic
+ * correctly reported "the body registers nothing" across an 11-frame hitstop.
+ */
+const REACTION_STANCES: ReadonlySet<string> = new Set([
+  'hitstun', 'blockstun', 'juggle', 'knockdown', 'wakeup',
+])
 
 /**
  * Returns the index into `assets.frames` to draw. Falls back sensibly at every
@@ -88,6 +106,11 @@ export function resolveFrame(assets: FighterAssets, q: AnimQuery): number {
     q.stance === 'blockstun' || q.stance === 'juggle'
   if (actionDriven && q.move) {
     return frameAt(clip, q.move.frame, false)
+  }
+  // Reactions have no move of their own, so they run off the reaction clock.
+  // Without it these clamp to their last frame and the animation never plays.
+  if (REACTION_STANCES.has(q.stance) && q.reactionFrame !== undefined) {
+    return frameAt(clip, q.reactionFrame, clip.loop)
   }
   const loop = clip.loop
   return frameAt(clip, loop ? q.globalFrame : q.globalFrame, loop)

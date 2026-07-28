@@ -198,7 +198,10 @@ export class FightRenderer {
       // pair and the zero-step control, cancelling out to exactly 1.00x. Tying
       // the clock to real sim advancement makes `step(n)` move the animation by
       // exactly n frames, and makes a frozen frame genuinely frozen.
-      if (this.latest.frame !== this.prev.frame) this._globalFrame++
+      if (this.latest.frame !== this.prev.frame) {
+        this._globalFrame++
+        this._tickReactions(this.prev, this.latest)
+      }
       steps++
     }
     // Level-triggered celebration signal for the stage. True only while the
@@ -214,6 +217,35 @@ export class FightRenderer {
   }
   private _acc = 0
   private _globalFrame = 0
+  /** Frames elapsed inside each fighter's current reaction. See `FighterView`. */
+  private _reaction: [number, number] = [0, 0]
+
+  /**
+   * Advances each fighter's reaction clock, restarting it whenever a new
+   * reaction begins. Two triggers, because one is not enough: entering a
+   * reaction stance covers the first hit, and `stunRemaining` going *up*
+   * covers the rest of a combo -- a second hit landing during hitstun keeps the
+   * stance identical while re-arming the stun, and without that test the victim
+   * would keep playing the tail of the first reaction through every follow-up.
+   */
+  private _tickReactions(prev: FightState, cur: FightState): void {
+    for (let i = 0; i < 2; i++) {
+      const p = prev.fighters[i]
+      const c = cur.fighters[i]
+      const restarted = c.stance !== p.stance || c.stunRemaining > p.stunRemaining
+      if (restarted) {
+        this._reaction[i] = 0
+        continue
+      }
+      // Hitstop is the impact emphasis: the sim frame counter keeps moving but
+      // the fight is deliberately frozen. The reaction must freeze with it, or
+      // the victim animates straight through the one moment the freeze exists
+      // to sell. The genre read is snap to the impact pose, hold it for the
+      // duration of the stop, then play the recovery out.
+      if (cur.hitstop > 0) continue
+      this._reaction[i] += 1
+    }
+  }
 
   get globalFrame() {
     return this._globalFrame
@@ -222,8 +254,8 @@ export class FightRenderer {
   fighterViews(alpha: number): [FighterView, FighterView] | null {
     if (!this.latest || !this.prev) return null
     return [
-      interpView(this.prev.fighters[0], this.latest.fighters[0], alpha, this._globalFrame),
-      interpView(this.prev.fighters[1], this.latest.fighters[1], alpha, this._globalFrame),
+      interpView(this.prev.fighters[0], this.latest.fighters[0], alpha, this._globalFrame, this._reaction[0]),
+      interpView(this.prev.fighters[1], this.latest.fighters[1], alpha, this._globalFrame, this._reaction[1]),
     ]
   }
 
@@ -427,6 +459,7 @@ function interpView(
   cur: FighterState,
   alpha: number,
   globalFrame: number,
+  reactionFrame: number,
 ): FighterView {
   // Positions interpolate for smoothness; everything discrete comes from `cur`.
   const pos: Vec2 = {
@@ -443,6 +476,7 @@ function interpView(
     maxHealth: cur.maxHealth,
     grounded: cur.grounded,
     globalFrame,
+    reactionFrame,
   }
 }
 

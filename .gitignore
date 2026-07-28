@@ -73,3 +73,15 @@ projectile-shots/
 motion-strips/
 probe-out/
 dist-measure/
+
+# Scratch measurement probes. Convention: a leading underscore means throwaway.
+# Agents drop these to print one number and are supposed to delete them; when
+# they don't, they redden the shared gate or get committed by accident.
+src/**/_*.probe.test.ts
+tools/_out/
+tools/_probe/*.txt
+spark-pixel/
+spark-pixel-mutant/
+/_*.png
+/spark-pixel*.png
+.hud-agent/

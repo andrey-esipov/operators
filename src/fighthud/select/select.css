@@ -509,6 +509,12 @@
   position: absolute;
   inset: 0;
 }
+/* Per-frame geometry (left/top/width/height) is driven inline by HeroRender as
+   the idle clip advances — it cannot live in CSS. This rule only marks the crop
+   as the decorative, non-interactive layer it is. */
+.fsel-hero-clip {
+  pointer-events: none;
+}
 .fsel-hero-loading {
   border-radius: 8px;
   background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 18%, transparent), transparent 78%);

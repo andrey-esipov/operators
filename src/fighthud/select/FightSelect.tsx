@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { Word } from '../Announcements'
 import { loadPortrait, preloadPortrait, type PortraitInfo } from '../portraits'
 import { HeroRender } from './HeroRender'
+import { stageThumb, stageFull } from './stageAssets'
 import { Sfx } from '../../lib/audio'
 import { Voice } from '../../lib/voice'
 import { getFighter } from '../../data/fighters'
@@ -68,21 +69,17 @@ function stageScene([a, b]: [string, string]): string {
   ].join(', ')
 }
 
-/** The real rendered stage art already ships at `/stages/<id>.png` (the same
- *  1536×1024 renders the 3D arenas are built from) but the picker had never
- *  consumed it — the v9 critic saw only "abstract colour-gradient bands … you
- *  learn nothing about any arena." Presenting the real image makes Garage / War
- *  Room / Channel instantly recognisable. stage-art owns producing optimised
- *  thumbnails; the moment they land at a dedicated path this is the one line to
- *  repoint. The CSS `stageScene` stays as the 404 fallback so a missing image
- *  degrades to an evocative place, never a dead box. */
-function stageThumb(id: string): string {
-  return `/stages/${id}.png`
-}
+// The real rendered arena art (Garage / War Room / Channel …) makes each stage
+// instantly recognisable where the v9 critic saw only "abstract colour-gradient
+// bands." The thumb-vs-full split path lives in ./stageAssets so the byte-budget
+// gate (selectAssetBudget.node.test.ts) can import it without pulling in React.
+// The CSS `stageScene` above stays as the 404 fallback so a missing image
+// degrades to an evocative place, never a dead box.
 
-/** Warm the stage images so the stage grid + big preview paint at once instead
- *  of streaming in, and a capture can't photograph the load race. Fire-and-
- *  forget; failures are the fallback's problem, not ours. */
+/** Warm the small ribbon thumbnails (~50 KB each, ~0.4 MB total — NOT the
+ *  multi-MB full renders, which load on demand for the one big preview) so the
+ *  ribbon paints at once instead of streaming in, and a capture can't photograph
+ *  a load race. Fire-and-forget; failures are the fallback's problem, not ours. */
 function preloadStages() {
   if (typeof Image === 'undefined') return
   for (const s of STAGES) {
@@ -605,7 +602,9 @@ export function FightSelect() {
                 className="fsel-stage-preview-img"
                 style={{ background: `url(${stageThumb(hoveredStage.id)}) center/cover no-repeat, ${stageScene(hoveredStage.swatch)}` }}
                 aria-hidden
-              />
+              >
+                <img className="fsel-stage-preview-pic" src={stageFull(hoveredStage.id)} alt="" decoding="async" />
+              </span>
               <span className="fsel-stage-preview-grade" aria-hidden />
               <span className="fsel-stage-preview-scan" aria-hidden />
               <div className="fsel-stage-preview-cap">
@@ -646,8 +645,9 @@ export function FightSelect() {
                   <span
                     className="fsel-stage-thumb"
                     data-stage={g.id}
-                    style={{ background: `url(${stageThumb(g.id)}) center/cover no-repeat, ${stageScene(g.swatch)}` }}
+                    style={{ background: stageScene(g.swatch) }}
                   >
+                    <img className="fsel-stage-thumb-img" src={stageThumb(g.id)} alt="" decoding="async" loading="lazy" />
                     <span className="fsel-stage-sheen" aria-hidden />
                     <span className="fsel-stage-vignette" aria-hidden />
                     {g.note && <span className="fsel-stage-flag">{g.note}</span>}
@@ -665,7 +665,7 @@ export function FightSelect() {
           {stage != null && STAGES[stage] && (
             <span
               className="fsel-vs-arena"
-              style={{ background: `url(${stageThumb(STAGES[stage].id)}) center/cover no-repeat, ${stageScene(STAGES[stage].swatch)}` }}
+              style={{ background: `url(${stageFull(STAGES[stage].id)}) center/cover no-repeat, ${stageScene(STAGES[stage].swatch)}` }}
               aria-hidden
             />
           )}

@@ -556,6 +556,18 @@
   background-size: cover;
   background-position: center;
 }
+/* Full-res render layered over the thumb LQIP (already loaded by the ribbon):
+   it fades in once it decodes, so switching arenas reads instant then sharpens
+   rather than blanking while ~2 MB streams in. */
+.fsel-stage-preview-pic {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  animation: fsel-cropin 0.45s ease-out;
+}
 .fsel-stage-preview-grade {
   position: absolute;
   inset: 0;
@@ -627,6 +639,16 @@
 .fsel-stagecard.cursor .fsel-stage-thumb {
   border-color: #ff3df0;
   box-shadow: 0 0 0 2px #ff3df0, 0 0 22px 3px rgba(255, 61, 240, 0.5);
+}
+/* The small display-sized thumbnail; the parent's `stageScene` gradient shows
+   through as the 404 fallback if it ever fails to load. */
+.fsel-stage-thumb-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 .fsel-stagecard.chosen .fsel-stage-thumb {
   border-color: #f6ec5a;

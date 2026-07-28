@@ -40,7 +40,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  height: 20px;
+  min-height: 34px;
   width: 100%;
 }
 .fhud-hpwrap.b .fhud-namerow { flex-direction: row-reverse; }
@@ -58,6 +58,33 @@
   transform: skewX(-8deg);
 }
 .fhud-badge > span { transform: skewX(8deg); }
+
+/* Cropped-atlas portrait. Hard black frame + accent rim + drop shadow keeps it
+   in the house language; the right fighter is mirrored to face inward. */
+.fhud-portrait {
+  position: relative;
+  flex: 0 0 auto;
+  display: inline-block;
+  overflow: hidden;
+  background: linear-gradient(180deg, #241340, #0f0a1a);
+  border: 2px solid #000;
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.6), 0 0 10px -2px var(--accent);
+  image-rendering: pixelated;
+}
+.fhud-portrait.b { transform: scaleX(-1); }
+.fhud-portrait::after {
+  /* Bottom accent shelf for the arcade name-plate read. */
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: var(--accent);
+  box-shadow: 0 0 6px var(--accent);
+}
 
 .fhud-name {
   font-size: 11px;
@@ -258,6 +285,14 @@
 }
 .fhud-combo.a { left: 8%; align-items: flex-start; }
 .fhud-combo.b { right: 8%; align-items: flex-end; }
+.fhud-combo-rank {
+  font-family: var(--font-display);
+  font-size: 24px;
+  letter-spacing: 0.16em;
+  line-height: 1;
+  margin-bottom: 2px;
+  transform: skewX(-8deg);
+}
 .fhud-combo-count {
   font-family: var(--font-num);
   font-size: 74px;
@@ -288,18 +323,39 @@
 }
 
 /* ── Flash chips (parry / throw-tech) ───────────────────────────────── */
-.fhud-flash {
+.fhud-flash-wrap {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+/* Full-frame coloured edge pulse behind the read. */
+.fhud-flash-edge {
+  position: absolute;
+  inset: 0;
+  mix-blend-mode: screen;
+}
+/* Expanding shock ring, centred just above the fighters' heads. */
+.fhud-flash-ring {
+  position: absolute;
+  top: 40%;
+  width: 120px;
+  height: 120px;
+  border: 5px solid #fff;
+  border-radius: 50%;
+}
+/* The label chip itself. */
+.fhud-flash-chip {
   position: absolute;
   top: 34%;
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 6px 14px;
+  padding: 7px 18px;
   font-family: var(--font-display);
-  font-size: 16px;
-  letter-spacing: 0.24em;
+  font-size: 20px;
+  letter-spacing: 0.26em;
   color: #fff;
   border: 3px solid #000;
-  box-shadow: 5px 5px 0 rgba(0, 0, 0, 0.6);
 }
 
 /* ── Announcements ──────────────────────────────────────────────────── */
@@ -331,4 +387,50 @@
   line-height: 1;
   text-align: center;
   text-shadow: 6px 6px 0 #000, 0 0 24px rgba(0, 0, 0, 0.8);
+}
+
+/* ── Screen FX (KO flash / round wipe / heavy-hit impact) ────────────── */
+.fhud-fx-ko {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.fhud-fx-flash {
+  position: absolute;
+  inset: 0;
+  background: #fff;
+}
+.fhud-fx-shock {
+  position: absolute;
+  left: 50%;
+  top: 46%;
+  width: 220px;
+  height: 220px;
+  margin: -110px 0 0 -110px;
+  border-radius: 50%;
+  border: 10px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 0 40px rgba(255, 214, 10, 0.7), inset 0 0 30px rgba(255, 214, 10, 0.5);
+}
+.fhud-fx-vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 50% 46%, transparent 30%, rgba(0, 0, 0, 0.86) 100%);
+}
+.fhud-fx-wipe {
+  position: absolute;
+  top: -20%;
+  bottom: -20%;
+  left: 0;
+  right: 0;
+  pointer-events: none;
+  filter: blur(1px);
+}
+.fhud-fx-impact {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse at 50% 50%, transparent 52%, rgba(239, 35, 60, 0.9) 100%);
+}
+.fhud-fx-impact[data-strong='1'] {
+  background: radial-gradient(ellipse at 50% 50%, transparent 42%, rgba(255, 60, 60, 0.95) 100%);
 }

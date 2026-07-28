@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import type { CSSProperties } from 'react'
 import { FightRenderer } from '../three/fight/FightRenderer'
 import { loadFighterAtlas } from '../three/fight/loadFighterAtlas'
 import { STAGE_ORDER } from '../three/stage/StageRegistry'
@@ -221,35 +222,77 @@ const overlayStyle: React.CSSProperties = {
 /** Dismissable because a permanent keymap legend over the stage is the fastest
  *  way to make a fighting game look like a tutorial instead of a game. */
 function ControlHint() {
-  const [shown, setShown] = useState(true)
+  const [visible, setVisible] = useState(true)
+  const [mounted, setMounted] = useState(true)
+
   useEffect(() => {
-    const t = window.setTimeout(() => setShown(false), 6000)
-    return () => window.clearTimeout(t)
+    // Dismiss the moment the player demonstrates they know the controls. The
+    // timer is only a fallback for someone who never presses anything — a hint
+    // that outlives its usefulness is what makes a game look like a tutorial.
+    const dismiss = () => setVisible(false)
+    window.addEventListener('keydown', dismiss, { once: true })
+    const t = window.setTimeout(dismiss, 6000)
+    return () => {
+      window.removeEventListener('keydown', dismiss)
+      window.clearTimeout(t)
+    }
   }, [])
-  if (!shown) return null
+
+  // Stay mounted until the fade finishes, otherwise it pops out of existence.
+  useEffect(() => {
+    if (visible) return
+    const t = window.setTimeout(() => setMounted(false), 420)
+    return () => window.clearTimeout(t)
+  }, [visible])
+
+  if (!mounted) return null
+
+  const cap: CSSProperties = {
+    display: 'inline-block',
+    minWidth: 17,
+    padding: '2px 5px',
+    marginRight: 3,
+    borderRadius: 4,
+    background: 'linear-gradient(180deg,#2b3444,#161c26)',
+    border: '1px solid rgba(180,205,230,0.28)',
+    borderBottomColor: 'rgba(0,0,0,0.6)',
+    boxShadow: '0 1px 0 rgba(255,255,255,0.12) inset, 0 1px 2px rgba(0,0,0,0.5)',
+    color: '#dce8f4',
+    font: '600 10px ui-monospace, monospace',
+    textAlign: 'center',
+  }
+
+  const group = (keys: string[], label: string) => (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
+      {keys.map((k) => (
+        <kbd key={k} style={cap}>
+          {k}
+        </kbd>
+      ))}
+      <span style={{ marginLeft: 5, color: '#8ba0b6', font: '10px ui-monospace, monospace', letterSpacing: '0.14em' }}>
+        {label}
+      </span>
+    </span>
+  )
+
   return (
     <div
       style={{
         position: 'absolute',
         left: '50%',
-        bottom: 24,
-        transform: 'translateX(-50%)',
+        bottom: 26,
+        transform: `translateX(-50%) translateY(${visible ? 0 : 6}px)`,
         display: 'flex',
-        gap: 18,
-        padding: '8px 16px',
-        borderRadius: 999,
-        background: 'rgba(5,8,14,0.62)',
-        border: '1px solid rgba(159,180,200,0.16)',
-        color: '#9fb4c8',
-        font: '11px ui-monospace, monospace',
-        letterSpacing: '0.1em',
+        gap: 20,
+        alignItems: 'center',
         pointerEvents: 'none',
-        backdropFilter: 'blur(6px)',
+        opacity: visible ? 1 : 0,
+        transition: 'opacity 380ms ease, transform 380ms ease',
       }}
     >
-      <span>WASD MOVE</span>
-      <span>U I O PUNCH</span>
-      <span>J K L KICK</span>
+      {group(['W', 'A', 'S', 'D'], 'MOVE')}
+      {group(['U', 'I', 'O'], 'PUNCH')}
+      {group(['J', 'K', 'L'], 'KICK')}
     </div>
   )
 }

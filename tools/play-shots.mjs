@@ -125,12 +125,25 @@ async function state() {
 
 const shots = []
 async function shot(name) {
+  // Freeze first. Reading state and then screenshotting a 3200x1800 page takes
+  // long enough for the sim to advance a dozen frames, so an unpaused capture
+  // can label a shot `hitstun` and show a fighter who already recovered. The
+  // label and the pixels have to describe the same moment or this tool is just
+  // another lying harness.
+  await page.evaluate(() => window.__PLAY__.pause())
   const st = await state()
   await page.screenshot({ path: `${OUT}/${name}.png` })
-  shots.push({ name, ...st })
+  const after = await state()
+  await page.evaluate(() => window.__PLAY__.resume())
+
+  // Prove the freeze held across the screenshot rather than assuming it.
+  const drift =
+    after.p1.st !== st.p1.st || after.p2.st !== st.p2.st || after.p1.hp !== st.p1.hp
+  shots.push({ name, ...st, drift })
   console.log(
     `  ${name.padEnd(18)} phase=${st.phase} combo=${st.combo} ` +
-      `p1[hp=${st.p1.hp} m=${st.p1.meter} ${st.p1.st}] p2[hp=${st.p2.hp} m=${st.p2.meter} ${st.p2.st}]`,
+      `p1[hp=${st.p1.hp} m=${st.p1.meter} ${st.p1.st}] p2[hp=${st.p2.hp} m=${st.p2.meter} ${st.p2.st}]` +
+      (drift ? '   *** DRIFTED DURING CAPTURE — label is not trustworthy' : ''),
   )
 }
 

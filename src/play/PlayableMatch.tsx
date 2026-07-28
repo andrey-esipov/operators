@@ -17,6 +17,10 @@ declare global {
       ready: () => boolean
       state: () => FightState
       coverage: () => { lit: number; total: number; fraction: number }
+      /** Freeze the sim so a capture's label and its pixels describe one moment. */
+      pause: () => void
+      resume: () => void
+      paused: () => boolean
     }
   }
 }
@@ -107,7 +111,15 @@ export function PlayableMatch() {
         renderer.setInitialState(sim.initialState)
 
         let lastOver = false
+        // Capture tools need the world to hold still. Reading state and then
+        // taking a DPR-2 screenshot of a 3200x1800 page takes long enough for
+        // the sim to advance a dozen frames, so an unpaused capture can label a
+        // shot `hitstun` and show a fighter who has already recovered — the shot
+        // and its label describing different moments. Freezing the step is the
+        // only way the label can be trusted.
+        let frozen = false
         renderer.setStep(() => {
+          if (frozen) return { state: sim.current, events: [] }
           const res = sim.step()
           hudRef.current?.push(res.state, res.events)
           // The only React state this loop is allowed to touch, and only on
@@ -134,6 +146,13 @@ export function PlayableMatch() {
             ready: () => true,
             state: () => sim.current,
             coverage: () => renderer!.fighterCoverage(),
+            pause: () => {
+              frozen = true
+            },
+            resume: () => {
+              frozen = false
+            },
+            paused: () => frozen,
           }
         }
 

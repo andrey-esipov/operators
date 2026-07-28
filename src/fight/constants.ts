@@ -203,6 +203,24 @@ export const MIN_DAMAGE = 5
 export const JUGGLE_ALLOWANCE = 4
 
 /**
+ * Juggle gravity scaling. Each successive airborne hit imparts less upward
+ * knockback than the last, so a juggle *decays* — the victim gets visibly
+ * heavier and the arcs step down rather than repeating at full height. Without
+ * this a second launcher (Surge Palm after cr.HP) re-launched to the identical
+ * apex, so a route read as two disjoint full-height pops with a near-full
+ * descent between them, and only JUGGLE_ALLOWANCE stopped a full-height loop.
+ *
+ * The scale applies to airborne hits only — the first (grounded) launch keeps
+ * its full authored height. Measured against a real AI juggle: the second pop
+ * drops from apex 262 to ~186, which pulls the victim back into hitbox range
+ * sooner (tighter, more legible juggle) while the same physics still guarantee
+ * termination. STEP is the per-extension falloff; FLOOR keeps a deep juggle
+ * from imparting zero (which would look like the hit missed).
+ */
+export const JUGGLE_GRAVITY_STEP = 0.16
+export const JUGGLE_GRAVITY_FLOOR = 0.4
+
+/**
  * ─── The combo system, in one place ─────────────────────────────────────────
  *
  * A combo is a string of hits with no neutral gap — the victim never leaves
@@ -214,8 +232,9 @@ export const JUGGLE_ALLOWANCE = 4
  *      cancel into ['super']. That is the whole cancel graph:
  *          light → medium/heavy → special → super
  *   2. LAUNCH + JUGGLE — a launcher (cr.HP, DP) pops the victim airborne with
- *      JUGGLE_ALLOWANCE hits of air time; each follow-up spends one and adds a
- *      little upward knockback, and gravity + the allowance guarantee it ends.
+ *      JUGGLE_ALLOWANCE hits of air time; each follow-up spends one, and its
+ *      upward knockback is taxed by JUGGLE_GRAVITY_STEP per hit so the arcs step
+ *      down. Gravity scaling + the allowance together guarantee it ends.
  *   3. SCALING — COMBO_SCALING taxes each successive hit so a 10-hit route beats
  *      a 3-hit route without tripling it. MIN_SCALE / MIN_DAMAGE keep the tail
  *      from reaching zero.

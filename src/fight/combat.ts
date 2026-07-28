@@ -21,6 +21,8 @@ import {
   BACKDASH_INVULN,
   COMBO_SCALING,
   JUGGLE_ALLOWANCE,
+  JUGGLE_GRAVITY_FLOOR,
+  JUGGLE_GRAVITY_STEP,
   KNOCKDOWN_FRAMES,
   MAX_METER,
   METER_MULT,
@@ -50,6 +52,16 @@ export function scaleDamage(base: number, comboCount: number, moveScaling: numbe
   let scale = COMBO_SCALING[idx] * moveScaling
   if (scale < MIN_SCALE) scale = MIN_SCALE
   return Math.max(MIN_DAMAGE, Math.round(base * scale))
+}
+
+/** Juggle gravity scaling: the upward knockback an airborne hit imparts falls
+ *  off with each hit already spent, so a juggle's arcs step down instead of
+ *  repeating at full height. `juggleLeft` is read *after* it is decremented for
+ *  the current hit, so the first extension (allowance-1) is taxed once. The
+ *  initial grounded launch never routes through here and keeps its full height. */
+export function juggleScale(juggleLeft: number): number {
+  const spent = JUGGLE_ALLOWANCE - juggleLeft
+  return Math.max(JUGGLE_GRAVITY_FLOOR, 1 - JUGGLE_GRAVITY_STEP * spent)
 }
 
 function moveFrame(f: FighterState, def: FighterDef) {
@@ -377,10 +389,11 @@ function applyHit(
     if (D.grounded) {
       D.grounded = false
       D.juggleLeft = JUGGLE_ALLOWANCE
+      D.vel.y = hit.knockback.y
     } else {
       D.juggleLeft = Math.max(0, D.juggleLeft - 1)
+      D.vel.y = hit.knockback.y * juggleScale(D.juggleLeft)
     }
-    D.vel.y = hit.knockback.y
     D.stance = 'juggle'
     D.stunRemaining = hit.hitstun
     events.push({ type: 'launch', at, attacker: ai })
@@ -392,7 +405,7 @@ function applyHit(
     D.juggleLeft = Math.max(0, D.juggleLeft - 1)
     D.stance = 'juggle'
     D.stunRemaining = hit.hitstun
-    D.vel.y += hit.knockback.y
+    D.vel.y += hit.knockback.y * juggleScale(D.juggleLeft)
   } else {
     D.stance = 'hitstun'
     D.stunRemaining = hit.hitstun

@@ -33,9 +33,35 @@ export default defineConfig({
   },
   preview: { port: 5000, host: true, allowedHosts: true, strictPort: false },
   test: {
-    // Same scratch-probe carve-out as tsconfig.app.json: `_*.probe.test.ts`
-    // files are one-shot measurement dumps, and some throw deliberately to
-    // print their numbers. They must not be able to redden the shared suite.
-    exclude: [...configDefaults.exclude, '**/_*.probe.test.ts'],
+    // Two carve-outs, both about keeping the shared gate honest.
+    //
+    // 1. `_*.probe.test.ts` — one-shot measurement dumps, some of which throw
+    //    deliberately to print their numbers. Scratch must never be able to
+    //    redden the suite for everyone else. (Mirrored in tsconfig.app.json.)
+    //
+    // 2. Nested git worktrees. Agents create detached worktrees INSIDE the repo
+    //    (`.sprite-probe/wt`, `_critic-<sha>`, `_calib-<sha>`, `_r2-tip-<sha>`)
+    //    to capture against a pinned SHA. Each holds a FULL COPY of src/, so
+    //    vitest's default `**/*.test.ts` collected every copy: the suite
+    //    reported 2905 tests when the real number is 450 — inflated ~6.5x by
+    //    the same assertions counted over and over.
+    //
+    //    That is not just a cosmetic miscount. It made the headline pass number
+    //    meaningless as a quality signal, ran the suite ~6x slower than needed,
+    //    and — worst — meant a STALE copy pinned to an old SHA could redden the
+    //    gate over code that no longer exists, or stay green over code that was
+    //    since broken. A gate that reports on a different revision than the one
+    //    you are about to ship is a lying harness by construction.
+    exclude: [
+      ...configDefaults.exclude,
+      '**/_*.probe.test.ts',
+      '**/.sprite-probe/**',
+      '**/_critic-*/**',
+      '**/_calib-*/**',
+      '**/_r2-*/**',
+      '**/_stageart-*/**',
+      '**/_vfx-*/**',
+      '**/dist-*/**',
+    ],
   },
 })

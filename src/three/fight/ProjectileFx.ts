@@ -316,3 +316,30 @@ export function makeGlowMesh(tint: THREE.Color, renderOrder: number, tex?: THREE
   mesh.renderOrder = renderOrder
   return mesh
 }
+
+/** One bolt's hot-point this frame, for the renderer-only clash test. */
+export interface ClashPoint {
+  owner: 0 | 1
+  x: number
+  y: number
+}
+
+/**
+ * Do two live bolts clash this frame? True ONLY for OPPOSING owners whose
+ * hot-points sit within `threshold` world units (squared-distance, inclusive of
+ * the boundary). A fighter's own spread never crackles against itself.
+ *
+ * This is deliberately COSMETIC: the sim rules that projectiles pass through one
+ * another (combat.updateProjectiles: "Projectiles ignore one another — the
+ * simplest rule that still zones"), so the renderer paints an energy crackle
+ * where two opposing bolts cross WITHOUT touching the simulation — no trade, no
+ * despawn, nothing that could desync. Pure (numbers only) so it unit-tests
+ * without a scene or a GL context, which is the only honest way to prove an
+ * additive burst's TRIGGER (the burst itself defeats pixel differencing).
+ */
+export function clashing(a: ClashPoint, b: ClashPoint, threshold: number): boolean {
+  if (a.owner === b.owner) return false
+  const dx = a.x - b.x
+  const dy = a.y - b.y
+  return dx * dx + dy * dy <= threshold * threshold
+}

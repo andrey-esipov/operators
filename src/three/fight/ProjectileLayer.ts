@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import type { Projectile } from '../../fight/types'
 import { STAGE_HALF_W, PROJECTILE_MARGIN, SUPER_FREEZE_FRAMES } from '../../fight/constants'
 import { simToWorld, cmYToWorld } from './worldScale'
-import { energyTint, flashTint, makeGlowMesh, hotCoreTexture, presenceFor, type Presence } from './ProjectileFx'
+import { energyTint, flashTint, makeGlowMesh, hotCoreTexture, presenceFor, clashing, type Presence } from './ProjectileFx'
 import {
   loadProjectileAtlas,
   type LoadedProjectile,
@@ -52,6 +52,12 @@ const PROJ_Z = 0.08
 /** Number of trailing glow blobs behind the hot-point. Enough to read as a
  *  streak at bolt speed without becoming a solid bar. */
 const TRAIL_SEG = 6
+
+/** Opposing bolts crackle when their hot-points cross within this many world
+ *  units — roughly a bolt's visible radius, so the burst reads as the two energy
+ *  bodies touching, not a pop in the empty gap between them. Cosmetic only; the
+ *  sim passes projectiles through each other (see ProjectileFx.clashing). */
+const CLASH_WORLD_DIST = 0.7
 
 // Per-kind opacities and scales (trail, floor, aura, spawn flash, impact) live
 // in the Presence profile in ProjectileFx; the layer reads them off each Live,
@@ -128,6 +134,8 @@ interface TrailBlob {
 interface Live {
   id: number
   kind: string
+  /** Which fighter fired it, so opposing bolts can be detected for a clash. */
+  owner: 0 | 1
   loaded: LoadedProjectile
   mesh: THREE.Mesh
   geom: THREE.PlaneGeometry
@@ -179,6 +187,17 @@ interface Live {
 export class ProjectileLayer {
   readonly group = new THREE.Group()
   private live = new Map<number, Live>()
+  /** Short additive crackles where opposing bolts crossed. Each is independent of
+   *  the two bolts that spawned it and self-retires when its clock runs out. */
+  private clashBursts: {
+    mesh: THREE.Mesh; mat: THREE.MeshBasicMaterial
+    core: THREE.Mesh; coreMat: THREE.MeshBasicMaterial
+    clock: number; life: number; size: number
+  }[] = []
+  /** Opposing pairs (keyed by id) already crackling, so one crossing fires ONE
+   *  burst; a key is dropped once the pair parts past a hysteresis band so a
+   *  genuine re-cross can crackle again. */
+  private clashedPairs = new Set<string>()
   private loaded = new Map<string, LoadedProjectile>()
   private loading = new Map<string, Promise<void>>()
   private warned = new Set<string>()
@@ -404,6 +423,11 @@ export class ProjectileLayer {
       }
     }
 
+    // Opposing bolts crossing -> a one-shot midpoint crackle. Cosmetic: the sim
+    // passes projectiles through one another, so this only paints where their
+    // energy overlaps. Runs after every live bolt is positioned this frame.
+    this.updateClashes(seen)
+
     // Any tracked sprite the sim no longer owns starts (or continues) its death
     // in place, then retires when it finishes.
     for (const l of this.live.values()) {
@@ -428,6 +452,7 @@ export class ProjectileLayer {
     // every survivor once per frame. Retired beams are already gone from the map
     // (their flash disposed in retire), so this only touches live ones.
     for (const l of this.live.values()) this.tickSpawnFlash(l, ticks)
+    this.tickClashBursts(ticks)
 
     // Full-screen super atmosphere + the owner-anchored charge. Both run on the
     // UNSCALED render delta (not `ticks`, which collapses to ~0 while the sim is
@@ -437,6 +462,91 @@ export class ProjectileLayer {
     const renderTicks = Math.min((renderDt ?? dt) * 60, MAX_TICKS)
     this.updateSuperAtmosphere(cur, renderTicks, superState ?? null)
     this.updateSuperCharge(superState ?? null, renderTicks)
+  }
+
+  /** Detect opposing-owner bolts crossing and fire a one-shot midpoint crackle.
+   *  O(n^2) over live bolts, but n is a small handful (a zoner and a projectile
+   *  opponent, plus the odd spread), so the pairwise scan is trivially cheap. */
+  private updateClashes(seen: Set<number>) {
+    const active: Live[] = []
+    for (const l of this.live.values()) if (!l.detached && seen.has(l.id)) active.push(l)
+    if (active.length < 2) {
+      this.clashedPairs.clear()
+      return
+    }
+    const near = new Set<string>()
+    for (let i = 0; i < active.length; i++) {
+      for (let j = i + 1; j < active.length; j++) {
+        const a = active[i]
+        const b = active[j]
+        if (a.owner === b.owner) continue
+        const aPt = { owner: a.owner, x: a.lastWorld.x, y: a.lastWorld.y }
+        const bPt = { owner: b.owner, x: b.lastWorld.x, y: b.lastWorld.y }
+        const key = a.id < b.id ? `${a.id}:${b.id}` : `${b.id}:${a.id}`
+        // Hysteresis: a pair stays "engaged" out to 1.6x the fire distance, so a
+        // bolt loitering on the boundary can't strobe a fresh burst every frame.
+        if (clashing(aPt, bPt, CLASH_WORLD_DIST * 1.6)) near.add(key)
+        if (clashing(aPt, bPt, CLASH_WORLD_DIST) && !this.clashedPairs.has(key)) {
+          this.spawnClashBurst(a, b)
+          this.clashedPairs.add(key)
+        }
+      }
+    }
+    // Forget pairs that have parted (or where a bolt retired) so a genuine
+    // re-cross crackles again rather than staying suppressed forever.
+    for (const k of [...this.clashedPairs]) if (!near.has(k)) this.clashedPairs.delete(k)
+  }
+
+  /** A crackle where two opposing bolts crossed: a coloured glow wearing BOTH
+   *  bolts' hues mixed, plus a tight white-hot core, at their midpoint. Additive
+   *  and short — it flares and clears. It lives between the fighters (where the
+   *  bolts met), not on them, so it accents the fireball war without washing the
+   *  silhouettes. */
+  private spawnClashBurst(a: Live, b: Live) {
+    const mid = a.lastWorld.clone().lerp(b.lastWorld, 0.5)
+    mid.z = PROJ_Z + 0.03
+    const mixed = a.tint.clone().lerp(b.tint, 0.5)
+    const glow = makeGlowMesh(mixed, 24)
+    const glowMat = glow.material as THREE.MeshBasicMaterial
+    glowMat.opacity = 0
+    glow.position.copy(mid)
+    this.group.add(glow)
+    const core = makeGlowMesh(new THREE.Color(0xffffff), 25, hotCoreTexture())
+    const coreMat = core.material as THREE.MeshBasicMaterial
+    coreMat.opacity = 0
+    core.position.copy(mid)
+    this.group.add(core)
+    this.clashBursts.push({ mesh: glow, mat: glowMat, core, coreMat, clock: 0, life: 0.3, size: 1.5 })
+  }
+
+  /** Grow + fade every live clash crackle, retiring (and disposing) any whose
+   *  clock has run out. Opacity rides a sin envelope so each burst rises then
+   *  clears, capped well below a blowout (outer 0.5, core 0.82 additive). */
+  private tickClashBursts(ticks: number) {
+    if (this.clashBursts.length === 0) return
+    const dt = ticks / 60
+    const survivors: typeof this.clashBursts = []
+    for (const c of this.clashBursts) {
+      c.clock += dt
+      const t = c.clock / c.life
+      if (t >= 1) {
+        this.group.remove(c.mesh)
+        ;(c.mesh.geometry as THREE.BufferGeometry).dispose()
+        c.mat.dispose()
+        this.group.remove(c.core)
+        ;(c.core.geometry as THREE.BufferGeometry).dispose()
+        c.coreMat.dispose()
+        continue
+      }
+      const env = Math.sin(Math.min(1, t) * Math.PI)
+      const scale = c.size * (0.5 + 0.9 * t)
+      c.mesh.scale.setScalar(scale)
+      c.mat.opacity = 0.5 * env
+      c.core.scale.setScalar(scale * 0.5)
+      c.coreMat.opacity = 0.82 * env
+      survivors.push(c)
+    }
+    this.clashBursts = survivors
   }
 
   /** Did the sim drop this bolt because it CONNECTED, versus running out of life
@@ -539,6 +649,7 @@ export class ProjectileLayer {
     const l: Live = {
       id: p.id,
       kind: p.kind,
+      owner: p.owner,
       loaded,
       mesh,
       geom,
@@ -1185,6 +1296,16 @@ export class ProjectileLayer {
       }
     }
     this.live.clear()
+    for (const c of this.clashBursts) {
+      this.group.remove(c.mesh)
+      ;(c.mesh.geometry as THREE.BufferGeometry).dispose()
+      c.mat.dispose()
+      this.group.remove(c.core)
+      ;(c.core.geometry as THREE.BufferGeometry).dispose()
+      c.coreMat.dispose()
+    }
+    this.clashBursts = []
+    this.clashedPairs.clear()
     this.disposeSuperQuads()
     this.disposeSuperCharge()
     for (const res of this.loaded.values()) res.texture.dispose()

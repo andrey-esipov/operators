@@ -174,7 +174,12 @@ describe('projectile despawn', () => {
     expect(maxX).toBeGreaterThan(480) // crossed the wall plane
     // And it is gone by the end — not stuck flying forever.
     expect(cur.projectiles ?? []).toHaveLength(0)
+    // Crucially, it despawned by leaving the stage (~f140), NOT by its `life`
+    // timer running out (~f215). Asserting a tight upper bound isolates the
+    // off-stage despawn: without it the bolt survives to life-expiry and this
+    // fails, so the test can't pass on the wrong code path.
     expect(gone).toBeGreaterThan(0)
+    expect(gone).toBeLessThan(180)
   })
 })
 

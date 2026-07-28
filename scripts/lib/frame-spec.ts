@@ -174,6 +174,17 @@ export const FRAMES: FrameSpec[] = [
       'body compact and curled, arms drawn in, momentum clearly upward, no ground contact at all.',
   },
   {
+    // Mid-ascent, so the fully-visible rise isn't a single held drawing. Still
+    // airborne and climbing — a distinct keyframe (the tuck->apex morph smears).
+    name: 'jump-rise-2',
+    heightRatio: 0.84,
+    aspect: [0.5, 1.0],
+    pose:
+      'still ascending in the middle of a jump, fully airborne with both feet off the ground — the body beginning ' +
+      'to uncurl out of the tuck, knees dropping away from the chest, arms starting to come out from the body, ' +
+      'momentum still clearly upward, no ground contact.',
+  },
+  {
     name: 'jump-apex',
     heightRatio: 0.85,
     aspect: [0.5, 1.0],
@@ -659,7 +670,7 @@ export const CLIPS: Record<string, ClipSpec> = {
   crouch: clip(true, ['crouch', 8], ['tw-cr-c2', 4], ['crouch-2', 8], ['tw-cr-c2', 4]),
   // Jump arc keyframes through its phases (hard cuts — morph smears the airborne
   // pose changes): rise -> apex, then apex -> fall -> land absorb.
-  'jump-rise': clip(false, ['jump-rise', 6], ['jump-apex', 8]),
+  'jump-rise': clip(false, ['jump-rise', 5], ['jump-rise-2', 5], ['jump-apex', 8]),
   'jump-fall': clip(false, ['jump-apex', 4], ['jump-fall', 6], ['jump-land', 6]),
   // Dash keyframes coil -> burst -> settle; the coil doubles as the recovery.
   dash: clip(false, ['dash-ready', 3], ['dash', 6], ['dash-ready', 4]),

@@ -91,8 +91,11 @@ function shadowTexture(): THREE.Texture {
   c.width = c.height = s
   const ctx = c.getContext('2d')!
   const g = ctx.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2)
-  g.addColorStop(0, 'rgba(0,0,0,0.9)')
-  g.addColorStop(0.55, 'rgba(0,0,0,0.5)')
+  // A tight, dark core so a stamp placed under a sole reads as genuine contact,
+  // with a quick falloff so two feet stay visually separate (the gap between the
+  // legs must NOT fill in — that is the contradiction this system fixes).
+  g.addColorStop(0, 'rgba(0,0,0,0.95)')
+  g.addColorStop(0.4, 'rgba(0,0,0,0.62)')
   g.addColorStop(1, 'rgba(0,0,0,0)')
   ctx.fillStyle = g
   ctx.fillRect(0, 0, s, s)
@@ -100,6 +103,22 @@ function shadowTexture(): THREE.Texture {
   t.colorSpace = THREE.NoColorSpace
   sharedShadowTex = t
   return t
+}
+
+/** Max number of independent contact cores a fighter can cast at once (two feet
+ *  plus a hand/knee/torso on a knockdown or wakeup plant). */
+const SHADOW_STAMPS = 4
+
+/**
+ * One ground-contact support point, in the fighter's own facing-agnostic frame:
+ * `ox` is the world-X offset of the contact from the feet anchor at facing = +1,
+ * `halfW` its world half-width, `strength` its relative darkness (the widest,
+ * most-planted contact = 1). Extracted once per frame from the real silhouette.
+ */
+interface Contact {
+  ox: number
+  halfW: number
+  strength: number
 }
 
 /**
@@ -114,7 +133,9 @@ export class Fighter {
   readonly group = new THREE.Group()
   readonly mesh: THREE.Mesh
   private uniforms: SpriteFighterUniforms
-  private shadow: THREE.Mesh
+  private shadowStamps: THREE.Mesh[] = []
+  /** Per-frame ground-contact support points, indexed by frame number. */
+  private contacts: Contact[][] = []
   private bloomMask: THREE.Mesh
   private assets: FighterAssets | null = null
   private pxToWorld = CM_TO_WORLD
@@ -161,30 +182,42 @@ export class Fighter {
     this.bloomMask.renderOrder = -1
     this.bloomMask.userData.noBloom = true
 
-    this.shadow = new THREE.Mesh(
-      new THREE.PlaneGeometry(1, 1),
-      new THREE.MeshBasicMaterial({
-        map: shadowTexture(),
-        transparent: true,
-        depthWrite: false,
-        // The shadow sits a hair above the floor (y≈0.02). At the near-level
-        // fighting-game camera that gap is far below the depth buffer's ability
-        // to separate it from the reflective floor plane at y=0, so with depth
-        // testing on the shadow z-fought the floor and dropped out entirely —
-        // the "sprite pasted on the floor with no contact" tell that survived
-        // for five sessions. It's a ground decal: draw it purely by renderOrder
-        // (after the floor/groundfog at <=4, before the sprite at 10) and never
-        // depth-test it against the floor it is meant to darken.
-        depthTest: false,
-        opacity: 0.85,
-        color: 0x000000,
-      }),
-    )
-    this.shadow.rotation.x = -Math.PI / 2
-    this.shadow.position.y = WORLD.GROUND_Y + 0.02
-    this.shadow.renderOrder = 5
+    // ---- Contact shadow: a pool of dark cores, one per support point --------
+    // A single centred ellipse puts its darkest point at the body centroid,
+    // which in a wide fighting stance is the empty gap BETWEEN the feet — the
+    // dark core touches neither sole (a contradiction that reads worse than the
+    // old "sprite floating over the floor" absence it replaced). Instead we cast
+    // one soft dark stamp under each real ground-contact point (both feet, and a
+    // hand/knee/torso plant on knockdown/wakeup), so every sole gets its own
+    // dark core and the space between stays light.
+    //
+    // Each stamp is a flat ground decal: it sits a hair above the floor
+    // (y≈0.02), which at this near, low camera is far below the depth buffer's
+    // ability to separate it from the reflective floor at y=0. Depth-testing it
+    // made it z-fight the floor and drop out entirely (the "no contact" tell that
+    // survived five sessions), so — like the original — draw purely by
+    // renderOrder (after floor/groundfog ≤4, before the sprite at 10) and never
+    // depth-test against the floor it is meant to darken.
+    for (let i = 0; i < SHADOW_STAMPS; i++) {
+      const stamp = new THREE.Mesh(
+        new THREE.PlaneGeometry(1, 1),
+        new THREE.MeshBasicMaterial({
+          map: shadowTexture(),
+          transparent: true,
+          depthWrite: false,
+          depthTest: false,
+          opacity: 0,
+          color: 0x000000,
+        }),
+      )
+      stamp.rotation.x = -Math.PI / 2
+      stamp.position.y = WORLD.GROUND_Y + 0.02
+      stamp.renderOrder = 5
+      stamp.frustumCulled = false
+      this.shadowStamps.push(stamp)
+    }
 
-    this.group.add(this.shadow, this.mesh, this.bloomMask)
+    this.group.add(this.mesh, this.bloomMask, ...this.shadowStamps)
   }
 
   setAssets(assets: FighterAssets, tex: AtlasTextureSet, accent: string) {
@@ -204,6 +237,96 @@ export class Fighter {
     const refH = assets.frames[refIdx]?.rect.h || assets.frames[0]?.rect.h || 512
     this.pxToWorld = (assets.heightCm * CM_TO_WORLD) / refH
     this.curFrame = -1
+
+    // Precompute the ground-contact support points for every frame from the real
+    // silhouette so the runtime shadow costs only a table lookup (below).
+    this.contacts = this.computeContacts(tex)
+  }
+
+  /**
+   * For each frame, read the bottom band of the character's silhouette and split
+   * it into ground-contact clusters. A wide idle gives two clusters (the feet);
+   * a knockdown gives one long low cluster (the body on its side); a wakeup hand
+   * plant gives a forward cluster plus the feet — all straight from the art, so
+   * the shadow tracks whatever is actually touching the floor without any
+   * per-stance table. Runs once per fighter at load.
+   */
+  private computeContacts(tex: AtlasTextureSet): Contact[][] {
+    const out: Contact[][] = []
+    if (!this.assets) return out
+    const { mask, width: aw, height_px: ah } = tex
+    for (const f of this.assets.frames) out.push(this.contactsForFrame(mask, aw, ah, f))
+    return out
+  }
+
+  private contactsForFrame(
+    mask: Uint8Array,
+    aw: number,
+    ah: number,
+    f: FighterAssets['frames'][number],
+  ): Contact[] {
+    const { rect, anchor } = f
+    const rw = rect.w, rh = rect.h, rx = rect.x, ry = rect.y
+    if (rw <= 0 || rh <= 0) return []
+
+    // Lowest opaque row of this frame (row 0 = top; feet are at the bottom).
+    let bottomPy = -1
+    for (let py = rh - 1; py >= 0 && bottomPy < 0; py--) {
+      const Y = ry + py
+      if (Y < 0 || Y >= ah) continue
+      const base = Y * aw + rx
+      for (let px = 0; px < rw; px++) { if (mask[base + px]) { bottomPy = py; break } }
+    }
+    if (bottomPy < 0) return []
+
+    // Density of silhouette coverage per column across a thin contact band just
+    // above the lowest row — the footprint pressed into the floor.
+    const band = Math.max(3, Math.round(rh * 0.05))
+    const top = Math.max(0, bottomPy - band)
+    const dens = new Float32Array(rw)
+    for (let py = top; py <= bottomPy; py++) {
+      const Y = ry + py
+      if (Y < 0 || Y >= ah) continue
+      const base = Y * aw + rx
+      for (let px = 0; px < rw; px++) if (mask[base + px]) dens[px]++
+    }
+
+    // Merge columns into clusters, bridging small gaps (a shoe's arch, AA) so one
+    // foot is one contact, but leaving the wide stance gap between feet as a
+    // genuine break.
+    const maxGap = Math.max(2, Math.round(rw * 0.04))
+    const clusters: { start: number; end: number; mass: number; cx: number }[] = []
+    let px = 0
+    while (px < rw) {
+      if (!dens[px]) { px++; continue }
+      let end = px
+      for (;;) {
+        while (end + 1 < rw && dens[end + 1]) end++
+        let g = end + 1, gg = 0
+        while (g < rw && !dens[g] && gg < maxGap) { g++; gg++ }
+        if (g < rw && dens[g] && gg <= maxGap) { end = g; continue }
+        break
+      }
+      let mass = 0, wsum = 0
+      for (let c = px; c <= end; c++) { mass += dens[c]; wsum += dens[c] * c }
+      clusters.push({ start: px, end, mass, cx: mass > 0 ? wsum / mass : (px + end) / 2 })
+      px = end + 1
+    }
+    if (!clusters.length) return []
+
+    // Keep the meaningful contacts: drop specks, take the strongest few.
+    let maxMass = 0
+    for (const c of clusters) if (c.mass > maxMass) maxMass = c.mass
+    const kept = clusters
+      .filter((c) => c.mass >= 0.18 * maxMass)
+      .sort((a, b) => b.mass - a.mass)
+      .slice(0, SHADOW_STAMPS)
+
+    return kept.map((c) => ({
+      ox: (c.cx - anchor.x) * this.pxToWorld,
+      halfW: ((c.end - c.start + 1) / 2) * this.pxToWorld,
+      strength: THREE.MathUtils.clamp(c.mass / (maxMass || 1), 0.45, 1),
+    }))
   }
 
   /** Width of the standing silhouette in world units, for shadow/camera sizing. */
@@ -304,29 +427,72 @@ export class Fighter {
     this.uniforms.uDissolve.value = this.dissolve
     this.uniforms.uOpacity.value = 1
 
-    // ---- Contact shadow ---------------------------------------------------
-    // A ground decal that ties the fighter to the floor. It must SHRINK, fade
-    // and soften as the fighter leaves the ground (a small faint pool directly
-    // below reads as height; a shadow that grew would read as nearing a light),
-    // and it must lean away from the stage key light rather than sit as a
-    // symmetric blob.
+    // ---- Contact shadow: a dark core under each real support point ---------
+    // Ground decals that tie the fighter to the floor. Each support point (feet,
+    // and a hand/knee/torso plant on knockdown/wakeup) gets its own soft dark
+    // core, so a wide stance reads as two planted feet, not one blob hovering in
+    // the gap between the legs. As the fighter leaves the ground the cores
+    // CONVERGE toward centre, SHRINK, and SOFTEN (a small faint pool directly
+    // below reads as height; a shadow that grew or stayed dark would read as
+    // nearing a light), and the pool leans away from the stage key light.
     const airborne = Math.max(0, v.pos.y) * CM_TO_WORLD // world units above floor
     const w = this.bodyWidth
-    const lift = THREE.MathUtils.clamp(airborne / (WORLD.FIGHTER_HEIGHT * 0.9), 0, 1)
-    const shrink = 1 - 0.5 * lift // tight on the ground, ~half size at jump apex
-    const shadowW = w * 0.92 * shrink
-    const shadowD = w * 0.3 * shrink
+    let lift = THREE.MathUtils.clamp(airborne / (WORLD.FIGHTER_HEIGHT * 0.9), 0, 1)
+    // DEV mutation hook: force the height response off so a probe can prove the
+    // grounded↔airborne shrink/soften comes from THIS code, not the instrument.
+    if (import.meta.env.DEV && (globalThis as Record<string, unknown>).__MUT_SHADOW_NOLIFT__) lift = 0
+    const shrink = 1 - 0.5 * lift
+    const conv = lift // feet draw together as the fighter rises
     // Cast opposite the key light's horizontal direction. uKeyDir points from the
     // surface toward the light (set by applyLighting above), so the pool leans to
     // the far side; the offset eases toward centre as the fighter rises.
     const kd = this.uniforms.uKeyDir.value
     const away = kd.x >= 0 ? -1 : 1
     const offX = away * w * 0.14 * (1 - 0.5 * lift)
-    this.shadow.position.set(feet.x + offX, WORLD.GROUND_Y + 0.02, 0)
-    this.shadow.scale.set(shadowW, shadowD, 1)
-    const smat = this.shadow.material as THREE.MeshBasicMaterial
-    // Dark and crisp planted, lighter and softer airborne.
-    smat.opacity = THREE.MathUtils.clamp(0.85 - 0.62 * lift, 0.16, 0.85) * (1 - this.dissolve)
+
+    const frameContacts = this.contacts[this.curFrame]
+    // Fallback keeps a two-foot stance if a frame yielded no silhouette band, so
+    // we can never silently regress to a single centred blob in the leg gap.
+    let cs: Contact[] =
+      frameContacts && frameContacts.length
+        ? frameContacts
+        : [
+            { ox: -w * 0.24, halfW: w * 0.15, strength: 1 },
+            { ox: w * 0.24, halfW: w * 0.15, strength: 1 },
+          ]
+
+    // DEV mutation hooks (stripped from production by import.meta.env.DEV):
+    //  · __MUT_SHADOW_OFF__      — hide every core, giving a per-height baseline
+    //    of the bare floor so a probe can difference out the sprite/floor/twinkle
+    //    and read ONLY the shadow's contribution.
+    //  · __MUT_SHADOW_CENTROID__ — collapse to a single centred blob at the body
+    //    centroid: the exact OLD defect, so an anchoring probe that passes on the
+    //    support-point version must go red here or it is not really testing.
+    let shadowOff = false
+    if (import.meta.env.DEV) {
+      const g = globalThis as Record<string, unknown>
+      if (g.__MUT_SHADOW_OFF__) shadowOff = true
+      if (g.__MUT_SHADOW_CENTROID__) cs = [{ ox: 0, halfW: w * 0.46, strength: 1 }]
+    }
+
+    for (let i = 0; i < this.shadowStamps.length; i++) {
+      const stamp = this.shadowStamps[i]
+      const smat = stamp.material as THREE.MeshBasicMaterial
+      if (shadowOff || i >= cs.length) { stamp.visible = false; smat.opacity = 0; continue }
+      stamp.visible = true
+      const c = cs[i]
+      const cx = feet.x + offX + v.facing * c.ox * (1 - conv)
+      const coreW = Math.max(w * 0.14, c.halfW * 2) * 1.35 * shrink
+      const coreD = w * 0.26 * shrink
+      stamp.position.set(cx, WORLD.GROUND_Y + 0.02, 0)
+      stamp.scale.set(coreW, coreD, 1)
+      // Dark and crisp planted, lighter and softer airborne. Extra cores beyond
+      // the first fade out as the fighter rises so mid-air is one faint pool, not
+      // a stack of overlapping (and thus darker) ellipses.
+      const extraFade = i === 0 ? 1 : 1 - lift
+      const peak = (0.92 - 0.62 * lift) * c.strength
+      smat.opacity = THREE.MathUtils.clamp(peak, 0.12, 0.92) * (1 - this.dissolve) * extraFade
+    }
   }
 
   /** Chest-height world anchor (x, y, z) for the stage's shadow/reflection sync. */
@@ -338,8 +504,10 @@ export class Fighter {
   dispose() {
     this.mesh.geometry.dispose()
     ;(this.mesh.material as THREE.Material).dispose()
-    this.shadow.geometry.dispose()
-    ;(this.shadow.material as THREE.Material).dispose()
+    for (const stamp of this.shadowStamps) {
+      stamp.geometry.dispose()
+      ;(stamp.material as THREE.Material).dispose()
+    }
     this.bloomMask.geometry.dispose()
     ;(this.bloomMask.material as THREE.Material).dispose()
     this.group.parent?.remove(this.group)

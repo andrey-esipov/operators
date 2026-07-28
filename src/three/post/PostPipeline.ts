@@ -16,17 +16,36 @@ import type { RenderDriver } from '../core/Engine'
 import { MasterGradeEffect } from './MasterGradeEffect'
 import { LensEffect } from './LensEffect'
 import { LensFinalizeEffect } from './LensFinalizeEffect'
+import { DepthOfFieldEffect } from './DepthOfFieldEffect'
 import { makeLensDirt } from './lensDirt'
 import { gradeFor, mixGrades, NEUTRAL_GRADE, type StageGrade } from './grades'
+
+declare global {
+  interface Window {
+    /**
+     * Dev/QA handle on the post pipeline, used by the DOF probe. `dofDefeat(true)`
+     * feeds the depth-of-field pass a pathological focus band (fighter plane
+     * pushed into the far-blur zone) AND an off-screen character matte, defeating
+     * ALL THREE fighter-protection guards at once — i.e. it INJECTS the "DOF
+     * softened the fighters" failure with every other variable held constant, so
+     * a probe can watch the fighter crop go from bit-exact to blurred in one build.
+     * `hasDof()` reports whether the pass is actually present (quality/?nodof).
+     */
+    __POST__?: {
+      dofDefeat: (on: boolean) => void
+      hasDof: () => boolean
+    }
+  }
+}
 
 /**
  * Post-processing pipeline — the show's final image authorship.
  *
  * Stack (ultra):
- *   RenderPass → [Bloom (multi-scale, energy-conserving) + Lens dirt/anamorphic
- *   + MasterGrade (AgX + per-stage colour script + split tone + vignette +
- *   grain)] → [edge-weighted chromatic aberration + contrast-adaptive sharpen]
- *   → SMAA.
+ *   RenderPass → DOF/bokeh (stage-depth defocus; fighters stay crisp) → [Bloom
+ *   (multi-scale, energy-conserving) + Lens dirt/anamorphic + MasterGrade (AgX +
+ *   per-stage colour script + split tone + vignette + grain)] → [edge-weighted
+ *   chromatic aberration + contrast-adaptive sharpen] → SMAA.
  *
  * The design tension is pixel art vs. cinematic post: the grade is fully
  * pointwise so sprite edges pass through untouched, CA is zero at frame centre
@@ -50,6 +69,7 @@ export class PostPipeline implements Subsystem, RenderDriver {
       grade: q.has('nograde'),
       finalize: q.has('nofinalize'),
       bgFloor: q.has('nobgfloor'),
+      dof: q.has('nodof'),
     }
   }
   readonly name = 'post'
@@ -68,6 +88,8 @@ export class PostPipeline implements Subsystem, RenderDriver {
   private lens!: LensEffect
   private grade!: MasterGradeEffect
   private finalize!: LensFinalizeEffect
+  private dof: DepthOfFieldEffect | null = null
+  private dofDefeat = false
   /** ?nobgfloor — disables the background contrast floor for QA bisects. */
   private bgFloorOff = false
   private smaa: SMAAEffect | null = null
@@ -97,6 +119,7 @@ export class PostPipeline implements Subsystem, RenderDriver {
   private _charA = new THREE.Vector2(-1, -1)
   private _charB = new THREE.Vector2(-1, -1)
   private _charHalf = new THREE.Vector2(0.09, 0.24)
+  private _offMatte = new THREE.Vector2(-1, -1)
 
   async init(ctx: EngineContext) {
     this.ctx = ctx
@@ -115,6 +138,30 @@ export class PostPipeline implements Subsystem, RenderDriver {
       multisampling: 0,
     })
     this.composer.addPass(new RenderPass(scene, camera))
+
+    // --- depth-of-field / bokeh (own CONVOLUTION pass, runs on the raw render) --
+    //
+    // Placed FIRST, before bloom, so defocus happens at the "lens" and the bloom
+    // that follows blooms an already-soft foreground instead of a hard black edge.
+    // It reads scene depth: the camera-pinned foreground occluders sit at a fixed
+    // near depth and defocus into bokeh; the world-space background softens with
+    // distance; the fighters sit in the focus band and early-out BIT-EXACT (see
+    // DepthOfFieldEffect for the three fighter-protection guards). Convolution
+    // effects must own their pass, so this is a standalone EffectPass.
+    //
+    // ?nodof bisects it out; the depthOfField quality flag gates it off on low.
+    const offDof = PostPipeline.qaFlags()
+    this.dof = null
+    if (flags.depthOfField && !offDof.dof) {
+      this.dof = new DepthOfFieldEffect()
+      this.dof.setCamera(camera.near, camera.far)
+      // bgRamp: units past the focus band over which the world background reaches
+      // full blur. fgRamp/fgBoost: the pinned foreground occluders sit ~4-6 units
+      // in front of the fighters, so they must reach heavy bokeh over a short
+      // ramp. maxRadius in device px at DPR 2. Tuned against native-1:1 captures.
+      this.dof.setParams(7.0, 3.4, 1.7, 16)
+      this.composer.addPass(new EffectPass(camera, this.dof))
+    }
 
     // --- bloom: wide Gaussian, energy-conserving ------------------------
     //
@@ -289,6 +336,17 @@ export class PostPipeline implements Subsystem, RenderDriver {
     // published anchors, so the grade can keep their chroma separate from the
     // arena. Fully self-contained (no dependency on layer tagging).
     this.updateCharMatte()
+
+    // Dev/QA handle for the DOF probe (see the __POST__ global doc). Exposed here
+    // rather than in build() so it always reflects the current pass presence.
+    if (import.meta.env.DEV) {
+      window.__POST__ = {
+        dofDefeat: (on: boolean) => {
+          this.dofDefeat = on
+        },
+        hasDof: () => !!this.dof,
+      }
+    }
 
     // --- decays ---------------------------------------------------------
     // The impact envelope is deliberately front-loaded: it falls fastest while
@@ -518,6 +576,38 @@ export class PostPipeline implements Subsystem, RenderDriver {
     // The finalize pass re-asserts the same matte after bloom (see below).
     this.finalize.setCharDepth(farDist + 1.1, 2.4)
     this.finalize.setCharMatte(this._charA, this._charB, this._charHalf)
+
+    // Depth-of-field focus band tracks the fighter plane so both fighters stay in
+    // focus (CoC 0 → bit-exact early-out). center = midpoint of the two fighter
+    // distances; half spans the gap between them plus slack so a launched fighter
+    // pulled off the shared plane is still covered. The same screen-space matte is
+    // fed as a second, depth-gated guard. Everything nearer (pinned occluders) or
+    // farther (arena walls) than the band defocuses. Distances are euclidean; the
+    // shader compares against eye-Z linear depth — fighters sit near screen centre
+    // where the two nearly agree, and the slack + matte absorb the small error.
+    if (this.dof) {
+      if (this.dofDefeat) {
+        // INJECTED FAILURE (dev/QA only): move the focus band ~6 units IN FRONT of
+        // the fighter plane and send the matte off-screen, so the fighters fall a
+        // moderate distance into the background blur (CoC ~0.7, not saturated) with
+        // NO guard to protect them. They go visibly soft while the frame stays lit
+        // and trustworthy — this is the red state the probe must see, proving the
+        // green (guarded) build's crisp fighter crop is a real result, not a no-op.
+        // (A previous version pinned focus to the camera; that over-blurred the
+        // whole dark scene to near-black, indistinguishable from a cleared buffer.)
+        const defeatCenter = Math.max(0.5, (distA + distB) * 0.5 - 6.0)
+        this.dof.setFocus(defeatCenter, 0.4)
+        this._offMatte.set(-1, -1)
+        this.dof.setCharMatte(this._offMatte, this._offMatte, this._charHalf)
+        this.dof.setCharDepth(0.0, 0.1)
+      } else {
+        const focusCenter = (distA + distB) * 0.5
+        const focusHalf = Math.abs(distA - distB) * 0.5 + 1.5
+        this.dof.setFocus(focusCenter, focusHalf)
+        this.dof.setCharMatte(this._charA, this._charB, this._charHalf)
+        this.dof.setCharDepth(farDist + 1.1, 2.4)
+      }
+    }
   }
 
   private lastY = 0

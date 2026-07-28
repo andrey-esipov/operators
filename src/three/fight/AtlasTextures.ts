@@ -30,6 +30,15 @@ export interface AtlasTextureSet {
   height: THREE.Texture
   width: number
   height_px: number
+  /**
+   * The conditioned silhouette coverage, atlas-sized, row 0 = top (flipY is off
+   * on the uploads, so this indexes identically to the sampled texture). 0 =
+   * background, non-zero = inside the character. The contact-shadow anchoring in
+   * Fighter reads the bottom band of each frame's silhouette from this to find
+   * the real ground-contact points (feet, and hands/knees/torso on a knockdown),
+   * so the shadow's dark cores land under the soles instead of in the stance gap.
+   */
+  mask: Uint8Array
 }
 
 export type AtlasSource = HTMLImageElement | HTMLCanvasElement
@@ -135,7 +144,7 @@ export function buildAtlasTextures(src: AtlasSource, anisotropy = 8): AtlasTextu
     t.needsUpdate = true
   }
 
-  return { albedo, normal, height: heightTex, width: w, height_px: h }
+  return { albedo, normal, height: heightTex, width: w, height_px: h, mask }
 }
 
 // ---------------------------------------------------------------------------

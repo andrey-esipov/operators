@@ -227,16 +227,25 @@ const FRAG = /* glsl */ `
 
     float height = texture2D(uHeight, vUv).r;
 
+    // Form-shaping normal: the synthesised height field saturates across wide
+    // interiors (torso), so raw normals barely tilt away from camera and the
+    // body reads flat and evenly lit — the "cutout composited into the scene"
+    // tell. Exaggerate the lateral tilt for the diffuse dots only (key + fill)
+    // so the stage's directional rig sculpts a real warm-key / cool-shadow
+    // gradient across the form. Rim/fresnel stay on raw N so the silhouette
+    // edge and halo gating are untouched.
+    vec3 Nl = normalize(vec3(N.xy * 1.7, N.z));
+
     // ---- Key: wrapped half-Lambert, never crushes to flat black -----------
     vec3 keyDir = normalize(uKeyDir);
-    float ndl = dot(N, keyDir);
-    float wrap = clamp((ndl + 0.42) / 1.42, 0.0, 1.0);
+    float ndl = dot(Nl, keyDir);
+    float wrap = clamp((ndl + 0.34) / 1.34, 0.0, 1.0);
     wrap = pow(wrap, 1.15);
     vec3 diffuse = uKeyColor * uKeyIntensity * wrap;
 
     // ---- Fill: soft directional + a hemispheric floor ---------------------
-    float ndf = dot(N, normalize(uFillDir)) * 0.5 + 0.5;
-    vec3 fill = uFillColor * uFillIntensity * (0.35 + 0.65 * ndf);
+    float ndf = dot(Nl, normalize(uFillDir)) * 0.5 + 0.5;
+    vec3 fill = uFillColor * uFillIntensity * (0.24 + 0.76 * ndf);
 
     // ---- Ambient + warm floor bounce on the lower body --------------------
     float lowBody = 1.0 - smoothstep(0.0, 0.4, vUv.y); // near feet (v grows down)

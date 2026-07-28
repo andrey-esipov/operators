@@ -29,14 +29,17 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor)
 
   vec3 bloom = texture2D(bloomTex, uv).rgb;
 
-  // Bright overhead stage fixtures (LED ticker-boards, pendant lamps) live in
-  // the top of the frame. Left unchecked, the dirt and the horizontal streak
-  // below smear their hot ends sideways into soft round pools that park in the
-  // top corners and read as smudges on the lens — the textbook hobby-render
-  // tell. Roll the art-directed lens *extras* off toward the top so the boards
-  // still bloom crisply (base bloom is untouched) but never streak into orbs.
-  // The action lives in the lower-centre, where the lens character is kept.
-  float topFade = 1.0 - 0.82 * smoothstep(0.66, 1.0, uv.y);
+  // Bright overhead stage fixtures (LED ticker-boards, pendant lamps, falling
+  // confetti) live in the top of the frame. Left unchecked, the dirt and the
+  // horizontal streak below smear their hot ends sideways into soft round pools
+  // that park in the top corners and read as smudges on the lens — the textbook
+  // hobby-render tell, and the single most-flagged artefact in blind review.
+  // Base bloom is untouched (the boards still bloom crisply); it is only the
+  // art-directed lens *extras* — dirt grime and the anamorphic streak — that
+  // must not survive into the top of the frame. Roll them almost fully off above
+  // the action: near-zero by the upper third, full character retained in the
+  // lower-centre where the fighters and their contact VFX live (uv.y < 0.5).
+  float topFade = 1.0 - 0.97 * smoothstep(0.5, 0.82, uv.y);
 
   // Lens dirt: grime lit by the bloom sitting behind it.
   vec3 dirt = texture2D(dirtTex, uv * dirtScale).rgb;

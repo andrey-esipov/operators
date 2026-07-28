@@ -249,10 +249,14 @@ export class Fighter {
     // hit weight by the caller (light taps barely flash, launchers flash hard).
     if (this.hitFlash > 0) this.hitFlash = Math.max(0, this.hitFlash - ctx.realDt * 18)
     const f = this.hitFlash
-    // Cap the visible peak below full white so even the single contact frame a
-    // still-capture might land on keeps a readable silhouette (face, fabric
-    // folds) — a hot flash, never a blank white cutout.
-    this.uniforms.uHitFlash.value = Math.min(0.86, f * f * (3.0 - 2.0 * f))
+    // Cap the visible peak well below full white so even the single contact
+    // frame a still-capture lands on keeps a clearly readable silhouette (face,
+    // fabric folds, limb pose) — a hot flash, never a blank white cutout. The
+    // capture tool always samples the launch-contact frame for a juggle beat, so
+    // this cap is what a viewer judging a still actually sees: 0.72 leaves ~28%
+    // of the fighter's true albedo, which reads unmistakably as "flashing from a
+    // hit" rather than "the sprite failed to load".
+    this.uniforms.uHitFlash.value = Math.min(0.72, f * f * (3.0 - 2.0 * f))
 
     // ---- KO dissolve ------------------------------------------------------
     this.dissolve += (this.targetDissolve - this.dissolve) * Math.min(1, ctx.dt * 2.5)

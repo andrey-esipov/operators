@@ -17,9 +17,14 @@ import { RoundPips } from './RoundPips'
 import { ComboCounter, type ComboState } from './ComboCounter'
 import { Announcements, type AnnounceState } from './Announcements'
 import { FlashChip, type FlashState } from './FlashChip'
+import { ScreenFx, type KoFxState, type WipeState, type ImpactState } from './ScreenFx'
 import './hud.css'
 
 const EMPTY_EVENTS: FightEvent[] = []
+
+// Heavy-hit thresholds (of MAX_HEALTH ~1000) for the impact vignette.
+const IMPACT_MIN = 42
+const IMPACT_STRONG = 66
 
 // Fallback identities when the caller doesn't pass display info. Warm-left /
 // cool-right mirrors the rest of the game's player-A / player-B palette.
@@ -67,6 +72,9 @@ export const FightHud = forwardRef<FightHudHandle, FightHudProps>(function Fight
   const [combo, setCombo] = useState<ComboState | null>(null)
   const [announce, setAnnounce] = useState<AnnounceState | null>(null)
   const [flash, setFlash] = useState<FlashState | null>(null)
+  const [koFx, setKoFx] = useState<KoFxState | null>(null)
+  const [wipe, setWipe] = useState<WipeState | null>(null)
+  const [impact, setImpact] = useState<ImpactState | null>(null)
 
   // ── Mutable bookkeeping across frames (no re-render) ───────────────────
   const keySeq = useRef(0)
@@ -77,6 +85,9 @@ export const FightHud = forwardRef<FightHudHandle, FightHudProps>(function Fight
   const comboTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const announceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const koFxTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const wipeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const impactTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const pushAnnounce = useCallback((a: Omit<AnnounceState, 'key'>) => {
     const withKey = { ...a, key: ++keySeq.current }
@@ -111,6 +122,13 @@ export const FightHud = forwardRef<FightHudHandle, FightHudProps>(function Fight
             })
             if (comboTimer.current) clearTimeout(comboTimer.current)
             comboTimer.current = setTimeout(() => setCombo(null), 1400)
+
+            // Heavy-hit impact vignette — sell the hitstop window.
+            if (e.damage >= IMPACT_MIN) {
+              setImpact({ key: ++keySeq.current, strong: e.damage >= IMPACT_STRONG })
+              if (impactTimer.current) clearTimeout(impactTimer.current)
+              impactTimer.current = setTimeout(() => setImpact(null), 300)
+            }
             break
           }
           case 'parry': {
@@ -121,6 +139,10 @@ export const FightHud = forwardRef<FightHudHandle, FightHudProps>(function Fight
           }
           case 'round-start': {
             koThisRound.current = false
+            // Colour bar sweeps the frame as the round title lands.
+            setWipe({ key: ++keySeq.current, color: '#F72585', accent: '#7209B7' })
+            if (wipeTimer.current) clearTimeout(wipeTimer.current)
+            wipeTimer.current = setTimeout(() => setWipe(null), 960)
             pushAnnounce({
               kind: 'round',
               kicker: 'ROUND',
@@ -132,6 +154,10 @@ export const FightHud = forwardRef<FightHudHandle, FightHudProps>(function Fight
           }
           case 'ko': {
             koThisRound.current = true
+            // Full-screen KO punctuation: flash + shockwave + slow vignette.
+            setKoFx({ key: ++keySeq.current })
+            if (koFxTimer.current) clearTimeout(koFxTimer.current)
+            koFxTimer.current = setTimeout(() => setKoFx(null), 1600)
             const winner = (1 - e.who) as 0 | 1
             const perfect = s.fighters[winner].health >= s.fighters[winner].maxHealth
             pushAnnounce({
@@ -200,6 +226,9 @@ export const FightHud = forwardRef<FightHudHandle, FightHudProps>(function Fight
       if (comboTimer.current) clearTimeout(comboTimer.current)
       if (announceTimer.current) clearTimeout(announceTimer.current)
       if (flashTimer.current) clearTimeout(flashTimer.current)
+      if (koFxTimer.current) clearTimeout(koFxTimer.current)
+      if (wipeTimer.current) clearTimeout(wipeTimer.current)
+      if (impactTimer.current) clearTimeout(impactTimer.current)
     },
     [],
   )
@@ -217,6 +246,9 @@ export const FightHud = forwardRef<FightHudHandle, FightHudProps>(function Fight
   return (
     <HudTickContext.Provider value={ctx}>
       <div className={`fhud-root ${className ?? ''}`} data-testid="fhud-root">
+        {/* Screen FX sit behind the readable HUD text but over the stage. */}
+        <ScreenFx ko={koFx} wipe={wipe} impact={impact} />
+
         <div className="fhud-topbar">
           <HealthBar index={0} display={disp[0]} />
           <div className="fhud-center">

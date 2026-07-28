@@ -19,8 +19,14 @@ import { findAnchor } from './sprite-pipeline'
 import type { Box, FighterAssets, SpriteFrameMeta, Vec2 } from '../../src/fight/types'
 import { CLIPS, FRAME_ORDER, frameIndex } from './frame-spec'
 
-/** Max GPU texture dimension we allow. Power-of-two, safe on all targets. */
-const MAX_ATLAS = 4096
+/**
+ * Max GPU texture dimension we allow. 8192 is the WebGL2 spec floor that every
+ * desktop GPU exceeds (most report 16384); it lets a fighter author at 2x so the
+ * sprite isn't a 4x upscale on a retina display. A fighter that packs to exactly
+ * 8192 has zero headroom — adding frames past that would force multi-page atlases,
+ * which the single-`atlas` FighterAssets contract cannot express without a change.
+ */
+const MAX_ATLAS = 8192
 const PADDING = 2
 
 export interface RegisteredFrame {

@@ -36,9 +36,21 @@ import { analyzeClip, type TemporalReport } from './lib/temporal'
 // Shared registration frame, matching the probe. A 512 canvas with the feet at
 // (256, 470) and a 380px neutral height leaves headroom above for a jump and
 // to the sides for a full roundhouse without clipping.
-const CANVAS = 512
-const TARGET_H = 380
-const ORIGIN = { x: 256, y: 470 }
+//
+// SCALE authors every frame at a multiple of that base. The gpt-image-2 source is
+// 1024px and the segmented character stands ~940px tall in it, so a 1x (380px)
+// cell throws away ~2.5x of real detail and reads as a 4x upscale on a retina
+// display. SCALE=2 (760px cell) recovers that detail at ~1:1 with the source and
+// still fits a single <=8192 atlas per fighter, staying inside the single-`atlas`
+// FighterAssets contract. The renderer is resolution-independent — it derives
+// world size from heightCm / refFrame.rect.h — so 2x pixels render at the same
+// world size with twice the detail, no renderer change.
+const SCALE = 2
+const CANVAS = 512 * SCALE
+const TARGET_H = 380 * SCALE
+const ORIGIN = { x: 256 * SCALE, y: 470 * SCALE }
+// Foot/bottom drift is measured in pixels, so its tolerance scales with SCALE.
+const DRIFT_TOL = 2.5 * SCALE
 const DEFAULT_HEIGHT_CM = 180
 const MAX_ATTEMPTS = 3
 const CONCURRENCY = 2
@@ -161,7 +173,7 @@ export async function generateFighter(
         if (round > 0) regenerations++
       }
       const { seg, reg } = await segReg(raw, spec)
-      const result = await validateFrame(seg, reg, refHist, spec, ORIGIN)
+      const result = await validateFrame(seg, reg, refHist, spec, ORIGIN, { driftTol: DRIFT_TOL })
       if (!best || score(result) > score(best.result)) best = { raw, result, reg }
       if (result.passed) break
       log(`    ${spec.name}: reject (${result.rejects.join('; ')})${round < MAX_ATTEMPTS - 1 ? ' — regenerating' : ' — keeping best'}`)
@@ -259,7 +271,8 @@ export async function generateFighter(
   const atlasHref = `/fighters/${id}/atlas.png`
   const { atlas, assets } = await packAtlas(id, atlasHref, registered, opts.heightCm ?? DEFAULT_HEIGHT_CM)
   const meta = await import('sharp').then((m) => m.default(atlas).metadata())
-  const anchorCheck = await assertAnchorsPreserved(atlas, assets)
+  // Anchor-preservation tolerance is pixel-absolute, so it scales with SCALE too.
+  const anchorCheck = await assertAnchorsPreserved(atlas, assets, 1.5 * SCALE)
   if (!anchorCheck.ok) log(`  ANCHOR WARNINGS:\n    ${anchorCheck.report.join('\n    ')}`)
 
   fs.writeFileSync(path.join(outDir, 'atlas.png'), atlas)

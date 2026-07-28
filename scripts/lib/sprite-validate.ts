@@ -189,7 +189,13 @@ export async function validateFrame(
   refHist: Float64Array,
   spec: Pick<FrameSpec, 'name' | 'aspect'>,
   origin: { x: number; y: number },
+  opts: { driftTol?: number } = {},
 ): Promise<ValidationResult> {
+  // Foot/bottom drift are the only pixel-ABSOLUTE checks here (everything else is
+  // a ratio or percentage). When the pipeline authors at 2x resolution the same
+  // real drift measures twice as many pixels, so the caller scales this with the
+  // resolution factor — otherwise a frame that is fine at 1x falsely rejects at 2x.
+  const driftTol = opts.driftTol ?? DRIFT_TOL
   const rejects: string[] = []
   const warnings: string[] = []
 
@@ -235,8 +241,8 @@ export async function validateFrame(
   if (holeFrac > HOLE_MAX) rejects.push(`segmentation: enclosed hole ${(holeFrac * 100).toFixed(1)}% of bbox > ${(HOLE_MAX * 100).toFixed(0)}% (body erased)`)
   if (coverage < MIN_COVERAGE) rejects.push(`presence: coverage ${coverage.toFixed(1)}% — character missing or a speck`)
   if (coverage > MAX_COVERAGE) rejects.push(`presence: coverage ${coverage.toFixed(1)}% — fills the frame`)
-  if (footDrift > DRIFT_TOL) rejects.push(`registration: foot drift ${footDrift.toFixed(1)}px`)
-  if (bottomDrift > DRIFT_TOL) rejects.push(`registration: bottom drift ${bottomDrift.toFixed(1)}px`)
+  if (footDrift > driftTol) rejects.push(`registration: foot drift ${footDrift.toFixed(1)}px`)
+  if (bottomDrift > driftTol) rejects.push(`registration: bottom drift ${bottomDrift.toFixed(1)}px`)
 
   if (spec.aspect) {
     const [lo, hi] = spec.aspect

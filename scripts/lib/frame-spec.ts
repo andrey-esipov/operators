@@ -62,6 +62,18 @@ export const FRAMES: FrameSpec[] = [
       'the settle of a breathing cycle in a neutral fighting guard — shoulders relaxed and dropped slightly, ' +
       'chest lowered as the breath goes out, knees softly bent, both fists up in a loose guard, weight even.',
   },
+  {
+    // The living sway the breath-only keys lack. A great idle shifts weight and
+    // drifts the guard, not just rises and falls. Feet stay planted so the foot
+    // anchor is stable; only the hips, shoulder and lead hand move.
+    name: 'idle-4',
+    heightRatio: 1.0,
+    aspect: [0.3, 0.64],
+    pose:
+      'a small living weight-shift in a neutral fighting guard — weight easing onto the back foot with both feet ' +
+      'still planted flat, lead shoulder dropping a touch and the front guard hand drifting slightly outward and ' +
+      'down, chest still lifted, a calm idle sway, poised and ready.',
+  },
 
   // ── Walk forward: a four-key cycle (contact, passing, contact, passing) ──
   {
@@ -448,6 +460,14 @@ export interface TweenSpec {
 }
 
 export const TWEENS: TweenSpec[] = [
+  // Idle breathing + sway loop. Four keys (neutral → inhale → sway → exhale)
+  // with a morph inbetween each edge, wrapping back to neutral. The motion is
+  // small and continuous — the flow-morph's best case — so no key jitters and
+  // the last tween lands adjacent to idle-1 for a seamless loop.
+  { name: 'tw-i1-i2', from: 'idle-1', to: 'idle-2', t: 0.5 },
+  { name: 'tw-i2-i4', from: 'idle-2', to: 'idle-4', t: 0.5 },
+  { name: 'tw-i4-i3', from: 'idle-4', to: 'idle-3', t: 0.5 },
+  { name: 'tw-i3-i1', from: 'idle-3', to: 'idle-1', t: 0.5 },
   // Hitstun: snap-back → settle → back toward guard.
   { name: 'tw-hh-hr', from: 'hit-high', to: 'hit-reel', t: 0.5 },
   { name: 'tw-hr-hs', from: 'hit-reel', to: 'hit-settle', t: 0.5 },
@@ -532,7 +552,17 @@ export const CLIPS: Record<string, ClipSpec> = {
   // `hitstun` to `['hurt','hit','idle']`, so those clips MUST be named `block`
   // and `hurt`, not after the stance. (An earlier cut named them after the
   // stance and block/hitstun animation silently vanished.)
-  idle: clip(true, ['idle-1', 12], ['idle-2', 12], ['idle-3', 12], ['idle-2', 12]),
+  idle: clip(
+    true,
+    ['idle-1', 8],
+    ['tw-i1-i2', 4],
+    ['idle-2', 7],
+    ['tw-i2-i4', 4],
+    ['idle-4', 7],
+    ['tw-i4-i3', 4],
+    ['idle-3', 8],
+    ['tw-i3-i1', 4],
+  ),
   'walk-fwd': clip(
     true,
     ['walk-fwd-1', 5], ['tw-wf-12', 3], ['walk-fwd-2', 5], ['tw-wf-23', 3],

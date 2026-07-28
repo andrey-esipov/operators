@@ -1,6 +1,8 @@
 import * as THREE from 'three'
 import type { Projectile } from '../../fight/types'
-import { simToWorld } from './worldScale'
+import { STAGE_HALF_W, PROJECTILE_MARGIN } from '../../fight/constants'
+import { simToWorld, cmYToWorld } from './worldScale'
+import { energyTint, makeGlowMesh } from './ProjectileFx'
 import {
   loadProjectileAtlas,
   type LoadedProjectile,
@@ -27,6 +29,15 @@ import {
  *    impact burst in place, so the hit reads even though the sim object is gone.
  *  - Mirrored, not duplicated. Art is authored travelling right; a left-facing
  *    owner flips the quad on X (and the anchor with it).
+ *
+ * Beyond the atlas, three things separate a shipped fireball from a sprite
+ * sliding across the screen, and each is added here:
+ *  - a motion TRAIL (a short history of the hot-point, drawn as fading glow
+ *    blobs) so a fast bolt reads as light in motion, not a floating cutout;
+ *  - a FLOOR POOL of light tracking under the bolt, so it belongs to the scene
+ *    instead of being pasted on top;
+ *  - two visibly different deaths — a bright IMPACT burst when it connects, and
+ *    a soft FIZZLE when it merely runs out of life or leaves the stage.
  */
 
 /** World units per source pixel for projectile art. Tuned so an `ion-bolt`
@@ -38,7 +49,30 @@ const WORLD_PER_PX = 0.014
  *  characters it passes, never behind them. */
 const PROJ_Z = 0.08
 
-type Phase = 'spawn' | 'travel' | 'impact'
+/** Number of trailing glow blobs behind the hot-point. Enough to read as a
+ *  streak at bolt speed without becoming a solid bar. */
+const TRAIL_SEG = 6
+
+/** Peak additive opacity of the freshest trail blob (older ones taper to 0). */
+const TRAIL_OPACITY = 0.6
+
+/** Additive opacity of the floor light pool while the bolt is in flight. Kept
+ *  low on purpose: it is grounding spill light, not a second projectile. */
+const FLOOR_OPACITY = 0.3
+
+/** Ticks a fizzle (life-expiry / off-stage exit) takes to dissipate. */
+const FIZZLE_TICKS = 12
+
+/** Past this |x| (cm) the sim retires a bolt for leaving the stage; matches the
+ *  sim's own off-stage test so the renderer infers that death, not a hit. */
+const OFFSTAGE_CM = STAGE_HALF_W + PROJECTILE_MARGIN
+
+type Phase = 'spawn' | 'travel' | 'impact' | 'fizzle'
+
+interface TrailBlob {
+  mesh: THREE.Mesh
+  mat: THREE.MeshBasicMaterial
+}
 
 interface Live {
   id: number
@@ -53,9 +87,25 @@ interface Live {
   clock: number
   /** Last world position, so a detached sprite bursts where it died. */
   lastWorld: THREE.Vector3
-  /** True once the sim no longer owns this projectile; playing out impact. */
+  /** True once the sim no longer owns this projectile; playing out its death. */
   detached: boolean
   curFrame: number
+  /** Energy colour for this kind's trail / pool / flash. */
+  tint: THREE.Color
+  /** Fading glow blobs behind the hot-point, newest first. */
+  trail: TrailBlob[]
+  /** Recent hot-point world positions, newest first (drives the trail). */
+  history: THREE.Vector3[]
+  /** Soft additive light washed on the floor under the bolt. */
+  floor: THREE.Mesh
+  floorMat: THREE.MeshBasicMaterial
+  /** Expanding light burst, spawned only on a genuine impact. */
+  flash: THREE.Mesh | null
+  flashMat: THREE.MeshBasicMaterial | null
+  /** Last-seen sim values, to infer WHY the sim dropped the bolt. */
+  lastX: number
+  lastVx: number
+  lastLife: number
 }
 
 export class ProjectileLayer {
@@ -66,6 +116,7 @@ export class ProjectileLayer {
   private warned = new Set<string>()
   private disposed = false
   private tmpWorld = new THREE.Vector3()
+  private groundY = cmYToWorld(0)
 
   constructor() {
     this.group.name = 'projectiles'
@@ -140,30 +191,53 @@ export class ProjectileLayer {
         simToWorld({ x: px, y: py }, this.tmpWorld)
         l.facing = p.facing
         l.lastWorld.copy(this.tmpWorld)
+        // Remember the latest sim truth so, once the bolt vanishes, we can tell a
+        // hit from a mere expiry / off-stage exit and pick the right death.
+        l.lastX = p.pos.x
+        l.lastVx = p.vel.x
+        l.lastLife = p.life
         this.place(l)
+        this.pushTrail(l, true)
         this.advance(l, ticks)
       }
     }
 
-    // Any tracked sprite the sim no longer owns starts (or continues) its
-    // impact burst in place, then retires when the burst finishes.
+    // Any tracked sprite the sim no longer owns starts (or continues) its death
+    // in place, then retires when it finishes.
     for (const l of this.live.values()) {
       if (seen.has(l.id)) continue
       if (!l.detached) {
         l.detached = true
-        l.phase = 'impact'
         l.clock = 0
         l.curFrame = -1
+        if (this.diedOnContact(l)) {
+          l.phase = 'impact'
+          this.spawnFlash(l)
+        } else {
+          l.phase = 'fizzle'
+        }
       }
       this.place(l)
-      const done = this.advance(l, ticks)
+      const done = this.animateOut(l, ticks)
       if (done) this.retire(l)
     }
+  }
+
+  /** Did the sim drop this bolt because it CONNECTED, versus running out of life
+   *  or leaving the stage? The sim emits no despawn reason, so infer it from the
+   *  last-seen state: a bolt that still had life and was still on-stage was
+   *  consumed by contact; otherwise it expired or flew off. */
+  private diedOnContact(l: Live): boolean {
+    const nextX = l.lastX + l.lastVx
+    const wentOffstage = Math.abs(nextX) > OFFSTAGE_CM
+    const expired = l.lastLife - 1 <= 0
+    return !wentOffstage && !expired
   }
 
   private spawn(p: Projectile): Live | null {
     const loaded = this.loaded.get(p.kind)
     if (!loaded) return null
+    const tint = energyTint(p.kind)
     const geom = new THREE.PlaneGeometry(1, 1)
     const mat = new THREE.MeshBasicMaterial({
       map: loaded.texture,
@@ -181,6 +255,21 @@ export class ProjectileLayer {
     mesh.frustumCulled = false
     mesh.renderOrder = 20 // over fighters (10), under nothing that matters
     this.group.add(mesh)
+
+    // Floor light pool: a wide, soft additive smear on the ground under the bolt.
+    const floor = makeGlowMesh(tint, 12)
+    const floorMat = floor.material as THREE.MeshBasicMaterial
+    this.group.add(floor)
+
+    // Trail blobs, mounted once and reused; laid out along the hot-point history.
+    const trail: TrailBlob[] = []
+    for (let i = 0; i < TRAIL_SEG; i++) {
+      const bm = makeGlowMesh(tint, 14)
+      bm.visible = false
+      this.group.add(bm)
+      trail.push({ mesh: bm, mat: bm.material as THREE.MeshBasicMaterial })
+    }
+
     const l: Live = {
       id: p.id,
       kind: p.kind,
@@ -194,6 +283,16 @@ export class ProjectileLayer {
       lastWorld: new THREE.Vector3(),
       detached: false,
       curFrame: -1,
+      tint,
+      trail,
+      history: [],
+      floor,
+      floorMat,
+      flash: null,
+      flashMat: null,
+      lastX: p.pos.x,
+      lastVx: p.vel.x,
+      lastLife: p.life,
     }
     this.live.set(p.id, l)
     return l
@@ -214,6 +313,48 @@ export class ProjectileLayer {
       l.lastWorld.y + (m.anchor.y - m.frameH / 2) * WORLD_PER_PX,
       PROJ_Z,
     )
+
+    // Floor pool tracks the bolt's x, glued to the ground: a soft, low smear of
+    // spill light so the bolt belongs to the stage rather than floating over it.
+    l.floor.position.set(l.lastWorld.x, this.groundY + worldH * 0.05, PROJ_Z - 0.02)
+    l.floor.scale.set(worldW * 1.15, worldW * 0.36, 1)
+    l.floorMat.opacity = FLOOR_OPACITY
+  }
+
+  /** Push the current hot-point onto the trail history and lay the blobs out
+   *  along it with a size + brightness taper. `extend` is false once detached,
+   *  so the trail stops growing and only fades. */
+  private pushTrail(l: Live, extend: boolean) {
+    if (extend) {
+      l.history.unshift(l.lastWorld.clone())
+      if (l.history.length > TRAIL_SEG + 1) l.history.pop()
+    }
+    const worldH = l.loaded.manifest.frameH * WORLD_PER_PX
+    const head = worldH * 0.62
+    for (let i = 0; i < l.trail.length; i++) {
+      const h = l.history[i + 1]
+      const b = l.trail[i]
+      if (!h) {
+        b.mesh.visible = false
+        continue
+      }
+      const f = 1 - i / TRAIL_SEG
+      const size = Math.max(0.12, head * (0.85 * f + 0.15))
+      b.mesh.visible = true
+      b.mesh.position.set(h.x, h.y, PROJ_Z - 0.005 * (i + 1))
+      // Stretched along travel so the blobs blur into a streak, not a bead chain.
+      b.mesh.scale.set(size * 1.4, size * 0.82, 1)
+      b.mat.opacity = TRAIL_OPACITY * f
+    }
+  }
+
+  /** Fade the trail + floor pool toward `k` (0..1 of full brightness). */
+  private dimAux(l: Live, k: number) {
+    for (let i = 0; i < l.trail.length; i++) {
+      const f = 1 - i / TRAIL_SEG
+      l.trail[i].mat.opacity = TRAIL_OPACITY * f * k
+    }
+    l.floorMat.opacity = FLOOR_OPACITY * k
   }
 
   /** Advance the current clip by `ticks`, blit the resolved frame, and handle
@@ -234,6 +375,49 @@ export class ProjectileLayer {
       return false
     }
     return done // meaningful only for the one-shot impact phase
+  }
+
+  /** Play out a detached bolt's death. Impact runs the bright impact clip and an
+   *  expanding flash while the trail retracts; fizzle just softly dissipates the
+   *  last travel frame. Returns true when the death is finished. */
+  private animateOut(l: Live, ticks: number): boolean {
+    l.clock += ticks
+    if (l.phase === 'impact') {
+      const clip = l.loaded.manifest.clips.impact
+      const total = clipTotal(clip)
+      const { idx, done } = frameAt(clip, l.clock)
+      if (idx !== l.curFrame) {
+        l.curFrame = idx
+        this.blit(l, idx)
+      }
+      const t = total > 0 ? Math.min(1, l.clock / total) : 1
+      this.dimAux(l, 1 - t) // trail + pool bleed off as the burst takes over
+      if (l.flash && l.flashMat) {
+        const worldH = l.loaded.manifest.frameH * WORLD_PER_PX
+        const s = worldH * (0.8 + 2.2 * t)
+        l.flash.position.set(l.lastWorld.x, l.lastWorld.y, PROJ_Z + 0.01)
+        l.flash.scale.set(s, s, 1)
+        l.flashMat.opacity = Math.max(0, 1 - t) * 0.9
+      }
+      return done
+    }
+    // fizzle: hold the last travel frame and dissolve it.
+    const t = Math.min(1, l.clock / FIZZLE_TICKS)
+    l.mat.opacity = 1 - t
+    const worldW = l.loaded.manifest.frameW * WORLD_PER_PX
+    const worldH = l.loaded.manifest.frameH * WORLD_PER_PX
+    const grow = 1 + 0.25 * t
+    l.mesh.scale.set((l.facing < 0 ? -worldW : worldW) * grow, worldH * grow, 1)
+    this.dimAux(l, 1 - t)
+    return t >= 1
+  }
+
+  private spawnFlash(l: Live) {
+    const mesh = makeGlowMesh(l.tint, 22)
+    mesh.renderOrder = 22
+    this.group.add(mesh)
+    l.flash = mesh
+    l.flashMat = mesh.material as THREE.MeshBasicMaterial
   }
 
   private clipFor(l: Live): ProjectileClip {
@@ -265,6 +449,19 @@ export class ProjectileLayer {
     this.group.remove(l.mesh)
     l.geom.dispose()
     l.mat.dispose()
+    this.group.remove(l.floor)
+    ;(l.floor.geometry as THREE.BufferGeometry).dispose()
+    l.floorMat.dispose()
+    for (const b of l.trail) {
+      this.group.remove(b.mesh)
+      ;(b.mesh.geometry as THREE.BufferGeometry).dispose()
+      b.mat.dispose()
+    }
+    if (l.flash) {
+      this.group.remove(l.flash)
+      ;(l.flash.geometry as THREE.BufferGeometry).dispose()
+      l.flashMat?.dispose()
+    }
     this.live.delete(l.id)
   }
 
@@ -280,11 +477,31 @@ export class ProjectileLayer {
       this.group.remove(l.mesh)
       l.geom.dispose()
       l.mat.dispose()
+      this.group.remove(l.floor)
+      ;(l.floor.geometry as THREE.BufferGeometry).dispose()
+      l.floorMat.dispose()
+      for (const b of l.trail) {
+        this.group.remove(b.mesh)
+        ;(b.mesh.geometry as THREE.BufferGeometry).dispose()
+        b.mat.dispose()
+      }
+      if (l.flash) {
+        this.group.remove(l.flash)
+        ;(l.flash.geometry as THREE.BufferGeometry).dispose()
+        l.flashMat?.dispose()
+      }
     }
     this.live.clear()
     for (const res of this.loaded.values()) res.texture.dispose()
     this.loaded.clear()
   }
+}
+
+/** Total ticks a clip runs (sum of per-frame durations). */
+function clipTotal(clip: ProjectileClip): number {
+  let total = 0
+  for (const d of clip.durations) total += d
+  return total
 }
 
 /**

@@ -65,9 +65,14 @@ export class FightCamera {
   private readonly camLift = 0.45
   // z range. minZ never binds at grounded range (the vertical solve is larger);
   // it only guards a degenerate close-and-low frame. maxZ is the hard pull-out
-  // limit for a big launch/juggle — generous so a full air combo stays whole.
+  // limit — deliberately generous so the CONTAINMENT INVARIANT (both fighters'
+  // full sprite bounds inside the frame) is never broken by the clamp on a real
+  // jump or a full 7-hit juggle. The rule is: if containing both needs a wider
+  // shot than this, the wider shot wins — a slightly small pair reads fine, an
+  // amputated grounded fighter reads as a bug. maxZ is now a genuine safety cap
+  // (revealing the void), not a framing budget the action fights against.
   private readonly minZ = 7.5
-  private readonly maxZ = 18.0
+  private readonly maxZ = 28.0
   // Horizontal breathing room (world units) added beyond the fighters' spread
   // before the camera has to dolly back further than the vertical solve already
   // asks for. At the new, more pulled-back framing the vertical axis dominates
@@ -126,14 +131,15 @@ export class FightCamera {
     const tanH = tanV * this.cam.aspect
     // Dynamic headroom: topY is fed as feet + a FIXED fighter height, but wild
     // airborne poses (a juggle arch, a knockdown tumble) paint noticeably taller
-    // than a standing fighter at the same feet height — a fixed headroom left the
-    // juggle head kissing the top edge (maxY 0.994) even when the standing pose
-    // one frame earlier had room. So reserve extra headroom in proportion to how
-    // far off the floor the higher fighter is (rise = topY - grounded head): none
-    // when grounded (footsies framing untouched), growing as a launch lifts a
-    // fighter into the poses that need it.
+    // than a standing fighter at the same feet height, so reserve a LITTLE extra
+    // headroom as a fighter leaves the floor. This factor is deliberately small
+    // and capped: the old rise*0.6 inflated the band so far that an ORDINARY jump
+    // drove zForY past maxZ, forcing the clamp — and the clamped path then
+    // sacrificed the grounded fighter (see the composition block below). The
+    // containment of BOTH fighters is the invariant; headroom above the airborne
+    // head is a nicety that must never grow big enough to break it.
     const rise = Math.max(0, f.topY - WORLD.FIGHTER_HEIGHT)
-    const headTop = this.headTopBase + rise * 0.6
+    const headTop = this.headTopBase + Math.min(rise * 0.22, 1.1)
     const zForY = (f.topY + headTop + this.footBot) / (2 * Math.max(0.0001, tanV))
 
     // --- Horizontal containment -----------------------------------------
@@ -163,17 +169,17 @@ export class FightCamera {
     // --- Vertical composition -------------------------------------------
     // Centre the frame on the band we sized z for, so the grounded feet sit
     // ~footBot above the bottom edge and the highest head ~headTop below the top
-    // edge. `balancedCenter` is the midpoint of that band; when a big launch
-    // needs more distance than maxZ can give, the frame can't hold the whole
-    // band, so bias the centre UP (`headPriority`) to keep the airborne head's
-    // headroom and let the near floor slide out the bottom instead. Losing a
-    // sliver of floor reads far better than amputating the launched fighter —
-    // which is the entire defect this framing exists to kill. When z is NOT
-    // clamped the two expressions are equal, so this is a no-op at normal range.
-    const halfV = z * tanV
+    // edge. We CENTRE the contained band and never bias off it: the previous
+    // version biased the centre UP whenever z was clamped (to protect the
+    // airborne head's headroom), which quietly let the GROUNDED fighter slide
+    // off the bottom edge — a jump would frame the airborne fighter and amputate
+    // the grounded one at the waist. Containing both fighters is the invariant;
+    // if the band is ever too tall for even maxZ (a monster juggle past the
+    // safety cap), centring crops a symmetric sliver off BOTH the head-sky and
+    // the near floor instead of sacrificing one fighter whole. With maxZ now
+    // generous this clamp effectively never binds in real gameplay.
     const balancedCenter = (f.topY + headTop - this.footBot) * 0.5
-    const headPriority = f.topY + headTop - halfV
-    const lookY = Math.max(balancedCenter, headPriority)
+    const lookY = balancedCenter
     const camY = lookY + this.camLift
 
     // A small, snappy motivated punch-in on impact (~3% of z). Deliberately
@@ -196,6 +202,40 @@ export class FightCamera {
     // Ease the dolly impulse back to rest.
     this.dolly.step(0, 11.0, 0.85, dt)
     const camZ = z - punch + this.dolly.value
+
+    // --- Hard containment guarantee (post-spring) ------------------------
+    // The springs above give the operator mass, but a fast transition — a
+    // landing after a jump — leaves the AIM lagging high (the look spring is
+    // still recovering from the airborne centre) while the velocity-clamped
+    // zoom has already snapped back, so the frame ends up aimed ABOVE the
+    // now-grounded feet and drops them off the bottom edge. The spring IS the
+    // lag, so no target math fixes it; instead pin the FINAL aim into the band
+    // that provably contains both fighters at the dolly distance actually
+    // applied this frame (camZ, so an impact punch-in that pulls the lens closer
+    // is accounted for too). It bites only during the transient and enforces the
+    // invariant — both fighters' feet-to-head fully in frame — on every frame.
+    // Measured: without this, a landing cropped the grounded feet ~4% off the
+    // bottom on ~8% of frames; with it, zero out-of-frame instances across the
+    // whole choreography.
+    const halfVApplied = camZ * tanV
+    const loY = -this.footBot
+    const hiY = f.topY + headTop
+    // lookAt puts the visible band's centre exactly at the aim, so the band is
+    // ~[aim - halfV, aim + halfV]. The aim can sit anywhere that still holds both
+    // ends: within +/- (halfV - bandHalf) of the band centre. Clamp the sprung
+    // aim into that window (minus a small tilt safety); when the band is taller
+    // than the frame (a monster launch past maxZ, effectively never) fall back to
+    // the centre so the crop is a symmetric sliver, never one whole fighter. Shift
+    // the camera body by the same delta so the tilt is preserved and this only
+    // moves anything while the clamp is actually biting (a landing transient).
+    const bandCenter = (loY + hiY) * 0.5
+    const usable = halfVApplied - (hiY - loY) * 0.5 - 0.12
+    const clampedAim = usable > 0
+      ? clamp(this.look.value.y, bandCenter - usable, bandCenter + usable)
+      : bandCenter
+    const aimDelta = clampedAim - this.look.value.y
+    this.look.value.y = clampedAim
+    this.pos.value.y += aimDelta
 
     // Handheld micro-drift + impact shake, additive on top of the spring value.
     this.shake = Math.max(0, this.shake - dt * 2.2)

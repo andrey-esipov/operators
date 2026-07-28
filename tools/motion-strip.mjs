@@ -99,6 +99,35 @@ const setup = async () => {
     await page.keyboard.press('KeyL')
   } else if (ACTION === 'jump') {
     await page.keyboard.press('ArrowUp')
+  } else if (ACTION === 'hit') {
+    // The critic capped motion at 5.5 because hitstop and reaction latency were
+    // unmeasured -- "those decide whether it hurts" -- and no beat existed that
+    // began at contact. Freezing a fixed time after pressing attack does not
+    // work: the gap between the press and the hit varies with spacing, startup
+    // and whether the CPU blocked, so the strip would start at a different point
+    // in the reaction every run and the numbers would not be comparable.
+    //
+    // So detect the hit itself. Walk into range, swing, and poll the live state
+    // for the defender's health actually dropping, then freeze on that frame.
+    // Frame 0 of the strip is then contact, by construction, every time.
+    const hpBefore = await page.evaluate(() => window.__PLAY__.state().fighters[1].health)
+    await key('ArrowRight', 520)
+    let connected = false
+    for (let swing = 0; swing < 6 && !connected; swing++) {
+      await page.keyboard.press('KeyL')
+      for (let i = 0; i < 40; i++) {
+        const hp = await page.evaluate(() => window.__PLAY__.state().fighters[1].health)
+        if (hp < hpBefore) {
+          connected = true
+          break
+        }
+        await page.waitForTimeout(8)
+      }
+      if (!connected) await key('ArrowRight', 90)
+    }
+    // A strip that silently starts somewhere other than contact is worth less
+    // than no strip, so refuse rather than film an unknown moment.
+    if (!connected) return 'never landed a hit, so there is no contact frame to film from'
   }
   if (reloaded) return 'RELOADED'
   await page.evaluate(() => window.__PLAY__.pause())
@@ -160,7 +189,18 @@ const floors = []
 // operations -- evaluate, poll, screenshot -- and differs only in stepping zero
 // frames instead of one.
 const advance = async (n) => {
-  await page.evaluate((k) => window.__PLAY__.step(k), n)
+  // A reload during capture surfaces as a raw "Execution context was destroyed"
+  // out of the evaluate, which escaped the guard below and crashed with a stack
+  // trace instead of the intended message. Convert it here so the failure is
+  // legible and still fatal -- capture-phase reloads must never be recovered
+  // from silently, or the strip becomes frames of a restarted match.
+  try {
+    await page.evaluate((k) => window.__PLAY__.step(k), n)
+  } catch (e) {
+    console.log(`FAILED: the page reloaded mid-capture (${e.name}). The strip would be a restarted match.`)
+    await browser.close()
+    process.exit(1)
+  }
   // Let the frozen sim actually consume the step before the next screenshot,
   // otherwise consecutive files are the same frame and the tool reports a
   // perfectly smooth animation that never moved.

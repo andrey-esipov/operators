@@ -80,15 +80,31 @@ export function buildIpoPrep(b: StageBuild, cfg: StageConfig, flags: QualityFlag
   b.onUpdate((t) => {
     ;(bellGlow.material as THREE.MeshBasicMaterial).opacity = 0.28 + 0.22 * Math.abs(Math.sin(t * 2.2))
   })
-  // Falling ticker-tape confetti — the unmistakable NYSE/Nasdaq listing-day cue.
-  // Thin fluttering slivers in gold/white/blue drift down across the hall and
-  // wrap, so the stage reads as an IPO celebration, not an awards podium.
+  // Ticker-tape confetti — the unmistakable NYSE/Nasdaq listing-day cue, but a
+  // CELEBRATION cue: it falls only during a victory / round-over beat (see
+  // `b.celebrate`), never during neutral play, where a constant paper storm read
+  // as a party overlay pasted onto a fight. It eases in/out, and while idle it is
+  // fully hidden AND skips its per-frame matrix work, so a neutral round gets
+  // exactly zero ticker-tape motion.
   if (flags.crowdCount > 0) {
     const tapeColors = [0xffd60a, 0xfcbf49, 0xffffff, 0x9ecbff, 0xffe08a, 0xff6a6a, 0x8affc0]
     const N = 140
     const geo = new THREE.PlaneGeometry(0.11, 0.34)
     const seeds: { x: number; z: number; y0: number; sp: number; rot: number; sw: number; sc: number }[] = []
-    const tape = new THREE.InstancedMesh(geo, new THREE.MeshBasicMaterial({ vertexColors: false, toneMapped: false, side: THREE.DoubleSide }), N)
+    const tape = new THREE.InstancedMesh(
+      geo,
+      new THREE.MeshBasicMaterial({
+        vertexColors: false,
+        toneMapped: false,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0,
+        depthWrite: false,
+      }),
+      N,
+    )
+    // Born hidden: no confetti until a celebration actually starts.
+    tape.visible = false
     const colr = new THREE.Color()
     for (let i = 0; i < N; i++) {
       seeds.push({
@@ -104,7 +120,22 @@ export function buildIpoPrep(b: StageBuild, cfg: StageConfig, flags: QualityFlag
     }
     b.add(tape)
     const m4 = new THREE.Matrix4(); const qq = new THREE.Quaternion(); const eu = new THREE.Euler(); const sc = new THREE.Vector3(1, 1, 1); const pos = new THREE.Vector3()
-    b.onUpdate((t) => {
+    let gain = 0
+    const mat = tape.material as THREE.MeshBasicMaterial
+    b.onUpdate((t, dt) => {
+      const target = b.celebrate ? 1 : 0
+      // Ease toward the target so the tape drops in / clears out over ~0.3s
+      // rather than popping. `dt` collapses toward 0 during the KO hitstop
+      // freeze, which is correct: the whole world holds, and the tape resumes
+      // falling as time does.
+      gain += (target - gain) * Math.min(1, dt * 3.5)
+      if (target === 0 && gain < 0.01) {
+        // Fully idle: hide and skip ALL motion so a neutral round is still.
+        if (tape.visible) tape.visible = false
+        return
+      }
+      tape.visible = true
+      mat.opacity = gain
       for (let i = 0; i < N; i++) {
         const s = seeds[i]
         const y = 13 - ((s.y0 + t * s.sp) % 13.5)

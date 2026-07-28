@@ -16,6 +16,19 @@ import { buildStageScene } from './StageBuilds'
 import { DustField, groundFog } from './Atmosphere'
 import type { StageBuild } from './StageKit'
 
+declare global {
+  interface Window {
+    /**
+     * Dev-only readback of the stage celebration gate — the exact boolean the
+     * IPO ticker-tape reads. Lets an external probe verify the
+     * phase -> renderState.celebrate -> build.celebrate plumbing deterministically,
+     * without leaning on sparse confetti pixels or the win-screen UI overlay
+     * (whose cyan "ENTER TO CONTINUE" prompt otherwise pollutes a pixel probe).
+     */
+    __STAGE__?: { celebrate: () => boolean }
+  }
+}
+
 /**
  * The stage.
  *
@@ -276,8 +289,17 @@ export class StageSubsystem implements Subsystem {
     this.dust.update(this.time, dt, cfg.motes.drift + 0.4)
     this.fog.update(this.time)
 
-    // Animated set-dressing.
-    this.build?.update(this.time, dt)
+    // Animated set-dressing. Relay the match's celebration beat first so
+    // victory-only effects (the IPO ticker-tape) fire only at a round-over
+    // moment, never during neutral play.
+    if (this.build) {
+      this.build.celebrate = state.celebrate ?? false
+      this.build.update(this.time, dt)
+      // Expose the live gate so the confetti probe can assert the celebration
+      // plumbing is wired to the real phase — not a pixel heuristic a static
+      // win-screen prompt could satisfy.
+      if (import.meta.env.DEV) window.__STAGE__ = { celebrate: () => this.build?.celebrate ?? false }
+    }
 
     // Practical flicker for "crisis"/warm bulbs realism.
     if (this.practicals.length && (state.scenario === 'crisis' || state.scenario === 'pre-pmf')) {

@@ -25,6 +25,12 @@ export class StageBuild {
   readonly disposables: { dispose(): void }[] = []
   /** Meshes that should be hidden while the reflection pass renders (cheap). */
   readonly reflectSkip: THREE.Object3D[] = []
+  /**
+   * Relayed each frame by the stage subsystem from the match's celebration
+   * beat. Stage builds read it to gate victory-only set-dressing (e.g. the IPO
+   * ticker-tape), so nothing festive fires during neutral play.
+   */
+  celebrate = false
 
   add(o: THREE.Object3D) {
     this.root.add(o)

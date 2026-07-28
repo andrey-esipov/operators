@@ -59,6 +59,13 @@ export interface FightRenderState {
   round: number
   /** True while any cinematic owns the camera. */
   cinematic: boolean
+  /**
+   * True only during a victory / round-over celebration beat (sim phase
+   * `ko` | `round-end` | `match-end`). Stage-owned festive effects (the IPO
+   * ticker-tape, etc.) gate on this so they never fire during neutral play.
+   * Optional so preview/lab render states can omit it (treated as `false`).
+   */
+  celebrate?: boolean
 }
 
 /** Impact strength buckets. Drives camera shake, particle counts, light pops. */

@@ -79,12 +79,26 @@ export class FightCamera {
   // The frame is sized to contain the band [feet - footBot, highestHead +
   // headTop] and its dolly distance (z) is solved DIRECTLY from that band (see
   // update()), so the fighter's on-screen size falls out of the geometry rather
-  // than a magic number. headTopBase is deliberately large: it is the standing
-  // headroom, and with FIGHTER_HEIGHT ≈ 3.4 and fov 32 it lands a grounded
-  // fighter at ~60% while leaving ~2 world units of sky for a launch to climb
-  // into before the containment even has to widen.
-  private readonly headTopBase = 2.05
-  private readonly footBot = 0.2
+  // than a magic number.
+  //
+  // The vertical WEIGHTING (how that fixed span splits into sky above vs floor
+  // below) is what these two numbers set, and they are chosen so the sum
+  // FIGHTER_HEIGHT + headTopBase + footBot stays 5.65 — the exact span the old
+  // tuning used. Holding the sum fixed means restZ and therefore the neutral
+  // character size are byte-for-byte unchanged (a grounded fighter still fills
+  // ~59-60%, genre-perfect); ONLY the split moves.
+  //
+  // The old split (headTopBase 2.05 / footBot 0.2) reserved the launch headroom
+  // STATICALLY: ~36% dead sky over a standing head and a floor line jammed at
+  // ~96% down the frame (feet almost on the bottom edge, ~4% apron). That reads
+  // airy-on-top and stuck-on-bottom at neutral. The genre reserves launch
+  // headroom DYNAMICALLY instead — the camera lifts only when a launch actually
+  // climbs (see headTop below) — and keeps a real floor apron at rest. So the
+  // standing headroom drops to ~18% and the apron grows to ~22% (floor line at
+  // ~78% down, squarely in the genre's 75-80%), and the sky a juggle needs is
+  // added back on demand by the rise term rather than parked here permanently.
+  private readonly headTopBase = 1.0
+  private readonly footBot = 1.25
   // The camera sits a touch above the aim so the lens tilts down a few degrees:
   // enough to ride the near floor up into the lower frame (grounding the
   // fighters, hiding the floor's front edge) without going top-down.
@@ -194,15 +208,20 @@ export class FightCamera {
     const tanH = tanV * this.cam.aspect
     // Dynamic headroom: topY is fed as feet + a FIXED fighter height, but wild
     // airborne poses (a juggle arch, a knockdown tumble) paint noticeably taller
-    // than a standing fighter at the same feet height, so reserve a LITTLE extra
-    // headroom as a fighter leaves the floor. This factor is deliberately small
-    // and capped: the old rise*0.6 inflated the band so far that an ORDINARY jump
-    // drove zForY past maxZ, forcing the clamp — and the clamped path then
-    // sacrificed the grounded fighter (see the composition block below). The
-    // containment of BOTH fighters is the invariant; headroom above the airborne
-    // head is a nicety that must never grow big enough to break it.
+    // than a standing fighter at the same feet height, so reserve extra headroom
+    // as a fighter leaves the floor. This is now the PRIMARY source of launch sky:
+    // the static base was cut from 2.05 to 1.0 (to tighten the neutral frame and
+    // free floor apron), so the slope/cap are raised a touch to add that airiness
+    // back ON DEMAND — at a full juggle headTop reaches ~1.0 + 1.3 = 2.3, a hair
+    // roomier than the old static 2.05, but only while the action is actually up
+    // there. It stays deliberately capped: the old rise*0.6 inflated the band so
+    // far that an ORDINARY jump drove zForY past maxZ, forcing the clamp — and the
+    // clamped path then sacrificed the grounded fighter (see the composition block
+    // below). At 0.26/1.3 the cap engages only near the top of a real launcher
+    // (rise ≈ 5, topY ≈ 8.4) and zForY there is ~22 < maxZ 28, so containment of
+    // BOTH fighters — the invariant — is never at risk; the headroom is a nicety.
     const rise = Math.max(0, f.topY - WORLD.FIGHTER_HEIGHT)
-    const headTop = this.headTopBase + Math.min(rise * 0.22, 1.1)
+    const headTop = this.headTopBase + Math.min(rise * 0.26, 1.3)
     const zForY = (f.topY + headTop + this.footBot) / (2 * Math.max(0.0001, tanV))
 
     // --- Horizontal containment -----------------------------------------

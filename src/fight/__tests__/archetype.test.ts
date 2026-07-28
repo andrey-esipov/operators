@@ -79,8 +79,10 @@ describe('archetypes play differently', () => {
   })
 
   it("the command grab out-ranges the universal throw at the same spacing", () => {
-    // Gap 100: too far for the universal LP+LK throw, in range for Gut Wrench.
-    const GAP = 100
+    // Gap 138: too far for the universal LP+LK throw, in range for Gut Wrench.
+    // (The whole engagement sits REACH_BONUS=38 further out than the raw box
+    // numbers read, so this is the old gap-100 situation shifted out to match.)
+    const GAP = 138
     const gwScript = [dir(4), hold(1), hold(2), hold(3), inp(6, 'lp')]
 
     const gw = play(

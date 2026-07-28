@@ -8,7 +8,7 @@
  */
 
 import type { Box, Hit, HitLevel, Guard, Move, MoveFrame, MoveTag, Vec2 } from '../types'
-import { PUSHBOX_H, PUSHBOX_W } from '../constants'
+import { PUSHBOX_H, PUSHBOX_W, REACH_BONUS } from '../constants'
 
 // Standard body boxes, authored facing right with the origin at the feet.
 export const STAND_HURT: Box = { x: -24, y: 0, w: 48, h: 168 }
@@ -98,6 +98,10 @@ export function mkMove(spec: MoveSpec): Move {
   const perActiveForward = spec.forward ? spec.forward / spec.active : 0
 
   const frames: MoveFrame[] = []
+  // Extend every attack's forward reach by REACH_BONUS so moves still connect
+  // now that the wider pushbox holds fighters further apart. Reach is the far
+  // edge, so we grow width and leave the near edge (x) where it was authored.
+  const reach = spec.hitbox.map((b) => ({ ...b, w: b.w + REACH_BONUS }))
   for (let f = 0; f < total; f++) {
     const isStartup = f < spec.startup
     const isActive = f >= spec.startup && f < spec.startup + spec.active
@@ -115,7 +119,7 @@ export function mkMove(spec: MoveSpec): Move {
 
     frames.push({
       sprite: base + phase,
-      hitboxes: isActive ? spec.hitbox : [],
+      hitboxes: isActive ? reach : [],
       hurtboxes: [hurt],
       pushbox: push,
       motion,

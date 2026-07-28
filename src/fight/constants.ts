@@ -72,9 +72,25 @@ export const KNOCKDOWN_FRAMES = 40
 export const WAKEUP_FRAMES = 10
 
 /** Default pushbox width; individual move frames may override. Fighters this
- *  wide can never occupy the same space — see collision separation. */
-export const PUSHBOX_W = 62
+ *  wide can never occupy the same space — see collision separation.
+ *
+ *  Sized to the *visible* character, not a token box. The generated sprites
+ *  stand in wide, planted fighting stances ~120cm across; a 62cm pushbox let two
+ *  bodies interpenetrate until they read as a single character with duplicated
+ *  limbs. Widening it to 100cm keeps the opaque bodies apart. Because a wider
+ *  body would otherwise put every move out of range, REACH_BONUS below extends
+ *  every move's reach by the same amount, so the spacing game is unchanged. */
+export const PUSHBOX_W = 100
 export const PUSHBOX_H = 170
+
+/** Added to every attack's forward reach when frame data is expanded. When the
+ *  pushbox widened from 62 to 100cm, fighters stood 38cm further apart at point
+ *  blank, which would have made every close normal whiff and broken every combo
+ *  route. Extending all reach by that same 38cm shifts the whole engagement
+ *  outward in lock-step: connect margins, combo links and footsies whiff-space
+ *  are all preserved — only the absolute separation grew. One knob, applied in
+ *  mkMove, instead of re-authoring dozens of hitboxes by hand. */
+export const REACH_BONUS = 38
 
 /** How knockback bleeds off. Ground knockback decays fast (friction); air
  *  knockback is governed by gravity instead. */

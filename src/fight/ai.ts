@@ -19,6 +19,7 @@
 import type { Button, Direction, FightState, InputFrame } from './types'
 import { getFighterDef } from './fighters'
 import { makeRng, type Rng } from './rng'
+import { REACH_BONUS } from './constants'
 
 interface Step {
   rel: Direction
@@ -168,6 +169,11 @@ export class FighterAI {
     const back: Direction = 4
     const downBack: Direction = 1
     const fwd: Direction = 6
+    // The whole engagement sits REACH_BONUS further out than the boxes read at
+    // face value (wider pushbox + matching reach), so every spacing band below is
+    // shifted out by the same amount — the AI reads the same *relative* ranges it
+    // always did, just at the fighters' true separation.
+    const R = REACH_BONUS
 
     // Reading own state (stun/recovery) is instant — you always know your own
     // situation. Only the opponent read is delayed.
@@ -178,7 +184,7 @@ export class FighterAI {
 
     // Throw defence: read a close throw startup and roll the tier's tech chance,
     // pressing LP+LK to break it (option-selected with a down-back block).
-    if (o.throwStartup && o.dist < 75 && this.rng.next() < this.tier.techChance) {
+    if (o.throwStartup && o.dist < 75 + R && this.rng.next() < this.tier.techChance) {
       return frame(toward(downBack, facing), ['lp', 'lk'])
     }
 
@@ -187,14 +193,14 @@ export class FighterAI {
     // when the opponent is nearly dead and in range, and a big-whiff punish.
     const sup = this.getSuper(me.id)
     const haveSuper = !!sup && me.meter >= sup.cost
-    if (haveSuper && o.dist < 175 && me.grounded) {
+    if (haveSuper && o.dist < 175 + R && me.grounded) {
       // Round closer: opponent low enough that the super likely finishes it. A
       // healthy per-frame chance so a spectator actually sees the kill land.
       if (o.oppHealth <= 300 && this.rng.next() < 0.06 + this.aggression * 0.18) {
         return this.startSuper(sup!.motion, facing)
       }
       // Big-whiff punish: cash a caught recovery into the super instead of a poke.
-      if (o.attacking && o.inRecovery && o.dist < 140 &&
+      if (o.attacking && o.inRecovery && o.dist < 140 + R &&
           this.rng.next() < this.tier.punishChance) {
         return this.startSuper(sup!.motion, facing)
       }
@@ -202,7 +208,7 @@ export class FighterAI {
 
     // Anti-air: opponent airborne and in range -> rising uppercut (cr.HP). Gated
     // by the tier so easy whiffs it more often.
-    if (!o.grounded && o.posY > 55 && o.dist < 175) {
+    if (!o.grounded && o.posY > 55 && o.dist < 175 + R) {
       if (this.rng.next() < 0.4 + this.tier.blockChance * 0.6) {
         return frame(toward(2, facing), ['hp'])
       }
@@ -210,8 +216,8 @@ export class FighterAI {
     }
 
     // React to a committed close attack.
-    if (o.attacking && o.dist < 150) {
-      if (o.inRecovery && o.dist < 120 && this.rng.next() < this.tier.punishChance) {
+    if (o.attacking && o.dist < 150 + R) {
+      if (o.inRecovery && o.dist < 120 + R && this.rng.next() < this.tier.punishChance) {
         // Whiff punish: quarter-circle Surge Palm for a real reward.
         this.queue = [{ rel: 3 }, { rel: 6, buttons: ['hp'] }]
         return frame(toward(2, facing))
@@ -227,7 +233,7 @@ export class FighterAI {
     // archetype. Melee-only characters have no `projectiles` table and fall
     // straight through to the approach, so their behaviour is unchanged.
     const zones = !!getFighterDef(me.id).projectiles
-    if (o.dist > 165) {
+    if (o.dist > 165 + R) {
       if (zones && this.rng.next() < 0.45 + this.aggression * 0.2) {
         this.queue = [{ rel: 3 }, { rel: 6, buttons: ['hp'] }] // fast bolt fullscreen
         return frame(toward(2, facing))
@@ -238,7 +244,7 @@ export class FighterAI {
       // A zoner would rather hold ground than close the gap for free.
       return frame(toward(zones ? 5 : fwd, facing))
     }
-    if (o.dist > 95) {
+    if (o.dist > 95 + R) {
       if (zones && this.rng.next() < 0.30 + this.aggression * 0.2) {
         this.queue = [{ rel: 3 }, { rel: 6, buttons: ['lp'] }] // slow wall bolt
         return frame(toward(2, facing))

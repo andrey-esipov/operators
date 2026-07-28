@@ -106,4 +106,32 @@ describe('KeyboardSource', () => {
     key('keyup', 'KeyW')
     expect(src.poll().dir).toBe(5)
   })
+
+  it('captures a direction tap that starts and ends between two polls', () => {
+    // A down input the poll never saw held — the sub-frame direction the sim's
+    // motion ring can't recover if the source drops it. KeyS is down (numpad 2).
+    src.poll()
+    key('keydown', 'KeyS')
+    key('keyup', 'KeyS')
+    expect(src.poll().dir).toBe(2)
+  })
+
+  it('releases a sub-frame direction tap on the very next poll', () => {
+    src.poll()
+    key('keydown', 'KeyS')
+    key('keyup', 'KeyS')
+    src.poll()
+    expect(src.poll().dir).toBe(5)
+  })
+
+  it('captures a sub-frame diagonal clipped mid-roll (the 623 corner)', () => {
+    // Holding forward and clipping down for less than a frame must read as
+    // down-forward (3) that frame, not plain forward — the exact cardinal a
+    // dragon-punch roll needs to reach the buffer.
+    key('keydown', 'KeyD')
+    src.poll()
+    key('keydown', 'KeyS')
+    key('keyup', 'KeyS')
+    expect(src.poll().dir).toBe(3)
+  })
 })

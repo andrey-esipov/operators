@@ -58,17 +58,21 @@ export class KeyboardSource implements InputSource {
   private held = new Set<string>()
   /**
    * Key codes that saw a `keydown` since the last poll, whether or not they are
-   * still down now.
+   * still down now — for BOTH attack buttons and the movement cardinals.
    *
-   * Without this, `pressed` is derived purely by diffing the held-set between
+   * Without this, an input is derived purely by diffing state between
    * consecutive polls — so a tap that begins *and ends* inside one 16.7ms frame
-   * is never observed as held, and the press is silently dropped. That is not
+   * is never observed as held, and is silently dropped. That is not
    * hypothetical: it reproduces every time in the playability harness, and it
    * is worse for real players than for the test, because a dropped input during
    * a stutter is indistinguishable from a missed combo.
    *
-   * Latching keydown at event time instead means a press is never lost,
-   * regardless of how short it was or how late the poll arrived.
+   * For buttons a dropped tap is a missed attack. For DIRECTIONS it is worse: a
+   * quarter-circle or dragon-punch is a fast roll through cardinals, and a
+   * sub-frame direction the poll never sampled never enters the sim's motion
+   * ring — so the sim's leniency window has nothing to recover, and the special
+   * dies. Latching keydown at event time means a direction the stick clipped
+   * through is captured for the frame it happened on, exactly like a button.
    */
   private tapped = new Set<string>()
   private prevButtons = new Set<Button>()
@@ -91,18 +95,18 @@ export class KeyboardSource implements InputSource {
     }
   }
 
-  private any(codes: string[]): boolean {
-    return codes.some((c) => this.held.has(c))
-  }
-
   private anyDownSincePoll(codes: string[]): boolean {
     return codes.some((c) => this.held.has(c) || this.tapped.has(c))
   }
 
   poll(): InputFrame {
+    // Directions consult the same keydown latch as buttons, so a cardinal the
+    // stick clipped through sub-frame (the fast roll of a 236/623) is captured
+    // for the frame it occurred on and reaches the sim's motion ring, instead
+    // of being lost between polls where no leniency window can recover it.
     const dir = toNumpad(
-      this.any(this.map.left), this.any(this.map.right),
-      this.any(this.map.up), this.any(this.map.down),
+      this.anyDownSincePoll(this.map.left), this.anyDownSincePoll(this.map.right),
+      this.anyDownSincePoll(this.map.up), this.anyDownSincePoll(this.map.down),
     )
     const now = new Set<Button>()
     for (const b of Object.keys(this.map.buttons) as Button[]) {

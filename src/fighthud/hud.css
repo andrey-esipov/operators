@@ -22,8 +22,8 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
-  padding: 14px 18px 0;
+  gap: 8px;
+  padding: 14px 14px 0;
 }
 
 /* ── Health assembly ────────────────────────────────────────────────────
@@ -34,7 +34,7 @@
    floating parts. The whole housing rakes toward the centre. */
 .fhud-hpwrap {
   flex: 1 1 0;
-  max-width: 640px;
+  max-width: 730px;
   display: flex;
   flex-direction: row;
   align-items: flex-start;
@@ -73,9 +73,7 @@
   justify-content: center;
   flex: 0 0 auto;
   z-index: 2;
-  width: 46px;
-  height: 58px;
-  font-size: 26px;
+  font-size: 30px;
   color: #fff;
   border: 3px solid #04030a;
   box-shadow:

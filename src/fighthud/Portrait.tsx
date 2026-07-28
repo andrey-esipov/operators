@@ -16,7 +16,13 @@ interface Props {
 // arm-spread so the face reads at name-plate size.
 const TOP_FRACTION = 0.52
 const SIDE_TRIM = 0.16
-const BOX_H = 58 // px
+// FIXED display box. Both fighters render into the identical box and the art is
+// cover-cropped into it — so a HUD premised on mirrored symmetry is actually
+// symmetric. (Sizing the box to each crop's aspect made the two sides 43 vs
+// 51px wide.) Width is what the eye reads as "how much character am I shown",
+// so the box is deliberately wide.
+const BOX_W = 82 // px
+const BOX_H = 64 // px
 
 /**
  * Fighter portrait. Crops an idle frame out of the sprite atlas via a CSS
@@ -57,7 +63,7 @@ export function Portrait({ side, rosterId, name, accent, initial }: Props) {
       return (
         <span
           className={`fhud-portrait loading ${side}`}
-          style={{ width: `${BOX_H}px`, height: `${BOX_H}px`, ['--accent' as string]: accent }}
+          style={{ width: `${BOX_W}px`, height: `${BOX_H}px`, ['--accent' as string]: accent }}
           data-testid={`fhud-portrait-${side}`}
           data-loading="1"
         />
@@ -66,7 +72,7 @@ export function Portrait({ side, rosterId, name, accent, initial }: Props) {
     return (
       <span
         className={`fhud-badge ${side}`}
-        style={{ background: accent }}
+        style={{ width: `${BOX_W}px`, height: `${BOX_H}px`, background: accent }}
         data-testid={`fhud-badge-${side}`}
       >
         <span>{initial}</span>
@@ -78,13 +84,15 @@ export function Portrait({ side, rosterId, name, accent, initial }: Props) {
   const cropX = rect.x + rect.w * SIDE_TRIM
   const cropW = rect.w * (1 - SIDE_TRIM * 2)
   const cropH = rect.h * TOP_FRACTION
-  const scale = BOX_H / cropH
-  const boxW = cropW * scale
+  // Cover-fit the crop into the fixed box: scale so it fills, centre the
+  // horizontal overflow, anchor the top so the head stays in frame.
+  const scale = Math.max(BOX_W / cropW, BOX_H / cropH)
+  const offsetX = (BOX_W - cropW * scale) / 2
 
   return (
     <span
       className={`fhud-portrait ${side}`}
-      style={{ width: `${boxW}px`, height: `${BOX_H}px`, ['--accent' as string]: accent }}
+      style={{ width: `${BOX_W}px`, height: `${BOX_H}px`, ['--accent' as string]: accent }}
       data-testid={`fhud-portrait-${side}`}
     >
       <img
@@ -96,7 +104,7 @@ export function Portrait({ side, rosterId, name, accent, initial }: Props) {
           top: 0,
           left: 0,
           transformOrigin: '0 0',
-          transform: `scale(${scale}) translate(${-cropX}px, ${-rect.y}px)`,
+          transform: `translate(${offsetX}px, 0px) scale(${scale}) translate(${-cropX}px, ${-rect.y}px)`,
           imageRendering: 'pixelated',
           maxWidth: 'none',
         }}

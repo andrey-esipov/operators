@@ -199,7 +199,7 @@ export class PostPipeline implements Subsystem, RenderDriver {
     // after bloom, so it is the authoritative last word on the fighters: it
     // re-asserts the neutral, separated character read that the environment's
     // saturated bloom bleeds back over (see LensFinalizeEffect).
-    this.finalize.setCa(flags.chromaticAberration ? 0.0004 : 0, 0)
+    this.finalize.setCa(flags.chromaticAberration ? 0.00015 : 0, 0)
     this.finalize.setSharpen(0.32)
     this.grade.setCamera(camera.near, camera.far)
     this.finalize.setCamera(camera.near, camera.far)
@@ -411,14 +411,15 @@ export class PostPipeline implements Subsystem, RenderDriver {
     this.grade.setFlash(this.flash)
 
     // --- chromatic aberration spike ------------------------------------
-    // Base kept very low so the effect is invisible in neutral — even the
-    // extreme corners only fringe faintly on the highest-contrast vertical
-    // edges. At 0.0011 the whole background separated red/cyan and read as a
-    // rendering fault rather than a lens; a fighting game wants a fraction of
-    // that. Impacts/supers still spike it briefly for punch.
+    // Base pushed to a bare whisper so neutral frames are effectively CA-free —
+    // the residual bottom-corner fringing read as a rendering fault, not a lens.
+    // At 0.0011 the whole background separated red/cyan; even 0.0004 left a
+    // faint corner fringe at rest. A fighting game wants aberration to live on
+    // impacts, not in neutral, so the base is near-zero and impacts/supers carry
+    // it — spiked a touch harder to keep the punch now that the floor is lower.
     this.finalize.setCa(
-      flagsFor(this.quality).chromaticAberration ? 0.0004 : 0,
-      i * 0.006 + this.superPunch * 0.0016,
+      flagsFor(this.quality).chromaticAberration ? 0.00015 : 0,
+      i * 0.0075 + this.superPunch * 0.0016,
     )
   }
 

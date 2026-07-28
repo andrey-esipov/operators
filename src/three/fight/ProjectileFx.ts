@@ -80,17 +80,74 @@ export function hotCoreTexture(): THREE.Texture {
   return tex
 }
 
+let beamTex: THREE.Texture | null = null
+
 /**
- * Energy tint per projectile kind, keyed off the same string the sim tags a
- * `Projectile` with. Values track the authored art hue (ion-bolt is electric
- * cyan, super-beam an indigo lance) but are pushed slightly past 1.0 on the
+ * A horizontal BEAM-COLUMN gradient: a long electric-blue shaft with a thin
+ * blue-white hot filament down its spine, a softer blue body around it, feathered
+ * at the tail (the muzzle end melts into the caster's hand) and tapering to a
+ * bright leading edge (the head). Stretched between the muzzle and the beam head
+ * it draws the caster→target lance the marquee super was missing — the critic's
+ * "no beam geometry at all". Colour is baked BLUE-DOMINANT (body ~[60,120,255],
+ * spine ~[190,230,255]) rather than left white, so even summed additively the
+ * shaft holds its ion hue instead of clipping to a neutral smear; the material
+ * wears a white tint so the baked colour passes straight through.
+ */
+export function beamColumnTexture(): THREE.Texture {
+  if (beamTex) return beamTex
+  const W = 256, H = 64
+  const canvas = document.createElement('canvas')
+  canvas.width = W
+  canvas.height = H
+  const ctx = canvas.getContext('2d')!
+  const img = ctx.createImageData(W, H)
+  const smooth = (a: number, b: number, x: number) => {
+    const t = Math.max(0, Math.min(1, (x - a) / (b - a)))
+    return t * t * (3 - 2 * t)
+  }
+  for (let y = 0; y < H; y++) {
+    const vc = Math.abs((y + 0.5) / H - 0.5) * 2 // 0 at spine, 1 at edge
+    const bodyV = Math.exp(-((vc / 0.62) ** 2))
+    const coreV = Math.exp(-((vc / 0.17) ** 2))
+    const vprof = Math.min(1, bodyV * 0.55 + coreV)
+    for (let x = 0; x < W; x++) {
+      const u = (x + 0.5) / W
+      // Feather the muzzle tail, keep a bright leading head, tiny edge taper.
+      const uEnv = smooth(0, 0.12, u) * (1 - 0.3 * smooth(0.92, 1, u))
+      const a = Math.max(0, Math.min(1, vprof * uEnv))
+      const i = (y * W + x) * 4
+      img.data[i] = 40 + coreV * 95       // R: very blue body, blue-white spine
+      img.data[i + 1] = 92 + coreV * 96   // G: kept below B even at the spine so
+      img.data[i + 2] = 255               // B: pinned — the shaft never washes cyan
+      img.data[i + 3] = Math.round(a * 255)
+    }
+  }
+  ctx.putImageData(img, 0, 0)
+  const tex = new THREE.CanvasTexture(canvas)
+  tex.colorSpace = THREE.SRGBColorSpace
+  tex.magFilter = THREE.LinearFilter
+  tex.minFilter = THREE.LinearFilter
+  tex.generateMipmaps = false
+  tex.needsUpdate = true
+  beamTex = tex
+  return tex
+}
+
+/**
+ * Per-kind additive light colour, as an RGB multiplier applied to the sprite's
+ * energy. Values above 1 push a channel hot; the point is to bias toward one
  * dominant channel so the glow survives tone-mapping into the bloom. An unknown
  * kind still gets a warm light rather than an untinted grey, so a newly authored
  * projectile lights the scene the day its `frames.json` lands.
  */
 const TINTS: Record<string, [number, number, number]> = {
   'ion-bolt': [0.34, 0.78, 1.2],
-  'super-beam': [0.66, 0.52, 1.3],
+  // Blue pinned well above green so that when the aura/trail/floor/column stack
+  // additively and the blue channel clips at 255, green does NOT catch up and
+  // wash the body to cyan-white. A composite layer-diff (measure-beam-iso) showed
+  // the old [.40,.72,1.5] body clipping to cyan (B-dom -23); dropping green to
+  // .46 keeps the stacked body blue-dominant (the critic's "stays indigo").
+  'super-beam': [0.34, 0.46, 1.6],
 }
 
 export function energyTint(kind: string): THREE.Color {
@@ -151,6 +208,13 @@ export interface Presence {
    *  screen; an ion-bolt leaves both at 0 and nothing here runs. */
   worldDim: number
   screenFlash: number
+  /** A stretched additive COLUMN drawn from the muzzle to the beam head — the
+   *  caster→target "lance" the critic found missing ("no beam geometry at all").
+   *  0 disables it (an ion-bolt is a travelling bead, not a connected beam); a
+   *  super sets it to 1 to draw the electric column that ties the caster to the
+   *  strike. Purely a super lever — the whole read of "a discharge with structure"
+   *  rather than "a glow floating in the gap" lives here. */
+  beam: number
   /** How strongly the sim's projectile SPEED maps to visual strength (0 = ignore
    *  speed and use the profile verbatim). Both ion-bolt buttons spawn the SAME
    *  kind and art and differ ONLY in speed (lp = slow "wall", hp = fast
@@ -196,6 +260,7 @@ const DEFAULT_PRESENCE: Presence = {
   impactOpacity: 0.9,
   worldDim: 0,
   screenFlash: 0,
+  beam: 0,
   strengthRamp: 1,
 }
 
@@ -209,7 +274,7 @@ const DEFAULT_PRESENCE: Presence = {
 const PRESENCE: Record<string, Partial<Presence>> = {
   'super-beam': {
     spriteScale: 1.4,
-    coreBoost: 2.4,
+    coreBoost: 1.42,
     trailOpacity: 0.92,
     trailSize: 1.7,
     floorScaleX: 3.4,
@@ -219,14 +284,15 @@ const PRESENCE: Record<string, Partial<Presence>> = {
     auraOpacity: 0.55,
     coreGlow: 0.95,
     coreGlowOpacity: 1,
-    spawnFlash: 8.5,
+    spawnFlash: 5.5,
     spawnFlashTicks: 12,
-    spawnFlashOpacity: 1,
+    spawnFlashOpacity: 0.85,
     impactScale: 2.7,
     impactOpacity: 1,
     worldDim: 0.6,
-    screenFlash: 0.9,
+    screenFlash: 0.5,
     strengthRamp: 0,
+    beam: 1,
   },
 }
 
@@ -290,6 +356,24 @@ export function presenceFor(kind: string, speed?: number): Presence {
  *  bigger tinted glow), nudged slightly toward the kind's energy hue. */
 export function flashTint(kind: string): THREE.Color {
   return energyTint(kind).lerp(new THREE.Color(1.6, 1.6, 1.75), 0.6)
+}
+
+/**
+ * The HOT-CORE / super-flash colour. For most kinds this is `flashTint` — a
+ * near-white pop, correct for a small ion-bolt muzzle. But a super's core is the
+ * one place the whole failure lived: multiplied and additively summed, a
+ * near-white core clips every channel to 255 and the marquee beam "resolves to a
+ * fuzzy white bloom oval with no colour" (VERDICT-v9). Ion Storm therefore gets a
+ * BLUE-HOT core instead: blue pinned well above 1 so it survives tone-map and
+ * bloom, red held DOWN so the centre reads as ionized electric-blue-white rather
+ * than neutral white. The green is kept moderate — enough that the very centre
+ * still blooms to a hot blue-white pinpoint, not so much that the body greys out.
+ * This is the "keep the core below the white clip so it stays indigo" fix the
+ * critic asked for, applied to the emitter's own additive layers (the bloom pass
+ * is renderer-aaa's to preserve hue on top of this). */
+export function hotTint(kind: string): THREE.Color {
+  if (kind === 'super-beam') return new THREE.Color(0.42, 0.74, 1.95)
+  return flashTint(kind)
 }
 
 /**

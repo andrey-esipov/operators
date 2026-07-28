@@ -94,7 +94,7 @@ describe('presenceFor speed→strength ramp', () => {
     const superFast = presenceFor('super-beam', 12)
     expect(superFast).toEqual(superNoSpeed)
     expect(superFast.worldDim).toBeCloseTo(0.6)
-    expect(superFast.spawnFlash).toBeCloseTo(8.5)
+    expect(superFast.spawnFlash).toBeCloseTo(5.5)
   })
 
   it('returns the profile verbatim when no speed is supplied', () => {

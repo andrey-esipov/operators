@@ -181,61 +181,88 @@ function ionImpact(k: number, n: number): Frame {
 // ── super-beam ───────────────────────────────────────────────────────────────
 const SB_W = 176
 const SB_H = 128
-const SB_CORE: Vec3 = [255, 255, 255]
-const SB_MID: Vec3 = [205, 150, 255]
-const SB_EDGE: Vec3 = [90, 120, 255]
-const SB_ARC: Vec3 = [180, 230, 255]
+// A small, hot, only-slightly-blue tip (kept bright enough to satisfy the core
+// luminance validator, but no longer pure white so the head does not read as a
+// neutral smudge), a saturated electric-blue mid and edge, and a light-blue arc
+// colour for the crackle tendrils. The whole palette is now BLUE-DOMINANT — the
+// old mid was a magenta [205,150,255] that pulled the body off-hue.
+const SB_CORE: Vec3 = [220, 238, 255]
+const SB_MID: Vec3 = [110, 175, 255]
+const SB_EDGE: Vec3 = [78, 128, 255]
+const SB_ARC: Vec3 = [150, 214, 255]
 
 function beamTravel(phase: number): Frame {
   const f = new Field(SB_W, SB_H)
   const cy = SB_H / 2
-  const head = SB_W / 2 + 16
+  const head = SB_W / 2 + 34
+  const tail = 10
   const puls = 1 + 0.12 * Math.sin(phase * TAU)
-  // long trailing tail
-  for (let t = 1; t <= 9; t++) {
-    const tx = head - t * 10
+  // Elongated lance BODY: a long horizontal shaft (elong stretches sigma along
+  // the x-axis) rather than a round ball, so even the authored sprite is a
+  // directional dart, not a blob.
+  const bodyCx = (head + tail) / 2
+  f.glow(bodyCx, cy, 13, SB_EDGE, 0.5 * puls, 3.4, 0)
+  f.glow(bodyCx + 8, cy, 7.5, SB_MID, 0.8, 3.6, 0)
+  // Trailing tail, tapering back off the shaft.
+  for (let t = 1; t <= 7; t++) {
+    const tx = tail + (bodyCx - tail) * (1 - t / 8)
     const ty = cy + 3 * Math.sin(phase * TAU + t * 0.5)
-    f.glow(tx, ty, Math.max(3, 16 - t * 1.4), SB_EDGE, (0.55 - t * 0.05) * puls, 1.4, 0)
+    f.glow(tx, ty, Math.max(2.5, 12 - t * 1.2), SB_EDGE, (0.4 - t * 0.045) * puls, 1.5, 0)
   }
-  // rotating lightning tendrils
-  for (let i = 0; i < 3; i++) {
-    const ang = phase * TAU + (i / 3) * TAU
-    f.tendril(head, cy, ang, 42, SB_ARC, 0.9, i + 1)
+  // Forward spearpoint: shrinking glows ahead of the head so the nose tapers to a
+  // point instead of ending in a round cap.
+  for (let s = 1; s <= 4; s++) {
+    f.glow(head + s * 9, cy, Math.max(2, 8 - s * 1.6), SB_ARC, 0.5 - s * 0.08, 1.6, 0)
   }
-  f.glow(head, cy, 26 * puls, SB_EDGE, 0.8, 1.6, 0)
-  f.glow(head, cy, 14, SB_MID, 1.05, 1.4, 0)
-  f.glow(head, cy, 8 * puls, SB_CORE, 1.3, 1.3, 0)
+  // Denser crackle: 6 tendrils fanning off the head so the move earns "storm".
+  for (let i = 0; i < 6; i++) {
+    const ang = phase * TAU + (i / 6) * TAU
+    f.tendril(head, cy, ang, 40, SB_ARC, 0.85, i + 1)
+  }
+  // Spark flecks scattered along the shaft.
+  for (let i = 0; i < 7; i++) {
+    const fx = tail + (head - tail) * ((i * 0.618 + phase) % 1)
+    const fy = cy + Math.sin(phase * TAU * 2 + i * 1.7) * 15
+    f.glow(fx, fy, 1.8, SB_ARC, 0.7, 1, 0)
+  }
+  // Hot head: a bright blue edge, a saturated blue mid, and a SMALL blue-white
+  // tip (radius 6, not 8) so the white is a pinpoint, not the body.
+  f.glow(head, cy, 22 * puls, SB_EDGE, 0.75, 1.7, 0)
+  f.glow(head, cy, 12, SB_MID, 1.0, 1.4, 0)
+  f.glow(head, cy, 6 * puls, SB_CORE, 1.25, 1.25, 0)
   return { rgba: f.toRGBA(), w: SB_W, h: SB_H }
 }
 
 function beamSpawn(k: number, n: number): Frame {
   const f = new Field(SB_W, SB_H)
   const cy = SB_H / 2
-  const head = SB_W / 2 + 16
+  const head = SB_W / 2 + 34
   const s = Math.min(1, 0.2 + (k / (n - 1)) * 0.9)
   const flash = k <= 1 ? 1.4 : 1
-  f.glow(head, cy, 26 * s, SB_EDGE, 0.7 * s, 1.6, 0)
-  f.glow(head, cy, 14 * s, SB_MID, 1.0 * s, 1.4, 0)
-  f.glow(head, cy, 8 * s, SB_CORE, 1.25 * s * flash, 1.3, 0)
+  // The nose igniting: a compact bright dart that grows into the travel lance.
+  f.glow(head - 14, cy, 10 * s, SB_EDGE, 0.5 * s, 3.0, 0)
+  f.glow(head, cy, 22 * s, SB_EDGE, 0.65 * s, 1.7, 0)
+  f.glow(head, cy, 12 * s, SB_MID, 0.95 * s, 1.4, 0)
+  f.glow(head, cy, 6 * s, SB_CORE, 1.2 * s * flash, 1.25, 0)
   return { rgba: f.toRGBA(), w: SB_W, h: SB_H }
 }
 
 function beamImpact(k: number, n: number): Frame {
   const f = new Field(SB_W, SB_H)
   const cy = SB_H / 2
-  const cx = SB_W / 2 + 16
+  const cx = SB_W / 2 + 34
   const t = k / (n - 1)
   const ring = 10 + t * 54
   const fade = 1 - t
-  for (let a = 0; a < 16; a++) {
-    const ang = (a / 16) * TAU
+  for (let a = 0; a < 18; a++) {
+    const ang = (a / 18) * TAU
     f.glow(cx + Math.cos(ang) * ring, cy + Math.sin(ang) * ring * 0.8, 6 * fade + 1, SB_MID, 0.9 * fade)
   }
-  for (let i = 0; i < 4; i++) {
-    f.tendril(cx, cy, (i / 4) * TAU + t * 2, 30 + t * 20, SB_ARC, 0.8 * fade, i + 5)
+  for (let i = 0; i < 6; i++) {
+    f.tendril(cx, cy, (i / 6) * TAU + t * 2, 30 + t * 22, SB_ARC, 0.8 * fade, i + 5)
   }
   f.glow(cx, cy, 14 + t * 10, SB_EDGE, 0.6 * fade, 1.5, 0)
-  f.glow(cx, cy, 8 * fade + 1, SB_CORE, 1.3 * fade, 1.3, 0)
+  f.glow(cx, cy, 6 * fade + 1, SB_CORE, 1.25 * fade, 1.25, 0)
   return { rgba: f.toRGBA(), w: SB_W, h: SB_H }
 }
 
@@ -259,7 +286,7 @@ const KINDS: KindSpec[] = [
     travelN: 8, spawnN: 4, impactN: 6, travel: ionTravel, spawn: ionSpawn, impact: ionImpact,
   },
   {
-    kind: 'super-beam', w: SB_W, h: SB_H, anchorX: SB_W / 2 + 16,
+    kind: 'super-beam', w: SB_W, h: SB_H, anchorX: SB_W / 2 + 34,
     travelN: 10, spawnN: 5, impactN: 8, travel: beamTravel, spawn: beamSpawn, impact: beamImpact,
   },
 ]

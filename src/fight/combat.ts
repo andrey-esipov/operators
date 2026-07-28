@@ -425,7 +425,7 @@ function applyBlock(
   }
   A.vel.x += -A.facing * hit.pushback
   D.lastHitAt = at
-  events.push({ type: 'block', at, attacker: ai })
+  events.push({ type: 'block', at, attacker: ai, chip: hit.chip })
 }
 
 function applyHit(

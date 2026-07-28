@@ -281,7 +281,11 @@ export interface FightState {
 export type FightEvent =
   | { type: 'hit'; at: Vec2; attacker: 0 | 1; level: HitLevel; damage: number }
   | { type: 'counter-hit'; at: Vec2; attacker: 0 | 1; level: HitLevel; damage: number }
-  | { type: 'block'; at: Vec2; attacker: 0 | 1 }
+  // `chip` is the grey-life the block cost the defender (0 for a blocked normal —
+  // normals never chip). The renderer keys impact feedback off it: a block that
+  // cost nothing gets its guard flash but NO camera kick, because a shove when
+  // nothing landed erases the difference between blocking a jab and eating one.
+  | { type: 'block'; at: Vec2; attacker: 0 | 1; chip?: number }
   | { type: 'parry'; at: Vec2; attacker: 0 | 1 }
   | { type: 'whiff'; at: Vec2; attacker: 0 | 1 }
   | { type: 'throw'; at: Vec2; attacker: 0 | 1 }

@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import type { Projectile } from '../../fight/types'
 import { STAGE_HALF_W, PROJECTILE_MARGIN, SUPER_FREEZE_FRAMES } from '../../fight/constants'
 import { simToWorld, cmYToWorld } from './worldScale'
-import { energyTint, flashTint, makeGlowMesh, hotCoreTexture, presenceFor, clashing, type Presence } from './ProjectileFx'
+import { energyTint, flashTint, hotTint, makeGlowMesh, hotCoreTexture, beamColumnTexture, presenceFor, clashing, type Presence } from './ProjectileFx'
 import {
   loadProjectileAtlas,
   type LoadedProjectile,
@@ -52,6 +52,11 @@ const PROJ_Z = 0.08
 /** Number of trailing glow blobs behind the hot-point. Enough to read as a
  *  streak at bolt speed without becoming a solid bar. */
 const TRAIL_SEG = 6
+
+/** Fixed size of a beam's spark pool. Bounded by construction: sparks are
+ *  recycled in place, never allocated per-frame, so the "storm" stays dense while
+ *  the cost is a constant handful of additive quads per super. */
+const SPARK_COUNT = 30
 
 /** Opposing bolts crackle when their hot-points cross within this many world
  *  units — roughly a bolt's visible radius, so the burst reads as the two energy
@@ -131,6 +136,22 @@ interface TrailBlob {
   mat: THREE.MeshBasicMaterial
 }
 
+/** One additive spark in a beam's bounded particulate pool. Recycled in place —
+ *  when its life runs out it is re-seeded at the beam, never allocated again, so
+ *  the "storm" is dense but the pool is fixed-size and cheap. */
+interface Spark {
+  mesh: THREE.Mesh
+  mat: THREE.MeshBasicMaterial
+  x: number
+  y: number
+  vx: number
+  vy: number
+  life: number
+  maxLife: number
+  size: number
+  seed: number
+}
+
 interface Live {
   id: number
   kind: string
@@ -174,6 +195,14 @@ interface Live {
   spawnFlashMat: THREE.MeshBasicMaterial | null
   spawnClock: number
   spawnPos: THREE.Vector3
+  /** Stretched electric COLUMN drawn muzzle→head — the caster→target lance
+   *  (super only; else null). */
+  beam: THREE.Mesh | null
+  beamMat: THREE.MeshBasicMaterial | null
+  /** Bounded, recycled particulate streaming off the beam (super only; else
+   *  empty). `sparkEmit` accumulates fractional emissions between frames. */
+  sparks: Spark[]
+  sparkEmit: number
   /** This kind's presence profile and effective world-units-per-source-pixel
    *  (WORLD_PER_PX × spriteScale), used everywhere the sprite is sized. */
   presence: Presence
@@ -420,6 +449,7 @@ export class ProjectileLayer {
         this.place(l)
         this.pushTrail(l, true)
         this.advance(l, ticks)
+        this.updateSparks(l, ticks, true)
       }
     }
 
@@ -445,6 +475,7 @@ export class ProjectileLayer {
       }
       this.place(l)
       const done = this.animateOut(l, ticks)
+      this.updateSparks(l, ticks, false)
       if (done) this.retire(l)
     }
 
@@ -615,17 +646,18 @@ export class ProjectileLayer {
       this.group.add(aura)
     }
 
-    // Core: a small, near-white hot center laid over the aura. Additive blending
-    // is order-independent, so this simply sums a bright peak into the middle of
-    // the volume — the core-contrast the broad aura lacks on a lit stage. A hot
-    // near-white tint (flashTint), not the energy hue, so it reads as white-hot,
-    // on the TIGHT hotCoreTexture (sharp centre) rather than the soft haze the
-    // trail/pool wear — that sharp falloff is what makes it read as a searing
-    // point instead of one more mushy blob summed into the glow.
+    // Core: a small hot center laid over the aura. Additive blending is
+    // order-independent, so this simply sums a bright peak into the middle of the
+    // volume — the core-contrast the broad aura lacks on a lit stage. Wears
+    // `hotTint`: for an ion-bolt a near-white pop, but for the super a BLUE-HOT
+    // tint (red suppressed, blue pinned past 1) so the marquee core reads as an
+    // ionized electric-blue-white pinpoint instead of the neutral white smudge the
+    // old flashTint×coreBoost clipped it to. Drawn on the TIGHT hotCoreTexture
+    // (sharp centre) so it reads as a searing point, not one more mushy blob.
     let core: THREE.Mesh | null = null
     let coreMat: THREE.MeshBasicMaterial | null = null
     if (presence.coreGlow > 0) {
-      core = makeGlowMesh(flashTint(p.kind), 18, hotCoreTexture())
+      core = makeGlowMesh(hotTint(p.kind), 18, hotCoreTexture())
       coreMat = core.material as THREE.MeshBasicMaterial
       coreMat.opacity = 0
       this.group.add(core)
@@ -639,11 +671,41 @@ export class ProjectileLayer {
     let spawnFlash: THREE.Mesh | null = null
     let spawnFlashMat: THREE.MeshBasicMaterial | null = null
     if (presence.spawnFlash > 0) {
-      spawnFlash = makeGlowMesh(flashTint(p.kind), 30)
+      spawnFlash = makeGlowMesh(hotTint(p.kind), 30)
       spawnFlashMat = spawnFlash.material as THREE.MeshBasicMaterial
       spawnFlashMat.opacity = 0
       spawnFlash.position.set(spawnPos.x, spawnPos.y, PROJ_Z + 0.02)
       this.group.add(spawnFlash)
+    }
+
+    // Beam column: the stretched electric shaft drawn from the muzzle to the head
+    // each frame — the caster→target lance. Wears the baked blue-white column
+    // texture (its own colour), a white tint so that colour passes through, and
+    // sits over the aura but under the sprite bead + hot core. Only a kind that
+    // opts in (the super) builds one.
+    let beam: THREE.Mesh | null = null
+    let beamMat: THREE.MeshBasicMaterial | null = null
+    if (presence.beam > 0) {
+      beam = makeGlowMesh(new THREE.Color(1, 1, 1), 17, beamColumnTexture())
+      beamMat = beam.material as THREE.MeshBasicMaterial
+      beamMat.opacity = 0
+      this.group.add(beam)
+    }
+
+    // Particulate: a bounded, recycled pool of additive sparks that stream off the
+    // shaft so the move earns the word "storm". Fixed size (never grows), each
+    // spark re-seeded at the beam when its life runs out — see updateSparks.
+    const sparks: Spark[] = []
+    if (presence.beam > 0) {
+      for (let i = 0; i < SPARK_COUNT; i++) {
+        const sm = makeGlowMesh(energyTint(p.kind), 19)
+        sm.visible = false
+        this.group.add(sm)
+        sparks.push({
+          mesh: sm, mat: sm.material as THREE.MeshBasicMaterial,
+          x: 0, y: 0, vx: 0, vy: 0, life: 0, maxLife: 0, size: 0, seed: i * 1.618,
+        })
+      }
     }
 
     const l: Live = {
@@ -675,6 +737,10 @@ export class ProjectileLayer {
       spawnFlashMat,
       spawnClock: 0,
       spawnPos,
+      beam,
+      beamMat,
+      sparks,
+      sparkEmit: 0,
       presence,
       wpp,
       lastX: p.pos.x,
@@ -732,6 +798,31 @@ export class ProjectileLayer {
       l.core.scale.set(c * 1.5, c * 0.72, 1)
       l.coreMat.opacity = pr.coreGlowOpacity
     }
+
+    // Beam column: the electric shaft from the muzzle to the current head. As the
+    // head races out the shaft lengthens, so it reads as a lance thrust from the
+    // caster toward the target rather than a bead floating in the gap. Rotated to
+    // the muzzle→head axis; thickness a fraction of the sprite height with a fast
+    // flicker so it crackles as live discharge, not a static bar.
+    if (l.beam && l.beamMat) {
+      const dx = l.lastWorld.x - l.spawnPos.x
+      const dy = l.lastWorld.y - l.spawnPos.y
+      const len = Math.hypot(dx, dy)
+      const angle = Math.atan2(dy, dx)
+      // Overhang a touch past the head so the leading edge caps the bead, and hold
+      // a minimum so a just-born beam still shows a stub rather than nothing.
+      const shaftLen = Math.max(worldH * 0.6, len + worldH * 0.4)
+      const thick = worldH * (0.5 + 0.09 * Math.sin(l.clock * 0.9 + l.id))
+      l.beam.position.set(
+        (l.spawnPos.x + l.lastWorld.x) / 2,
+        (l.spawnPos.y + l.lastWorld.y) / 2,
+        PROJ_Z - 0.008,
+      )
+      l.beam.rotation.z = angle
+      l.beam.scale.set(shaftLen, thick, 1)
+      const flicker = 0.86 + 0.14 * Math.sin(l.clock * 1.7 + l.id * 2.3)
+      l.beamMat.opacity = pr.beam * 0.92 * flicker
+    }
   }
 
   /** Push the current hot-point onto the trail history and lay the blobs out
@@ -772,6 +863,53 @@ export class ProjectileLayer {
     l.floorMat.opacity = pr.floorOpacity * k
     if (l.auraMat) l.auraMat.opacity = pr.auraOpacity * k
     if (l.coreMat) l.coreMat.opacity = pr.coreGlowOpacity * k
+    // place() has already set the beam column to its live opacity this frame;
+    // scale that down so the shaft bleeds off with the rest of the death.
+    if (l.beamMat) l.beamMat.opacity *= k
+  }
+
+  /** Advance the beam's bounded spark pool one frame. While `emit` (the beam is
+   *  live) every dead spark is immediately re-seeded on the shaft, so the pool
+   *  stays saturated and the move reads as a storm; once the beam detaches `emit`
+   *  is false and the pool drains as each spark lives out its last flight, so the
+   *  particulate trails off rather than vanishing with the beam. Fixed-size and
+   *  recycled — no per-frame allocation, no unbounded growth. */
+  private updateSparks(l: Live, ticks: number, emit: boolean) {
+    if (!l.sparks.length) return
+    const worldH = l.loaded.manifest.frameH * l.wpp
+    const dx = l.lastWorld.x - l.spawnPos.x
+    const dy = l.lastWorld.y - l.spawnPos.y
+    const len = Math.hypot(dx, dy) || 1
+    const dirx = dx / len, diry = dy / len
+    const perpx = -diry, perpy = dirx
+    for (const s of l.sparks) {
+      if (s.life <= 0) {
+        if (!emit) { s.mesh.visible = false; continue }
+        // Re-seed on the shaft, biased toward the hot head, thrown outward.
+        const t = 0.25 + 0.75 * Math.random()
+        const off = (Math.random() - 0.5) * worldH * 0.7
+        s.x = l.spawnPos.x + dirx * len * t + perpx * off
+        s.y = l.spawnPos.y + diry * len * t + perpy * off
+        const outward = (Math.random() < 0.5 ? -1 : 1) * (0.03 + Math.random() * 0.09)
+        const back = -(0.005 + Math.random() * 0.03) // drift back off the head
+        s.vx = perpx * outward + dirx * back + (Math.random() - 0.5) * 0.02
+        s.vy = perpy * outward + diry * back + (Math.random() - 0.5) * 0.02 + 0.012
+        s.maxLife = 9 + Math.random() * 12
+        s.life = s.maxLife
+        s.size = worldH * (0.1 + Math.random() * 0.14)
+      }
+      s.life -= ticks
+      s.x += s.vx * ticks
+      s.y += s.vy * ticks
+      s.vy -= 0.0016 * ticks // a little gravity so the sparks arc as they fall away
+      const f = Math.max(0, s.life / s.maxLife)
+      const sz = s.size * (0.5 + 0.5 * f)
+      s.mesh.visible = f > 0
+      s.mesh.position.set(s.x, s.y, PROJ_Z - 0.006)
+      s.mesh.scale.set(sz, sz, 1)
+      // Flicker each spark so the field twinkles as discharge rather than drifting embers.
+      s.mat.opacity = f * (0.55 + 0.45 * Math.abs(Math.sin(l.clock * 2.1 + s.seed))) * 0.9
+    }
   }
 
   /** Drive the fixed spawn flash on its own short clock: a hard bright pop that
@@ -892,7 +1030,7 @@ export class ProjectileLayer {
           superIds.add(p.id)
           if (!this.superSeen.has(p.id)) {
             if (pr.screenFlash > flashPunch) flashPunch = pr.screenFlash
-            this.flashColor.copy(flashTint(p.kind))
+            this.flashColor.copy(hotTint(p.kind))
           }
         }
       }
@@ -915,7 +1053,7 @@ export class ProjectileLayer {
     // the exact "blow out the frame" failure the house has fought for 21 rounds.
     if (freeze > this.prevFreeze && this.prevFreeze === 0) {
       flashPunch = Math.max(flashPunch, 0.5)
-      this.flashColor.copy(flashTint('super-beam'))
+      this.flashColor.copy(hotTint('super-beam'))
     }
     this.prevFreeze = freeze
 
@@ -1251,7 +1389,27 @@ export class ProjectileLayer {
       ;(l.spawnFlash.geometry as THREE.BufferGeometry).dispose()
       l.spawnFlashMat?.dispose()
     }
+    this.disposeBeamExtras(l)
     this.live.delete(l.id)
+  }
+
+  /** Remove + dispose the beam column and every spark in the pool. Shared by the
+   *  per-beam retire and the whole-layer dispose so a beam's extra meshes never
+   *  leak on either path. */
+  private disposeBeamExtras(l: Live) {
+    if (l.beam) {
+      this.group.remove(l.beam)
+      ;(l.beam.geometry as THREE.BufferGeometry).dispose()
+      l.beamMat?.dispose()
+      l.beam = null
+      l.beamMat = null
+    }
+    for (const s of l.sparks) {
+      this.group.remove(s.mesh)
+      ;(s.mesh.geometry as THREE.BufferGeometry).dispose()
+      s.mat.dispose()
+    }
+    l.sparks = []
   }
 
   /** Count of sprites currently in the scene — cheap liveness signal for tests
@@ -1294,6 +1452,7 @@ export class ProjectileLayer {
         ;(l.spawnFlash.geometry as THREE.BufferGeometry).dispose()
         l.spawnFlashMat?.dispose()
       }
+      this.disposeBeamExtras(l)
     }
     this.live.clear()
     for (const c of this.clashBursts) {

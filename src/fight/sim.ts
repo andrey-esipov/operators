@@ -542,6 +542,28 @@ function checkRoundEnd(s: FightState, events: FightEvent[]): void {
   const koRound = h0 <= 0 || h1 <= 0
   s.phase = koRound ? 'ko' : 'round-end'
   s.phaseTimer = koRound ? KO_FRAMES : ROUND_END_FRAMES
+  // A time-over goes straight to the round-end beat with no KO freeze, so pose
+  // the ceremony now. A KO plays its freeze first and poses on the handoff to
+  // round-end (see the 'ko' phase in step).
+  if (!koRound) poseCeremony(s)
+}
+
+/** Freeze the ceremony pose: the winner celebrates, the loser stays down. Driven
+ *  when the round-end beat begins — after the KO freeze, or immediately on a
+ *  time-over — so the two seconds after a win read as a win, not a neutral idle.
+ *  Winner/loser are read from health, which by round-end reflects the result; a
+ *  draw or double-KO poses no one. The loser's `defeat` clip resolves to the
+ *  grounded knockdown art, so they persist on the stage instead of snapping
+ *  upright. Any in-flight move is cleared so the pose clip drives the frame. */
+function poseCeremony(s: FightState): void {
+  const [f0, f1] = s.fighters
+  const winner = f0.health > f1.health ? 0 : f1.health > f0.health ? 1 : -1
+  if (winner === -1) return
+  const loser = winner === 0 ? 1 : 0
+  s.fighters[winner].stance = 'victory'
+  s.fighters[winner].move = undefined
+  s.fighters[loser].stance = 'defeat'
+  s.fighters[loser].move = undefined
 }
 
 // ── The step function ────────────────────────────────────────────────────────
@@ -567,6 +589,7 @@ export function step(state: FightState, inputs: [InputFrame, InputFrame]): StepR
     if ((s.phaseTimer ?? 0) <= 0) {
       s.phase = 'round-end'
       s.phaseTimer = ROUND_END_FRAMES
+      poseCeremony(s) // KO freeze is over — strike the victory/defeat pose
     }
     s.frame++
     return { state: s, events }

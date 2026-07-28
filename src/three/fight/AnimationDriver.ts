@@ -33,6 +33,8 @@ function clipCandidates(stance: Stance, moveId?: string): string[] {
     case 'wakeup': return ['wakeup', 'idle']
     case 'throw-tech': return ['throw-tech', 'idle']
     case 'ko': return ['ko', 'lose', 'knockdown', 'idle']
+    case 'victory': return ['victory', 'win', 'idle']
+    case 'defeat': return ['defeat', 'lose', 'ko', 'knockdown', 'idle']
     default: return ['idle', 'stance']
   }
 }

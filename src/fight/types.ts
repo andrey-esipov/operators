@@ -155,6 +155,8 @@ export type Stance =
   | 'wakeup'
   | 'throw-tech'
   | 'ko'
+  | 'victory'
+  | 'defeat'
 
 export interface FighterState {
   id: string

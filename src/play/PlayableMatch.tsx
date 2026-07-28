@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { FightRenderer } from '../three/fight/FightRenderer'
-import { buildMockAtlas } from '../three/fight/mockAtlas'
+import { loadFighterAtlas } from '../three/fight/loadFighterAtlas'
 import { STAGE_ORDER } from '../three/stage/StageRegistry'
 import { MatchSim } from './MatchSim'
 import { KeyboardSource, DEFAULT_KEYMAP } from '../fight/input/sources'
@@ -97,7 +97,7 @@ export function PlayableMatch() {
         if (disposed) return renderer.dispose()
 
         setPhase('loading')
-        const [atlasA, atlasB] = await Promise.all([buildMockAtlas(aId), buildMockAtlas(bId)])
+        const [atlasA, atlasB] = await Promise.all([loadFighterAtlas(aId), loadFighterAtlas(bId)])
         if (disposed) return renderer.dispose()
         await renderer.setFighterAssets(0, atlasA.assets, atlasA.atlas, defA?.accent ?? '#E63946')
         await renderer.setFighterAssets(1, atlasB.assets, atlasB.atlas, defB?.accent ?? '#4361EE')

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { FightRenderer } from '../fight/FightRenderer'
 import { MockSim } from '../fight/mockSim'
 import { HarnessSim } from '../../fight/harnessSim'
-import { buildMockAtlas } from '../fight/mockAtlas'
+import { loadFighterAtlas } from '../fight/loadFighterAtlas'
 import { STAGE_ORDER } from '../stage/StageRegistry'
 import type { ScenarioId } from '../../types'
 import { getFighter } from '../../data/fighters'
@@ -95,7 +95,7 @@ export function FightHarness() {
       setStatus('loading sprites')
       const accentA = getFighter(aId)?.accent ?? '#E63946'
       const accentB = getFighter(bId)?.accent ?? '#4361EE'
-      const [atlasA, atlasB] = await Promise.all([buildMockAtlas(aId), buildMockAtlas(bId)])
+      const [atlasA, atlasB] = await Promise.all([loadFighterAtlas(aId), loadFighterAtlas(bId)])
       if (disposed) return renderer.dispose()
       await renderer.setFighterAssets(0, atlasA.assets, atlasA.atlas, accentA)
       await renderer.setFighterAssets(1, atlasB.assets, atlasB.atlas, accentB)

@@ -332,6 +332,18 @@ export const FRAMES: FrameSpec[] = [
       'legs trailing loosely behind the motion, head tipped back and limp, fully airborne with no control, floating at the peak.',
   },
   {
+    // The hinge between the horizontal apex and the head-down fall. Without it
+    // the morph has to swing ~90deg of rotation in a single tween and smears;
+    // this diagonal mid-somersault halves the rotation each tween must cover.
+    name: 'juggle-spin',
+    heightRatio: 0.9,
+    aspect: [0.7, 1.75],
+    pose:
+      'mid-tumble in the air, rotating past horizontal toward upside-down — the body tilted steeply on a diagonal, ' +
+      'head dropping down and to one side, legs swinging up overhead, arms trailing loosely, fully airborne and limp, ' +
+      'caught halfway through the backward somersault.',
+  },
+  {
     name: 'juggle-fall',
     heightRatio: 1.05,
     aspect: [0.5, 1.35],
@@ -428,7 +440,8 @@ export const TWEENS: TweenSpec[] = [
   { name: 'tw-hs-idle', from: 'hit-settle', to: 'idle-1', t: 0.5 },
   // Juggle arc: launch → apex → fall, a body tumbling through the air.
   { name: 'tw-jl-ja', from: 'juggle-launch', to: 'juggle-apex', t: 0.5 },
-  { name: 'tw-ja-jf', from: 'juggle-apex', to: 'juggle-fall', t: 0.5 },
+  { name: 'tw-ja-js', from: 'juggle-apex', to: 'juggle-spin', t: 0.5 },
+  { name: 'tw-js-jf', from: 'juggle-spin', to: 'juggle-fall', t: 0.5 },
   // Knockdown: the bounce settling to the floor.
   { name: 'tw-ki-kd', from: 'knockdown-impact', to: 'knockdown', t: 0.5 },
   // Walk cycles: an inbetween between every contact/passing key, wrapping.
@@ -527,7 +540,7 @@ export const CLIPS: Record<string, ClipSpec> = {
   // Hitstun: a snap-back that settles back toward guard, not one frozen recoil.
   hurt: clip(false, ['hit-high', 3], ['tw-hh-hs', 3], ['hit-settle', 4], ['tw-hs-idle', 4]),
   // Juggle: a real airborne tumble through the arc — launch, apex, fall.
-  juggle: clip(false, ['juggle-launch', 3], ['tw-jl-ja', 3], ['juggle-apex', 4], ['tw-ja-jf', 3], ['juggle-fall', 5]),
+  juggle: clip(false, ['juggle-launch', 3], ['tw-jl-ja', 3], ['juggle-apex', 4], ['tw-ja-js', 3], ['juggle-spin', 4], ['tw-js-jf', 3], ['juggle-fall', 5]),
   // Knockdown: crash and bounce, then settle flat.
   knockdown: clip(false, ['knockdown-impact', 4], ['tw-ki-kd', 3], ['knockdown', 16]),
   wakeup: clip(false, ['wakeup', 14]),

@@ -41,8 +41,8 @@ function f32ToB64(arr: Float32Array): string {
   return btoa(bin)
 }
 
-async function renderForMetrics(name: SoundName, opts: { stage?: StageId; dry?: boolean } = {}): Promise<RenderResult> {
-  const buf = await renderOffline(name, { stage: opts.stage, dry: opts.dry })
+async function renderForMetrics(name: SoundName, opts: { stage?: StageId; dry?: boolean; opts?: import('./impacts').ImpactOpts } = {}): Promise<RenderResult> {
+  const buf = await renderOffline(name, { stage: opts.stage, dry: opts.dry, opts: opts.opts })
   const L = buf.getChannelData(0)
   const R = buf.numberOfChannels > 1 ? buf.getChannelData(1) : L
   const inter = new Float32Array(buf.length * 2)
@@ -54,7 +54,7 @@ async function renderForMetrics(name: SoundName, opts: { stage?: StageId; dry?: 
   ready: () => true,
   sounds: ALL_SOUNDS,
   stages: STAGES,
-  render: (name: SoundName, opts?: { stage?: StageId; dry?: boolean }) => renderForMetrics(name, opts),
+  render: (name: SoundName, opts?: { stage?: StageId; dry?: boolean; opts?: import('./impacts').ImpactOpts }) => renderForMetrics(name, opts),
 }
 
 // ─── interactive UI ───────────────────────────────────────────────────────

@@ -440,6 +440,16 @@ export const TWEENS: TweenSpec[] = [
   { name: 'tw-wb-23', from: 'walk-back-2', to: 'walk-back-3', t: 0.5 },
   { name: 'tw-wb-34', from: 'walk-back-3', to: 'walk-back-4', t: 0.5 },
   { name: 'tw-wb-41', from: 'walk-back-4', to: 'walk-back-1', t: 0.5 },
+  // Attack anticipation + recovery-settle. The active frames are already
+  // extreme; these fill the snap INTO contact (wind-up) and, more importantly,
+  // the snap back to guard (recovery) so a punch doesn't hard-cut to idle.
+  // Only the punches get tweens — they extend along a line so the flow-morph is
+  // clean. The kicks sweep a wide arc (morph's weak case) and stay snappy at
+  // 2-3 extreme frames, which reads fine for a fast normal.
+  { name: 'tw-lp-rec', from: 'lp-active', to: 'idle-1', t: 0.5 },
+  { name: 'tw-mp-rec', from: 'mp-active', to: 'idle-1', t: 0.5 },
+  { name: 'tw-hp-wind', from: 'hp-startup', to: 'hp-active', t: 0.5 },
+  { name: 'tw-hp-rec', from: 'hp-active', to: 'idle-1', t: 0.5 },
 ]
 
 /** All frame names, in generation order: free stance, generated keys, then synthesised tweens. */
@@ -477,9 +487,9 @@ const clip = (loop: boolean, ...pairs: [string, number][]): ClipSpec => ({
 // Per-move clips a MoveFrame / attack stance can index into. Defined as named
 // consts so the sim's move ids (st.LP, cr.HP, qcf.P …) can alias straight onto
 // them below without re-specifying frames and durations.
-const LP = clip(false, ['lp-startup', 3], ['lp-active', 4], ['lp-startup', 4])
-const MP = clip(false, ['idle-1', 3], ['mp-active', 5], ['idle-1', 6])
-const HP = clip(false, ['hp-startup', 5], ['hp-active', 5], ['hp-startup', 8])
+const LP = clip(false, ['lp-startup', 3], ['lp-active', 4], ['tw-lp-rec', 4])
+const MP = clip(false, ['idle-1', 3], ['mp-active', 5], ['tw-mp-rec', 5])
+const HP = clip(false, ['hp-startup', 5], ['tw-hp-wind', 3], ['hp-active', 5], ['tw-hp-rec', 6])
 const LK = clip(false, ['lk-active', 4], ['idle-1', 5])
 const MK = clip(false, ['mk-active', 5], ['idle-1', 7])
 const HK = clip(false, ['hk-startup', 6], ['hk-active', 6], ['idle-1', 10])

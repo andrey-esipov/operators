@@ -68,6 +68,7 @@ export class FightVfx {
   handle(e: FightEvent) {
     switch (e.type) {
       case 'hit': return this.hit(e.at, e.attacker, e.level, e.damage)
+      case 'counter-hit': return this.counterHit(e.at, e.level)
       case 'block': return this.block(e.at, e.attacker)
       case 'parry': return this.parry(e.at)
       case 'throw': return this.throwFx(e.at)
@@ -133,6 +134,52 @@ export class FightVfx {
     this.d.camera.punchIn(t.push)
     this.d.fighters[target]?.triggerHitFlash(t.flash)
     this.d.emitEngine?.(attacker, target, level, power, 'hit')
+  }
+
+  /**
+   * Counter-hit reward flourish — a purely additive VISUAL overlay.
+   *
+   * The sim emits `counter-hit` ALONGSIDE the normal `hit` for the same contact
+   * (combat.ts), so the base spark, the impact freeze, the light flash and the
+   * camera punch have ALREADY fired for this frame via hit(). This method must
+   * therefore add ONLY the "you got countered" colour callout on top — it does
+   * NOT call hit(), requestHitstop, emitEngine or triggerHitFlash. Doing any of
+   * those would double the freeze/light and risk the exact fighter wash this
+   * subsystem has fought for 21 iterations. The distinct read comes from HUE, not
+   * more energy: magenta is used by no other event (hit is orange, block/parry
+   * are cyan), so a magenta ring over the orange spark is unmistakably "COUNTER".
+   * Fires for every counter the sim reports, projectile counters included.
+   */
+  private counterHit(at: Vec2, level: HitLevel) {
+    const w = HIT[level] ?? HIT.medium
+    // Anchor to the sim's contact point, same floor-clamp discipline as hit()/
+    // block() so a low projectile counter can't drop the callout onto the floor.
+    // z just in front of the hit spark (0.05) so the magenta reads over it.
+    const contactX = this.world(at).x
+    const hitCm = THREE.MathUtils.clamp(at.y, 40, 175)
+    const pos = this.p.set(contactX, WORLD.GROUND_Y + hitCm * CM_TO_WORLD, 0.06)
+
+    const white = new THREE.Color(0xffffff)
+    // Signature counter magenta — vivid, unused elsewhere in the event palette.
+    const mag = new THREE.Color(0xff2ea0)
+
+    // The callout ring. For 'shock' the SECOND colour arg owns the ring hue (see
+    // hit()'s note), so magenta must ride color2 to get a magenta front with a
+    // white heart. Sized off the hit weight so a launcher-counter reads bigger.
+    this.d.shockwave.spawn('shock', pos, 0.55 + w.core * 0.26, 0.28, white, mag, 1.35, 1.25)
+    // A crisp inner star — 'star' hue is owned by the FIRST arg → a white heart
+    // rimmed magenta, giving the ring a bright centre without a solid blob.
+    this.d.shockwave.spawn('star', pos, 0.3 + w.core * 0.12, 0.2, white, mag, 1.2)
+    // A few fast radial shards: zero gravity + heavy drag so they shoot out and
+    // stop as clean rays instead of falling into a pom-pom. Kept modest (16) and
+    // short (0.26s) — well under a hit's spark budget — so the overlay accents the
+    // hit without adding light that could flatten the fighters.
+    this.d.additive.emit({
+      position: pos, count: 16, speed: 14, speedVariance: 0.6,
+      color: mag, color2: white, size: 0.11, sizeVariance: 0.5,
+      life: 0.26, lifeVariance: 0.4, gravity: 0, drag: 5.2,
+      shape: 'streak', intensity: 1.7, spawnRadius: 0.12, stretch: 3.8,
+    })
   }
 
   private block(at: Vec2, attacker: 0 | 1) {

@@ -198,6 +198,19 @@ export const MIN_SCALE = 0.2
 /** Absolute damage floor so a heavily-scaled hit still does something. */
 export const MIN_DAMAGE = 5
 
+/**
+ * Chip damage a BLOCKABLE strike special or super deals on block, as a fraction
+ * of its raw damage. Normals never chip (blocking a poke must be free, or turtle
+ * pressure collapses — airblock.test.ts locks "chip on st.HP is 0"); throws are
+ * unblockable so the concept does not apply; but a committed fireball, dragon
+ * punch or rush that the defender blocks should still cost them something. That
+ * "grey life" is what keeps a cornered opponent from blocking forever and gives
+ * a chip-KO its tension. Derived centrally and rounded so per-move chip can't
+ * drift; any chip authored explicitly on a move (warden's bolts, the crumple
+ * supers) overrides this and is left exactly as written.
+ */
+export const SPECIAL_CHIP_RATIO = 0.125
+
 /** Juggle allowance a launcher grants: the number of airborne hits a juggle
  *  permits. Each airborne hit spends one; at zero further hits whiff, which is
  *  what makes infinite air combos impossible.

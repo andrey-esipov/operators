@@ -21,6 +21,13 @@
  * Mutation-proved (see report): zero dp.P invuln -> leg 2 reds (reversal no
  * longer beats the meaty); reversalChance -> 0 -> leg 4 reds (AI stops
  * reversing); reverting the frames-scan fix in getReversal -> leg 4 reds.
+ *
+ * Leg 3 (baited reversal) asserts p0 takes EXACTLY dp.P's chip, not 0: blockable
+ * strike specials now chip on block (SPECIAL_CHIP_RATIO). That is a deliberate
+ * mechanic change, not a regression — nothing else in the exchange moved
+ * (reversedWith, p1dmg, counterHits, punishable are all unchanged), and the
+ * delta is exactly round(dp.P damage * ratio). Zero the ratio and DP_CHIP -> 0,
+ * restoring the old reading, which proves the divergence is 100% the chip.
  */
 
 import { describe, expect, it } from 'vitest'
@@ -34,6 +41,7 @@ import type { FightState, InputFrame } from '../types'
 
 const JAB_DMG = getFighterDef('operator').moves['st.LP'].hit.damage
 const DP_DMG = getFighterDef('operator').moves['dp.P'].hit.damage
+const DP_CHIP = getFighterDef('operator').moves['dp.P'].hit.chip // blocked-reversal chip
 const WAKE = KNOCKDOWN_FRAMES + WAKEUP_FRAMES // frame the defender becomes actionable
 
 /** Seed a defender (p1, on the right facing -1) into a fresh knockdown at `gap`,
@@ -145,11 +153,14 @@ describe('okizeme: the getup rock-paper-scissors', () => {
 
   it('a baited reversal whiffs into a punish — it is not a free button', () => {
     const r = exchange({ meaty: false, reversal: true })
-    // Attacker blocks instead of pressing: the DP is blocked (nobody is hurt) and
-    // the attacker recovers first, catching the defender in DP recovery. This is
-    // what stops the reversal being a guaranteed escape.
+    // Attacker blocks instead of pressing: the DP is blocked, so the attacker
+    // takes only its chip (a blockable special is not free to throw out, but a
+    // blocked one is a chip, not a combo), and recovers first, catching the
+    // defender in DP recovery. That punish — not the chip — is what stops the
+    // reversal being a guaranteed escape. Asserting EXACTLY the move's chip also
+    // proves the DP was blocked, not landed: a clean hit would be ~DP_DMG, not 13.
     expect(r.reversedWith).toBe('dp.P')
-    expect(r.p0dmg).toBe(0)
+    expect(r.p0dmg).toBe(DP_CHIP)
     expect(r.p1dmg).toBe(0)
     expect(r.counterHits).toBe(0)
     expect(r.punishable).toBe(true)

@@ -8,7 +8,7 @@
  */
 
 import type { Box, Hit, HitLevel, Guard, Move, MoveFrame, MoveTag, Vec2 } from '../types'
-import { PUSHBOX_H, PUSHBOX_W, REACH_BONUS, KB_X_SCALE, KB_Y_SCALE, CANCEL_WINDOW } from '../constants'
+import { PUSHBOX_H, PUSHBOX_W, REACH_BONUS, KB_X_SCALE, KB_Y_SCALE, CANCEL_WINDOW, SPECIAL_CHIP_RATIO } from '../constants'
 
 // Standard body boxes, authored facing right with the origin at the feet.
 export const STAND_HURT: Box = { x: -24, y: 0, w: 48, h: 168 }
@@ -148,7 +148,27 @@ export function mkMove(spec: MoveSpec): Move {
     cost: spec.cost,
     frames,
     active: [spec.startup, spec.startup + spec.active - 1],
-    hit: mkHit(spec.hit),
+    hit: mkSpecialChip(spec),
     airOk: spec.airOk,
   }
+}
+
+/**
+ * Build a move's Hit, adding chip to blockable strike specials and supers that
+ * did not author it explicitly. This is the single place the "blockable specials
+ * chip, normals don't, throws can't" rule lives, so no move carries a hand-typed
+ * chip magic number. `spec.hit.chip === undefined` is checked BEFORE mkHit runs
+ * (mkHit defaults chip to 0, which would erase the distinction), so any authored
+ * chip — including an intentional 0 — wins over the derived value.
+ */
+function mkSpecialChip(spec: MoveSpec): Hit {
+  const hit = mkHit(spec.hit)
+  const blockableStrike =
+    (spec.tag === 'special' || spec.tag === 'super') &&
+    spec.hit.guard !== 'throw' &&
+    spec.hit.damage > 0
+  if (blockableStrike && spec.hit.chip === undefined) {
+    hit.chip = Math.round(spec.hit.damage * SPECIAL_CHIP_RATIO)
+  }
+  return hit
 }

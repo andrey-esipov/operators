@@ -259,7 +259,25 @@ const FRAG = /* glsl */ `
     float rimTerm = clamp(dot(N, normalize(uRimDir)) * 0.5 + 0.5, 0.0, 1.0);
     vec3 stageRim = uRimColor * uRimIntensity * fres * rimTerm;
     vec3 accentRim = uAccent * fres * 0.5;
-    vec3 rim = (stageRim + accentRim) * interior;
+
+    // ---- Keyed back-rim: silhouette separation on any backdrop ------------
+    // A back light placed opposite the key's horizontal throw. It lights only
+    // the shadow-side edge of the silhouette, in a cool complement to the
+    // (usually warm) stage key, so a fighter whose stage rim shares the hue of
+    // a warm busy background — e.g. ipo-prep's gold rim over gold ticker
+    // screens — still separates from it. This is the "rim/back light keyed to
+    // the stage's dominant light" that ties the sprite to the scene rig instead
+    // of leaving it a flat, evenly-lit cutout. Its falloff is wider than the
+    // razor fresnel so it reads as an edge, but it is gated to the away-from-key
+    // side so it never wraps into a full halo, and the fighter is bloom-excluded
+    // so it cannot smear into a glow.
+    vec2 keyH = normalize(keyDir.xy + vec2(1e-4));
+    float backSide = clamp(dot(normalize(N.xy + vec2(1e-4)), -keyH), 0.0, 1.0);
+    float backEdge = pow(1.0 - clamp(dot(N, vec3(0.0, 0.0, 1.0)), 0.0, 1.0), 1.7);
+    vec3 coolKey = uKeyColor.bgr; // swap R/B: a cool complement to a warm key
+    vec3 backRim = coolKey * (0.16 + 0.07 * uKeyIntensity) * backEdge * backSide;
+
+    vec3 rim = (stageRim + accentRim + backRim) * interior;
 
     // ---- Transient impact point light -------------------------------------
     vec3 toFlash = uFlashPos.xyz - vWorld;

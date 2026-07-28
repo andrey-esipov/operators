@@ -198,8 +198,20 @@ export const MIN_SCALE = 0.2
 /** Absolute damage floor so a heavily-scaled hit still does something. */
 export const MIN_DAMAGE = 5
 
-/** Juggle allowance a launcher grants. Each airborne hit spends one; at zero
- *  further hits whiff, which is what makes infinite air combos impossible. */
+/** Juggle allowance a launcher grants: the number of airborne hits a juggle
+ *  permits. Each airborne hit spends one; at zero further hits whiff, which is
+ *  what makes infinite air combos impossible.
+ *
+ *  This is the SHOTO BASELINE and the default a `FighterDef` falls back to when
+ *  it does not set its own `juggleAllowance`. It is deliberately a per-archetype
+ *  knob (see def.ts): a grappler's juggles are short and brutal (they want the
+ *  knockdown into okizeme, not a long air combo), a zoner's are a short
+ *  repositioning tool, and the all-rounder shoto gets the full route. The
+ *  per-archetype values DERIVE from this constant as offsets (BASELINE, -1, -2)
+ *  so the whole spread scales if the baseline ever moves — one knob, not three
+ *  copies. `juggleScale` is parameterised by the launch's starting allowance so
+ *  the gravity arc keeps the same SHAPE at every allowance; only the number of
+ *  steps differs. */
 export const JUGGLE_ALLOWANCE = 4
 
 /**

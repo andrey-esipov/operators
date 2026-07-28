@@ -55,6 +55,15 @@ export interface FighterDef {
   walkFwd?: number
   /** Backward walk speed (cm/frame). Falls back to the global default. */
   walkBack?: number
+  /**
+   * How many airborne hits this archetype's launchers permit — its juggle
+   * identity. Falls back to `JUGGLE_ALLOWANCE` (the shoto baseline) when unset,
+   * so a grappler and a zoner do not juggle identically to the all-rounder: the
+   * shoto gets the full route, the zoner a shorter repositioning juggle, the
+   * grappler the shortest (it trades air time for a faster knockdown into its
+   * okizeme). Set as offsets from the baseline constant so the spread tracks it.
+   */
+  juggleAllowance?: number
   moves: Record<string, Move>
   /**
    * Move id → the projectile it spawns on its first active frame, if any. A

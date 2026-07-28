@@ -29,6 +29,7 @@ import {
   CROUCH_PUSH,
   mkMove,
 } from './build'
+import { JUGGLE_ALLOWANCE } from '../constants'
 import { detectMotion } from '../input/motion'
 
 let spr = 900
@@ -308,6 +309,10 @@ export const VANGUARD: FighterDef = {
   health: 1150,
   walkFwd: 3.1,
   walkBack: 1.5,
+  // Juggle identity: the grappler gets the SHORTEST air route. It trades air
+  // time for a faster hard knockdown into its command-grab okizeme — that is
+  // where a grappler's damage lives, not in a long juggle.
+  juggleAllowance: JUGGLE_ALLOWANCE - 2,
   moves: MOVES,
   select,
 }

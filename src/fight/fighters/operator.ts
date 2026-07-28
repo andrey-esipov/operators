@@ -15,7 +15,7 @@
 
 import type { Button, Direction, Move } from '../types'
 import type { FighterDef, SelectContext } from '../def'
-import { MAX_HEALTH } from '../constants'
+import { JUGGLE_ALLOWANCE, MAX_HEALTH } from '../constants'
 import {
   AIR_HURT,
   AIR_PUSH,
@@ -330,6 +330,9 @@ export const OPERATOR: FighterDef = {
   id: 'operator',
   name: 'Operator',
   health: MAX_HEALTH,
+  // Juggle identity: the all-rounder shoto gets the full-length air route — the
+  // baseline every other archetype is offset from.
+  juggleAllowance: JUGGLE_ALLOWANCE,
   moves: MOVES,
   select,
 }

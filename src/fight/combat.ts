@@ -62,9 +62,14 @@ export function scaleDamage(base: number, comboCount: number, moveScaling: numbe
  *  off with each hit already spent, so a juggle's arcs step down instead of
  *  repeating at full height. `juggleLeft` is read *after* it is decremented for
  *  the current hit, so the first extension (allowance-1) is taxed once. The
- *  initial grounded launch never routes through here and keeps its full height. */
-export function juggleScale(juggleLeft: number): number {
-  const spent = JUGGLE_ALLOWANCE - juggleLeft
+ *  initial grounded launch never routes through here and keeps its full height.
+ *
+ *  `allowance` is the launch's STARTING allowance (the juggler's archetype knob),
+ *  so `spent` is measured from where THIS juggle began — the arc keeps the same
+ *  shape whether the route is 2 hits or 4, only the number of steps differs. It
+ *  defaults to the shoto baseline so existing callers (and tests) are unchanged. */
+export function juggleScale(juggleLeft: number, allowance: number = JUGGLE_ALLOWANCE): number {
+  const spent = allowance - juggleLeft
   return Math.max(JUGGLE_GRAVITY_FLOOR, 1 - JUGGLE_GRAVITY_STEP * spent)
 }
 
@@ -298,7 +303,7 @@ export function resolveCombat(
     s.hitstop = Math.max(s.hitstop, stop)
     if (p.parried) resolveParry(s, A, D, p.at, p.ai, events)
     else if (p.blocked) applyBlock(A, D, p.hit, p.at, p.ai, events)
-    else applyHit(A, D, p.hit, p.at, p.ai, p.counter, events)
+    else applyHit(A, D, p.hit, p.at, p.ai, p.counter, defs[p.ai].juggleAllowance ?? JUGGLE_ALLOWANCE, events)
   }
 }
 
@@ -425,7 +430,7 @@ function applyBlock(
 
 function applyHit(
   A: FighterState, D: FighterState, hit: Hit, at: Pending['at'], ai: 0 | 1,
-  counter: boolean, events: FightEvent[],
+  counter: boolean, allowance: number, events: FightEvent[],
 ): void {
   // Counter reward: more damage (applied to the base, before combo scaling) and
   // more hitstun. The launcher path below also grants an extra juggle unit.
@@ -446,12 +451,13 @@ function applyHit(
     if (D.grounded) {
       D.grounded = false
       // A counter-hit launcher grants extra juggle allowance so the extra height
-      // and stun convert into a longer air route.
-      D.juggleLeft = JUGGLE_ALLOWANCE + (counter ? COUNTER_JUGGLE_BONUS : 0)
+      // and stun convert into a longer air route. The allowance itself is the
+      // juggler's archetype knob (shoto full, zoner shorter, grappler shortest).
+      D.juggleLeft = allowance + (counter ? COUNTER_JUGGLE_BONUS : 0)
       D.vel.y = hit.knockback.y
     } else {
       D.juggleLeft = Math.max(0, D.juggleLeft - 1)
-      D.vel.y = hit.knockback.y * juggleScale(D.juggleLeft)
+      D.vel.y = hit.knockback.y * juggleScale(D.juggleLeft, allowance)
     }
     D.stance = 'juggle'
     D.stunRemaining = hitstun
@@ -464,7 +470,7 @@ function applyHit(
     D.juggleLeft = Math.max(0, D.juggleLeft - 1)
     D.stance = 'juggle'
     D.stunRemaining = hitstun
-    D.vel.y += hit.knockback.y * juggleScale(D.juggleLeft)
+    D.vel.y += hit.knockback.y * juggleScale(D.juggleLeft, allowance)
   } else {
     D.stance = 'hitstun'
     D.stunRemaining = hitstun
@@ -566,7 +572,7 @@ export function updateProjectiles(
         s.hitstop = Math.max(s.hitstop, p.hit.hitstop + (counter ? COUNTER_HITSTOP_BONUS : 0))
         if (parried) resolveParry(s, A, D, at, p.owner, events)
         else if (blocked) applyBlock(A, D, p.hit, at, p.owner, events)
-        else applyHit(A, D, p.hit, at, p.owner, counter, events)
+        else applyHit(A, D, p.hit, at, p.owner, counter, defs[p.owner].juggleAllowance ?? JUGGLE_ALLOWANCE, events)
         consumed = true
       }
     }

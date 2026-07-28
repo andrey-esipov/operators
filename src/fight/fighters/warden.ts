@@ -31,6 +31,7 @@ import {
   mkHit,
   mkMove,
 } from './build'
+import { JUGGLE_ALLOWANCE } from '../constants'
 import { detectMotion } from '../input/motion'
 
 let spr = 0
@@ -311,6 +312,9 @@ export const WARDEN: FighterDef = {
   // Slow to advance, quick to retreat: everything about mobility says "stay out".
   walkFwd: 2.0,
   walkBack: 2.6,
+  // Juggle identity: the zoner's juggle is a short repositioning tool — enough
+  // to cash out an anti-air and reset to a zoning advantage, not a full combo.
+  juggleAllowance: JUGGLE_ALLOWANCE - 1,
   moves: MOVES,
   projectiles: PROJECTILES,
   select,

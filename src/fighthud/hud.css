@@ -97,18 +97,36 @@
   font-size: 11px;
   letter-spacing: 0.16em;
   color: #fff;
-  text-shadow: 2px 2px 0 #000;
+  text-shadow: 1px 1px 0 #000, 2px 2px 0 rgba(0, 0, 0, 0.6);
   white-space: nowrap;
+  /* Angled plate so the name reads as a stamped nameplate, not floating text. */
+  padding: 3px 12px 2px;
+  background: linear-gradient(180deg, rgba(28, 18, 44, 0.94), rgba(9, 6, 17, 0.94));
+  border: 2px solid #000;
+  border-bottom: 2px solid var(--accent, #fff);
+  box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  transform: skewX(-8deg);
+}
+/* Counter-skew the label so the text stays upright inside the raked plate. */
+.fhud-name > span {
+  display: inline-block;
+  transform: skewX(8deg);
 }
 
-/* Two-layer track: trail (recoverable/chip) sits behind, main in front. */
+/* Two-layer track: trail (recoverable/chip) sits behind, main in front. The
+   track is a deep, dark trough with a metallic outer rim so the fill reads as
+   sitting *inside* a machined channel (SF6 / Strive), not painted on a flat bar. */
 .fhud-hptrack {
   position: relative;
   width: 100%;
-  height: 20px;
-  background: #140d20;
+  height: 22px;
+  background: linear-gradient(180deg, #05030a 0%, #17102a 55%, #0a0713 100%);
   border: 2px solid #000;
-  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.06), 4px 4px 0 rgba(0, 0, 0, 0.55);
+  box-shadow:
+    inset 0 3px 5px rgba(0, 0, 0, 0.8),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.07),
+    0 0 0 1px rgba(176, 188, 214, 0.28),
+    5px 5px 0 rgba(0, 0, 0, 0.55);
   overflow: hidden;
   /* Skew the whole bar for that aggressive fighting-game rake. */
   transform: skewX(-11deg);
@@ -134,8 +152,28 @@
   box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.55);
 }
 .fhud-hpfill {
-  background: linear-gradient(180deg, #9bffdb 0%, #1fe8a4 22%, #06c489 60%, #037a52 100%);
-  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.5), inset 0 -3px 0 rgba(0, 0, 0, 0.4);
+  background: linear-gradient(180deg, #f2ff9e 0%, #c2ef44 16%, #8ecb1c 46%, #5b8f10 74%, #2f5308 100%);
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.85),
+    inset 0 6px 7px rgba(255, 255, 255, 0.22),
+    inset 0 -5px 7px rgba(0, 0, 0, 0.5);
+}
+/* Bright draining edge — the crisp lit lip at the front of the bar that sells
+   the "this is a live gauge" read in SF6 / Strive. Anchored to the inner end. */
+.fhud-hpfill::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: 3px;
+  background: linear-gradient(180deg, #ffffff, rgba(255, 255, 255, 0.35));
+  box-shadow: 0 0 7px rgba(255, 255, 255, 0.7);
+  pointer-events: none;
+}
+.fhud-hpwrap.b .fhud-hpfill::after {
+  right: auto;
+  left: 0;
 }
 /* Notch overlay — keeps the segmented arcade read on a smooth-draining bar. */
 .fhud-hpnotches {
@@ -159,8 +197,18 @@
   animation: fhudHpCrit 0.7s ease-in-out infinite;
 }
 @keyframes fhudHpCrit {
-  0%, 100% { box-shadow: inset 0 0 0 2px rgba(255,255,255,0.06), 4px 4px 0 rgba(0,0,0,0.55), 0 0 0 0 rgba(239,35,60,0); }
-  50%      { box-shadow: inset 0 0 0 2px rgba(255,80,80,0.35), 4px 4px 0 rgba(0,0,0,0.55), 0 0 18px 3px rgba(239,35,60,0.75); }
+  0%, 100% {
+    box-shadow:
+      inset 0 3px 5px rgba(0, 0, 0, 0.8), inset 0 -1px 0 rgba(255, 255, 255, 0.07),
+      0 0 0 1px rgba(176, 188, 214, 0.28), 5px 5px 0 rgba(0, 0, 0, 0.55),
+      0 0 0 0 rgba(239, 35, 60, 0);
+  }
+  50% {
+    box-shadow:
+      inset 0 3px 5px rgba(0, 0, 0, 0.8), inset 0 -1px 0 rgba(255, 255, 255, 0.07),
+      0 0 0 1px rgba(255, 90, 90, 0.6), 5px 5px 0 rgba(0, 0, 0, 0.55),
+      0 0 18px 3px rgba(239, 35, 60, 0.75);
+  }
 }
 
 /* ── Super gauge ────────────────────────────────────────────────────── */
@@ -233,10 +281,23 @@
   position: relative;
   min-width: 96px;
   padding: 6px 10px 4px;
-  background: linear-gradient(135deg, #241340, #0f0a1a);
+  background: linear-gradient(180deg, #2c1a4e 0%, #1a1030 46%, #0d0918 100%);
   border: 3px solid #000;
-  box-shadow: 5px 5px 0 rgba(0, 0, 0, 0.6), inset 0 0 0 2px rgba(255, 255, 255, 0.06);
+  box-shadow:
+    5px 5px 0 rgba(0, 0, 0, 0.6),
+    inset 0 2px 0 rgba(255, 255, 255, 0.18),
+    inset 0 -3px 6px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(176, 188, 214, 0.25);
   transform: skewX(-8deg);
+  overflow: hidden;
+}
+/* Top sheen across the plate to match the lit read of the health bars. */
+.fhud-timerplate::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 55% 0;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.16), transparent);
+  pointer-events: none;
 }
 .fhud-timernum {
   font-family: var(--font-num);

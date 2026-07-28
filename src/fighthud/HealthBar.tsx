@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useRef, type CSSProperties } from 'react'
 import { useHudTick } from './hudContext'
 import { Portrait } from './Portrait'
 import type { FighterDisplay } from './types'
@@ -16,13 +16,14 @@ const TAU_TRAIL = 260
 const TRAIL_HOLD_MS = 150
 const CRIT_PCT = 0.25
 
-// Health fill per tier (good / warn / crit). A bright highlight at the top
-// easing to a rich, dark base gives the bar a cylindrical, lit read like SF6 or
-// Strive — the flat near-solid green it replaced looked like a debug meter.
+// Health fill per tier (good / warn / crit). Each is a bright-top → deep-base
+// vertical ramp with a wide luminance spread so the fill reads as a lit, curved
+// tube (SF6 / Strive) rather than flat paint. The healthy tier is a yellow-green
+// → amber-olive ramp on purpose: saturated mint green reads as a debug meter.
 const TIER_FILL = [
-  'linear-gradient(180deg,#9bffdb 0%,#1fe8a4 22%,#06c489 60%,#037a52 100%)',
-  'linear-gradient(180deg,#fff1a8 0%,#ffdb3b 22%,#ecab0e 60%,#8f6300 100%)',
-  'linear-gradient(180deg,#ffc6c6 0%,#ff5c5c 22%,#df1c35 60%,#6f0817 100%)',
+  'linear-gradient(180deg,#f2ff9e 0%,#c2ef44 16%,#8ecb1c 46%,#5b8f10 74%,#2f5308 100%)',
+  'linear-gradient(180deg,#fff3aa 0%,#ffd23a 18%,#f0a20e 50%,#b56d02 76%,#6b3f00 100%)',
+  'linear-gradient(180deg,#ffd2d2 0%,#ff5252 18%,#e21f36 50%,#a10f22 76%,#560611 100%)',
 ]
 
 /** Smoothing factor for a given time constant and frame delta. */
@@ -96,8 +97,11 @@ export function HealthBar({ index, display }: Props) {
     <div ref={wrapRef} className={`fhud-hpwrap ${side}`}>
       <div className="fhud-namerow">
         <Portrait side={side} rosterId={display.rosterId} name={display.name} accent={display.accent} initial={initial} />
-        <span className="fhud-name" style={{ color: display.accent }}>
-          {display.name}
+        <span
+          className="fhud-name"
+          style={{ color: display.accent, ['--accent' as string]: display.accent } as CSSProperties}
+        >
+          <span>{display.name}</span>
         </span>
       </div>
       <div className="fhud-hptrack" data-testid={`fhud-hptrack-${side}`}>

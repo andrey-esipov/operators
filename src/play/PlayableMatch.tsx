@@ -10,6 +10,10 @@ import type { FightHudHandle } from '../fighthud'
 import { getFighter } from '../data/fighters'
 import type { ScenarioId } from '../types'
 import type { FightState } from '../fight/types'
+import { createLiveSink } from '../audio/liveSink'
+import type { LiveFightAudioSink, LiveSinkStats } from '../audio/liveSink'
+import { FightAudioReactor } from '../audio/reactor'
+import { useGame } from '../state/game'
 
 declare global {
   interface Window {
@@ -23,6 +27,10 @@ declare global {
       paused: () => boolean
       step: (n?: number) => void
       stepsPending: () => number
+      /** Audio diagnostics: proves the renderer feeds the reactor (counts climb)
+       *  and whether the AudioContext has unlocked. A camera cannot hear, so a
+       *  live capture reads this to check sound is actually being driven. */
+      audio: () => LiveSinkStats
     }
   }
 }
@@ -101,6 +109,9 @@ export function PlayableMatch() {
 
     let renderer: FightRenderer | null = null
     let disposed = false
+    // The audio reactor's live sink. Held here so the __PLAY__ probe can read
+    // its diagnostics and so cleanup can stop the music bed.
+    let audioSink: LiveFightAudioSink | null = null
 
     const keyboard = new KeyboardSource(DEFAULT_KEYMAP)
     const sim = new MatchSim({
@@ -130,6 +141,23 @@ export function PlayableMatch() {
         if (disposed) return renderer.dispose()
 
         renderer.setInitialState(sim.initialState)
+
+        // Give the fighter a voice. The audio engine (src/audio/**) and ~400
+        // recorded files were built and never called — this is the seam. The
+        // reactor consumes the SAME read-only event list the VFX consumes, so
+        // the sim stays pure. The live sink lazily builds a *suspended*
+        // AudioContext (autoplay-safe) and fails silent, so the headless capture
+        // tools that also drive this route make no sound and never throw.
+        audioSink = createLiveSink({
+          fighterIds: [aId, bId],
+          music: useGame.getState().musicEnabled,
+        })
+        const reactor = new FightAudioReactor(audioSink)
+        renderer.setAudio(reactor)
+        // Build the graph + point per-arena reverb at the opening stage now, so
+        // the music bus exists when the fight begins and the first hit already
+        // carries the room. Safe on a suspended context.
+        audioSink.init(scenario)
 
         let lastOver = false
         let announced = false
@@ -194,6 +222,11 @@ export function PlayableMatch() {
             },
             /** Frames the frozen sim still owes, so a caller can wait for them. */
             stepsPending: () => stepBudget,
+            audio: () =>
+              audioSink?.stats() ?? {
+                calls: 0, impacts: 0, footsteps: 0, announces: 0,
+                voices: 0, contextRunning: false, musicStarted: false,
+              },
           }
         }
 

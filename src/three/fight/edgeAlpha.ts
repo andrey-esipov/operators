@@ -56,35 +56,88 @@ export function despeckle(mask: Uint8Array, w: number, h: number) {
  * transparent pixel that borders coloured pixels adopts their average colour.
  * Alpha is untouched — this only pre-loads sensible colour under the feather so
  * the half-transparent edge blends onto skin/cloth, not the backdrop (no halo).
+ *
+ * Frontier implementation: a packed atlas is mostly empty transparent padding,
+ * so the old "scan all W*H pixels, `iters` times, each snapshotting the whole
+ * mask" cost seconds at load (measured ~1.9s for lenny in Chrome/ANGLE) doing
+ * almost nothing — every ring re-examined 35M padding pixels to fill a ~2px rim.
+ * This walks only the rim: seed from the silhouette boundary, and each ring only
+ * visits the unfilled neighbours of the previous ring. The output is identical
+ * (proved byte-for-byte in edgeAlpha.test.ts) — a fill still reads the average of
+ * its neighbours filled in EARLIER rings, never same-ring fills — so the edge the
+ * shader samples is unchanged; only the wasted work is gone.
  */
 export function dilateColor(px: Uint8ClampedArray, mask: Uint8Array, w: number, h: number, iters: number) {
+  const n = w * h
   const filled = mask.slice()
-  for (let it = 0; it < iters; it++) {
-    const snapshot = filled.slice()
-    for (let y = 0; y < h; y++) {
-      for (let x = 0; x < w; x++) {
-        const p = y * w + x
-        if (snapshot[p] !== 0) continue
-        let r = 0, g = 0, b = 0, c = 0
-        for (let dy = -1; dy <= 1; dy++) {
-          const yy = y + dy
-          if (yy < 0 || yy >= h) continue
-          for (let dx = -1; dx <= 1; dx++) {
-            const xx = x + dx
-            if (xx < 0 || xx >= w) continue
-            const q = yy * w + xx
-            if (snapshot[q] === 0) continue
-            const qi = q * 4
-            r += px[qi]; g += px[qi + 1]; b += px[qi + 2]; c++
-          }
+  // Seed: boundary filled pixels (a filled pixel with >=1 unfilled 8-neighbour).
+  // Their unfilled neighbours are exactly what the old ring 1 would fill.
+  let frontier: number[] = []
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const p = y * w + x
+      if (filled[p] === 0) continue
+      let boundary = false
+      for (let dy = -1; dy <= 1 && !boundary; dy++) {
+        const yy = y + dy
+        if (yy < 0 || yy >= h) continue
+        for (let dx = -1; dx <= 1; dx++) {
+          const xx = x + dx
+          if (xx < 0 || xx >= w) continue
+          if (filled[yy * w + xx] === 0) { boundary = true; break }
         }
-        if (c > 0) {
-          const i = p * 4
-          px[i] = r / c; px[i + 1] = g / c; px[i + 2] = b / c
-          filled[p] = 255
+      }
+      if (boundary) frontier.push(p)
+    }
+  }
+  // `stamp` dedupes candidates per ring without clearing an n-sized array.
+  const stamp = new Int32Array(n).fill(-1)
+  for (let it = 0; it < iters; it++) {
+    // Candidates: unfilled 8-neighbours of the previous ring's fills.
+    const cand: number[] = []
+    for (let f = 0; f < frontier.length; f++) {
+      const fp = frontier[f]
+      const fy = (fp / w) | 0
+      const fx = fp - fy * w
+      for (let dy = -1; dy <= 1; dy++) {
+        const yy = fy + dy
+        if (yy < 0 || yy >= h) continue
+        for (let dx = -1; dx <= 1; dx++) {
+          const xx = fx + dx
+          if (xx < 0 || xx >= w) continue
+          const q = yy * w + xx
+          if (filled[q] !== 0 || stamp[q] === it) continue
+          stamp[q] = it
+          cand.push(q)
         }
       }
     }
+    // Average each candidate over its neighbours filled in EARLIER rings (filled
+    // is committed only after this loop, so same-ring fills are not sources).
+    for (let ci = 0; ci < cand.length; ci++) {
+      const p = cand[ci]
+      const py = (p / w) | 0
+      const pxx = p - py * w
+      let r = 0, g = 0, b = 0, c = 0
+      for (let dy = -1; dy <= 1; dy++) {
+        const yy = py + dy
+        if (yy < 0 || yy >= h) continue
+        for (let dx = -1; dx <= 1; dx++) {
+          const xx = pxx + dx
+          if (xx < 0 || xx >= w) continue
+          const q = yy * w + xx
+          if (filled[q] === 0) continue
+          const qi = q * 4
+          r += px[qi]; g += px[qi + 1]; b += px[qi + 2]; c++
+        }
+      }
+      if (c > 0) {
+        const i = p * 4
+        px[i] = r / c; px[i + 1] = g / c; px[i + 2] = b / c
+      }
+    }
+    for (let ci = 0; ci < cand.length; ci++) filled[cand[ci]] = 255
+    frontier = cand
   }
 }
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { conditionAlbedoAlpha } from '../edgeAlpha'
+import { conditionAlbedoAlpha, dilateColor } from '../edgeAlpha'
 
 /**
  * These guard the fix that stopped the texture loader from throwing away the
@@ -114,5 +114,97 @@ describe('edgeAlpha.conditionAlbedoAlpha', () => {
     expect(f.data[c * 4 + 3]).toBe(255) // centre opaque
     expect(f.data[3]).toBe(0) // corner (backdrop) keyed out
     expect(partialLevels(f.data).size).toBeGreaterThan(0)
+  })
+})
+
+/**
+ * The original, obviously-correct dilateColor: scan every pixel, `iters` times,
+ * snapshotting the whole mask each ring. The shipped dilateColor replaces this
+ * with a frontier walk for speed (~1.9s -> a few ms on lenny). This reference
+ * exists ONLY to prove the fast path is byte-identical, so the speed-up cannot
+ * silently move a single edge pixel and undo the coverage-ramp fix.
+ */
+function dilateColorReference(
+  px: Uint8ClampedArray,
+  mask: Uint8Array,
+  w: number,
+  h: number,
+  iters: number,
+) {
+  const filled = mask.slice()
+  for (let it = 0; it < iters; it++) {
+    const snapshot = filled.slice()
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const p = y * w + x
+        if (snapshot[p] !== 0) continue
+        let r = 0, g = 0, b = 0, c = 0
+        for (let dy = -1; dy <= 1; dy++) {
+          const yy = y + dy
+          if (yy < 0 || yy >= h) continue
+          for (let dx = -1; dx <= 1; dx++) {
+            const xx = x + dx
+            if (xx < 0 || xx >= w) continue
+            const q = yy * w + xx
+            if (snapshot[q] === 0) continue
+            const qi = q * 4
+            r += px[qi]; g += px[qi + 1]; b += px[qi + 2]; c++
+          }
+        }
+        if (c > 0) {
+          const i = p * 4
+          px[i] = r / c; px[i + 1] = g / c; px[i + 2] = b / c
+          filled[p] = 255
+        }
+      }
+    }
+  }
+}
+
+/** Two differently-coloured blobs + a lone speck, on a wide transparent margin. */
+function dilationFixture(): { px: Uint8ClampedArray; mask: Uint8Array; w: number; h: number } {
+  const w = 44
+  const h = 32
+  const px = new Uint8ClampedArray(w * h * 4)
+  const mask = new Uint8Array(w * h)
+  const put = (x: number, y: number, r: number, g: number, b: number) => {
+    const p = y * w + x
+    mask[p] = 255
+    px[p * 4] = r; px[p * 4 + 1] = g; px[p * 4 + 2] = b; px[p * 4 + 3] = 255
+  }
+  // Blob A (reddish) left, blob B (bluish) right — placed ~6px apart so their
+  // dilation rings collide, exercising the multi-source-average / frontier-meet
+  // case where snapshot-vs-live ordering would diverge if the fast path were wrong.
+  for (let y = 10; y < 18; y++) for (let x = 6; x < 14; x++) put(x, y, 200, 60, 40)
+  for (let y = 12; y < 20; y++) for (let x = 22; x < 30; x++) put(x, y, 40, 70, 210)
+  // A lone 1px speck (mic-boom-like thin feature) to test boundary seeding.
+  put(37, 6, 230, 220, 80)
+  return { px, mask, w, h }
+}
+
+describe('edgeAlpha.dilateColor (fast frontier == reference)', () => {
+  it('is byte-identical to the whole-image reference for iters 1..5', () => {
+    for (let iters = 1; iters <= 5; iters++) {
+      const a = dilationFixture()
+      const b = dilationFixture()
+      dilateColor(a.px, a.mask, a.w, a.h, iters)
+      dilateColorReference(b.px, b.mask, b.w, b.h, iters)
+      // Compare the whole RGBA buffer, not just a channel — any moved edge pixel
+      // (the thing that would reintroduce the staircase) shows up here.
+      let firstDiff = -1
+      for (let i = 0; i < a.px.length; i++) {
+        if (a.px[i] !== b.px[i]) { firstDiff = i; break }
+      }
+      expect(firstDiff, `iters=${iters} first differing byte at ${firstDiff}`).toBe(-1)
+    }
+  })
+
+  it('actually dilated something (guards against a no-op fixture)', () => {
+    const before = dilationFixture()
+    const after = dilationFixture()
+    dilateColor(after.px, after.mask, after.w, after.h, 4)
+    let changed = 0
+    for (let i = 0; i < before.px.length; i++) if (before.px[i] !== after.px[i]) changed++
+    expect(changed).toBeGreaterThan(0)
   })
 })

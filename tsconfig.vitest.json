@@ -1,0 +1,32 @@
+{
+  "comment": [
+    "Node-typed test lane. Most tests run under tsconfig.app.json, which ships",
+    "ONLY vite/client types on purpose so app code can't reach for node APIs.",
+    "A few gates must read committed files from disk (e.g. the atlas VRAM budget",
+    "reads the real atlas PNG headers). Those are named `*.node.test.ts`, are",
+    "excluded from the app project, and compile here WITH node types — so the",
+    "file-reading stays quarantined to the gate and never leaks node globals into",
+    "the shipped app program."
+  ],
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.vitest.tsbuildinfo",
+    "target": "es2023",
+    "lib": ["ES2023", "DOM"],
+    "module": "esnext",
+    "types": ["node", "vite/client"],
+    "skipLibCheck": true,
+
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+    "jsx": "react-jsx",
+
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "erasableSyntaxOnly": true,
+    "noFallthroughCasesInSwitch": true
+  },
+  "include": ["src/**/*.node.test.ts"]
+}

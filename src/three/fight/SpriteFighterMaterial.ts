@@ -219,9 +219,30 @@ const FRAG = /* glsl */ `
     // don't spill past the silhouette into a halo.
     float interior = smoothstep(0.0, 0.16, base.a - 0.55);
 
-    // Unpack the tangent-space normal. Mirror x with facing so lighting flips
-    // with the character.
-    vec3 N = texture2D(uNormal, vUv).xyz * 2.0 - 1.0;
+    // ---- Crisp interior sampling ------------------------------------------
+    // The atlas art is authored crisp at native res, but a fighter fills ~1.5x
+    // its atlas-frame height on screen, so plain bilinear magnification softens
+    // every interior edge into a 2-3px ramp — the "soft upscale" the aesthetic
+    // (original-SF pixel craft, 2026) can't afford. Reconstruct each art-texel
+    // as a defined block with only a ~1px screen-space antialiased seam: crisp
+    // where texels differ (edges), smooth where they don't (skin/cloth
+    // gradients), and — critically — this warps only the RGB fetch. The alpha
+    // above is sampled from the plain vUv, so the baked coverage-AA silhouette
+    // ramp is untouched and cannot be re-aliased.
+    vec2 res = 1.0 / uTexel;
+    vec2 uvPix = vUv * res;
+    vec2 seam = floor(uvPix - 0.5) + 0.5;
+    vec2 frac = uvPix - seam;
+    vec2 fw = max(fwidth(uvPix), vec2(1e-5));
+    vec2 snap = clamp((frac - 0.5) / fw + 0.5, 0.0, 1.0);
+    vec2 uvCrisp = (seam + snap) * uTexel;
+    vec3 albedoRgb = texture2D(uAlbedo, uvCrisp).rgb;
+
+    // Unpack the tangent-space normal. The map ships two channels (RG); z is
+    // reconstructed as the positive hemisphere. Mirror x with facing so lighting
+    // flips with the character.
+    vec2 nxy = texture2D(uNormal, vUv).xy * 2.0 - 1.0;
+    vec3 N = vec3(nxy, sqrt(max(0.0, 1.0 - dot(nxy, nxy))));
     N.x *= uFacing;
     N = normalize(N);
 
@@ -290,7 +311,7 @@ const FRAG = /* glsl */ `
     // A gentle cavity/AO term from the height field keeps folds and the far
     // side reading as volume rather than a flat cutout.
     float ao = mix(0.72, 1.0, height);
-    vec3 albedo = base.rgb;
+    vec3 albedo = albedoRgb;
     vec3 color = albedo * (ambient + diffuse * ao + fill * ao) + rim * (0.5 + 0.5 * albedo) + flash;
 
     // Soft highlight knee on the lit body. The fighter is bloom-excluded, so

@@ -28,6 +28,11 @@
      definition: they reach for node APIs we deliberately don't ship types for,
      and several throw on purpose to dump numbers. Left in the checked set they
      turn the SHARED gate red for everyone else working the tree, which has now
-     happened three times. Scratch must never be able to gate. */
-  "exclude": ["src/**/_*.probe.test.ts"]
+     happened three times. Scratch must never be able to gate.
+
+     `*.node.test.ts` are the committed exception: gates that must read files
+     from disk (e.g. the atlas VRAM budget reads the real atlas PNG headers).
+     They compile under tsconfig.vitest.json WITH node types, so file I/O stays
+     quarantined to those gates and never grants the shipped app node globals. */
+  "exclude": ["src/**/_*.probe.test.ts", "src/**/*.node.test.ts"]
 }

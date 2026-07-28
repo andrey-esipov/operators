@@ -123,16 +123,32 @@ await browser.close()
 srv.close()
 
 const MIP = 4 / 3
+// Mirror of ATLAS_MAP_POLICY in src/three/fight/AtlasTextures.ts (this tool is a
+// standalone .mjs and can't import the TS module). The budget *gate* lives in
+// atlasVramBudget.test.ts and imports the real policy; this is a reporting echo,
+// so keep the two in sync if the policy changes.
+const naiveVramMB = (w, h) => (3 * w * h * 4 * MIP) / 1048576 // pre-fix: 3× RGBA+mip
+const policyVramMB = (w, h) => {
+  const half = (n) => Math.ceil(n / 2)
+  const albedo = w * h * 4 // full-res RGBA
+  const normal = half(w) * half(h) * 2 // half-res RG8
+  const height = half(w) * half(h) * 1 // half-res R8
+  return ((albedo + normal + height) * MIP) / 1048576
+}
 console.log('\n=== GPU (Chrome + ANGLE/Metal) ===')
 console.log(gl)
 console.log('\n=== per-atlas (native 1:1, measured in-browser) ===')
 console.log(
-  ['id', 'w', 'h', 'wireMB', 'decodeMs', 'readMs', 'partial%', 'vramMB(3xRGBA+mip)'].join('\t'),
+  ['id', 'w', 'h', 'wireMB', 'decodeMs', 'readMs', 'partial%', 'vramMB(naive)', 'vramMB(policy)'].join(
+    '\t',
+  ),
 )
 let vramLenny = 0
+let naiveLenny = 0
 for (const r of rows.sort((a, b) => b.w * b.h - a.w * a.h)) {
-  const vram = (3 * r.w * r.h * 4 * MIP) / 1048576
-  if (r.id === 'lenny') vramLenny = vram
+  const naive = naiveVramMB(r.w, r.h)
+  const vram = policyVramMB(r.w, r.h)
+  if (r.id === 'lenny') { vramLenny = vram; naiveLenny = naive }
   console.log(
     [
       r.id,
@@ -142,12 +158,17 @@ for (const r of rows.sort((a, b) => b.w * b.h - a.w * a.h)) {
       r.decodeMs.toFixed(1),
       r.readMs.toFixed(1),
       ((100 * r.partial) / r.total).toFixed(2),
+      naive.toFixed(0),
       vram.toFixed(0),
     ].join('\t'),
   )
 }
-console.log(`\nlenny single-fighter GPU texture cost: ${vramLenny.toFixed(0)} MB`)
-console.log(`two-lenny match texture cost: ${(2 * vramLenny).toFixed(0)} MB`)
+console.log(
+  `\nlenny single-fighter GPU texture cost: ${vramLenny.toFixed(0)} MB (was ${naiveLenny.toFixed(0)} MB pre-fix)`,
+)
+console.log(
+  `two-lenny match texture cost: ${(2 * vramLenny).toFixed(0)} MB (was ${(2 * naiveLenny).toFixed(0)} MB pre-fix)`,
+)
 console.log(
   `\n8192-wide upload safe? MAX_TEXTURE_SIZE=${gl.maxTexture} => ${
     gl.maxTexture >= 8192 ? 'YES on this GPU' : 'NO — would fail/clamp'

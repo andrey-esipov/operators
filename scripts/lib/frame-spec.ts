@@ -620,6 +620,33 @@ const clip = (loop: boolean, ...pairs: [string, number][]): ClipSpec => ({
   loop,
 })
 
+/**
+ * Remap a clip spec's frame *names* to indices into one fighter's packed frames.
+ * Returns null if the fighter is missing any pose the clip references, so the
+ * caller can try a fallback rather than emit a clip that points at a hole.
+ *
+ * Lives here (a zero-dependency module) and is shared by the atlas builder and
+ * the reaction-fallback patch so the two cannot diverge — the same discipline as
+ * the shared footAnchorX: pipeline logic re-derived in a second place drifts and
+ * eventually lies.
+ */
+export function resolveClip(
+  spec: ClipSpec | undefined,
+  nameToIndex: Map<string, number>,
+): { frames: number[]; durations: number[]; loop: boolean } | null {
+  if (!spec) return null
+  const frames: number[] = []
+  const durations: number[] = []
+  for (let i = 0; i < spec.frames.length; i++) {
+    const idx = nameToIndex.get(spec.frames[i])
+    if (idx === undefined) return null
+    frames.push(idx)
+    durations.push(spec.durations[i])
+  }
+  if (!frames.length) return null
+  return { frames, durations, loop: spec.loop }
+}
+
 // Per-move clips a MoveFrame / attack stance can index into. Defined as named
 // consts so the sim's move ids (st.LP, cr.HP, qcf.P …) can alias straight onto
 // them below without re-specifying frames and durations.
@@ -726,6 +753,37 @@ export const CLIPS: Record<string, ClipSpec> = {
   'qcf.fast': FIREBALL, // Ion Bolt (Charged)
   'super.storm': SUPER, // Ion Storm
   'throw.f': HP, // Repel Toss — no dedicated grab pose; the heavy lunge reads closest
+}
+
+/**
+ * Shallow reaction clips for a partially-generated fighter that never got the
+ * deep reaction poses (hit-reel, hit-settle, juggle-*, knockdown-impact,
+ * wakeup-rise) and so drops the rich CLIPS entry above. Built ONLY from the core
+ * poses every fighter generates — hit-high, hit-low, knockdown, ko, wakeup, idle
+ * — as HARD CUTS between distinct poses. No `tw-*` inbetween exists for these
+ * edges, and that is deliberate: a big pose delta must be a fifth KEY, never a
+ * fifth tween (a morph across this much rotation double-images).
+ *
+ * `buildAssets` uses one of these ONLY when the matching rich clip drops, so a
+ * complete fighter keeps its authored 5-/7-key reaction and a partial one plays
+ * a real multi-key reel instead of `AnimationDriver` silently resolving the
+ * stance to `idle` — the exact defect ("the body registers nothing") that the
+ * clipCandidates idle fallback hides. Frames are reused from the fighter's own
+ * already-registered atlas cells, so there is no new pose, no re-segmentation
+ * and no foot-anchor drift to introduce.
+ *
+ * No `juggle` here on purpose: the core set has no airborne-hit pose, and faking
+ * one from a neutral jump would read as a jump, not a launch. clipCandidates
+ * resolves the `juggle` STANCE to `['juggle','hurt','idle']`, so a juggled
+ * partial fighter degrades to this `hurt` reel — a real reaction, not a lie.
+ */
+export const FALLBACK_CLIPS: Record<string, ClipSpec> = {
+  // Snap-back (the impact, held through hitstop) -> double over -> recover to guard.
+  hurt: clip(false, ['hit-high', 5], ['hit-low', 3], ['idle-1', 6]),
+  // Hit the ground rigid -> limbs settle and crumple. Two distinct grounded poses.
+  knockdown: clip(false, ['knockdown', 5], ['ko', 16]),
+  // Kneel-and-push-up -> stood in guard. (The core set has no mid-rise pose.)
+  wakeup: clip(false, ['wakeup', 8], ['idle-1', 4]),
 }
 
 /**

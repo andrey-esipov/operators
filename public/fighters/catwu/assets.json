@@ -584,37 +584,36 @@
     },
     "hurt": {
       "frames": [
-        28
+        28,
+        29,
+        0
       ],
       "durations": [
-        10
-      ],
-      "loop": false
-    },
-    "juggle": {
-      "frames": [
-        28
-      ],
-      "durations": [
-        10
+        5,
+        3,
+        6
       ],
       "loop": false
     },
     "knockdown": {
       "frames": [
-        32
+        32,
+        35
       ],
       "durations": [
-        20
+        5,
+        16
       ],
       "loop": false
     },
     "wakeup": {
       "frames": [
-        33
+        33,
+        0
       ],
       "durations": [
-        14
+        8,
+        4
       ],
       "loop": false
     },

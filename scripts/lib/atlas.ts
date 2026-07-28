@@ -17,7 +17,7 @@
 import sharp from 'sharp'
 import { findAnchor, footAnchorX } from './sprite-pipeline'
 import type { Box, FighterAssets, SpriteFrameMeta, Vec2 } from '../../src/fight/types'
-import { CLIPS, FRAME_ORDER, frameIndex } from './frame-spec'
+import { CLIPS, FALLBACK_CLIPS, FRAME_ORDER, frameIndex, resolveClip } from './frame-spec'
 
 /**
  * Max GPU texture dimension we allow. 8192 is the WebGL2 spec floor that every
@@ -146,22 +146,17 @@ export async function packAtlas(
     return { name, rect, anchor: t.anchor }
   })
 
-  // Build clips, remapping frame names to indices into frameMeta. Skip any
-  // clip that references a frame we failed to produce, rather than emit a clip
-  // that points at a hole.
+  // Build clips, remapping frame names to indices into frameMeta. A clip whose
+  // rich (authored) form references a pose this fighter never generated drops to
+  // a core-pose-only fallback (see FALLBACK_CLIPS) so the stance still plays a
+  // real reel; if neither resolves, the clip is skipped rather than emitted with
+  // a hole.
   const nameToMeta = new Map(frameMeta.map((m, i) => [m.name, i]))
   const clips: FighterAssets['clips'] = {}
-  for (const [clipName, spec] of Object.entries(CLIPS)) {
-    const indices: number[] = []
-    const durations: number[] = []
-    let complete = true
-    for (let i = 0; i < spec.frames.length; i++) {
-      const idx = nameToMeta.get(spec.frames[i])
-      if (idx === undefined) { complete = false; break }
-      indices.push(idx)
-      durations.push(spec.durations[i])
-    }
-    if (complete && indices.length) clips[clipName] = { frames: indices, durations, loop: spec.loop }
+  for (const clipName of Object.keys(CLIPS)) {
+    const built = resolveClip(CLIPS[clipName], nameToMeta) ??
+      resolveClip(FALLBACK_CLIPS[clipName], nameToMeta)
+    if (built) clips[clipName] = built
   }
 
   const assets: FighterAssets = {

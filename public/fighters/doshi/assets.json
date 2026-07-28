@@ -1506,6 +1506,41 @@
         6
       ],
       "loop": false
+    },
+    "hurt": {
+      "frames": [
+        35,
+        36,
+        0
+      ],
+      "durations": [
+        5,
+        3,
+        6
+      ],
+      "loop": false
+    },
+    "knockdown": {
+      "frames": [
+        40,
+        43
+      ],
+      "durations": [
+        5,
+        16
+      ],
+      "loop": false
+    },
+    "wakeup": {
+      "frames": [
+        41,
+        0
+      ],
+      "durations": [
+        8,
+        4
+      ],
+      "loop": false
     }
   },
   "heightCm": 180

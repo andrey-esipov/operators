@@ -53,6 +53,9 @@ const DEFAULT_B = 'lenny'
 /** Archetype each roster face fights as, when not overridden by `?p1`/`?p2`. */
 const DEFAULT_ARCHETYPE = 'operator'
 
+/** The arena a first-time player sees. See the note at the `?stage=` parse. */
+const DEFAULT_STAGE: ScenarioId = 'pre-pmf'
+
 type Phase = 'booting' | 'loading' | 'playing' | 'error'
 
 export function PlayableMatch() {
@@ -66,7 +69,13 @@ export function PlayableMatch() {
   const [fightStarted, setFightStarted] = useState(false)
 
   const params = new URLSearchParams(window.location.search)
-  const stageParam = (params.get('stage') as ScenarioId) || 'ipo-prep'
+  // `pre-pmf` won a blind, shuffled ranking of all seven capturable arenas by a
+  // clear margin (7.5 against a 5.5 worst, spread 2.0 -- the largest single
+  // lever measured on this project). It is the only stage that genuinely lights
+  // the fighter: god-rays, warm rim against cool fill, dust, real depth. Two of
+  // the three standing "the fighters look pasted on" complaints are stage
+  // lighting rather than character craft, and they do not recur here.
+  const stageParam = (params.get('stage') as ScenarioId) || DEFAULT_STAGE
   const aId = params.get('a') || DEFAULT_A
   const bId = params.get('b') || DEFAULT_B
   const p1 = params.get('p1') || DEFAULT_ARCHETYPE
@@ -105,7 +114,7 @@ export function PlayableMatch() {
 
     void (async () => {
       try {
-        const scenario: ScenarioId = STAGE_ORDER.includes(stageParam) ? stageParam : 'ipo-prep'
+        const scenario: ScenarioId = STAGE_ORDER.includes(stageParam) ? stageParam : DEFAULT_STAGE
         renderer = new FightRenderer(canvas, { scenario })
         await renderer.init()
         // Bail out *through* dispose, never around it: an early return leaks a

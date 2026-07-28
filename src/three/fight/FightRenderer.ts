@@ -23,7 +23,7 @@ import { Fighter, type FighterView } from './Fighter'
 import { buildAtlasTextures, type AtlasSource } from './AtlasTextures'
 import { FightCamera, type StageBounds } from './FightCamera'
 import { FightVfx } from './FightVfx'
-import { simToWorld, CM_TO_WORLD } from './worldScale'
+import { simToWorld } from './worldScale'
 
 /**
  * Top-level controller that turns a running simulation into a rendered fight.
@@ -395,8 +395,8 @@ class FightWorld {
       const ax = a.chestAnchor().x
       const bx = b.chestAnchor().x
       const topY = Math.max(
-        simToWorld(views[0].pos).y + heightWorld(views[0]),
-        simToWorld(views[1].pos).y + heightWorld(views[1]),
+        simToWorld(views[0].pos).y + heightWorld(),
+        simToWorld(views[1].pos).y + heightWorld(),
       )
       this.r.cameraRef.update(realDt, {
         ax,
@@ -412,7 +412,14 @@ class FightWorld {
   dispose() {}
 }
 
-function heightWorld(v: FighterView): number {
-  // Rough head height above feet for framing; airborne pos.y already in feet.
-  return 1.9 + Math.max(0, v.pos.y) * CM_TO_WORLD
+function heightWorld(): number {
+  // Head height above the feet, in world units, for vertical framing. The
+  // airborne offset is deliberately NOT added here: simToWorld already places
+  // the feet at their airborne height (GROUND_Y + pos.y * CM_TO_WORLD), so a
+  // jumping fighter's head is feetWorldY + this constant. Adding pos.y a second
+  // time double-counts the entire jump/juggle height, which doubled topY, blew
+  // zForY past the dolly clamp and shrank both fighters to a ~5% smear on every
+  // launch — then lurched back in on landing. marginY already reserves the
+  // headroom a jump needs.
+  return 1.9
 }

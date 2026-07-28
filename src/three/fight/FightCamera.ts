@@ -59,6 +59,22 @@ export class FightCamera {
   // large in frame even at range.
   private readonly marginX = 1.45
   private readonly marginY = 1.9
+  // Vertical follow (jumps / juggles). The camera must always keep the grounded
+  // fighter — the one actually acting — readable, so a launched opponent is
+  // followed only so far before it is allowed to ride toward the top edge
+  // rather than dollying the whole scene out until both fighters are specks.
+  //   maxRiseFit  caps how much airborne height feeds the framing, in world
+  //               units above rest (~3.5 ≈ a tall jump). Beyond it the fighter
+  //               rises in frame instead of shrinking everyone.
+  //   vFollow     how fast the frame dollies out per unit of (capped) rise.
+  //   vLookFollow how fast the aim pans up. Kept below vFollow so the growing
+  //               frustum always outruns the pan and the grounded feet never
+  //               fall off the bottom edge.
+  //   vCamFollow  how fast the camera itself lifts (a touch under the aim pan).
+  private readonly maxRiseFit = 3.5
+  private readonly vFollow = 0.34
+  private readonly vLookFollow = 0.3
+  private readonly vCamFollow = 0.24
 
   constructor(cam: THREE.PerspectiveCamera, bounds: StageBounds) {
     this.cam = cam
@@ -88,11 +104,16 @@ export class FightCamera {
     const midX = (f.ax + f.bx) * 0.5
     const sep = Math.abs(f.ax - f.bx)
 
-    // Distance needed to fit both fighters horizontally, and the jump apex
-    // vertically, at the current fov/aspect. Take whichever needs more room.
+    // Distance needed to fit both fighters horizontally, and to follow vertical
+    // action, at the current fov/aspect. Take whichever needs more room.
     const vfov = THREE.MathUtils.degToRad(this.cam.fov)
     const halfSpanX = sep * 0.5 + this.marginX
-    const halfSpanY = Math.max(this.marginY, (f.topY - this.baseY) * 0.5 + this.marginY)
+    // Capped vertical follow: rise is how far the higher fighter is above rest;
+    // vRise clamps it so a big launch stops pulling the dolly out and instead
+    // lets that fighter ride toward the top of frame (see field notes).
+    const rise = Math.max(0, f.topY - this.baseY)
+    const vRise = Math.min(rise, this.maxRiseFit)
+    const halfSpanY = this.marginY + vRise * this.vFollow
     const tanV = Math.tan(vfov * 0.5)
     const tanH = tanV * this.cam.aspect
     const zForX = halfSpanX / Math.max(0.0001, tanH)
@@ -107,10 +128,11 @@ export class FightCamera {
     const hi = this.bounds.maxX - halfViewX
     const camX = lo <= hi ? clamp(midX, lo, hi) : midX
 
-    // Rise toward the action when it goes airborne, but keep feet visible.
-    const rise = Math.max(0, f.topY - this.baseY)
-    const lookY = this.aimY + rise * 0.34
-    const camY = this.camBaseY + rise * 0.24
+    // Follow the vertical action with the capped rise so the aim and camera pan
+    // up in lockstep with the (bounded) dolly — never far enough to push the
+    // grounded fighter's feet off the bottom edge.
+    const lookY = this.aimY + vRise * this.vLookFollow
+    const camY = this.camBaseY + vRise * this.vCamFollow
 
     // Springs give the operator mass — snappy but never jittery.
     const targetPos = this.tmpPos.set(camX, camY, z + this.dolly.value)

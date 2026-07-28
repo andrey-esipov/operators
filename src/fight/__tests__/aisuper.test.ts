@@ -63,7 +63,7 @@ describe('AI supers', () => {
     // Deterministic: same seed, same first super, every run — the property the
     // screenshot tool relies on to capture the same moment each time.
     expect(a.supers[0].frame).toBe(b.supers[0].frame)
-    expect(a.supers[0].frame).toBe(1212)
+    expect(a.supers[0].frame).toBe(1333)
   })
 
   it('every archetype the AI pilots can and does reach its super', () => {

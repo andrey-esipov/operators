@@ -57,16 +57,20 @@ interface Tier {
    *  up. Small numbers still fire reliably because opportunities span several
    *  frames; a higher tier simply cashes them in more often and sooner. */
   superChance: number
+  /** Probability of reading a committed attack (or incoming fireball) and
+   *  parrying it instead of blocking — the Third Strike defensive read. Higher
+   *  tiers parry far more; a beginner almost never lands one. */
+  parryChance: number
 }
 
 const TIERS: Record<Difficulty, Tier> = {
   // Slow to react, drops most blocks, barely techs — a beginner punching bag
   // that still occasionally defends itself.
-  easy: { reactionFrames: 22, blockChance: 0.30, punishChance: 0.20, techChance: 0.10, aggression: 0.30, superChance: 0.05 },
+  easy: { reactionFrames: 22, blockChance: 0.30, punishChance: 0.20, techChance: 0.10, aggression: 0.30, superChance: 0.05, parryChance: 0.05 },
   // Competent: blocks the obvious, punishes the slow, techs some throws.
-  medium: { reactionFrames: 14, blockChance: 0.65, punishChance: 0.55, techChance: 0.40, aggression: 0.55, superChance: 0.12 },
+  medium: { reactionFrames: 14, blockChance: 0.65, punishChance: 0.55, techChance: 0.40, aggression: 0.55, superChance: 0.12, parryChance: 0.28 },
   // Sharp but still human-shaped: an 8-frame read is fast, not frame-perfect.
-  hard: { reactionFrames: 8, blockChance: 0.92, punishChance: 0.85, techChance: 0.70, aggression: 0.78, superChance: 0.22 },
+  hard: { reactionFrames: 8, blockChance: 0.92, punishChance: 0.85, techChance: 0.70, aggression: 0.78, superChance: 0.22, parryChance: 0.6 },
 }
 
 /** What the AI reacts to — the opponent's state, snapshotted so we can react to
@@ -79,6 +83,12 @@ interface Obs {
   inRecovery: boolean
   throwStartup: boolean
   oppHealth: number
+  /** Guard of the opponent's live strike (startup/active, not recovery), or null.
+   *  Drives the parry direction: 'low' parries down, everything else forward. */
+  attackGuard: string | null
+  /** Nearest incoming enemy projectile heading at me: its horizontal distance and
+   *  guard, or null. Lets the AI read a fireball and parry it. */
+  projectile: { dist: number; guard: string } | null
 }
 
 export interface AIOptions {
@@ -135,6 +145,21 @@ export class FighterAI {
     const meF = state.fighters[me]
     const opp = state.fighters[1 - me]
     const oppMove = opp.move ? getFighterDef(opp.id).moves[opp.move.id] : undefined
+    // A strike is parryable only while it can still connect (startup + active),
+    // not once it's whiffed into recovery. Throws and unblockables never parry.
+    const liveStrike =
+      opp.stance === 'attack' && !!oppMove && !!opp.move &&
+      opp.move.frame <= oppMove.active[1] &&
+      oppMove.hit.guard !== 'throw' && oppMove.hit.guard !== 'unblockable'
+    // Nearest enemy fireball actually closing on me.
+    let projectile: { dist: number; guard: string } | null = null
+    for (const p of state.projectiles ?? []) {
+      if (p.owner === me) continue
+      const closing = Math.sign(p.vel.x) === Math.sign(meF.pos.x - p.pos.x)
+      if (!closing) continue
+      const d = Math.abs(p.pos.x - meF.pos.x)
+      if (!projectile || d < projectile.dist) projectile = { dist: d, guard: p.hit.guard }
+    }
     const cur: Obs = {
       grounded: opp.grounded,
       posY: opp.pos.y,
@@ -145,6 +170,8 @@ export class FighterAI {
         !!oppMove && !!opp.move && oppMove.hit.guard === 'throw' &&
         opp.move.frame <= oppMove.active[1],
       oppHealth: opp.health,
+      attackGuard: liveStrike ? oppMove!.hit.guard : null,
+      projectile,
     }
     this.obs.push(cur)
     const idx = this.obs.length - 1 - this.tier.reactionFrames
@@ -206,6 +233,15 @@ export class FighterAI {
       }
     }
 
+    // Read an incoming fireball and parry it head-on (tight window, meter reward)
+    // instead of eating chip — the zoner-breaking answer a Third Strike player
+    // reaches for. Distance-gated so the tap lands inside the parry window.
+    if (o.projectile && o.projectile.dist < 80 && me.grounded &&
+        this.rng.next() < this.tier.parryChance) {
+      const pdir = o.projectile.guard === 'low' ? 2 : 6
+      return frame(toward(pdir, facing))
+    }
+
     // Anti-air: opponent airborne and in range -> rising uppercut (cr.HP). Gated
     // by the tier so easy whiffs it more often.
     if (!o.grounded && o.posY > 55 && o.dist < 175 + R) {
@@ -221,6 +257,13 @@ export class FighterAI {
         // Whiff punish: quarter-circle Surge Palm for a real reward.
         this.queue = [{ rel: 3 }, { rel: 6, buttons: ['hp'] }]
         return frame(toward(2, facing))
+      }
+      // Parry the read: tap INTO the attack (forward for highs, down for lows) in
+      // its tight window instead of blocking. A fresh tap arms the parry, so this
+      // single frame is enough; the reward (frame advantage + meter) makes it the
+      // aggressive defensive option a skilled player picks over a safe block.
+      if (o.attackGuard && this.rng.next() < this.tier.parryChance) {
+        return frame(toward(o.attackGuard === 'low' ? 2 : 6, facing))
       }
       if (this.rng.next() < this.tier.blockChance) {
         return frame(toward(o.posY > 20 ? back : downBack, facing))

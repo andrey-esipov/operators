@@ -21,13 +21,17 @@ import { editPose, removeFlatBackground, registerFrame, findAnchor, mapLimit } f
 import {
   FRAMES,
   STANCE_FRAME,
+  TWEENS,
   buildPrompt,
+  CLIPS,
   type FrameSpec,
 } from './lib/frame-spec'
 import { referenceHistogram, validateFrame, type ValidationResult } from './lib/sprite-validate'
 import { packAtlas, assertAnchorsPreserved, type RegisteredFrame } from './lib/atlas'
 import { contactSheet, clipFilmstrip, previewHtml, FILMSTRIP_CLIPS, type RegMap } from './lib/preview'
 import { clipApng } from './lib/apng'
+import { morph } from './lib/inbetween'
+import { analyzeClip, type TemporalReport } from './lib/temporal'
 
 // Shared registration frame, matching the probe. A 512 canvas with the feet at
 // (256, 470) and a 380px neutral height leaves headroom above for a jump and
@@ -58,6 +62,7 @@ export interface FighterSummary {
   failedFrames: string[]
   missingFrames: string[]
   warnedFrames: string[]
+  temporalWarnings: string[]
   atlasSize: { width: number; height: number }
   anchorsOk: boolean
   ms: number
@@ -200,6 +205,56 @@ export async function generateFighter(
   }
   if (missing.length) log(`  MISSING (dropped from atlas): ${missing.join(', ')}`)
 
+  // ── Inbetweens ────────────────────────────────────────────────────────────
+  // Synthesise each tween by flow-morphing its two neighbour keys (free, local,
+  // deterministic). Skip any whose endpoints didn't survive generation — the
+  // clip packer then drops the incomplete clip rather than point at a hole.
+  let tweens = 0
+  for (const tw of TWEENS) {
+    const a = regMap.get(tw.from)
+    const b = regMap.get(tw.to)
+    if (!a || !b) continue
+    try {
+      const buf = await morph(a.buf, b.buf, tw.t, { flowRes: 128 })
+      // A tween skips registration, so derive its foot anchor straight from its
+      // own pixels (same bottom-band centroid the atlas check re-derives) rather
+      // than assuming the shared ORIGIN — otherwise the stored anchor wouldn't
+      // match the morphed feet and the renderer would ground it a few px off.
+      const fa = await findAnchor(buf)
+      const origin = { x: fa.footX, y: fa.bottom + 1 }
+      registered.push({ name: tw.name, buf, origin })
+      regMap.set(tw.name, { buf, w: CANVAS, h: CANVAS })
+      tweens++
+    } catch (e) {
+      log(`    tween ${tw.name}: morph failed — ${(e as Error).message.split('\n')[0]}`)
+    }
+  }
+  if (tweens) log(`  synthesised ${tweens} inbetween frame(s)`)
+
+  // ── Temporal coherence ────────────────────────────────────────────────────
+  // Per-frame validation cannot see a stutter; measure the frame-to-frame
+  // silhouette delta series of the high-traffic clips and flag any transition
+  // wildly out of line with its neighbours. Warn (don't fail) — a flagged clip
+  // is worth a human look, and the report records it.
+  const temporalWarn: string[] = []
+  for (const clipName of ['walk-fwd', 'walk-back', 'hurt', 'juggle', 'knockdown']) {
+    const spec = CLIPS[clipName]
+    if (!spec) continue
+    const bufs = spec.frames.map((n) => regMap.get(n)?.buf).filter((b): b is Buffer => !!b)
+    if (bufs.length < 3) continue
+    let rep: TemporalReport
+    try {
+      rep = await analyzeClip(bufs)
+    } catch {
+      continue
+    }
+    if (!rep.ok) {
+      const detail = rep.flags.map((f) => `${f.kind}@${f.at}(${f.delta.toFixed(3)}v${f.local.toFixed(3)})`).join(' ')
+      temporalWarn.push(`${clipName}: ${detail}`)
+      log(`    temporal: ${clipName} — ${detail}`)
+    }
+  }
+
   // Pack the atlas and prove the anchors survived the trim.
   const atlasHref = `/fighters/${id}/atlas.png`
   const { atlas, assets } = await packAtlas(id, atlasHref, registered, opts.heightCm ?? DEFAULT_HEIGHT_CM)
@@ -244,6 +299,7 @@ export async function generateFighter(
     failedFrames: outcomes.filter((o) => !o.passed).map((o) => o.name),
     missingFrames: missing,
     warnedFrames: outcomes.filter((o) => o.warnings.length).map((o) => o.name),
+    temporalWarnings: temporalWarn,
     atlasSize: { width: meta.width ?? 0, height: meta.height ?? 0 },
     anchorsOk: anchorCheck.ok,
     ms: Date.now() - t0,
@@ -259,6 +315,7 @@ function printSummary(s: FighterSummary) {
   if (s.failedFrames.length) console.log(`  FAILED (kept best): ${s.failedFrames.join(', ')}`)
   if (s.missingFrames.length) console.log(`  MISSING (dropped): ${s.missingFrames.join(', ')}`)
   if (s.warnedFrames.length) console.log(`  warnings (review): ${s.warnedFrames.join(', ')}`)
+  if (s.temporalWarnings.length) console.log(`  temporal flags: ${s.temporalWarnings.join(' | ')}`)
 }
 
 async function main() {

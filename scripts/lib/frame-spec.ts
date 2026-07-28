@@ -302,6 +302,43 @@ export const FRAMES: FrameSpec[] = [
       'doubling over from a blow to the gut — torso folded sharply forward, both arms clutching in toward the ' +
       'stomach, knees buckling and dropping the body lower, head bowed, winded and hunched by the impact.',
   },
+  {
+    // The settle of a hitstun: the snap-back has peaked and the body is coming
+    // back toward guard. Played after hit-high it turns a single frozen recoil
+    // into a snap → recover beat.
+    name: 'hit-settle',
+    heightRatio: 0.99,
+    aspect: [0.3, 0.7],
+    pose:
+      'recovering balance just after a blow to the head — head and torso swinging back forward toward centre and ' +
+      'nearly upright again, both hands drawing back in toward a raised guard, weight resettling onto both feet, still a little rattled.',
+  },
+
+  // ── Juggle: an airborne tumble arc, launch → apex → fall ─────────────────
+  {
+    name: 'juggle-launch',
+    heightRatio: 1.1,
+    aspect: [0.45, 1.15],
+    pose:
+      'just launched off the ground by an uppercut — the body jackknifed backward and both feet lifting clear of ' +
+      'the floor, spine arched, head and arms thrown back loosely, completely airborne and helpless, rising fast.',
+  },
+  {
+    name: 'juggle-apex',
+    heightRatio: 0.72,
+    aspect: [1.0, 2.4],
+    pose:
+      'at the very top of a juggle, tumbling in mid-air — the body turned almost horizontal and rotating, arms and ' +
+      'legs trailing loosely behind the motion, head tipped back and limp, fully airborne with no control, floating at the peak.',
+  },
+  {
+    name: 'juggle-fall',
+    heightRatio: 1.05,
+    aspect: [0.5, 1.35],
+    pose:
+      'dropping out of a juggle, upside-down — the body inverted with the head falling toward the ground and the ' +
+      'legs kicked up overhead, arms dangling down loosely, plummeting helplessly head-first, mid-fall.',
+  },
 
   // ── Blocks ────────────────────────────────────────────────────────────
   {
@@ -322,6 +359,17 @@ export const FRAMES: FrameSpec[] = [
   },
 
   // ── Knockdown & wakeup ─────────────────────────────────────────────────
+  {
+    // The instant of crashing down — the body still partly off the floor as it
+    // slams and bounces. Played before the flat rest it turns a static prone
+    // frame into a real impact.
+    name: 'knockdown-impact',
+    heightRatio: 0.52,
+    aspect: [1.1, 2.5],
+    pose:
+      'crashing down onto the ground on the back and shoulders — the body slamming flat and bouncing slightly, ' +
+      'limbs flung out from the impact, still a little off the floor mid-bounce, hitting the ground hard and low in the frame.',
+  },
   {
     name: 'knockdown',
     heightRatio: 0.42,
@@ -358,8 +406,44 @@ export const FRAMES: FrameSpec[] = [
   },
 ]
 
-/** All frame names, in generation order, with the free stance frame first. */
-export const FRAME_ORDER: string[] = [STANCE_FRAME, ...FRAMES.map((f) => f.name)]
+/**
+ * Inbetweens, synthesised by optical-flow morph from two neighbouring key
+ * frames (see scripts/lib/inbetween.ts) rather than generated. An inbetween is
+ * defined by its endpoints, so deriving it from them keeps it on-model and,
+ * crucially, temporally coherent — the axis a fighting game lives or dies on.
+ * These are the highest-screen-time clips: hit reactions (on screen every few
+ * seconds), the juggle arc, and the walk cycle.
+ */
+export interface TweenSpec {
+  name: string
+  from: string
+  to: string
+  /** 0..1 position between `from` and `to`. */
+  t: number
+}
+
+export const TWEENS: TweenSpec[] = [
+  // Hitstun: snap-back → settle → back toward guard.
+  { name: 'tw-hh-hs', from: 'hit-high', to: 'hit-settle', t: 0.5 },
+  { name: 'tw-hs-idle', from: 'hit-settle', to: 'idle-1', t: 0.5 },
+  // Juggle arc: launch → apex → fall, a body tumbling through the air.
+  { name: 'tw-jl-ja', from: 'juggle-launch', to: 'juggle-apex', t: 0.5 },
+  { name: 'tw-ja-jf', from: 'juggle-apex', to: 'juggle-fall', t: 0.5 },
+  // Knockdown: the bounce settling to the floor.
+  { name: 'tw-ki-kd', from: 'knockdown-impact', to: 'knockdown', t: 0.5 },
+  // Walk cycles: an inbetween between every contact/passing key, wrapping.
+  { name: 'tw-wf-12', from: 'walk-fwd-1', to: 'walk-fwd-2', t: 0.5 },
+  { name: 'tw-wf-23', from: 'walk-fwd-2', to: 'walk-fwd-3', t: 0.5 },
+  { name: 'tw-wf-34', from: 'walk-fwd-3', to: 'walk-fwd-4', t: 0.5 },
+  { name: 'tw-wf-41', from: 'walk-fwd-4', to: 'walk-fwd-1', t: 0.5 },
+  { name: 'tw-wb-12', from: 'walk-back-1', to: 'walk-back-2', t: 0.5 },
+  { name: 'tw-wb-23', from: 'walk-back-2', to: 'walk-back-3', t: 0.5 },
+  { name: 'tw-wb-34', from: 'walk-back-3', to: 'walk-back-4', t: 0.5 },
+  { name: 'tw-wb-41', from: 'walk-back-4', to: 'walk-back-1', t: 0.5 },
+]
+
+/** All frame names, in generation order: free stance, generated keys, then synthesised tweens. */
+export const FRAME_ORDER: string[] = [STANCE_FRAME, ...FRAMES.map((f) => f.name), ...TWEENS.map((t) => t.name)]
 
 export function frameIndex(name: string): number {
   const i = FRAME_ORDER.indexOf(name)
@@ -413,8 +497,16 @@ export const CLIPS: Record<string, ClipSpec> = {
   // and `hurt`, not after the stance. (An earlier cut named them after the
   // stance and block/hitstun animation silently vanished.)
   idle: clip(true, ['idle-1', 12], ['idle-2', 12], ['idle-3', 12], ['idle-2', 12]),
-  'walk-fwd': clip(true, ['walk-fwd-1', 9], ['walk-fwd-2', 9], ['walk-fwd-3', 9], ['walk-fwd-4', 9]),
-  'walk-back': clip(true, ['walk-back-1', 9], ['walk-back-2', 9], ['walk-back-3', 9], ['walk-back-4', 9]),
+  'walk-fwd': clip(
+    true,
+    ['walk-fwd-1', 5], ['tw-wf-12', 3], ['walk-fwd-2', 5], ['tw-wf-23', 3],
+    ['walk-fwd-3', 5], ['tw-wf-34', 3], ['walk-fwd-4', 5], ['tw-wf-41', 3],
+  ),
+  'walk-back': clip(
+    true,
+    ['walk-back-1', 5], ['tw-wb-12', 3], ['walk-back-2', 5], ['tw-wb-23', 3],
+    ['walk-back-3', 5], ['tw-wb-34', 3], ['walk-back-4', 5], ['tw-wb-41', 3],
+  ),
   crouch: clip(true, ['crouch', 8]),
   'jump-rise': clip(false, ['jump-rise', 6], ['jump-apex', 8]),
   'jump-fall': clip(false, ['jump-fall', 8]),
@@ -422,9 +514,12 @@ export const CLIPS: Record<string, ClipSpec> = {
   backdash: clip(false, ['backdash', 10]),
   attack: clip(false, ['mp-active', 8]),
   block: clip(true, ['block-stand', 6]),
-  hurt: clip(false, ['hit-high', 10]),
-  juggle: clip(false, ['hit-high', 10]),
-  knockdown: clip(false, ['knockdown', 20]),
+  // Hitstun: a snap-back that settles back toward guard, not one frozen recoil.
+  hurt: clip(false, ['hit-high', 3], ['tw-hh-hs', 3], ['hit-settle', 4], ['tw-hs-idle', 4]),
+  // Juggle: a real airborne tumble through the arc — launch, apex, fall.
+  juggle: clip(false, ['juggle-launch', 3], ['tw-jl-ja', 3], ['juggle-apex', 4], ['tw-ja-jf', 3], ['juggle-fall', 5]),
+  // Knockdown: crash and bounce, then settle flat.
+  knockdown: clip(false, ['knockdown-impact', 4], ['tw-ki-kd', 3], ['knockdown', 16]),
   wakeup: clip(false, ['wakeup', 14]),
   'throw-tech': clip(false, ['block-stand', 8]),
   ko: clip(false, ['ko', 30]),

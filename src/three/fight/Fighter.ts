@@ -69,6 +69,7 @@ export class Fighter {
   readonly mesh: THREE.Mesh
   private uniforms: SpriteFighterUniforms
   private shadow: THREE.Mesh
+  private bloomMask: THREE.Mesh
   private assets: FighterAssets | null = null
   private pxToWorld = CM_TO_WORLD
   private curFrame = -1
@@ -86,14 +87,33 @@ export class Fighter {
     this.mesh = new THREE.Mesh(makeUnitQuad(), mat)
     this.mesh.frustumCulled = false
     this.mesh.renderOrder = 10
+
     // Keep the fighter out of the (inverted) selective bloom. Blooming the
     // character's own diffuse doubles its luminance and blows lit skin / a hit
-    // flash to pure white — measured directly here: with bloom on the defender,
-    // the heavy-hit frame lost all albedo and read as a white silhouette; with
-    // the mesh excluded it keeps its full read. Real fighters bloom the stage,
-    // the VFX and the supers, never the sprite. The PostPipeline collects every
-    // mesh tagged noBloom into the exclusion set on its first frame.
-    this.mesh.userData.noBloom = true
+    // flash to pure white; and the bright white shoe soles bloom into glowing
+    // pools on the floor that read as the character hovering on light. Real
+    // fighters bloom the stage, the VFX and the supers, never the sprite.
+    //
+    // The catch: SelectiveBloomEffect masks its selection by DEPTH — it renders
+    // the selected meshes through a plain depth pass and excludes screen pixels
+    // whose scene depth matches. But the sprite's vertex shader ignores the
+    // quad's `position` attribute and rebuilds its geometry from uniforms
+    // (uSize/uPivot/squash/lean), so that depth pass draws the fighter as a tiny
+    // unit quad in the wrong place. The mask misses the real sprite entirely and
+    // tagging `mesh.noBloom` is a no-op (verified: toggling it changes nothing).
+    //
+    // Fix: a plain proxy quad that DOES honour its transform. The sprite is a
+    // flat billboard at a single depth (FIGHTER_Z[side]), so a quad covering its
+    // screen footprint at that z gives the depth pass the correct silhouette and
+    // the fighter is genuinely excluded. It never draws colour or depth in the
+    // main pass; it exists only to be seen by the bloom effect's depth pass.
+    this.bloomMask = new THREE.Mesh(
+      makeUnitQuad(),
+      new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false, depthTest: false }),
+    )
+    this.bloomMask.frustumCulled = false
+    this.bloomMask.renderOrder = -1
+    this.bloomMask.userData.noBloom = true
 
     this.shadow = new THREE.Mesh(
       new THREE.PlaneGeometry(1, 1),
@@ -109,7 +129,7 @@ export class Fighter {
     this.shadow.position.y = WORLD.GROUND_Y + 0.012
     this.shadow.renderOrder = 5
 
-    this.group.add(this.shadow, this.mesh)
+    this.group.add(this.shadow, this.mesh, this.bloomMask)
   }
 
   setAssets(assets: FighterAssets, tex: AtlasTextureSet, accent: string) {
@@ -195,6 +215,18 @@ export class Fighter {
     this.uniforms.uSquash.value.set(sx, sy)
     this.uniforms.uLean.value = lean
 
+    // ---- Bloom-exclusion depth proxy --------------------------------------
+    // Cover the sprite's screen footprint with a plain quad at the sprite's
+    // constant depth so the selective bloom's depth pass can mask the fighter
+    // (see the constructor). Sized generously from the frame's world extent —
+    // over-covering is harmless because the mask only affects scene pixels that
+    // are actually at this depth (the sprite itself and the thin floor line at
+    // its feet), never the background or the far stage.
+    const bw = this.uniforms.uSize.value.x * Math.abs(sx)
+    const bh = this.uniforms.uSize.value.y * Math.abs(sy)
+    this.bloomMask.position.set(feet.x - bw, feet.y - 0.15, FIGHTER_Z[this.side])
+    this.bloomMask.scale.set(bw * 2, bh + 0.3, 1)
+
     // ---- Lighting from the stage rig --------------------------------------
     applyLighting(this.uniforms, ctx.light)
     this.uniforms.uFogColor.value.copy(ctx.fogColor)
@@ -241,6 +273,8 @@ export class Fighter {
     ;(this.mesh.material as THREE.Material).dispose()
     this.shadow.geometry.dispose()
     ;(this.shadow.material as THREE.Material).dispose()
+    this.bloomMask.geometry.dispose()
+    ;(this.bloomMask.material as THREE.Material).dispose()
     this.group.parent?.remove(this.group)
   }
 }

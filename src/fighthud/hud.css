@@ -85,6 +85,13 @@
   background: var(--accent);
   box-shadow: 0 0 6px var(--accent);
 }
+/* Brief holding state while the atlas resolves — an accent tile, never a
+   debug letter. Pulses so a capture that catches it reads as alive. */
+.fhud-portrait.loading { animation: fhudPortraitLoad 0.9s ease-in-out infinite; }
+@keyframes fhudPortraitLoad {
+  0%, 100% { opacity: 0.72; }
+  50% { opacity: 1; }
+}
 
 .fhud-name {
   font-size: 11px;

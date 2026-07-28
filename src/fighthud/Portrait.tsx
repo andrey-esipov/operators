@@ -26,6 +26,7 @@ const BOX_H = 40 // px
  */
 export function Portrait({ side, rosterId, name, accent, initial }: Props) {
   const [info, setInfo] = useState<PortraitInfo | null>(null)
+  const [failed, setFailed] = useState(false)
   const alive = useRef(true)
 
   const id = rosterId ?? rosterIdForName(name)
@@ -33,9 +34,12 @@ export function Portrait({ side, rosterId, name, accent, initial }: Props) {
   useEffect(() => {
     alive.current = true
     setInfo(null)
+    setFailed(false)
     if (id) {
       loadPortrait(id).then((p) => {
-        if (alive.current) setInfo(p)
+        if (!alive.current) return
+        if (p) setInfo(p)
+        else setFailed(true)
       })
     }
     return () => {
@@ -43,7 +47,22 @@ export function Portrait({ side, rosterId, name, accent, initial }: Props) {
     }
   }, [id])
 
+  // While a resolvable portrait is still loading, show a neutral accent tile —
+  // never the letter badge. The badge is a genuine "no art" fallback (a fighter
+  // with no atlas, or a failed load); flashing a debug letter for ~1 frame at
+  // match start while the atlas fetch resolves would read as an unfinished HUD
+  // in any capture that snapshots the intro.
   if (!info) {
+    if (id && !failed) {
+      return (
+        <span
+          className={`fhud-portrait loading ${side}`}
+          style={{ width: `${BOX_H}px`, height: `${BOX_H}px`, ['--accent' as string]: accent }}
+          data-testid={`fhud-portrait-${side}`}
+          data-loading="1"
+        />
+      )
+    }
     return (
       <span
         className={`fhud-badge ${side}`}

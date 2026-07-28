@@ -58,11 +58,11 @@ describe('AI parries', () => {
     // operator vs vanguard: neither has a projectile, so this isolates the
     // melee (attackGuard) parry read with a stable rng stream.
     const a = parries(0x51ac, 'operator', 'vanguard')
-    expect(a.length).toBe(2)
+    expect(a.length).toBe(4)
     expect(a.every((p) => !p.fireball)).toBe(true) // no fireballs exist here
     // Deterministic anchor: drifts red if the parry read, the reaction delay,
     // or the rng stream changes underneath it.
-    expect(a[0].frame).toBe(707)
+    expect(a[0].frame).toBe(291)
   })
 
   it('is deterministic: the same seed parries on the same frames every run', () => {

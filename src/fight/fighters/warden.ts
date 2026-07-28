@@ -111,7 +111,7 @@ const crHP = mkMove({
   hitbox: [{ x: 12, y: 62, w: 54, h: 122 }],
   cancels: ['super'],
   hit: { damage: 80, blockstun: 16 /* -8 */, hitstun: 24, guard: 'high', level: 'launcher',
-    kbx: 1.0, kby: 8.5, pushback: 1.0, hitstop: 11, meterGain: 18, meterGainOnBlock: 7, juggle: true },
+    kbx: 1.0, kby: 9, pushback: 1.0, hitstop: 11, meterGain: 18, meterGainOnBlock: 7, juggle: true },
 })
 const crLK = mkMove({
   id: 'cr.LK', name: 'Low Shin', tag: 'normal', button: 'lk', sprite: nextSprite(),

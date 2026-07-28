@@ -127,12 +127,17 @@ export const KB_X_SCALE: Record<HitLevel, number> = {
   crumple: 1.5,
 }
 
-/** Vertical (launcher) knockback multiplier. Doubling the authored kby lifts the
- *  apex from ~36cm to ~150cm — roughly a fighter's own height, the arc the eye
- *  can actually track through a juggle. Apex grows with the square of kby
- *  (apex = kby(kby-1)/2, gravity decrements before integrating), so 2× kby is
- *  ~4× apex, which is exactly the deficit the launcher had. */
-export const KB_Y_SCALE = 2.0
+/** Vertical (launcher) knockback multiplier. A launcher must send the victim at
+ *  least as high as they can leap under their own power — a neutral jump peaks at
+ *  ~231 units (JUMP_VELOCITY 22), and a launcher that lifts them less reads as a
+ *  physicality inversion (measured: the old launcher hit only ~36, a fifth of a
+ *  jump). At 2.6 the weakest launcher (warden cr.HP, base kby 8.5) clears the jump
+ *  apex; the authored spread then places stronger launchers and DPs higher, which
+ *  is correct — a reversal uppercut should out-launch a crouching normal. Apex
+ *  grows with the square of kby (apex = kby(kby-1)/2, gravity decrements before
+ *  integrating), and airtime tracks the jump's, so the arc reads like a jump, not
+ *  slow-motion. */
+export const KB_Y_SCALE = 2.6
 
 /**
  * Wall bounce. A juggled fighter slammed into the wall hard enough rebounds off

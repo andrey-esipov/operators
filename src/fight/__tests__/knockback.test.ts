@@ -1,13 +1,17 @@
 /**
  * Impact must READ. Contact used to be weightless: a launcher lifted a ~180-unit
- * fighter barely 36 units (a quarter of body height) and a heavy shoved ~12 units
- * — a slow drift, not a hit. These are exactly the values that silently decay
- * back toward zero if KB_X_SCALE / KB_Y_SCALE or the friction curve are ever
- * "simplified", and a screenshot looks fine while the feel is gone. So this guard
- * asserts FLOORS on the actual post-hit trajectory, measured from the running sim.
+ * fighter barely 36 units (a quarter of body height) — and, damningly, less than
+ * a fifth of how high that same fighter reaches on a neutral jump (~231). A
+ * launcher that sends the victim LOWER than they can hop under their own power is
+ * a physicality inversion. The horizontal side drifted ~12 units — a slide, not a
+ * shove. These are exactly the values that silently decay back toward zero if
+ * KB_X_SCALE / KB_Y_SCALE are ever "simplified", and a screenshot looks fine
+ * while the feel is gone. So this guard asserts FLOORS on the actual post-hit
+ * trajectory, measured from the running sim, and ties the launcher floor to the
+ * jump itself so it can never again invert.
  *
  * Teeth (mutation-checked, see report):
- *  - KB_Y_SCALE -> 1.0 collapses the launcher apex to ~36 units  -> reds.
+ *  - KB_Y_SCALE -> 1.0 drops the launcher below the jump apex -> reds.
  *  - KB_X_SCALE.heavy -> 1.0 collapses heavy pushback to ~12 units -> reds.
  * A vacuous "the victim moved at all" check would survive both, so we pin real,
  * body-scaled floors (sim units are ~centimetres: a fighter stands ~180 tall).
@@ -17,6 +21,21 @@ import { describe, expect, it } from 'vitest'
 import { createFight, step } from '../sim'
 import { inp, dir } from './helpers'
 import type { Button, Direction, FightState } from '../types'
+
+/** Neutral jump apex for a fighter under its own power — the reference height a
+ *  launcher must clear. */
+function jumpApex(p: string): number {
+  const s = createFight(p, 'operator') as FightState
+  s.phase = 'fight'
+  s.phaseTimer = 0
+  let st = s
+  let apex = 0
+  for (let k = 0; k < 90; k++) {
+    st = step(st, [dir(8), dir(5)]).state
+    apex = Math.max(apex, st.fighters[0].pos.y)
+  }
+  return apex
+}
 
 /**
  * Land exactly one move from fighter 0 on a neutral, non-blocking fighter 1 at
@@ -54,19 +73,22 @@ function land(p1: string, d: Direction, btn: Button): { apex: number; horiz: num
 }
 
 describe('knockback reads as impact', () => {
-  it('a launcher lifts the victim to roughly a body height, not a hop', () => {
-    // operator cr.HP is the anti-air launcher (juggle: true). Its apex must clear
-    // a body-height-ish arc the eye can track through a juggle — not the old ~36.
+  it('a launcher sends the victim at least as high as their own neutral jump', () => {
+    // The anti-inversion guard: a launcher (operator cr.HP) must clear the jump
+    // apex, not fall short of it. Tied to the jump so it stays true if jump
+    // physics change.
+    const jump = jumpApex('operator')
     const { apex } = land('operator', 2, 'hp')
-    expect(apex).toBeGreaterThanOrEqual(130)
+    expect(apex).toBeGreaterThanOrEqual(jump)
   })
 
-  it('every archetype launcher clears the same floor', () => {
+  it('every archetype launcher clears the neutral jump too', () => {
     // Not just the operator: the launch multiplier is global, so a dead constant
-    // would drop all three at once.
+    // would drop all three below the jump at once.
     for (const p of ['operator', 'vanguard', 'warden']) {
+      const jump = jumpApex(p)
       const { apex } = land(p, 2, 'hp')
-      expect(apex).toBeGreaterThanOrEqual(130)
+      expect(apex).toBeGreaterThanOrEqual(jump)
     }
   })
 

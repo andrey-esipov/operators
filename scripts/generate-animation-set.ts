@@ -269,6 +269,12 @@ export async function generateFighter(
   let inkedFrames = 0, aaFrames = 0
   const keylineWarn: string[] = []
   const aaWarn: string[] = []
+  // Tweens carry a self-derived anchor (keys are pinned to the fixed ORIGIN).
+  // Since the edge passes below nudge the silhouette ~1px, re-derive each tween's
+  // anchor from its FINAL pixels so the stored anchor describes what ships, not
+  // the pre-edge morph — otherwise a prone tween's contact-centroid, whose
+  // lower-band cutoff shifts with the ~1px height change, drifts past tolerance.
+  const tweenNames = new Set(TWEENS.map((t) => t.name))
   for (const rf of registered) {
     const orig = await toRGBA(rf.buf)
     const work = { data: orig.data.slice(), width: orig.width, height: orig.height }
@@ -299,6 +305,10 @@ export async function generateFighter(
       rf.buf = outBuf
       const rm = regMap.get(rf.name)
       if (rm) rm.buf = outBuf
+      if (tweenNames.has(rf.name)) {
+        const fa = await findAnchor(outBuf)
+        rf.origin = { x: fa.footX, y: fa.bottom + 1 }
+      }
     }
   }
   log(`  keyline: inked ${inkedFrames}/${registered.length}  coverage-AA: ${aaFrames}/${registered.length}`)

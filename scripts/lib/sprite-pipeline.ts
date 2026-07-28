@@ -261,14 +261,78 @@ export interface Anchor {
 }
 
 /**
- * Locate the character and, crucially, the point it stands on.
+ * Above this width/height ratio a pose is treated as prone (a knockdown, a
+ * sprawled KO) rather than upright, and the horizontal pivot switches rule.
+ * Upright poses here top out around 1.0 (a crouch); prone poses measure 2.5-3.4.
+ */
+export const WIDE_ASPECT = 1.5
+/** Fraction of silhouette height, measured up from the floor, that counts as the
+ *  ground-contact mass for a prone pose. */
+export const CONTACT_FRAC = 0.4
+
+/**
+ * The horizontal pivot the whole pipeline aligns on, given an alpha sampler and
+ * the silhouette's bounding box. ONE implementation, shared by registration
+ * (`findAnchor`) and the atlas re-derivation (`assertAnchorsPreserved`), so the
+ * two can never drift apart on the definition of "the point it stands on".
  *
- * Aligning on bounding-box centre looks correct on a contact sheet and reads
- * as a limp when animated: a thrown punch widens the box to the right, which
- * drags the whole body left. So the pivot is the horizontal midpoint of the
- * *ground-contact band* (the bottom slice of the silhouette) — that tracks the
- * feet, which are what the character actually stands on, and it barely moves
- * when the arms do.
+ * Upright pose (tall): the midpoint of the ground-contact band (bottom slice).
+ * Bounding-box centre reads as a limp when animated — a thrown punch widens the
+ * box to the right and drags the whole body left — whereas the bottom band
+ * tracks the feet and barely moves when the arms do.
+ *
+ * Prone pose (wide): that band is no longer "the feet". It is a long horizontal
+ * strip whose left/right extremes are sprawled limb tips, and those extremes are
+ * NOT preserved through the registration resize — a 3.4-aspect knockdown drifts
+ * 19.5px between being pinned and being re-derived. So a prone pose registers on
+ * the alpha-weighted centroid of its lower contact mass instead: mass-weighted,
+ * so a thin flung limb barely moves it, and linear under scaling, so it survives
+ * the resize (measured <0.6px self-drift on every pose, upright and prone).
+ */
+export function footAnchorX(
+  alphaAt: (x: number, y: number) => number,
+  left: number,
+  right: number,
+  top: number,
+  bottom: number,
+  alphaThreshold = 8,
+): number {
+  const bboxW = right - left + 1
+  const bboxH = bottom - top + 1
+  const aspect = bboxW / bboxH
+
+  if (aspect >= WIDE_ASPECT) {
+    // Prone: alpha-weighted centroid of the bottom CONTACT_FRAC of the body.
+    const yStart = Math.max(top, Math.round(bottom - CONTACT_FRAC * bboxH))
+    let sumX = 0, mass = 0
+    for (let y = yStart; y <= bottom; y++) {
+      for (let x = left; x <= right; x++) {
+        const al = alphaAt(x, y)
+        if (al <= alphaThreshold) continue
+        sumX += x * al
+        mass += al
+      }
+    }
+    if (mass > 0) return sumX / mass
+  }
+
+  // Upright: midpoint of the ground-contact band (bottom 6%, min 3px).
+  const bandH = Math.max(3, Math.round(bboxH * 0.06))
+  let fl = Infinity, fr = -Infinity
+  for (let y = bottom; y > bottom - bandH && y >= 0; y--) {
+    for (let x = left; x <= right; x++) {
+      if (alphaAt(x, y) <= alphaThreshold) continue
+      if (x < fl) fl = x
+      if (x > fr) fr = x
+    }
+  }
+  return fr >= 0 ? (fl + fr) / 2 : (left + right) / 2
+}
+
+/**
+ * Locate the character and, crucially, the point it stands on. The horizontal
+ * pivot rule (upright band vs prone contact-centroid) lives in `footAnchorX`,
+ * shared with the atlas anchor check.
  */
 export async function findAnchor(pngWithAlpha: Buffer, alphaThreshold = 8): Promise<Anchor> {
   const { data, info } = await sharp(pngWithAlpha)
@@ -289,17 +353,10 @@ export async function findAnchor(pngWithAlpha: Buffer, alphaThreshold = 8): Prom
   }
   if (right < 0) throw new Error('empty sprite after segmentation')
 
-  // Ground-contact band: bottom 6% of the silhouette, min 3px.
-  const bandH = Math.max(3, Math.round((bottom - top + 1) * 0.06))
-  let fl = width, fr = -1
-  for (let y = bottom; y > bottom - bandH && y >= 0; y--) {
-    for (let x = 0; x < width; x++) {
-      if (data[(y * width + x) * 4 + 3] <= alphaThreshold) continue
-      if (x < fl) fl = x
-      if (x > fr) fr = x
-    }
-  }
-  const footX = fr >= 0 ? (fl + fr) / 2 : (left + right) / 2
+  const footX = footAnchorX(
+    (x, y) => data[(y * width + x) * 4 + 3],
+    left, right, top, bottom, alphaThreshold,
+  )
 
   return { left, right, top, bottom, width: right - left + 1, height: bottom - top + 1, footX }
 }

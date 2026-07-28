@@ -15,7 +15,7 @@
  * from the packed pixels and checks it against the stored metadata.
  */
 import sharp from 'sharp'
-import { findAnchor } from './sprite-pipeline'
+import { findAnchor, footAnchorX } from './sprite-pipeline'
 import type { Box, FighterAssets, SpriteFrameMeta, Vec2 } from '../../src/fight/types'
 import { CLIPS, FRAME_ORDER, frameIndex } from './frame-spec'
 
@@ -191,8 +191,7 @@ export async function assertAnchorsPreserved(
 
   for (const f of assets.frames) {
     const { x, y, w, h } = f.rect
-    // Bottom band of the silhouette within this rect — same ground-contact
-    // logic findAnchor uses, but computed against the packed atlas.
+    // Silhouette bounding box within this rect; the pivot rule is applied below.
     let top = h, bottom = -1, left = w, right = -1
     for (let yy = 0; yy < h; yy++) {
       for (let xx = 0; xx < w; xx++) {
@@ -204,16 +203,13 @@ export async function assertAnchorsPreserved(
       }
     }
     if (bottom < 0) { report.push(`${f.name}: empty rect`); ok = false; continue }
-    const bandH = Math.max(3, Math.round((bottom - top + 1) * 0.06))
-    let fl = w, fr = -1
-    for (let yy = bottom; yy > bottom - bandH && yy >= 0; yy--) {
-      for (let xx = 0; xx < w; xx++) {
-        if (data[((y + yy) * info.width + (x + xx)) * 4 + 3] <= 8) continue
-        if (xx < fl) fl = xx
-        if (xx > fr) fr = xx
-      }
-    }
-    const footX = fr >= 0 ? (fl + fr) / 2 : (left + right) / 2
+    // Same pose-adaptive pivot rule findAnchor uses (shared footAnchorX), so the
+    // check re-derives exactly what registration pinned — upright band midpoint
+    // or prone contact-centroid — rather than a second, divergent copy.
+    const footX = footAnchorX(
+      (xx, yy) => data[((y + yy) * info.width + (x + xx)) * 4 + 3],
+      left, right, top, bottom,
+    )
     const dx = Math.abs(footX - f.anchor.x)
     const dy = Math.abs((bottom + 1) - f.anchor.y)
     if (dx > tolerance || dy > tolerance) {

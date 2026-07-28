@@ -75,12 +75,31 @@ const capture = async (name) => {
   writeFileSync(`${OUT}/${name}.png`, await page.screenshot())
 }
 
-// ── Drive: intro -> fight, then force a match-deciding KO. ────────────────
-// Read the *real* phase off state(); __FIGHTHUD__.phase() is a beat label
-// (idle/attack/hit...) during fight and never equals 'fight'.
+// ── Drive: intro -> fight. Stop the instant the fight begins so the FIGHT!
+// banner (which rides the intro->fight transition and lives ~1.1s of wall time)
+// is still on screen. This is the beat tools/ceremony-shots.mjs can only catch
+// as best-effort on the live route -- a DPR-2 screenshot races the flash there.
+// Here the sim is paused, so framer settles the pop with no race and FIGHT! is
+// a guaranteed, deterministic assertion. ──────────────────────────────────
 await page.evaluate(() => {
   const F = window.__FIGHTHUD__
   for (let i = 0; i < 400 && F.state().phase !== 'fight'; i++) F.step(1)
+})
+const fightPhase = await realPhase()
+// The diagnostic timing is exact: FIGHT! pops in by ~300ms and clears by ~1.1s
+// after the flip. Read + screenshot at 500ms lands squarely mid-hold, so both
+// the assertion and the saved PNG show it. (capture()'s 680ms settle -- right
+// for the long KO/WINS holds -- would push past FIGHT!'s expiry and save a
+// blank frame, which is exactly the kind of PNG/assertion mismatch this project
+// keeps getting burned by.)
+await page.waitForTimeout(500)
+const fightBanner = await bannerText()
+writeFileSync(`${OUT}/00-fight.png`, await page.screenshot())
+console.log(`  FIGHT frame: phase=${fightPhase} banner=${JSON.stringify(fightBanner.words)}`)
+
+// ── Force a match-deciding KO. ────────────────────────────────────────────
+await page.evaluate(() => {
+  const F = window.__FIGHTHUD__
   const s = F.state()
   // wins [1,0] so a single KO makes it [2,0] and round-end resolves to match-end.
   s.wins[0] = 1
@@ -110,6 +129,12 @@ console.log(`  WINS frame: phase=${endPhase} banner=${JSON.stringify(winBanner.w
 const hasWord = (b, w) => b.words.some((t) => t.toUpperCase() === w)
 const anyIncludes = (b, w) => b.words.some((t) => t.toUpperCase().includes(w))
 
+checks.push(['reached fight phase from intro', fightPhase === 'fight'])
+checks.push(['FIGHT frame shows the FIGHT! banner', anyIncludes(fightBanner, 'FIGHT')])
+// Discriminator: the KO cannot have happened yet at the fight frame, so K.O.
+// must be ABSENT there — proving the scan reads live DOM state per beat rather
+// than always reporting whatever it last saw.
+checks.push(['FIGHT frame does NOT show K.O. yet (scan discriminates)', !anyIncludes(fightBanner, 'K.O')])
 checks.push(['reached ko phase on a forced KO', koPhase === 'ko'])
 checks.push(['KO frame shows the K.O. banner', anyIncludes(koBanner, 'K.O.') || anyIncludes(koBanner, 'K.O')])
 // Discriminator: WINS must NOT be up yet at the KO — the winner still has to pose.

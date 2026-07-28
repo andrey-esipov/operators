@@ -318,7 +318,7 @@
 /* ── Super gauge ────────────────────────────────────────────────────── */
 .fhud-superrow {
   position: absolute;
-  bottom: 20px;
+  bottom: 30px;
   display: flex;
   align-items: center;
   gap: 8px;

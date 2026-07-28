@@ -228,10 +228,18 @@ export class FightRenderer {
 
   // ---- Internals shared with FightWorld ----------------------------------
 
-  _advance(realDt: number): { alpha: number; steps: number } {
-    if (!this.step || !this.latest) return { alpha: 0, steps: 0 }
+  _advance(realDt: number): { alpha: number; steps: number; simSteps: number } {
+    if (!this.step || !this.latest) return { alpha: 0, steps: 0, simSteps: 0 }
     this._acc += realDt
     let steps = 0
+    // `steps` counts render-loop iterations (wall-clock driven, so it keeps
+    // ticking even on a frozen capture where the step callback returns the same
+    // state). `simSteps` counts GENUINE sim-frame advances -- the same signal
+    // that gates the animation clock below -- so it holds at 0 in a frozen gap
+    // and rises by exactly 1 per `__PLAY__.step(1)`. The camera kick rides this,
+    // not wall time, so the shove is frame-steppable and cannot decay away in
+    // the wall-clock gaps between a capture tool's frames.
+    let simSteps = 0
     while (this._acc >= DT && steps < 5) {
       this.prev = this.latest
       const res = this.step()
@@ -250,6 +258,7 @@ export class FightRenderer {
       // exactly n frames, and makes a frozen frame genuinely frozen.
       if (this.latest.frame !== this.prev.frame) {
         this._globalFrame++
+        simSteps++
         this._tickReactions(this.prev, this.latest)
         // Derived audio (footsteps, meter charge, HP tension, phase/music) runs
         // only on genuine sim advancement — never on a frozen capture frame, so
@@ -267,7 +276,7 @@ export class FightRenderer {
       const ph = this.latest.phase
       this.renderStateObj.celebrate = ph === 'ko' || ph === 'round-end' || ph === 'match-end'
     }
-    return { alpha: clamp(this._acc / DT, 0, 1), steps }
+    return { alpha: clamp(this._acc / DT, 0, 1), steps, simSteps }
   }
   private _acc = 0
   private _globalFrame = 0
@@ -566,7 +575,11 @@ class FightWorld {
 
   update(scaledDt: number) {
     const realDt = this.ctx.realDt()
-    const { alpha } = this.r._advance(realDt)
+    const { alpha, simSteps } = this.r._advance(realDt)
+    // Sim-frame delta for the impact kick: DT per GENUINE sim advance, 0 in a
+    // frozen gap. This is what makes the kick survive a frame-stepped capture
+    // and hold through the hitstop freeze, instead of decaying on the wall clock.
+    const kickDt = simSteps * DT
 
     const cfg = stageConfig(this.r.scenarioId)
     this.fogColor.setHex(cfg.lighting.fog.color)
@@ -598,7 +611,7 @@ class FightWorld {
         simToWorld(views[0].pos).y + heightWorld(),
         simToWorld(views[1].pos).y + heightWorld(),
       )
-      this.r.cameraRef.update(realDt, {
+      this.r.cameraRef.update(realDt, kickDt, {
         ax,
         bx,
         topY,

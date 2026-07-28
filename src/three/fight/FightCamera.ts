@@ -33,12 +33,38 @@ export class FightCamera {
   private pos = new Spring3()
   private look = new Spring3()
   private dolly = new Spring1(0) // extra push-in, world units (negative = closer)
-  private shake = 0
-  private shakeDir = new THREE.Vector3()
+  // Impact kick — a directional camera SHOVE on contact, the thing that makes a
+  // hit read as weight rather than two sprites overlapping. Modelled as a spring
+  // impulse (kick the velocity, let it snap back) rather than the old decaying
+  // sinusoid: a sine wobble reads as floaty hand-shake, a sprung impulse reads as
+  // a punch. `kick` is the scalar displacement along `kickDir`, in world units.
+  private kick = new Spring1(0)
+  private kickDir = new THREE.Vector3(1, 0, 0)
   private t = 0
   private bounds: StageBounds
   private tmpPos = new THREE.Vector3()
   private tmpLook = new THREE.Vector3()
+
+  // Impact-kick tuning.
+  //   OMEGA/ZETA: a stiff, only-slightly-underdamped spring so the shove punches
+  //   out in ~40ms and settles in ~0.25s with a single small counter-swing — a
+  //   snappy kick with weight, never a lingering wobble.
+  //   SCALE: maps an event's weight knob (the `amount` VFX passes, ~0.07..0.5)
+  //   to a peak on-screen displacement. Tuned so a jab barely ticks (~4-6px) and
+  //   a KO rocks the frame (~30px), i.e. the kick SCALES WITH WEIGHT.
+  //   VMAX: caps accumulated impulse so a fast combo can't integrate the camera
+  //   off into the void.
+  //   MAX: hard ceiling on the kick DISPLACEMENT (world units). VMAX bounds a
+  //   single impulse, but a barrage that re-kicks every frame keeps velocity
+  //   pinned high and would still walk the camera out; this caps the excursion
+  //   itself, sized just above the largest single-frame kick (a crumple on
+  //   counter ≈ 0.16u) so no ordinary hit is clipped but a rapid string can't
+  //   stack past roughly one big hit.
+  private readonly KICK_OMEGA = 30
+  private readonly KICK_ZETA = 0.7
+  private readonly KICK_SCALE = 26
+  private readonly KICK_VMAX = 18
+  private readonly KICK_MAX = 0.18
 
   // Framing tuning (world units).
   //
@@ -102,19 +128,56 @@ export class FightCamera {
     this.bounds = b
   }
 
-  /** Kick a directional shake — VFX calls this on impacts. */
+  /**
+   * Kick a directional camera shove — VFX calls this on impacts, scaling
+   * `amount` with the hit's weight (light < medium < heavy < counter < super).
+   *
+   * The shove is a velocity impulse into a snap-back spring, so it reads as a
+   * punch that recovers, not a sustained shake. Crucially the spring is advanced
+   * on GAME time in update() (not wall time), so the kick is HELD through the
+   * impact freeze and punches out as the world resumes — a hit whose shake is
+   * spent invisibly inside the hitstop reads as no kick at all, which is exactly
+   * the "0px on contact" defect this replaces.
+   */
   addShake(amount: number, dir?: THREE.Vector3) {
-    this.shake = Math.min(0.6, this.shake + amount)
-    if (dir) this.shakeDir.copy(dir).normalize()
-    else this.shakeDir.set((Math.random() - 0.5), (Math.random() - 0.5), 0).normalize()
+    if (amount <= 0) return
+    // DEV mutation hook: silence the impact kick so a probe can prove the
+    // measured camera shift comes from THIS code, not the instrument (kick off
+    // must read ~0px, kick on > 0px). Stripped from production builds.
+    if (import.meta.env.DEV && (globalThis as Record<string, unknown>).__MUT_NO_KICK__) return
+    if (dir) {
+      this.kickDir.copy(dir).setZ(0)
+      if (this.kickDir.lengthSq() < 1e-6) this.kickDir.set(1, 0, 0)
+      this.kickDir.normalize()
+    } else {
+      // Mostly-horizontal random shove: a sideways jolt reads as a hit, while a
+      // large vertical component fights the careful feet/head composition.
+      this.kickDir.set((Math.random() - 0.5) * 2, (Math.random() - 0.5) * 0.7, 0)
+      if (this.kickDir.lengthSq() < 1e-6) this.kickDir.set(1, 0, 0)
+      this.kickDir.normalize()
+    }
+    this.kick.kick(Math.min(0.6, amount) * this.KICK_SCALE)
+    this.kick.vel = clamp(this.kick.vel, -this.KICK_VMAX, this.KICK_VMAX)
   }
 
   /** Momentary dolly-in impulse (super freeze, heavy hit). */
   punchIn(amount: number) {
+    if (import.meta.env.DEV && (globalThis as Record<string, unknown>).__MUT_NO_KICK__) return
     this.dolly.kick(-Math.abs(amount))
   }
 
-  update(dt: number, f: CameraFraming) {
+  /**
+   * @param dt      real (unscaled) frame delta — drives the framing springs,
+   *                handheld drift and containment, which must stay alive and
+   *                smooth even while the world is frozen for impact.
+   * @param kickDt  SIM-FRAME delta (DT per genuine sim advance, 0 in a frozen
+   *                gap) — drives ONLY the impact kick. Tying the shove to sim
+   *                frames rather than wall time makes it hold through the
+   *                hitstop freeze AND survive a frame-stepped capture: it
+   *                advances by exactly one frame per __PLAY__.step and holds
+   *                still in the wall-clock gaps between a capture tool's frames.
+   */
+  update(dt: number, kickDt: number, f: CameraFraming) {
     this.t += dt
     const midX = (f.ax + f.bx) * 0.5
     const sep = Math.abs(f.ax - f.bx)
@@ -237,14 +300,58 @@ export class FightCamera {
     this.look.value.y = clampedAim
     this.pos.value.y += aimDelta
 
-    // Handheld micro-drift + impact shake, additive on top of the spring value.
-    this.shake = Math.max(0, this.shake - dt * 2.2)
+    // Handheld micro-drift (tiny, continuous) + the impact kick, additive on top
+    // of the sprung + contained camera.
+    //
+    // The kick advances on SIM-FRAME time (kickDt), never wall time. During the
+    // hitstop freeze no sim frames advance, so the shove is HELD; it then plays
+    // out one frame at a time as the sim resumes. This is the fix for "0px kick
+    // on contact": the old sinusoid decayed on wall time and was entirely spent
+    // inside the freeze plus the capture tool's between-frame gaps, so by the
+    // time a frozen frame was read there was nothing left to see. Riding genuine
+    // sim frames also makes the kick frame-steppable, so impact-frames can film
+    // it one envelope sample per step instead of catching a dead camera.
+    this.kick.step(0, this.KICK_OMEGA, this.KICK_ZETA, Math.max(0, kickDt))
+    // Hard ceiling on the excursion so a rapid multi-hit string can't walk the
+    // camera out (anti-windup: pin velocity too, or it re-drives the value
+    // straight back to the cap next frame).
+    if (this.kick.value > this.KICK_MAX) { this.kick.value = this.KICK_MAX; if (this.kick.vel > 0) this.kick.vel = 0 }
+    else if (this.kick.value < -this.KICK_MAX) { this.kick.value = -this.KICK_MAX; if (this.kick.vel < 0) this.kick.vel = 0 }
     const drift = 0.02
-    const dx = fbm1(this.t * 1.3, 11) * drift + this.shakeDir.x * this.shake * 0.6 * Math.sin(this.t * 90)
-    const dy = fbm1(this.t * 1.1, 37) * drift + this.shakeDir.y * this.shake * 0.6 * Math.sin(this.t * 84)
+    const driftX = fbm1(this.t * 1.3, 11) * drift
+    const driftY = fbm1(this.t * 1.1, 37) * drift
+    // The kick is a pure PAN (added equally to eye and aim) so the visible band's
+    // centre moves by exactly the kick — which lets the containment clamp below
+    // reason about it exactly.
+    let kickX = this.kickDir.x * this.kick.value
+    let kickY = this.kickDir.y * this.kick.value
 
-    this.cam.position.set(this.pos.value.x + dx, this.pos.value.y + dy, camZ)
-    this.cam.lookAt(this.look.value.x + dx * 0.4, this.look.value.y + dy * 0.4, this.look.value.z)
+    // --- Kick containment: the shove must never break the invariant the clamp
+    // above just guaranteed. Vertically, keep the final aim inside the same
+    // [bandCenter ± usable] window; horizontally, keep the frustum edge inside
+    // the stage walls. The drift is left uncontained — at 0.02 it is a sub-pixel
+    // frame-to-frame nudge — but the kick can reach ~0.2 world units on a KO and
+    // is bounded here so a big hit near a frame edge can't amputate a fighter.
+    const aimBaseY = this.look.value.y + driftY * 0.4
+    if (usable > 0) {
+      kickY = clamp(aimBaseY + kickY, bandCenter - usable, bandCenter + usable) - aimBaseY
+    } else {
+      kickY = 0
+    }
+    const halfViewXApplied = camZ * tanH
+    const loX = this.bounds.minX + halfViewXApplied
+    const hiX = this.bounds.maxX - halfViewXApplied
+    if (loX <= hiX) {
+      const aimBaseX = this.look.value.x + driftX * 0.4
+      kickX = clamp(aimBaseX + kickX, loX, hiX) - aimBaseX
+    }
+
+    this.cam.position.set(this.pos.value.x + driftX + kickX, this.pos.value.y + driftY + kickY, camZ)
+    this.cam.lookAt(
+      this.look.value.x + driftX * 0.4 + kickX,
+      this.look.value.y + driftY * 0.4 + kickY,
+      this.look.value.z,
+    )
     this.cam.updateProjectionMatrix()
   }
 }

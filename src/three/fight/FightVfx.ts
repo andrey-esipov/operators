@@ -60,6 +60,7 @@ export interface FightVfxDeps {
 export class FightVfx {
   private d: FightVfxDeps
   private p = new THREE.Vector3()
+  private kd = new THREE.Vector3(1, 0, 0)
 
   constructor(deps: FightVfxDeps) {
     this.d = deps
@@ -68,8 +69,8 @@ export class FightVfx {
   handle(e: FightEvent) {
     switch (e.type) {
       case 'hit': return this.hit(e.at, e.attacker, e.level, e.damage)
-      case 'counter-hit': return this.counterHit(e.at, e.level)
-      case 'block': return this.block(e.at, e.attacker)
+      case 'counter-hit': return this.counterHit(e.at, e.attacker, e.level)
+      case 'block': return this.block(e.at, e.attacker, e.chip ?? 0)
       case 'parry': return this.parry(e.at)
       case 'throw': return this.throwFx(e.at)
       case 'launch': return this.launch(e.at)
@@ -78,6 +79,21 @@ export class FightVfx {
       case 'super-flash': return this.superFlash(e.who)
       case 'ko': return this.ko(e.who)
     }
+  }
+
+  /**
+   * Screen-space direction of the blow: away from the attacker, toward the
+   * victim, in the camera's XY plane. The camera kick rides this so a hit shoves
+   * the frame the way the punch travels (a right-facing jab kicks the frame
+   * right) instead of a directionless rattle — the difference between "impact"
+   * and "vibration". Mesh x is fine for a sign; it's what block() already uses.
+   */
+  private blowDir(attacker: 0 | 1, up: number): THREE.Vector3 {
+    const target = (attacker === 0 ? 1 : 0) as 0 | 1
+    const a = this.d.fighters[attacker]?.mesh.position.x ?? 0
+    const t = this.d.fighters[target]?.mesh.position.x ?? 0
+    const dir = Math.sign(t - a) || 1
+    return this.kd.set(dir, up, 0)
   }
 
   private world(at: Vec2): THREE.Vector3 {
@@ -128,30 +144,40 @@ export class FightVfx {
     this.d.shockwave.spawn('star', pos, 0.5 + t.core * 0.4, 0.26, t.hot, t.cool, 1.3 + power)
     this.d.shockwave.spawn('shock', pos, 0.4 + t.core * 0.3, 0.26, t.hot, t.cool, 1.15, 1.4)
 
-    // Feel: freeze, shake, dolly punch, and flash the defender.
+    // Feel: freeze, shake, dolly punch, and flash the defender. The shake is a
+    // directional shove along the blow, weight-scaled via t.shake (light 0.10 →
+    // crumple 0.36) so a jab ticks the frame and a launcher rocks it.
     this.d.requestHitstop(t.hitstopMs, t.hitstopScale)
-    this.d.camera.addShake(t.shake)
+    this.d.camera.addShake(t.shake, this.blowDir(attacker, 0.16))
     this.d.camera.punchIn(t.push)
     this.d.fighters[target]?.triggerHitFlash(t.flash)
     this.d.emitEngine?.(attacker, target, level, power, 'hit')
   }
 
   /**
-   * Counter-hit reward flourish — a purely additive VISUAL overlay.
+   * Counter-hit reward flourish — a colour callout PLUS a little extra screen
+   * kick.
    *
    * The sim emits `counter-hit` ALONGSIDE the normal `hit` for the same contact
    * (combat.ts), so the base spark, the impact freeze, the light flash and the
-   * camera punch have ALREADY fired for this frame via hit(). This method must
-   * therefore add ONLY the "you got countered" colour callout on top — it does
-   * NOT call hit(), requestHitstop, emitEngine or triggerHitFlash. Doing any of
-   * those would double the freeze/light and risk the exact fighter wash this
-   * subsystem has fought for 21 iterations. The distinct read comes from HUE, not
-   * more energy: magenta is used by no other event (hit is orange, block/parry
-   * are cyan), so a magenta ring over the orange spark is unmistakably "COUNTER".
-   * Fires for every counter the sim reports, projectile counters included.
+   * base camera shake have ALREADY fired for this frame via hit(). This method
+   * adds the "you got countered" magenta callout, and — because a counter is
+   * meant to hit HARDER — a small ADDITIONAL camera kick that stacks on the base
+   * shake this frame, so the same move on counter visibly rocks the frame more.
+   * It deliberately does NOT call hit(), requestHitstop, emitEngine or
+   * triggerHitFlash: doubling the FREEZE or the LIGHT is what risks the fighter
+   * wash this subsystem has fought for 21 iterations, whereas a bit more camera
+   * kick is exactly the extra weight a counter should read as. The distinct hue
+   * still does the identifying: magenta is used by no other event (hit is orange,
+   * block/parry are cyan). Fires for every counter the sim reports.
    */
-  private counterHit(at: Vec2, level: HitLevel) {
+  private counterHit(at: Vec2, attacker: 0 | 1, level: HitLevel) {
     const w = HIT[level] ?? HIT.medium
+    // Extra kick on top of the base hit's shake — scales with weight so a
+    // launcher-counter rocks harder than a jab-counter, and reuses the blow
+    // direction so it shoves the same way, not against, the base shake.
+    this.d.camera.addShake(0.12 + w.core * 0.05, this.blowDir(attacker, 0.2))
+    this.d.camera.punchIn(0.12)
     // Anchor to the sim's contact point, same floor-clamp discipline as hit()/
     // block() so a low projectile counter can't drop the callout onto the floor.
     // z just in front of the hit spark (0.05) so the magenta reads over it.
@@ -182,7 +208,7 @@ export class FightVfx {
     })
   }
 
-  private block(at: Vec2, attacker: 0 | 1) {
+  private block(at: Vec2, attacker: 0 | 1, chip: number) {
     // A block must read as a *deflection*, not a hit: a saturated-blue shield
     // clang with sparks that fan up-and-back off the guard, instantly telling
     // the eye "guarded, no damage" versus a hit's hot orange starburst. It gets
@@ -225,9 +251,18 @@ export class FightVfx {
       shape: 'streak', intensity: 1.7, spawnRadius: 0.12, stretch: 4.2,
       direction: new THREE.Vector3(-dir, 0.5, 0), spread: 1.5,
     })
-    // Chip feel: a short freeze and a small shake, weaker than a clean hit.
+    // Chip feel: a short blockstun freeze always (you DID guard), but a camera
+    // kick ONLY when the block actually cost grey-life. Blocking a normal chips
+    // nothing (constants.ts: "normals never chip"), and a screen shove when
+    // nothing got through erases the difference between blocking a jab and eating
+    // one — the whole point of the block read. So a no-chip block keeps its clang
+    // but stays camera-silent; a chip block (special/super) gets a small kick
+    // that scales a touch with the chip taken, always well under a clean hit.
     this.d.requestHitstop(45, 0.2)
-    this.d.camera.addShake(0.07)
+    if (chip > 0) {
+      const mag = 0.06 + Math.min(chip, 12) / 12 * 0.05
+      this.d.camera.addShake(mag, this.kd.set(-dir, 0.12, 0))
+    }
   }
 
   private parry(at: Vec2) {

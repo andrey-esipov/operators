@@ -57,10 +57,21 @@
 }
 .fsel-plate.a { left: 34px; }
 .fsel-plate.b { right: 34px; flex-direction: row-reverse; }
-.fsel-plate:not(.locked) { filter: saturate(0.4) brightness(0.8); }
+.fsel-plate:not(.locked):not(.active) { filter: saturate(0.35) brightness(0.7); opacity: 0.85; }
 .fsel-plate.active { filter: none; }
-.fsel-plate.active .fsel-plate-art {
-  box-shadow: 0 0 0 3px var(--accent), 0 0 24px color-mix(in srgb, var(--accent) 60%, transparent);
+.fsel-plate.locked .fsel-plate-art {
+  box-shadow: 0 0 0 3px var(--accent), 0 0 26px color-mix(in srgb, var(--accent) 65%, transparent);
+}
+/* Live hover preview: visible but clearly not yet committed — a breathing accent
+   frame, slightly held-back art, versus the solid ring a lock snaps to. */
+.fsel-plate.previewing .fsel-plate-art {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 68%, transparent), 0 0 18px color-mix(in srgb, var(--accent) 42%, transparent);
+  animation: fsel-preview-pulse 1.15s ease-in-out infinite;
+}
+.fsel-plate.previewing .fsel-plate-art .fsel-crop { opacity: 0.94; }
+@keyframes fsel-preview-pulse {
+  0%, 100% { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent), 0 0 14px color-mix(in srgb, var(--accent) 32%, transparent); }
+  50% { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 90%, transparent), 0 0 24px color-mix(in srgb, var(--accent) 55%, transparent); }
 }
 
 .fsel-plate-art {
@@ -98,6 +109,8 @@
   letter-spacing: 0.16em;
   color: #7a6f92;
 }
+.fsel-plate-state { color: var(--accent); }
+.fsel-plate-state.locked { color: #8fe388; }
 .fsel-plate-name {
   font-size: 16px;
   line-height: 1.1;
@@ -164,6 +177,30 @@
   z-index: 2;
 }
 .fsel-cell.taken { opacity: 0.6; }
+.fsel-cell-art {
+  position: relative;
+  display: block;
+  border-radius: 4px;
+  overflow: hidden;
+}
+/* Specular sweep that fires when the cursor lands on a cell — the snap of light
+   a fighting-game grid uses to say "this one" without a word. */
+.fsel-cell-sheen {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: 4px;
+  background: linear-gradient(115deg, transparent 44%, rgba(255, 255, 255, 0.38) 50%, transparent 56%);
+  background-size: 220% 100%;
+  background-position: 135% 0;
+  opacity: 0;
+}
+.fsel-cell.cursor .fsel-cell-sheen { animation: fsel-sheen 0.62s ease-out 1; }
+@keyframes fsel-sheen {
+  0% { background-position: 135% 0; opacity: 0; }
+  22% { opacity: 1; }
+  100% { background-position: -35% 0; opacity: 0; }
+}
 .fsel-cell-name {
   font-size: 11px;
   text-shadow: 1px 1px 0 #000;
@@ -194,10 +231,31 @@
   border-radius: 4px;
   background: #0b0713;
 }
-.fsel-crop-empty {
-  display: block;
-  border-radius: 4px;
+.fsel-crop-in { animation: fsel-cropin 0.2s ease-out both; }
+@keyframes fsel-cropin {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
 }
+/* Loading state: an accent-tinted shimmer, never a dead black square. The select
+   load race used to photograph SPIEGEL/DOSHI/LENNY as black boxes; preloading
+   usually wins the race now, and if a frame still catches a load it reads as
+   "art incoming" rather than "broken". */
+.fsel-crop-loading {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  border-radius: 4px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 24%, #0b0713), #0b0713);
+}
+.fsel-crop-loading::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(115deg, transparent 30%, color-mix(in srgb, var(--accent) 32%, transparent) 50%, transparent 70%);
+  transform: translateX(-100%);
+  animation: fsel-shimmer 1.1s ease-in-out infinite;
+}
+@keyframes fsel-shimmer { to { transform: translateX(100%); } }
 
 /* ── Hovered readout (name / style / hp) ─────────────────────────────── */
 .fsel-readout {
@@ -290,6 +348,39 @@
   border: 2px solid #130a1e;
   overflow: hidden;
 }
+/* Perspective floor grid receding to the horizon — reads as a place to stand,
+   not a colour chip. The 3D stage is the renderer's; this is only the thumbnail. */
+.fsel-stage-floor {
+  position: absolute;
+  left: -20%;
+  right: -20%;
+  bottom: 0;
+  height: 46%;
+  pointer-events: none;
+  background:
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.09) 0 1px, transparent 1px 15px),
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.07) 0 1px, transparent 1px 11px);
+  transform: perspective(120px) rotateX(54deg);
+  transform-origin: bottom center;
+  opacity: 0.55;
+}
+.fsel-stage-vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: 4px;
+  box-shadow: inset 0 0 22px rgba(0, 0, 0, 0.55), inset 0 -9px 16px rgba(0, 0, 0, 0.45);
+}
+.fsel-stage-sheen {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(115deg, transparent 46%, rgba(255, 255, 255, 0.18) 50%, transparent 54%);
+  background-size: 220% 100%;
+  background-position: 135% 0;
+  opacity: 0;
+}
+.fsel-stagecard.cursor .fsel-stage-sheen { animation: fsel-sheen 0.7s ease-out 1; }
 .fsel-stage-flag {
   position: absolute;
   top: 5px;
@@ -309,16 +400,88 @@
   text-shadow: 1px 1px 0 #000;
 }
 
-/* ── Launch overlay ──────────────────────────────────────────────────── */
+/* ── Launch / VS face-off ────────────────────────────────────────────── */
 .fsel-launch {
   position: absolute;
   inset: 0;
-  display: grid;
-  place-items: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(8px, 3.5vw, 70px);
   z-index: 30;
   pointer-events: none;
+  overflow: hidden;
 }
-.fsel-fight { font-size: clamp(90px, 16vw, 220px); }
+.fsel-vs-scrim {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(120% 90% at 50% 50%, rgba(11, 7, 19, 0.3) 0%, rgba(11, 7, 19, 0.82) 68%, #0b0713 100%);
+}
+.fsel-vs-bolt {
+  position: absolute;
+  top: -6%;
+  bottom: -6%;
+  left: 50%;
+  width: 4px;
+  transform: translateX(-50%) skewX(-12deg);
+  background: linear-gradient(180deg, transparent, #ffd36b 28%, #ffffff 50%, #ef6a3a 72%, transparent);
+  filter: blur(1.5px);
+  opacity: 0.5;
+  animation: fsel-bolt 1.5s ease-in-out infinite;
+}
+@keyframes fsel-bolt {
+  0%, 100% { opacity: 0.22; }
+  50% { opacity: 0.7; }
+}
+.fsel-vs-fighter {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.fsel-vs-art {
+  position: relative;
+  display: block;
+  filter: drop-shadow(0 12px 26px rgba(0, 0, 0, 0.6));
+}
+.fsel-vs-fighter.b .fsel-vs-art { transform: scaleX(-1); }
+.fsel-vs-art::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -12px;
+  width: 72%;
+  height: 22px;
+  transform: translateX(-50%);
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--accent) 72%, transparent), transparent);
+  filter: blur(5px);
+}
+.fsel-vs-name {
+  font-family: var(--font-display);
+  font-size: clamp(18px, 2.5vw, 34px);
+  letter-spacing: 0.02em;
+  text-shadow: 2px 2px 0 #130a1e;
+}
+.fsel-vs-arch {
+  font-size: clamp(9px, 1vw, 13px);
+  letter-spacing: 0.16em;
+  color: #d8ccf0;
+  padding: 3px 9px;
+  border: 1px solid color-mix(in srgb, var(--accent) 60%, transparent);
+  border-radius: 3px;
+}
+.fsel-vs-center {
+  position: relative;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  min-width: clamp(120px, 20vw, 300px);
+}
+.fsel-vs-clash { display: grid; place-items: center; grid-area: 1 / 1; }
+.fsel-vs-word { font-size: clamp(80px, 15vw, 200px); }
+.fsel-fight { font-size: clamp(64px, 11vw, 150px); }
 
 /* ── Controls hint ───────────────────────────────────────────────────── */
 .fsel-hint {
@@ -342,3 +505,4 @@
   border-radius: 3px;
   padding: 2px 5px;
 }
+.fsel-hint-pad { color: #6f6690; }

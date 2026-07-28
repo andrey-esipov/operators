@@ -93,3 +93,35 @@ export function loadPortrait(rosterId: string): Promise<PortraitInfo | null> {
   cache.set(rosterId, p)
   return p
 }
+
+// Image-decode cache keyed by atlas URL, so warming an atlas twice is free and a
+// grid can await "all portraits decodable" once.
+const imgCache = new Map<string, Promise<void>>()
+
+/**
+ * Warm a portrait all the way to a decoded image, not just resolved metadata.
+ *
+ * `loadPortrait` only fetches the tiny `assets.json`; the actual `atlas.png` is
+ * still fetched lazily when an `<img>` first mounts. On a grid that means cells
+ * pop in one-by-one and, worse, a capture taken mid-load photographs black
+ * boxes (the select screen's documented load race). Preloading every roster
+ * atlas on mount collapses that race: by the time the grid paints, the browser
+ * cache is warm and every portrait appears at once. Resolves (never rejects) on
+ * load, decode-failure, or known-absent art, so callers can simply
+ * `Promise.all(...)` without guarding.
+ */
+export function preloadPortrait(rosterId: string): Promise<void> {
+  return loadPortrait(rosterId).then((info) => {
+    if (!info || typeof Image === 'undefined') return
+    const cached = imgCache.get(info.atlas)
+    if (cached) return cached
+    const warm = new Promise<void>((resolve) => {
+      const img = new Image()
+      img.onload = () => resolve()
+      img.onerror = () => resolve()
+      img.src = info.atlas
+    })
+    imgCache.set(info.atlas, warm)
+    return warm
+  })
+}

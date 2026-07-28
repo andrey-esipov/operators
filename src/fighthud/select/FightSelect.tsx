@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Word } from '../Announcements'
-import { loadPortrait, type PortraitInfo } from '../portraits'
+import { loadPortrait, preloadPortrait, type PortraitInfo } from '../portraits'
+import { Sfx } from '../../lib/audio'
 import { ARCHETYPES, ROSTER, STAGES, type RosterEntry, type StageEntry } from './roster'
 import './select.css'
 import '../hud.css'
@@ -35,6 +36,18 @@ const STAGE_COLS = 4
 
 const CPU = 'medium'
 
+/** Build a layered "place" out of a stage's two-colour swatch — sky glow, a
+ *  horizon light-line and a grounded floor — so a card reads as somewhere you'd
+ *  fight rather than a flat gradient chip. Pure CSS: the renderer owns the real
+ *  3D stage; this is only the picker thumbnail. */
+function stageScene([a, b]: [string, string]): string {
+  return [
+    `radial-gradient(90% 62% at 50% 122%, ${a}99 0%, transparent 60%)`,
+    `radial-gradient(66% 48% at 72% 4%, ${a}66 0%, transparent 55%)`,
+    `linear-gradient(180deg, ${b} 0%, color-mix(in srgb, ${a} 26%, ${b}) 56%, color-mix(in srgb, ${a} 62%, ${b}) 60%, color-mix(in srgb, ${a} 22%, ${b}) 61%, ${b} 100%)`,
+  ].join(', ')
+}
+
 /** Cover-crop an atlas frame into a fixed box — the same trick Portrait.tsx uses
  *  for the HUD, but sized for the larger select art (head + torso). */
 function AtlasCrop({
@@ -66,7 +79,10 @@ function AtlasCrop({
   }, [skin])
 
   if (!info) {
-    return <span className="fsel-crop-empty" style={{ width: w, height: h, background: `${accent}22` }} />
+    // Accent-tinted shimmer, never a dead black box: the load race used to
+    // photograph as black squares (SPIEGEL/DOSHI/LENNY). A mid-load frame now
+    // reads as "art incoming", and preloadPortrait() usually beats first paint.
+    return <span className="fsel-crop fsel-crop-loading" style={{ width: w, height: h, ['--accent' as string]: accent }} aria-hidden />
   }
   const { rect, atlas } = info
   const cropX = rect.x + rect.w * sideTrim
@@ -75,7 +91,7 @@ function AtlasCrop({
   const scale = Math.max(w / cropW, h / cropH)
   const offsetX = (w - cropW * scale) / 2
   return (
-    <span className="fsel-crop" style={{ width: w, height: h }}>
+    <span className="fsel-crop fsel-crop-in" style={{ width: w, height: h }}>
       <img
         src={atlas}
         alt=""
@@ -94,22 +110,46 @@ function AtlasCrop({
   )
 }
 
-/** The locked/side nameplate — mirrors the in-match HUD nameband. */
-function SidePlate({ side, entry, active }: { side: 'a' | 'b'; entry: RosterEntry | null; active: boolean }) {
-  const arch = entry ? ARCHETYPES[entry.archetype] : null
+/** The locked/side nameplate — mirrors the in-match HUD nameband. While a side
+ *  is active and unlocked it *previews* the hovered fighter (art + name + style)
+ *  so your half of the screen fills in live as you scrub the grid, the way SF6/
+ *  Tekken telegraph a pick. It snaps to a solid lock on confirm. */
+function SidePlate({
+  side,
+  entry,
+  preview,
+  active,
+}: {
+  side: 'a' | 'b'
+  entry: RosterEntry | null
+  preview: RosterEntry | null
+  active: boolean
+}) {
+  const shown = entry ?? (active ? preview : null)
+  const locked = !!entry
+  const previewing = !locked && !!shown
+  const arch = shown ? ARCHETYPES[shown.archetype] : null
   return (
-    <div className={`fsel-plate ${side} ${entry ? 'locked' : ''} ${active ? 'active' : ''}`} data-testid={`fsel-plate-${side}`}>
-      <div className="fsel-plate-art" style={{ ['--accent' as string]: entry?.accent ?? '#4a4a5a' }}>
-        {entry ? (
-          <AtlasCrop skin={entry.skin} w={190} h={240} accent={entry.accent} />
+    <div
+      className={`fsel-plate ${side} ${locked ? 'locked' : ''} ${active ? 'active' : ''} ${previewing ? 'previewing' : ''}`}
+      data-testid={`fsel-plate-${side}`}
+      style={{ ['--accent' as string]: shown?.accent ?? '#4a4a5a' }}
+    >
+      <div className="fsel-plate-art">
+        {shown ? (
+          <AtlasCrop key={shown.skin} skin={shown.skin} w={190} h={240} accent={shown.accent} />
         ) : (
           <span className="fsel-plate-q">?</span>
         )}
       </div>
       <div className="fsel-plate-meta">
-        <div className="fsel-plate-tag">{side === 'a' ? 'PLAYER 1' : 'PLAYER 2'}</div>
-        <div className="fsel-plate-name" style={{ color: entry?.accent ?? '#8a8a9a' }}>
-          {entry ? entry.shortName : '—'}
+        <div className="fsel-plate-tag">
+          {side === 'a' ? 'PLAYER 1' : 'PLAYER 2'}
+          {previewing && <span className="fsel-plate-state"> — HOVER</span>}
+          {locked && <span className="fsel-plate-state locked"> — LOCKED</span>}
+        </div>
+        <div className="fsel-plate-name" style={{ color: shown?.accent ?? '#8a8a9a' }}>
+          {shown ? shown.shortName : '—'}
         </div>
         {arch && (
           <div className="fsel-plate-arch" style={{ ['--accent' as string]: arch.accent }}>
@@ -131,13 +171,37 @@ export function FightSelect() {
   // Bumped on every confirm so the locked cell + screen edge can pop.
   const [confirmKey, setConfirmKey] = useState(0)
   const [confirmAccent, setConfirmAccent] = useState('#f4c130')
+  // The VS face-off runs a tiny beat machine inside the 'launch' phase:
+  // 'vs' (portraits slam in + VS clash) → 'fight' (FIGHT! + stinger) → navigate.
+  const [launchBeat, setLaunchBeat] = useState<'vs' | 'fight'>('vs')
+  const [portraitsReady, setPortraitsReady] = useState(false)
+  // Launch/VS timers, tracked so an unmount mid-beat can't fire a stray navigate.
+  const timers = useRef<number[]>([])
+  const clearTimers = useCallback(() => {
+    timers.current.forEach((id) => window.clearTimeout(id))
+    timers.current = []
+  }, [])
+
+  // Warm every roster atlas up front so the grid paints all at once instead of
+  // popping in one-by-one — and so a capture can't photograph the load race.
+  useEffect(() => {
+    let live = true
+    Promise.all(ROSTER.map((r) => preloadPortrait(r.skin))).then(() => {
+      if (live) setPortraitsReady(true)
+    })
+    return () => {
+      live = false
+    }
+  }, [])
+
+  useEffect(() => () => clearTimers(), [clearTimers])
 
   const grid = phase === 'stage' || phase === 'launch' ? STAGES : ROSTER
 
   // Mirror live state into a ref so the __SELECT__ probe reads the committed
   // value synchronously right after driving an action.
-  const snap = useRef({ phase, cursor, p1, p2, stage })
-  snap.current = { phase, cursor, p1, p2, stage }
+  const snap = useRef({ phase, cursor, p1, p2, stage, portraitsReady })
+  snap.current = { phase, cursor, p1, p2, stage, portraitsReady }
 
   const launch = useCallback((p1i: number, p2i: number, stageIdx: number) => {
     const a = ROSTER[p1i]
@@ -156,14 +220,17 @@ export function FightSelect() {
 
   const move = useCallback(
     (dx: number, dy: number) => {
-      setCursor((c) => {
-        const len = snap.current.phase === 'stage' ? STAGES.length : ROSTER.length
-        const w = snap.current.phase === 'stage' ? STAGE_COLS : ROSTER_COLS
-        let next = c
-        if (dx) next = (next + dx + len) % len
-        if (dy) next = (next + dy * w + len) % len
-        return next
-      })
+      const s = snap.current
+      if (s.phase === 'launch') return
+      const len = s.phase === 'stage' ? STAGES.length : ROSTER.length
+      const w = s.phase === 'stage' ? STAGE_COLS : ROSTER_COLS
+      let next = s.cursor
+      if (dx) next = (next + dx + len) % len
+      if (dy) next = (next + dy * w + len) % len
+      if (next !== s.cursor) {
+        setCursor(next)
+        Sfx.menuMove()
+      }
     },
     [],
   )
@@ -171,6 +238,7 @@ export function FightSelect() {
   const confirm = useCallback(() => {
     const s = snap.current
     if (s.phase === 'p1') {
+      Sfx.menuSelect()
       setP1(s.cursor)
       setConfirmAccent(ROSTER[s.cursor].accent)
       setConfirmKey((k) => k + 1)
@@ -178,29 +246,40 @@ export function FightSelect() {
       // Offer P2 a different default cell so the two picks don't stack.
       setCursor((s.cursor + 1) % ROSTER.length)
     } else if (s.phase === 'p2') {
+      Sfx.menuSelect()
       setP2(s.cursor)
       setConfirmAccent(ROSTER[s.cursor].accent)
       setConfirmKey((k) => k + 1)
       setPhase('stage')
       setCursor(0)
     } else if (s.phase === 'stage') {
+      Sfx.menuSelect()
       setStage(s.cursor)
       setConfirmAccent('#f6ec5a')
       setConfirmKey((k) => k + 1)
+      setLaunchBeat('vs')
       setPhase('launch')
       const p1i = s.p1 ?? 0
       const p2i = s.p2 ?? 1
-      window.setTimeout(() => launch(p1i, p2i, s.cursor), 950)
+      const stageIdx = s.cursor
+      // VS face-off beat, then hand off. The nav is still an explicit result of a
+      // stage lock (never a render loop), just delayed by the ceremony; the
+      // handoff capture waits up to 30s, so the longer beat is safe.
+      clearTimers()
+      timers.current.push(window.setTimeout(() => { setLaunchBeat('fight'); Sfx.fight() }, 1500))
+      timers.current.push(window.setTimeout(() => launch(p1i, p2i, stageIdx), 2350))
     }
-  }, [launch])
+  }, [launch, clearTimers])
 
   const back = useCallback(() => {
     const s = snap.current
     if (s.phase === 'p2') {
+      Sfx.menuMove()
       setPhase('p1')
       setCursor(s.p1 ?? 0)
       setP2(null)
     } else if (s.phase === 'stage') {
+      Sfx.menuMove()
       setPhase('p2')
       setCursor(s.p2 ?? 0)
       setStage(null)
@@ -225,6 +304,57 @@ export function FightSelect() {
     return () => window.removeEventListener('keydown', onKey)
   }, [move, confirm, back])
 
+  // Gamepad: same hard cursor language as the keyboard. D-pad / left stick move
+  // (press-then-repeat), A confirms, B backs out. Polls in rAF and does NOTHING
+  // when no pad is present, so it can never drive the render-loop navigation the
+  // stability check guards against — the only nav path is still a user stage lock.
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || typeof navigator.getGamepads !== 'function') return
+    let raf = 0
+    let heldDir: string | null = null
+    let nextRepeat = 0
+    let prevA = false
+    let prevB = false
+    const DEAD = 0.5
+    const step = (dir: string) =>
+      move(dir === 'l' ? -1 : dir === 'r' ? 1 : 0, dir === 'u' ? -1 : dir === 'd' ? 1 : 0)
+    const poll = (t: number) => {
+      raf = requestAnimationFrame(poll)
+      const pad = Array.from(navigator.getGamepads?.() ?? []).find(Boolean)
+      if (!pad) {
+        heldDir = null
+        return
+      }
+      const ax = pad.axes[0] ?? 0
+      const ay = pad.axes[1] ?? 0
+      const left = pad.buttons[14]?.pressed || ax < -DEAD
+      const right = pad.buttons[15]?.pressed || ax > DEAD
+      const up = pad.buttons[12]?.pressed || ay < -DEAD
+      const down = pad.buttons[13]?.pressed || ay > DEAD
+      const dir = left ? 'l' : right ? 'r' : up ? 'u' : down ? 'd' : null
+      if (dir) {
+        if (dir !== heldDir) {
+          heldDir = dir
+          nextRepeat = t + 300
+          step(dir)
+        } else if (t >= nextRepeat) {
+          nextRepeat = t + 130
+          step(dir)
+        }
+      } else {
+        heldDir = null
+      }
+      const a = pad.buttons[0]?.pressed ?? false
+      const b = pad.buttons[1]?.pressed ?? false
+      if (a && !prevA) confirm()
+      if (b && !prevB) back()
+      prevA = a
+      prevB = b
+    }
+    raf = requestAnimationFrame(poll)
+    return () => cancelAnimationFrame(raf)
+  }, [move, confirm, back])
+
   // Dev probe so a capture tool can compose an exact mid-selection state and
   // ASSERT it, rather than screenshotting whatever happened to be on screen.
   useEffect(() => {
@@ -241,6 +371,7 @@ export function FightSelect() {
           p1arch: s.p1 != null ? ROSTER[s.p1].archetype : null,
           p2arch: s.p2 != null ? ROSTER[s.p2].archetype : null,
           stage: s.stage != null ? STAGES[s.stage].id : null,
+          portraitsReady: s.portraitsReady,
         }
       },
       move: (dx: number, dy: number) => move(dx, dy),
@@ -264,7 +395,7 @@ export function FightSelect() {
   const cells = useMemo(() => grid.map((g, i) => ({ g, i })), [grid])
 
   return (
-    <div className="fsel-root" data-testid="fsel-root" data-phase={phase}>
+    <div className="fsel-root" data-testid="fsel-root" data-phase={phase} data-portraits={portraitsReady ? 'ready' : 'loading'}>
       {/* Screen-edge confirm pulse — same defensive-flash language as FlashChip. */}
       <AnimatePresence>
         {confirmKey > 0 && (
@@ -279,12 +410,14 @@ export function FightSelect() {
         )}
       </AnimatePresence>
 
-      <header className="fsel-head">
-        <Word text={heading} color="#ffffff" accent={headAccent} className="fsel-title" />
-      </header>
+      {phase !== 'launch' && (
+        <header className="fsel-head">
+          <Word text={heading} color="#ffffff" accent={headAccent} className="fsel-title" />
+        </header>
+      )}
 
-      <SidePlate side="a" entry={p1Entry} active={phase === 'p1'} />
-      <SidePlate side="b" entry={p2Entry} active={phase === 'p2'} />
+      <SidePlate side="a" entry={p1Entry} preview={phase === 'p1' ? ROSTER[cursor] : null} active={phase === 'p1'} />
+      <SidePlate side="b" entry={p2Entry} preview={phase === 'p2' ? ROSTER[cursor] : null} active={phase === 'p2'} />
 
       {phase !== 'stage' && phase !== 'launch' && (
         <div className="fsel-stage-area">
@@ -301,12 +434,20 @@ export function FightSelect() {
                   data-skin={g.skin}
                   data-cursor={isCursor ? '1' : undefined}
                   style={{ ['--accent' as string]: g.accent }}
-                  onMouseEnter={() => setCursor(i)}
+                  onMouseEnter={() => { if (i !== cursor) { setCursor(i); Sfx.menuMove() } }}
                   onClick={() => { setCursor(i); confirm() }}
-                  animate={isCursor ? { scale: 1.06 } : { scale: 1 }}
-                  transition={{ type: 'spring', stiffness: 520, damping: 22 }}
+                  initial={{ opacity: 0, y: 18 }}
+                  animate={{ opacity: 1, y: 0, scale: isCursor ? 1.07 : 1 }}
+                  transition={{
+                    opacity: { duration: 0.24, delay: 0.03 * i },
+                    y: { type: 'spring', stiffness: 420, damping: 26, delay: 0.03 * i },
+                    scale: { type: 'spring', stiffness: 540, damping: 20 },
+                  }}
                 >
-                  <AtlasCrop skin={g.skin} w={150} h={168} accent={g.accent} />
+                  <span className="fsel-cell-art">
+                    <AtlasCrop skin={g.skin} w={150} h={168} accent={g.accent} />
+                    <span className="fsel-cell-sheen" aria-hidden />
+                  </span>
                   <span className="fsel-cell-name">{g.shortName}</span>
                   <span className="fsel-cell-arch" style={{ ['--accent' as string]: ARCHETYPES[g.archetype].accent }}>
                     {ARCHETYPES[g.archetype].label}
@@ -334,7 +475,7 @@ export function FightSelect() {
         </div>
       )}
 
-      {(phase === 'stage' || phase === 'launch') && (
+      {phase === 'stage' && (
         <div className="fsel-stage-area">
           <div className="fsel-grid fsel-grid-stage" role="listbox" aria-label="stages">
             {(cells as { g: StageEntry; i: number }[]).map(({ g, i }) => {
@@ -348,12 +489,20 @@ export function FightSelect() {
                   data-testid="fsel-stagecard"
                   data-stage={g.id}
                   data-cursor={isCursor ? '1' : undefined}
-                  onMouseEnter={() => phase === 'stage' && setCursor(i)}
+                  onMouseEnter={() => { if (phase === 'stage' && i !== cursor) { setCursor(i); Sfx.menuMove() } }}
                   onClick={() => { if (phase === 'stage') { setCursor(i); confirm() } }}
-                  animate={isCursor ? { scale: 1.05 } : { scale: 1 }}
-                  transition={{ type: 'spring', stiffness: 520, damping: 22 }}
+                  initial={{ opacity: 0, y: 16 }}
+                  animate={{ opacity: 1, y: 0, scale: isCursor ? 1.06 : 1 }}
+                  transition={{
+                    opacity: { duration: 0.22, delay: 0.028 * i },
+                    y: { type: 'spring', stiffness: 440, damping: 26, delay: 0.028 * i },
+                    scale: { type: 'spring', stiffness: 540, damping: 20 },
+                  }}
                 >
-                  <span className="fsel-stage-thumb" style={{ background: `linear-gradient(150deg, ${g.swatch[0]}, ${g.swatch[1]})` }}>
+                  <span className="fsel-stage-thumb" data-stage={g.id} style={{ background: stageScene(g.swatch) }}>
+                    <span className="fsel-stage-floor" aria-hidden />
+                    <span className="fsel-stage-sheen" aria-hidden />
+                    <span className="fsel-stage-vignette" aria-hidden />
                     {g.note && <span className={`fsel-stage-flag ${g.note === 'UNTESTED' ? 'warn' : ''}`}>{g.note}</span>}
                   </span>
                   <span className="fsel-stage-name">{g.name}</span>
@@ -365,21 +514,73 @@ export function FightSelect() {
       )}
 
       {phase === 'launch' && (
-        <motion.div
-          className="fsel-launch"
-          data-testid="fsel-launch"
-          initial={{ opacity: 0, scale: 0.7 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ type: 'spring', stiffness: 420, damping: 18 }}
-        >
-          <Word text="FIGHT!" color="#fff4c2" accent="#ef6a3a" className="fsel-fight" />
-        </motion.div>
+        <div className="fsel-launch" data-testid="fsel-launch" data-beat={launchBeat}>
+          <span className="fsel-vs-scrim" aria-hidden />
+          <span className="fsel-vs-bolt" aria-hidden />
+          <motion.div
+            className="fsel-vs-fighter a"
+            layout="position"
+            style={{ ['--accent' as string]: p1Entry?.accent ?? '#f4c130' }}
+            initial={{ x: '-16vw', opacity: 0, rotate: -5 }}
+            animate={{ x: 0, opacity: 1, rotate: 0 }}
+            transition={{ type: 'spring', stiffness: 260, damping: 22, layout: { type: 'spring', stiffness: 320, damping: 34 } }}
+          >
+            <span className="fsel-vs-art">
+              {p1Entry && <AtlasCrop key={p1Entry.skin} skin={p1Entry.skin} w={340} h={430} accent={p1Entry.accent} />}
+            </span>
+            <span className="fsel-vs-name" style={{ color: p1Entry?.accent }}>{p1Entry?.shortName}</span>
+            <span className="fsel-vs-arch">{p1Entry ? ARCHETYPES[p1Entry.archetype].label : ''}</span>
+          </motion.div>
+
+          <div className="fsel-vs-center">
+            <AnimatePresence>
+              {launchBeat === 'vs' ? (
+                <motion.div
+                  key="vs"
+                  className="fsel-vs-clash"
+                  initial={{ scale: 2.4, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.5, opacity: 0 }}
+                  transition={{ type: 'spring', stiffness: 320, damping: 15 }}
+                >
+                  <Word text="VS" color="#ffffff" accent="#ef6a3a" className="fsel-vs-word" />
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="fight"
+                  className="fsel-vs-clash"
+                  initial={{ scale: 0.55, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={{ type: 'spring', stiffness: 440, damping: 14 }}
+                >
+                  <Word text="FIGHT!" color="#fff4c2" accent="#ef6a3a" className="fsel-fight" />
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          <motion.div
+            className="fsel-vs-fighter b"
+            layout="position"
+            style={{ ['--accent' as string]: p2Entry?.accent ?? '#ef6a3a' }}
+            initial={{ x: '16vw', opacity: 0, rotate: 5 }}
+            animate={{ x: 0, opacity: 1, rotate: 0 }}
+            transition={{ type: 'spring', stiffness: 260, damping: 22, layout: { type: 'spring', stiffness: 320, damping: 34 } }}
+          >
+            <span className="fsel-vs-art">
+              {p2Entry && <AtlasCrop key={p2Entry.skin} skin={p2Entry.skin} w={340} h={430} accent={p2Entry.accent} />}
+            </span>
+            <span className="fsel-vs-name" style={{ color: p2Entry?.accent }}>{p2Entry?.shortName}</span>
+            <span className="fsel-vs-arch">{p2Entry ? ARCHETYPES[p2Entry.archetype].label : ''}</span>
+          </motion.div>
+        </div>
       )}
 
       <footer className="fsel-hint" data-testid="fsel-hint">
         <span><kbd>← ↑ ↓ →</kbd> / <kbd>WASD</kbd> MOVE</span>
         <span><kbd>ENTER</kbd> CONFIRM</span>
         <span><kbd>ESC</kbd> BACK</span>
+        <span className="fsel-hint-pad"><kbd>PAD</kbd> D-PAD · A · B</span>
       </footer>
     </div>
   )
@@ -397,6 +598,7 @@ declare global {
         p1arch: string | null
         p2arch: string | null
         stage: string | null
+        portraitsReady: boolean
       }
       move: (dx: number, dy: number) => void
       setCursor: (i: number) => void

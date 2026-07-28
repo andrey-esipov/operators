@@ -74,10 +74,6 @@ interface Tier {
   techChance: number
   /** 0..1 offensive pressure. */
   aggression: number
-  /** Per-frame chance of taking a super opportunity when one exists and meter is
-   *  up. Small numbers still fire reliably because opportunities span several
-   *  frames; a higher tier simply cashes them in more often and sooner. */
-  superChance: number
   /** Probability of reading a committed attack (or incoming fireball) and
    *  parrying it instead of blocking — the Third Strike defensive read. Higher
    *  tiers parry far more; a beginner almost never lands one. */
@@ -87,11 +83,11 @@ interface Tier {
 const TIERS: Record<Difficulty, Tier> = {
   // Slow to react, drops most blocks, barely techs — a beginner punching bag
   // that still occasionally defends itself.
-  easy: { reactionFrames: 22, blockChance: 0.30, punishChance: 0.20, techChance: 0.10, aggression: 0.30, superChance: 0.05, parryChance: 0.05 },
+  easy: { reactionFrames: 22, blockChance: 0.30, punishChance: 0.20, techChance: 0.10, aggression: 0.30, parryChance: 0.05 },
   // Competent: blocks the obvious, punishes the slow, techs some throws.
-  medium: { reactionFrames: 14, blockChance: 0.65, punishChance: 0.55, techChance: 0.40, aggression: 0.55, superChance: 0.12, parryChance: 0.28 },
+  medium: { reactionFrames: 14, blockChance: 0.65, punishChance: 0.55, techChance: 0.40, aggression: 0.55, parryChance: 0.28 },
   // Sharp but still human-shaped: an 8-frame read is fast, not frame-perfect.
-  hard: { reactionFrames: 8, blockChance: 0.92, punishChance: 0.85, techChance: 0.70, aggression: 0.78, superChance: 0.22, parryChance: 0.6 },
+  hard: { reactionFrames: 8, blockChance: 0.92, punishChance: 0.85, techChance: 0.70, aggression: 0.78, parryChance: 0.6 },
 }
 
 /** What the AI reacts to — the opponent's state, snapshotted so we can react to

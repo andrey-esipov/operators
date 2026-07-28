@@ -10,6 +10,7 @@
 import { chromium } from 'playwright-core'
 import { mkdirSync, rmSync, writeFileSync } from 'fs'
 import { execSync } from 'child_process'
+import sharp from 'sharp'
 
 const SHA = execSync('git rev-parse --short HEAD').toString().trim()
 
@@ -148,6 +149,32 @@ async function state() {
 }
 
 const shots = []
+
+// Mean luma of the stage band only — below the HUD, above the super row. A
+// WebGL canvas screenshotted at DPR 2 occasionally comes back as the cleared
+// drawing buffer rather than the composited frame, which yields a perfectly
+// black stage with the DOM HUD still painted over it. It looks like a
+// catastrophic renderer bug and it is not one; the critic filed it as
+// "full-screen blackout on a hitstun frame" off exactly such a frame.
+async function stageLuma(buf) {
+  const meta = await sharp(buf).metadata()
+  const { data, info } = await sharp(buf)
+    .extract({
+      left: 0,
+      top: Math.round(meta.height * 0.14),
+      width: meta.width,
+      height: Math.round(meta.height * 0.7),
+    })
+    .resize(120)
+    .raw()
+    .toBuffer({ resolveWithObject: true })
+  let sum = 0
+  const n = data.length / info.channels
+  for (let i = 0; i < data.length; i += info.channels)
+    sum += (data[i] + data[i + 1] + data[i + 2]) / 3
+  return sum / n
+}
+
 async function shot(name) {
   // If the build changed under us this run is already void — bail before
   // spending three seconds on a screenshot that can't be compared to the rest.
@@ -159,17 +186,45 @@ async function shot(name) {
   // another lying harness.
   await page.evaluate(() => window.__PLAY__.pause())
   const st = await state()
-  await page.screenshot({ path: `${OUT}/${name}.png` })
+  let buf = await page.screenshot()
+  let luma = await stageLuma(buf)
+  // A live stage sits around 70-90. Anything under 12 while the sim says we're
+  // mid-fight is a lost drawing buffer, not a dark scene — retake it rather
+  // than shipping a black PNG that reads as a renderer catastrophe.
+  let retakes = 0
+  while (luma < 12 && st.phase === 'fight' && retakes < 4) {
+    retakes++
+    await page.evaluate(() => window.__PLAY__.resume())
+    await page.waitForTimeout(120)
+    await page.evaluate(() => window.__PLAY__.pause())
+    buf = await page.screenshot()
+    luma = await stageLuma(buf)
+  }
+  writeFileSync(`${OUT}/${name}.png`, buf)
   const after = await state()
   await page.evaluate(() => window.__PLAY__.resume())
+
+  if (luma < 12 && st.phase === 'fight') {
+    console.log(
+      `FAILED: ${name} stage luma ${luma.toFixed(1)} after ${retakes} retakes — ` +
+        `the canvas is genuinely black while the sim says phase=fight`,
+    )
+    // Leave nothing behind. A directory of PNGs is the thing people look at,
+    // and a black frame sitting in it outlives the console message that
+    // explained it.
+    rmSync(OUT, { recursive: true, force: true })
+    await browser.close()
+    process.exit(1)
+  }
 
   // Prove the freeze held across the screenshot rather than assuming it.
   const drift =
     after.p1.st !== st.p1.st || after.p2.st !== st.p2.st || after.p1.hp !== st.p1.hp
-  shots.push({ name, ...st, drift })
+  shots.push({ name, ...st, drift, stageLuma: +luma.toFixed(1), retakes })
   console.log(
     `  ${name.padEnd(18)} phase=${st.phase} combo=${st.combo} ` +
       `p1[hp=${st.p1.hp} m=${st.p1.meter} ${st.p1.st}] p2[hp=${st.p2.hp} m=${st.p2.meter} ${st.p2.st}]` +
+      (retakes ? `   (retook ${retakes}x — lost drawing buffer)` : '') +
       (drift ? '   *** DRIFTED DURING CAPTURE — label is not trustworthy' : ''),
   )
 }

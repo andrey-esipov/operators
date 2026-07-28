@@ -71,6 +71,13 @@ export function PlayableMatch() {
   const p2 = params.get('p2') || 'vanguard'
   /** `?cpu=dummy` gives a training dummy instead of a live opponent. */
   const training = params.get('cpu') === 'dummy'
+  // A first-time player's first match should not be against the hardest CPU
+  // the engine can field. `?cpu=medium|hard` reaches the others — and
+  // measure-difficulty.mjs pins a tier explicitly so its numbers stay
+  // comparable across changes to this default.
+  const cpuParam = params.get('cpu')
+  const difficulty: 'easy' | 'medium' | 'hard' =
+    cpuParam === 'medium' || cpuParam === 'hard' ? cpuParam : 'easy'
 
   const defA = getFighter(aId)
   const defB = getFighter(bId)
@@ -90,7 +97,7 @@ export function PlayableMatch() {
       p2,
       controllers: [
         { kind: 'human', source: keyboard },
-        training ? { kind: 'dummy' } : { kind: 'cpu', difficulty: 'medium' },
+        training ? { kind: 'dummy' } : { kind: 'cpu', difficulty },
       ],
     })
 

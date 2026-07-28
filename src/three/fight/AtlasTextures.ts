@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { conditionAlbedoAlpha } from './edgeAlpha'
 
 /**
  * Turns a packed sprite atlas image into the three maps the fighter material
@@ -18,6 +19,9 @@ import * as THREE from 'three'
  *  2. Cross-frame bleed. Normals are derived only inside each silhouette (the
  *     background is hard-zeroed), so as long as frames don't touch, one frame's
  *     derivative never leaks into its neighbour.
+ *
+ * The silhouette edge itself is conditioned by ./edgeAlpha, shared verbatim with
+ * the offline edge probe so the two cannot disagree about what ships on screen.
  */
 
 export interface AtlasTextureSet {
@@ -29,13 +33,6 @@ export interface AtlasTextureSet {
 }
 
 export type AtlasSource = HTMLImageElement | HTMLCanvasElement
-
-/** gpt-image-2 renders on a flat neutral grey; used when a frame has no alpha. */
-function isBackdrop(r: number, g: number, b: number): boolean {
-  const nearMid = Math.abs(r - 128) < 32 && Math.abs(g - 128) < 32 && Math.abs(b - 128) < 32
-  const neutral = Math.abs(r - g) < 16 && Math.abs(g - b) < 16 && Math.abs(r - b) < 16
-  return nearMid && neutral
-}
 
 export function buildAtlasTextures(src: AtlasSource, anisotropy = 8): AtlasTextureSet {
   const w = src instanceof HTMLImageElement ? src.naturalWidth : src.width
@@ -52,34 +49,11 @@ export function buildAtlasTextures(src: AtlasSource, anisotropy = 8): AtlasTextu
   const px = image.data
   const n = w * h
 
-  // ---- 1. Resolve a hard alpha mask + collect luminance --------------------
-  // Prefer the source's own alpha when it actually carries a silhouette; fall
-  // back to chroma-keying the grey backdrop otherwise.
-  let alphaCarriers = 0
-  for (let i = 3; i < px.length; i += 4) if (px[i] < 250) alphaCarriers++
-  const useNativeAlpha = alphaCarriers > n * 0.02
-
-  const mask = new Uint8Array(n)
-  const lum = new Float32Array(n)
-  for (let p = 0, i = 0; p < n; p++, i += 4) {
-    const r = px[i], g = px[i + 1], b = px[i + 2], a = px[i + 3]
-    const solid = useNativeAlpha ? a > 128 : !isBackdrop(r, g, b)
-    mask[p] = solid ? 255 : 0
-    lum[p] = solid ? (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255 : 0
-  }
-
-  despeckle(mask, w, h)
-
-  // ---- 2. Dilate silhouette RGB into the transparent margin ----------------
-  // Grow the interior colour a few pixels past the silhouette. The feather in
-  // step 3 then blends onto the character's own edge colour rather than the
-  // backdrop, which is what removes the halo. We keep the ORIGINAL mask for
-  // alpha; this only rewrites colour under (soon-to-be) transparent pixels.
-  dilateColor(px, mask, w, h, 4)
-
-  // ---- 3. Feather the silhouette edge (1px) for a clean antialias ----------
-  const soft = featherAlpha(mask, w, h)
-  for (let p = 0, i = 3; p < n; p++, i += 4) px[i] = soft[p]
+  // ---- 1-3. Silhouette edge conditioning (mask, halo dilate, edge alpha) ----
+  // Preserves a baked coverage-AA ramp when the atlas carries one; chroma-keys
+  // and feathers otherwise. Shared with scripts/lib/atlas-quality so the probe
+  // measures this exact transform.
+  const { mask, lum } = conditionAlbedoAlpha(px, w, h)
   ctx.putImageData(image, 0, 0)
 
   // ---- 4. Height field: rounded body volume + surface detail ---------------
@@ -169,81 +143,6 @@ export function buildAtlasTextures(src: AtlasSource, anisotropy = 8): AtlasTextu
 
 function clamp01(v: number) {
   return v < 0 ? 0 : v > 1 ? 1 : v
-}
-
-function despeckle(mask: Uint8Array, w: number, h: number) {
-  const src = mask.slice()
-  for (let y = 1; y < h - 1; y++) {
-    for (let x = 1; x < w - 1; x++) {
-      const p = y * w + x
-      let c = 0
-      for (let dy = -1; dy <= 1; dy++)
-        for (let dx = -1; dx <= 1; dx++) {
-          if (dx === 0 && dy === 0) continue
-          if (src[p + dy * w + dx] !== 0) c++
-        }
-      if (src[p] !== 0 && c <= 1) mask[p] = 0
-      else if (src[p] === 0 && c >= 7) mask[p] = 255
-    }
-  }
-}
-
-/**
- * Grow opaque RGB outward into transparent pixels by `iters` rings. Each pass a
- * transparent pixel that borders coloured pixels adopts their average colour.
- * Alpha is untouched — this only pre-loads sensible colour under the feather.
- */
-function dilateColor(px: Uint8ClampedArray, mask: Uint8Array, w: number, h: number, iters: number) {
-  const filled = mask.slice()
-  for (let it = 0; it < iters; it++) {
-    const snapshot = filled.slice()
-    for (let y = 0; y < h; y++) {
-      for (let x = 0; x < w; x++) {
-        const p = y * w + x
-        if (snapshot[p] !== 0) continue
-        let r = 0, g = 0, b = 0, c = 0
-        for (let dy = -1; dy <= 1; dy++) {
-          const yy = y + dy
-          if (yy < 0 || yy >= h) continue
-          for (let dx = -1; dx <= 1; dx++) {
-            const xx = x + dx
-            if (xx < 0 || xx >= w) continue
-            const q = yy * w + xx
-            if (snapshot[q] === 0) continue
-            const qi = q * 4
-            r += px[qi]; g += px[qi + 1]; b += px[qi + 2]; c++
-          }
-        }
-        if (c > 0) {
-          const i = p * 4
-          px[i] = r / c; px[i + 1] = g / c; px[i + 2] = b / c
-          filled[p] = 255
-        }
-      }
-    }
-  }
-}
-
-function featherAlpha(mask: Uint8Array, w: number, h: number): Uint8Array {
-  const out = new Uint8Array(mask.length)
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      const p = y * w + x
-      if (mask[p] !== 0) { out[p] = 255; continue }
-      let c = 0
-      for (let dy = -1; dy <= 1; dy++) {
-        const yy = y + dy
-        if (yy < 0 || yy >= h) continue
-        for (let dx = -1; dx <= 1; dx++) {
-          const xx = x + dx
-          if (xx < 0 || xx >= w) continue
-          if (mask[yy * w + xx] !== 0) c++
-        }
-      }
-      out[p] = c >= 5 ? 175 : c >= 3 ? 96 : 0
-    }
-  }
-  return out
 }
 
 function chamferDistance(mask: Uint8Array, w: number, h: number): Float32Array {

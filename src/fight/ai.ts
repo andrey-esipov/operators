@@ -187,6 +187,17 @@ export class FighterAI {
    *  baselines). Seeding it off the same seed keeps the AI fully deterministic
    *  while making the reversal additive to everything that came before it. */
   private readonly revRng: Rng
+  /** A SEPARATE stream for the showcase heavy/sweep decisions, for exactly the
+   *  same reason revRng exists. These are the newest behaviour and must be
+   *  ADDITIVE to the tuned baseline: if they drew from `rng`, every mid-range
+   *  frame would consume the shared stream and silently re-roll the throw-tech,
+   *  parry and poke cadence downstream. It did — inserting the sweep gate into
+   *  the footsie band moved the easy tier's throw-escape count from 1 to 5 and
+   *  collapsed the measured hard-vs-easy margin. Drawing the heavy/sweep rolls
+   *  from a side stream keeps the main decision sequence byte-identical on every
+   *  frame where no showcase move fires, so the new tiers are purely additive and
+   *  the AI stays fully deterministic. */
+  private readonly showRng: Rng
   private readonly tier: Tier
   private readonly aggression: number
   private readonly obs: Obs[] = []
@@ -206,6 +217,7 @@ export class FighterAI {
   constructor(opts: AIOptions = {}) {
     this.rng = makeRng(opts.seed ?? 0x51ac)
     this.revRng = makeRng((opts.seed ?? 0x51ac) ^ 0x5eed)
+    this.showRng = makeRng((opts.seed ?? 0x51ac) ^ 0xca5e)
     this.tier = TIERS[opts.difficulty ?? 'medium']
     this.aggression = opts.aggression ?? this.tier.aggression
   }
@@ -509,8 +521,33 @@ export class FighterAI {
           const opener = this.startCombo(state, i, haveSuper)
           if (opener) return opener
         }
-        // Out of light range, or an archetype without the route: a single Surge.
-        this.queue = [{ rel: 3 }, { rel: 6, buttons: ['hp'] }]
+        // Out of light-cancel range the opponent is still frame-trapped in
+        // recovery — it cannot block, tech, or trade — so this punish is
+        // GUARANTEED. It is cashed SPECIAL-PRIMARY: by default (the fall-through
+        // below) into the Surge Palm special (qcf.P, itself a launcher-level
+        // move) — the AI's reliable meterless damage on a caught whiff. Only a
+        // MINORITY of punishes divert to a showcase big button — a sweep for the
+        // hard knockdown into okizeme, or a standing heavy for raw damage — so the
+        // heavy and sweep tiers reach the screen in real play at ZERO safety cost
+        // (the victim is committed, so neither can be blocked or whiff-punished
+        // back) WITHOUT demoting the AI's damage. The whole reason a human shows
+        // off a heavy is a caught whiff, and the AI never did — now it does,
+        // occasionally, on top of its bread-and-butter Surge.
+        if (o.dist < 118 + R) {
+          // Drawn from showRng so the choice never perturbs the main decision
+          // cadence (see showRng's declaration). Minority: 15% sweep, 25% heavy,
+          // 60% fall through to the Surge special below. Keeping the diversion a
+          // minority matters twice over: the Surge stays the AI's premier damage
+          // cash-in, and the diversions stay a small enough trajectory nudge that
+          // the AI's downstream BnB launcher-juggles hold — the aicombo juggle-
+          // regression test (seed 0xbeef) stays green here and reds if the
+          // diversion is allowed to dominate. Heavy still clears its census floor
+          // (1.0/match) with ~2x margin at this rate.
+          const roll = this.showRng.next()
+          if (roll < 0.15) return frame(toward(2, facing), ['hk']) // cr.HK sweep → knockdown/oki
+          if (roll < 0.40) return frame(toward(5, facing), ['hp']) // st.HP heavy → raw damage
+        }
+        this.queue = [{ rel: 3 }, { rel: 6, buttons: ['hp'] }] // qcf.P Surge Palm (default cash-in, level: launcher)
         return frame(toward(2, facing))
       }
       // Parry the read: tap INTO the attack (forward for highs, down for lows) in
@@ -546,6 +583,21 @@ export class FighterAI {
       if (zones && this.rng.next() < 0.30 + this.aggression * 0.2) {
         this.queue = [{ rel: 3 }, { rel: 6, buttons: ['lp'] }] // slow wall bolt
         return frame(toward(2, facing))
+      }
+      // Spaced footsie commit. At the near edge of poke range a melee fighter
+      // threatens its low sweep — a hard knockdown, and the fundamental footsie
+      // tool the AI was missing ENTIRELY. Only the sweep goes here, not the
+      // standing heavy: the sweep is long-reaching and hits low (it lands ~86%
+      // of the time in the census), whereas a neutral standing heavy mostly
+      // whiffs its shorter range, which is the exact "AI flails a big button at
+      // nothing" tell — so the heavy is reserved for the guaranteed whiff-punish
+      // above where it actually connects. Gated hard even so: melee archetypes
+      // only (a zoner has no business in sweep range), only vs a grounded
+      // opponent not already committed to its own attack (a spacing read, not a
+      // blind trade), at a low aggression-scaled rate so safe pokes still lead.
+      if (!zones && o.grounded && !o.attacking && o.dist < 122 + R &&
+          this.showRng.next() < 0.035 + this.aggression * 0.05) {
+        return frame(toward(2, facing), ['hk']) // cr.HK sweep — long low, hard knockdown
       }
       if (this.rng.next() < 0.05 + this.aggression * 0.1) {
         return frame(toward(2, facing), ['mk']) // cr.MK poke

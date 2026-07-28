@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import type { Projectile } from '../../fight/types'
 import { STAGE_HALF_W, PROJECTILE_MARGIN, SUPER_FREEZE_FRAMES } from '../../fight/constants'
 import { simToWorld, cmYToWorld } from './worldScale'
-import { energyTint, flashTint, hotTint, makeGlowMesh, hotCoreTexture, beamColumnTexture, beamTint, coreQuadTint, presenceFor, clashing, type Presence } from './ProjectileFx'
+import { energyTint, flashTint, hotTint, makeGlowMesh, hotCoreTexture, beamColumnTexture, beamCrackleTexture, beamCrackleScroll, BEAM_CRACKLE_PERIOD, beamTint, coreQuadTint, presenceFor, clashing, type Presence } from './ProjectileFx'
 import {
   loadProjectileAtlas,
   type LoadedProjectile,
@@ -694,6 +694,9 @@ export class ProjectileLayer {
     if (presence.beam > 0) {
       beam = makeGlowMesh(beamTint(), 17, beamColumnTexture())
       beamMat = beam.material as THREE.MeshBasicMaterial
+      // Moving crackle carved into the beam's alpha (never added → clip-safe; see
+      // beamCrackleTexture). repeat/offset are driven per-frame in place().
+      beamMat.alphaMap = beamCrackleTexture()
       beamMat.opacity = 0
       this.group.add(beam)
     }
@@ -826,7 +829,18 @@ export class ProjectileLayer {
       )
       l.beam.rotation.z = angle
       l.beam.scale.set(shaftLen, thick, 1)
-      const flicker = 0.86 + 0.14 * Math.sin(l.clock * 1.7 + l.id * 2.3)
+      // Scroll the crackle alphaMap muzzle→head; repeat keeps ~one tile per
+      // BEAM_CRACKLE_PERIOD world units so node density is length-invariant. This
+      // moving spatial structure now carries the "live discharge" read, so the old
+      // global opacity flicker is dialled back (0.86±0.14 → 0.93±0.07): it no
+      // longer has to fake crackle by pulsing the whole bar, and its shallower dip
+      // keeps the beam from compounding dim with the crackle's gaps.
+      const am = l.beamMat.alphaMap
+      if (am) {
+        am.repeat.x = shaftLen / BEAM_CRACKLE_PERIOD
+        am.offset.x = beamCrackleScroll(l.clock)
+      }
+      const flicker = 0.93 + 0.07 * Math.sin(l.clock * 1.7 + l.id * 2.3)
       l.beamMat.opacity = pr.beam * 0.92 * flicker
     }
   }

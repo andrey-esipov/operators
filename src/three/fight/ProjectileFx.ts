@@ -81,6 +81,7 @@ export function hotCoreTexture(): THREE.Texture {
 }
 
 let beamTex: THREE.Texture | null = null
+let beamCrackleTex: THREE.Texture | null = null
 
 /**
  * The beam column texture's darkest body (coreV=0) and hottest spine (coreV=1)
@@ -147,6 +148,108 @@ export function beamColumnTexture(): THREE.Texture {
   tex.generateMipmaps = false
   tex.needsUpdate = true
   beamTex = tex
+  return tex
+}
+
+// ── Beam crackle: moving high-frequency structure ALONG the shaft ─────────────
+//
+// MEASURED DEFECT (critic: "no crackle, a smooth shaft"). beamColumnTexture above
+// is smooth along its LENGTH: its colour is a function of the across-axis only
+// (constant along u) and its along-length alpha is a single monotonic
+// feather→plateau→taper envelope — 0 local maxima, detrended-std 0.023. The only
+// motion the shaft had came from two SPATIALLY-UNIFORM global oscillators in
+// ProjectileLayer.place(): an opacity flicker (measured 16.2 Hz, ±12%) and a
+// thickness wobble (8.7 Hz, ±7%). Those are fine in rate/amplitude but they
+// brighten/thin the WHOLE bar together, so they read as a breathing bar, never as
+// crackle. Live electrical discharge needs high-frequency SPATIAL variation that
+// TRAVELS — bright nodes and dark gaps racing muzzle→head. No change to the global
+// pulse can supply that; the structure has to live along the shaft and move.
+//
+// Carried as an alphaMap that MULTIPLIES the beam's alpha (final alpha =
+// opacity × column-alpha × crackle). Values sit in [~0.5, 1.0] with peaks pinned
+// at 1.0, so it only ever multiplies DOWN — carving moving dark gaps WITHOUT
+// adding energy. It therefore cannot push any channel toward the white clip the
+// beam-tint / coreQuadTint fix just closed (if anything it lowers the summed
+// spine), and its peaks stay hot so the beam does not go dull. That resolves the
+// critic's two super notes with one mechanism: sharper definition (gaps break up
+// the smooth blur) at strictly ≤ current energy (no re-blowout).
+//
+// beamCrackleRow is the pure 1-D generator, period-1 tileable via INTEGER
+// frequencies so the alphaMap scrolls seamlessly across its RepeatWrapping. It is
+// exported (no GL/canvas) so crackle.test.ts can gate its spatial content —
+// ~10 local maxima per tile vs the column's 0 — and its clip-safe range.
+export function beamCrackleRow(W: number, lo = 0.5): Float32Array {
+  const out = new Float32Array(W)
+  const TAU = Math.PI * 2
+  for (let x = 0; x < W; x++) {
+    const u = x / W // period-1: u=0 and u=1 are the same phase (seamless tile)
+    let s =
+      0.5 * Math.sin(TAU * u * 5) +
+      0.34 * Math.sin(TAU * u * 9 + 1.3) +
+      0.28 * Math.sin(TAU * u * 13 + 4.0)
+    s /= 1.12 // → ~[-1, 1]
+    let v = 0.5 + 0.5 * s // → [0, 1]
+    v = Math.pow(Math.max(0, v), 0.6) // bias bright, sharpen the dips into gaps
+    out[x] = lo + (1 - lo) * v // → [lo, 1], peaks at 1.0 (energy-preserving at nodes)
+  }
+  return out
+}
+
+// World length of one crackle tile. place() sets alphaMap.repeat.x =
+// shaftLen / BEAM_CRACKLE_PERIOD so node density stays constant as the lance grows
+// (≈10 nodes/tile → a ~12u full-screen beam shows ~24 travelling nodes) instead of
+// the pattern stretching. Larger ⇒ chunkier, fewer nodes.
+export const BEAM_CRACKLE_PERIOD = 5.0
+// Tiles the pattern scrolls per frame (clock advances ~1/frame at 60fps). Negative
+// so the crackle flows muzzle→head with the beam's travel. 0.05 tile/frame ⇒ node
+// world-velocity ≈ BEAM_CRACKLE_PERIOD * 0.05 * 60 ≈ 15 u/s — a fast live flow.
+export const BEAM_CRACKLE_SCROLL = 0.05
+// U-offset for the alphaMap at a clip clock (frames). Pure + monotonic so
+// crackle.test.ts can assert the crackle actually MOVES (a frozen scroll reds it).
+export function beamCrackleScroll(clock: number): number {
+  return -clock * BEAM_CRACKLE_SCROLL
+}
+
+// Bakes beamCrackleRow into a tileable grayscale strip used as the beam's alphaMap.
+// Cached singleton: like beamColumnTexture it outlives any one beam (material
+// .dispose() frees the material, not its textures), and only one super beam is
+// ever live at a time, so the per-frame repeat/offset that place() writes on it is
+// never contended. NoColorSpace — it is a mask, not colour, so it must not be
+// sRGB-decoded on sample. Needs a canvas, so it is never called in vitest-node.
+export function beamCrackleTexture(): THREE.Texture {
+  if (beamCrackleTex) return beamCrackleTex
+  const W = 256,
+    H = 32
+  const canvas = document.createElement('canvas')
+  canvas.width = W
+  canvas.height = H
+  const ctx = canvas.getContext('2d')!
+  const img = ctx.createImageData(W, H)
+  const row = beamCrackleRow(W)
+  for (let y = 0; y < H; y++) {
+    // Small per-row phase shift so gaps tilt/shimmer across the beam's thickness
+    // rather than being perfectly vertical bands (cosmetic; the gated along-length
+    // content is beamCrackleRow itself).
+    const shift = Math.round((y / H) * 7)
+    for (let x = 0; x < W; x++) {
+      const g = Math.round(row[(x + shift) % W] * 255)
+      const i = (y * W + x) * 4
+      img.data[i] = g
+      img.data[i + 1] = g
+      img.data[i + 2] = g
+      img.data[i + 3] = 255
+    }
+  }
+  ctx.putImageData(img, 0, 0)
+  const tex = new THREE.CanvasTexture(canvas)
+  tex.colorSpace = THREE.NoColorSpace
+  tex.wrapS = THREE.RepeatWrapping
+  tex.wrapT = THREE.ClampToEdgeWrapping
+  tex.magFilter = THREE.LinearFilter
+  tex.minFilter = THREE.LinearFilter
+  tex.generateMipmaps = false
+  tex.needsUpdate = true
+  beamCrackleTex = tex
   return tex
 }
 

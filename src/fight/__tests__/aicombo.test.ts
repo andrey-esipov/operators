@@ -1,9 +1,16 @@
 /**
  * The AI must actually PERFORM a long combo. The engine has supported cancels
- * for a while (normals -> special -> super), but both scripted and AI play
- * plateaued at ~3 hits, so the HUD's NICE@5 / GREAT@8 tiers never fired — a
- * combo system that, from the player's seat, does not exist. These tests prove
- * the CPU lands genuine extended routes in a real, deterministic fight.
+ * for a while (normals -> special -> super) plus launch + juggle, but both
+ * scripted and AI play plateaued at ~3 hits, so the HUD's NICE@5 / GREAT@8 tiers
+ * never fired — a combo system that, from the player's seat, does not exist.
+ * These tests prove the CPU lands genuine extended routes — including real
+ * airborne juggles — in a real, deterministic fight.
+ *
+ * The route the AI runs (operator): a rushdown light chain into a launcher
+ * juggle — cr.LK > cr.LP > cr.LK > cr.LP > cr.LK > cr.HP(launch) > Surge Palm,
+ * +super when meter is up. The Rising Uppercut pops the victim airborne and the
+ * palm/super catch them falling, so the tail of every long route is a genuine
+ * juggle rather than a flat ground string.
  *
  * THE TRAP THIS FILE IS BUILT TO AVOID: "a 5-hit combo occurred" is satisfied
  * by five unrelated pokes landing during a scramble. That is the same incidental
@@ -17,10 +24,11 @@
  *
  * Mutation-proved (see the report): disabling the AI's combo starter, and
  * removing the AI's hitstop guard, each drop the longest linked combo below 5
- * -> red. The damage band reds if scaling is removed (combo damage balloons).
- * (Collapsing CANCEL_WINDOW to 0 does NOT red it — the links connect during the
- * attacker's active frames, not the early-recovery window — so that is not
- * claimed as a mutation here.)
+ * -> red. Replacing the launcher (cr.HP) in the route with a non-launching
+ * normal drops every airborne hit to zero -> the juggle assertion reds. The
+ * damage band reds if scaling is removed (combo damage balloons). (Collapsing
+ * CANCEL_WINDOW to 0 does NOT red it — the links connect during the attacker's
+ * active frames, not the early-recovery window — so that is not claimed here.)
  */
 
 import { describe, expect, it } from 'vitest'
@@ -36,20 +44,23 @@ interface Combo {
   len: number
   /** Total health the victim lost across the linked run. */
   dmg: number
+  /** How many of the linked hits landed while the victim was airborne (juggle). */
+  air: number
 }
 
 /** The longest UNBROKEN combo either fighter suffers in a `frames`-long fight:
  *  a maximal run of hits during which the victim's comboCount climbed without
  *  resetting AND the victim was never in a neutral stance between hits. Returns
- *  its length and the damage it dealt. */
+ *  its length, the damage it dealt, and how many hits were airborne (juggle). */
 function longestLinkedCombo(seed: number, p1: string, p2: string, frames = 2400): Combo {
   const h = new HarnessSim({ seed, p1, p2 } as never)
-  let best: Combo = { len: 0, dmg: 0 }
+  let best: Combo = { len: 0, dmg: 0, air: 0 }
   const prevCC = [0, 0]
   const prevHP = [0, 0]
   const open = [false, false] // did a neutral frame break the current run?
   const startHP = [0, 0]
   const peak = [0, 0]
+  const air = [0, 0]
   for (let k = 0; k < frames; k++) {
     const r = h.step()
     for (let vi = 0; vi < 2; vi++) {
@@ -61,10 +72,12 @@ function longestLinkedCombo(seed: number, p1: string, p2: string, frames = 2400)
         if (cc === 1) {
           open[vi] = false
           startHP[vi] = prevHP[vi]
+          air[vi] = 0
         }
         peak[vi] = cc
+        if (!f.grounded || f.stance === 'juggle') air[vi]++
         if (!open[vi] && cc >= best.len) {
-          best = { len: cc, dmg: startHP[vi] - f.health }
+          best = { len: cc, dmg: startHP[vi] - f.health, air: air[vi] }
         }
       } else if (cc === 0) {
         peak[vi] = 0
@@ -79,10 +92,12 @@ function longestLinkedCombo(seed: number, p1: string, p2: string, frames = 2400)
 }
 
 describe('AI combo routes', () => {
-  // operator vs operator: the archetype that owns the hit-confirm BnB
-  // (cr.LK > cr.LP > cr.LK > cr.MK > Surge Palm, +super with meter). Measured
-  // across these seeds the longest linked combo is 5 or 6 every time; a value
-  // that never dips below 5 is the property the HUD's NICE@5 tier needs.
+  // operator vs operator: the archetype that owns the hit-confirm BnB — a
+  // rushdown light chain into a launcher juggle (cr.LK > cr.LP > cr.LK > cr.LP >
+  // cr.LK > cr.HP > Surge Palm, +super with meter). Measured across these seeds
+  // the longest linked combo is 5-7; a value that never dips below 5 is the
+  // property the HUD's NICE@5 tier needs, and the 7-hit peak proves the launcher
+  // route lands whole.
   const seeds = [0x51ac, 0x1234, 0xbeef, 0x77, 0xabcd, 1, 2, 3]
 
   it('the AI lands a genuinely linked 5+ hit combo, not incidental pokes', () => {
@@ -91,30 +106,48 @@ describe('AI combo routes', () => {
     // detector discards any run containing a mid-combo neutral frame, this is
     // impossible to satisfy with five scattered pokes — they would each reset
     // the counter and break the run. (Mutation-proved: with the AI's combo
-    // starter disabled, 7 of these 8 seeds fall to 1-3 hits; with the AI's
-    // hitstop guard removed — so queued cancels drain into the frozen sim and
-    // desync from the move they cancel — most seeds fall to 1-4. Either reds the
-    // per-seed assertion below.)
+    // starter disabled, every seed falls below 5; with the AI's hitstop guard
+    // removed — so queued cancels drain into the frozen sim and desync from the
+    // move they cancel — most seeds fall to 1-4. Either reds the assertion.)
     for (const c of combos) {
       expect(c.len).toBeGreaterThanOrEqual(5)
     }
-    // And at least one fight reaches the 6-hit, meter-spending finish.
-    expect(Math.max(...combos.map((c) => c.len))).toBeGreaterThanOrEqual(6)
+    // And the launcher route lands whole often enough to reach its 7-hit peak.
+    expect(Math.max(...combos.map((c) => c.len))).toBeGreaterThanOrEqual(7)
+  })
+
+  it('the AI\'s long routes are launcher juggles, not flat ground chains', () => {
+    // The signature ask: a launcher should permit follow-ups in the air. A combo
+    // that never leaves the floor is not a juggle, so we require the AI's long
+    // routes to contain hits landed while the victim is AIRBORNE — the palm and
+    // super catching the victim popped up by cr.HP. Measured: the seeds that
+    // reach 7 all carry 2 airborne hits; ground-only 5-hit runs carry 0.
+    const combos = seeds.map((s) => longestLinkedCombo(s, 'operator', 'operator'))
+    // A clear majority of fights land a real juggle in their longest combo.
+    const withAir = combos.filter((c) => c.air >= 1).length
+    expect(withAir).toBeGreaterThanOrEqual(4)
+    // And the peak-length routes are juggles specifically: the launcher popped
+    // the victim and at least two follow-ups connected in the air. This is what
+    // reds when the launcher (cr.HP) is swapped out of the route for a grounded
+    // normal — every airborne hit becomes a grounded one and this drops to 0.
+    const bigJuggles = combos.filter((c) => c.len >= 7 && c.air >= 2).length
+    expect(bigJuggles).toBeGreaterThanOrEqual(3)
   })
 
   it('combo damage is expressive but not degenerate', () => {
-    // A linked 5-6 hit route should clearly beat trading single pokes, yet
-    // scaling must stop it from being a near-kill off one opening. Measured:
-    // the meterless 5-hit deals 171, the metered 6-hit 261, out of 1000 health.
+    // A linked 5-7 hit route should clearly beat trading single pokes, yet
+    // scaling must stop it from being a near-kill off one opening. Measured: the
+    // ground-only 5-hit deals ~117, the 7-hit launcher juggle ~211, out of 1000
+    // health.
     const best = seeds
       .map((s) => longestLinkedCombo(s, 'operator', 'operator'))
       .reduce((a, b) => (b.dmg > a.dmg ? b : a))
     const maxHealth = 1000
     // Expressive: worth more than any single normal (the heaviest is ~100).
     expect(best.dmg).toBeGreaterThan(120)
-    // Not degenerate: a full BnB takes well under a third of the life bar, so a
-    // round is at least ~4 clean openings, never two. If scaling were removed
-    // the raw route sums to ~490 and this reds.
+    // Not degenerate: a full route takes well under a third of the life bar, so a
+    // round is at least ~4 clean openings, never two. If scaling were removed the
+    // raw route sums far higher and this reds.
     expect(best.dmg).toBeLessThan(maxHealth * 0.33)
   })
 

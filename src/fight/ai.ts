@@ -222,23 +222,30 @@ export class FighterAI {
     return frame(toward(2, facing))
   }
 
-  /** Build the operator hit-confirm BnB and fire its opener. The route is
-   *  cr.LK > cr.LP > cr.LK > cr.MK > Surge Palm (a meterless 5-hit that lights the
-   *  HUD's combo tier on its own), extended with the super when meter is up for a
-   *  6-hit finish that actually spends the bar. Returns the opener input, or null
-   *  if this character lacks the route's moves (only the operator has it for now,
-   *  so other archetypes fall through to their normal offense). */
-  private startCombo(state: FightState, i: 0 | 1, haveSuper: boolean): InputFrame | null {
+  /** Build the operator hit-confirm BnB and fire its opener. The route is a
+   *  rushdown light chain into a launcher juggle:
+   *    cr.LK > cr.LP > cr.LK > cr.LP > cr.LK > cr.HP(launch) > Surge Palm(air)
+   *  — a meterless 7-hit that pops the victim airborne on the Rising Uppercut and
+   *  catches them falling with the palm, extended with the super (also airborne)
+   *  when meter is up. The five-light opener carries the length the HUD's NICE@5
+   *  tier needs; the launcher turns the tail into a genuine juggle rather than a
+   *  flat ground string. The launcher must follow a light (only lights cancel into
+   *  a heavy normal), which is why the opener is light-heavy. Returns the opener
+   *  input, or null if this character lacks the route's moves (only the operator
+   *  has it for now, so other archetypes fall through to their normal offense). */
+   private startCombo(state: FightState, i: 0 | 1, haveSuper: boolean): InputFrame | null {
     const me = state.fighters[i]
     const moves = getFighterDef(me.id).moves
-    const need = ['cr.LK', 'cr.LP', 'cr.MK', 'qcf.P']
+    const need = ['cr.LK', 'cr.LP', 'cr.HP', 'qcf.P']
     if (!need.every((id) => moves[id])) return null
 
     const plan: ComboStep[] = [
       { id: 'cr.LK', rel: 2, btn: 'lk' },
       { id: 'cr.LP', rel: 2, btn: 'lp' },
       { id: 'cr.LK', rel: 2, btn: 'lk' },
-      { id: 'cr.MK', rel: 2, btn: 'mk' },
+      { id: 'cr.LP', rel: 2, btn: 'lp' },
+      { id: 'cr.LK', rel: 2, btn: 'lk' },
+      { id: 'cr.HP', rel: 2, btn: 'hp' },
       { id: 'qcf.P', rel: 6, btn: 'lp', motion: '236' },
     ]
     if (haveSuper) {

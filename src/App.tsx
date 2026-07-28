@@ -44,9 +44,17 @@ function isHudRoute(): boolean {
   return new URLSearchParams(window.location.search).get('fighthud') === '1'
 }
 
+/** The legacy turn-based card game, now at `?cards=1`. */
+function isCardsRoute(): boolean {
+  if (typeof window === 'undefined') return false
+  return new URLSearchParams(window.location.search).get('cards') === '1'
+}
+
+/** The fighter is the game, so it owns `/`. The dev routes above are tested
+ *  first and still win; `?play=1` keeps working for tools that hardcode it. */
 function isPlayRoute(): boolean {
   if (typeof window === 'undefined') return false
-  return new URLSearchParams(window.location.search).get('play') === '1'
+  return !isCardsRoute()
 }
 
 export function App() {

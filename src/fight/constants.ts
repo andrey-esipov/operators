@@ -23,6 +23,22 @@ export const MAX_HEALTH = 1000
 export const MAX_METER = 2000
 
 /**
+ * Global multiplier on all hit/block/throw meter gains. The per-move gains are
+ * tuned for relative weight (a heavy builds more than a jab); this scales the
+ * whole economy so a fighter actually banks a full bar within a round and can
+ * spend it on a super. Without it meter peaked around 0.6 bars in a fight to KO,
+ * so supers were literally unreachable. Tuned so a bar banks around the
+ * mid-round mark (~frame 1000-1100), which gives the AI a real window to spend
+ * it as a whiff punish mid-round rather than only as the killing blow.
+ */
+export const METER_MULT = 3.6
+
+/** Meter the attacker banks for a whiffed move. Footsies — whiffing pokes at
+ *  range to control space — should build toward a super, the way they do in a
+ *  real fighter. Small, so it rewards throwing buttons without dwarfing hits. */
+export const WHIFF_METER = 12
+
+/**
  * Gravity. Paired with JUMP_VELOCITY this gives a ~44-frame jump arc peaking at
  * ~242cm — enough to clear a crouching opponent, which is the SF3/SF6 feel.
  */

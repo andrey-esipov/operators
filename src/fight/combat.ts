@@ -23,6 +23,7 @@ import {
   JUGGLE_ALLOWANCE,
   KNOCKDOWN_FRAMES,
   MAX_METER,
+  METER_MULT,
   MIN_DAMAGE,
   MIN_SCALE,
   PARRY_FREEZE,
@@ -34,7 +35,14 @@ import {
   THROW_TECH_FRAMES,
   THROW_TECH_PUSH,
   THROW_TECH_WINDOW,
+  WHIFF_METER,
 } from './constants'
+
+/** Bank meter, scaled by the global economy multiplier and clamped to the cap.
+ *  All hit/block/throw gains route through here so the economy has one knob. */
+function gainMeter(f: FighterState, base: number): void {
+  f.meter = Math.min(MAX_METER, f.meter + Math.round(base * METER_MULT))
+}
 
 /** Progressive combo scaling with a floor — long combos taper, never vanish. */
 export function scaleDamage(base: number, comboCount: number, moveScaling: number): number {
@@ -219,6 +227,8 @@ export function resolveCombat(
       const A = s.fighters[ai]
       const move = A.move ? defs[ai].moves[A.move.id] : undefined
       if (move && A.move && A.move.frame === move.active[0] && !A.attackConnected) {
+        // A whiffed poke still builds a little meter — footsies feed the super.
+        A.meter = Math.min(MAX_METER, A.meter + WHIFF_METER)
         events.push({ type: 'whiff', at: { x: A.pos.x, y: A.pos.y + 90 }, attacker: ai })
       }
     }
@@ -320,7 +330,7 @@ function resolveThrow(
   }
 
   // Clean throw: unscaled damage, hard knockdown, meter to the thrower only.
-  A.meter = Math.min(MAX_METER, A.meter + hit.meterGain)
+  gainMeter(A, hit.meterGain)
   D.health = Math.max(0, D.health - hit.damage)
   D.move = undefined
   D.attackConnected = false
@@ -339,8 +349,8 @@ function applyBlock(
   A: FighterState, D: FighterState, hit: Hit, at: Pending['at'], ai: 0 | 1, events: FightEvent[],
 ): void {
   D.health = Math.max(0, D.health - hit.chip)
-  D.meter = Math.min(MAX_METER, D.meter + hit.meterGainOnBlock)
-  A.meter = Math.min(MAX_METER, A.meter + Math.floor(hit.meterGainOnBlock * 0.5))
+  gainMeter(D, hit.meterGainOnBlock)
+  gainMeter(A, hit.meterGainOnBlock * 0.5)
   D.stance = 'blockstun'
   D.stunRemaining = hit.blockstun
   D.vel.x = A.facing * hit.knockback.x * 0.5
@@ -355,8 +365,8 @@ function applyHit(
   const dmg = scaleDamage(hit.damage, D.comboCount, hit.scaling)
   D.health = Math.max(0, D.health - dmg)
   D.comboCount += 1
-  A.meter = Math.min(MAX_METER, A.meter + hit.meterGain)
-  D.meter = Math.min(MAX_METER, D.meter + Math.floor(hit.meterGain * 0.3))
+  gainMeter(A, hit.meterGain)
+  gainMeter(D, hit.meterGain * 0.3)
 
   D.vel.x = A.facing * hit.knockback.x
   D.move = undefined

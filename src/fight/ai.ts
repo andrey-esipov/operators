@@ -52,16 +52,20 @@ interface Tier {
   techChance: number
   /** 0..1 offensive pressure. */
   aggression: number
+  /** Per-frame chance of taking a super opportunity when one exists and meter is
+   *  up. Small numbers still fire reliably because opportunities span several
+   *  frames; a higher tier simply cashes them in more often and sooner. */
+  superChance: number
 }
 
 const TIERS: Record<Difficulty, Tier> = {
   // Slow to react, drops most blocks, barely techs — a beginner punching bag
   // that still occasionally defends itself.
-  easy: { reactionFrames: 22, blockChance: 0.30, punishChance: 0.20, techChance: 0.10, aggression: 0.30 },
+  easy: { reactionFrames: 22, blockChance: 0.30, punishChance: 0.20, techChance: 0.10, aggression: 0.30, superChance: 0.05 },
   // Competent: blocks the obvious, punishes the slow, techs some throws.
-  medium: { reactionFrames: 14, blockChance: 0.65, punishChance: 0.55, techChance: 0.40, aggression: 0.55 },
+  medium: { reactionFrames: 14, blockChance: 0.65, punishChance: 0.55, techChance: 0.40, aggression: 0.55, superChance: 0.12 },
   // Sharp but still human-shaped: an 8-frame read is fast, not frame-perfect.
-  hard: { reactionFrames: 8, blockChance: 0.92, punishChance: 0.85, techChance: 0.70, aggression: 0.78 },
+  hard: { reactionFrames: 8, blockChance: 0.92, punishChance: 0.85, techChance: 0.70, aggression: 0.78, superChance: 0.22 },
 }
 
 /** What the AI reacts to — the opponent's state, snapshotted so we can react to
@@ -73,6 +77,7 @@ interface Obs {
   attacking: boolean
   inRecovery: boolean
   throwStartup: boolean
+  oppHealth: number
 }
 
 export interface AIOptions {
@@ -88,11 +93,39 @@ export class FighterAI {
   private readonly tier: Tier
   private readonly aggression: number
   private readonly obs: Obs[] = []
+  /** Cached lookup of this fighter's super (motion + cost), resolved once from
+   *  its def. `null` means the character has no motion super. */
+  private superInfo?: { motion: string; cost: number } | null
 
   constructor(opts: AIOptions = {}) {
     this.rng = makeRng(opts.seed ?? 0x51ac)
     this.tier = TIERS[opts.difficulty ?? 'medium']
     this.aggression = opts.aggression ?? this.tier.aggression
+  }
+
+  /** This fighter's super, or null. Cached because a fighter never changes id. */
+  private getSuper(id: string): { motion: string; cost: number } | null {
+    if (this.superInfo !== undefined) return this.superInfo
+    const supers = Object.values(getFighterDef(id).moves).filter(
+      (m) => m.tag === 'super' && !!m.motion,
+    )
+    // Prefer the cheapest super so the AI can actually afford to throw one.
+    supers.sort((a, b) => (a.cost ?? 0) - (b.cost ?? 0))
+    const s = supers[0]
+    this.superInfo = s && s.motion ? { motion: s.motion, cost: s.cost ?? 1000 } : null
+    return this.superInfo
+  }
+
+  /** Begin a super: return the first motion input now and queue the rest, ending
+   *  on a punch so `punchTriggered` fires. The motion is facing-relative, so it
+   *  mirrors correctly on either side. */
+  private startSuper(motion: string, facing: 1 | -1): InputFrame {
+    const digits = motion.split('').map((c) => Number(c) as Direction)
+    const rest = digits.slice(1)
+    this.queue = rest.map((d, idx) =>
+      idx === rest.length - 1 ? { rel: d, buttons: ['hp'] as Button[] } : { rel: d },
+    )
+    return frame(toward(digits[0], facing))
   }
 
   /** Snapshot the opponent this frame and return the read from reactionFrames
@@ -110,6 +143,7 @@ export class FighterAI {
       throwStartup:
         !!oppMove && !!opp.move && oppMove.hit.guard === 'throw' &&
         opp.move.frame <= oppMove.active[1],
+      oppHealth: opp.health,
     }
     this.obs.push(cur)
     const idx = this.obs.length - 1 - this.tier.reactionFrames
@@ -146,6 +180,24 @@ export class FighterAI {
     // pressing LP+LK to break it (option-selected with a down-back block).
     if (o.throwStartup && o.dist < 75 && this.rng.next() < this.tier.techChance) {
       return frame(toward(downBack, facing), ['lp', 'lk'])
+    }
+
+    // Super logic. A super the AI never throws is, to the player, a feature that
+    // doesn't exist — so it deliberately looks for two spots: a round-closer
+    // when the opponent is nearly dead and in range, and a big-whiff punish.
+    const sup = this.getSuper(me.id)
+    const haveSuper = !!sup && me.meter >= sup.cost
+    if (haveSuper && o.dist < 175 && me.grounded) {
+      // Round closer: opponent low enough that the super likely finishes it. A
+      // healthy per-frame chance so a spectator actually sees the kill land.
+      if (o.oppHealth <= 300 && this.rng.next() < 0.06 + this.aggression * 0.18) {
+        return this.startSuper(sup!.motion, facing)
+      }
+      // Big-whiff punish: cash a caught recovery into the super instead of a poke.
+      if (o.attacking && o.inRecovery && o.dist < 140 &&
+          this.rng.next() < this.tier.punishChance) {
+        return this.startSuper(sup!.motion, facing)
+      }
     }
 
     // Anti-air: opponent airborne and in range -> rising uppercut (cr.HP). Gated

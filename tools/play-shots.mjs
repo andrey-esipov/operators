@@ -9,6 +9,9 @@
 // window.__PLAY__ at the instant of capture — never inferred from the filename.
 import { chromium } from 'playwright-core'
 import { mkdirSync, rmSync, writeFileSync } from 'fs'
+import { execSync } from 'child_process'
+
+const SHA = execSync('git rev-parse --short HEAD').toString().trim()
 
 const PORT = process.argv.includes('--port')
   ? process.argv[process.argv.indexOf('--port') + 1]
@@ -96,9 +99,30 @@ async function settle(maxMs = 20000) {
   return stable >= 10
 }
 
+// A reload doesn't merely interrupt a run — it swaps the build out underneath
+// it. Recovering and carrying on yields a set whose first half is one build and
+// second half another, and any judgement about consistency across that set is
+// worthless. Worse, it looks fine: nine PNGs, plausible labels, no error. So
+// stamp the page, and if the stamp is gone, throw the whole run away and start
+// over rather than quietly shipping a mixed set.
+class Reloaded extends Error {}
+let generation = 0
+const stampBuild = () =>
+  page.evaluate((g) => {
+    window.__CAP_GEN__ = g
+  }, ++generation)
+async function assertSameBuild() {
+  let seen
+  try {
+    seen = await page.evaluate(() => window.__CAP_GEN__)
+  } catch {
+    throw new Reloaded('the execution context was destroyed')
+  }
+  if (seen !== generation) throw new Reloaded('vite reloaded the page')
+}
+
 const readState = () =>
-  page.evaluate(() => {
-    const s = window.__PLAY__.state()
+  page.evaluate(() => {    const s = window.__PLAY__.state()
     const f = (p) => ({
       hp: Math.round(p.health),
       meter: Math.round(p.meter ?? 0),
@@ -125,6 +149,9 @@ async function state() {
 
 const shots = []
 async function shot(name) {
+  // If the build changed under us this run is already void — bail before
+  // spending three seconds on a screenshot that can't be compared to the rest.
+  await assertSameBuild()
   // Freeze first. Reading state and then screenshotting a 3200x1800 page takes
   // long enough for the sim to advance a dozen frames, so an unpaused capture
   // can label a shot `hitstun` and show a fighter who already recovered. The
@@ -153,43 +180,80 @@ const key = async (k, ms = 60) => {
   await page.keyboard.up(k)
 }
 
-console.log(`capturing the real game at http://localhost:${PORT}/  (DPR 2)`)
-await shot('00-neutral')
+console.log(`capturing the real game at http://localhost:${PORT}/  (DPR 2)  build ${SHA}`)
 
-await key('ArrowRight', 420)
-await shot('01-approach')
+async function runBeats() {
+  shots.length = 0
+  errors.length = 0
+  rmSync(OUT, { recursive: true, force: true })
+  mkdirSync(OUT, { recursive: true })
 
-await key('j', 40) // light
-await page.waitForTimeout(40)
-await shot('02-light-contact')
+  await shot('00-neutral')
 
-await key('k', 40) // medium
-await page.waitForTimeout(30)
-await shot('03-medium')
+  await key('ArrowRight', 420)
+  await shot('01-approach')
 
-await key('l', 40) // heavy
-await page.waitForTimeout(60)
-await shot('04-heavy')
+  await key('j', 40) // light
+  await page.waitForTimeout(40)
+  await shot('02-light-contact')
 
-await key('ArrowUp', 60)
-await page.waitForTimeout(200)
-await shot('05-airborne')
+  await key('k', 40) // medium
+  await page.waitForTimeout(30)
+  await shot('03-medium')
 
-await page.waitForTimeout(900)
-await shot('06-recovered')
+  await key('l', 40) // heavy
+  await page.waitForTimeout(60)
+  await shot('04-heavy')
 
-// Build meter, then throw the super.
-for (let i = 0; i < 14; i++) {
-  await key('j', 35)
-  await page.waitForTimeout(70)
+  await key('ArrowUp', 60)
+  await page.waitForTimeout(200)
+  await shot('05-airborne')
+
+  await page.waitForTimeout(900)
+  await shot('06-recovered')
+
+  // Build meter, then throw the super.
+  for (let i = 0; i < 14; i++) {
+    await key('j', 35)
+    await page.waitForTimeout(70)
+  }
+  await shot('07-meter-built')
+
+  await key('u', 40)
+  await page.waitForTimeout(140)
+  await shot('08-super')
+
+  // The last shot is as vulnerable as the first.
+  await assertSameBuild()
 }
-await shot('07-meter-built')
 
-await key('u', 40)
-await page.waitForTimeout(140)
-await shot('08-super')
+const ATTEMPTS = 4
+let captured = false
+for (let attempt = 1; attempt <= ATTEMPTS && !captured; attempt++) {
+  try {
+    await stampBuild()
+    await runBeats()
+    captured = true
+  } catch (e) {
+    if (!(e instanceof Reloaded)) throw e
+    console.log(`  restarting — ${e.message} (attempt ${attempt}/${ATTEMPTS})`)
+    if (attempt === ATTEMPTS) {
+      console.log('FAILED: could not complete a run without the build changing underneath it')
+      rmSync(OUT, { recursive: true, force: true })
+      await browser.close()
+      process.exit(1)
+    }
+    await page.goto(`http://localhost:${PORT}/`, { waitUntil: 'domcontentloaded' })
+    if (!(await settle())) {
+      console.log('FAILED: play route never came back after a reload')
+      await browser.close()
+      process.exit(1)
+    }
+    await page.mouse.click(800, 450)
+  }
+}
 
-writeFileSync(`${OUT}/shots.json`, JSON.stringify({ shots, errors }, null, 2))
+writeFileSync(`${OUT}/shots.json`, JSON.stringify({ build: SHA, shots, errors }, null, 2))
 console.log(errors.length ? `\n  ${errors.length} console/page errors:` : '\n  no console errors')
 for (const e of [...new Set(errors)].slice(0, 8)) console.log(`    ${e}`)
 

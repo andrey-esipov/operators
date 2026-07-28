@@ -100,30 +100,42 @@ const shot = async (name) => {
   console.log(`  wrote ${OUT}/${name}.png`)
 }
 
-await page.goto(BASE, { waitUntil: 'networkidle' })
+// Vite's HMR reloads the page whenever a source file is saved, which destroys
+// the execution context mid-scan and used to kill the run with an uncaught
+// "Execution context was destroyed" exception after several minutes of work.
+// With several agents editing this repo concurrently that is routine, not
+// exceptional, so retry the whole capture rather than reporting a failure that
+// says nothing about the game.
+const NAVIGATED = /Execution context was destroyed|Target closed|frame was detached/i
 
-// Wait for the harness to finish building atlases and expose the API.
-for (let i = 0; i < 120; i++) {
-  const ok = await page.evaluate(() => !!window.__FIGHT__?.ready())
-  if (ok) break
-  await sleep(250)
+const runCapture = async () => {
+  seen.clear()
+  failures.length = 0
+
+  await page.goto(BASE, { waitUntil: 'networkidle' })
+
+  // Wait for the harness to finish building atlases and expose the API.
+  for (let i = 0; i < 120; i++) {
+    const ok = await page.evaluate(() => !!window.__FIGHT__?.ready())
+    if (ok) break
+    await sleep(250)
+  }
+  const ready = await page.evaluate(() => !!window.__FIGHT__?.ready())
+  if (!ready) {
+    console.log('  FAILED: window.__FIGHT__ never became ready')
+    failures.push('not-ready')
+    return
+  }
+
+  // Freeze the loop, then warm a few frames so textures/pipeline are resident.
+  await page.evaluate(() => {
+    window.__FIGHT__.pause()
+    window.__FIGHT__.step(2)
+  })
+  await sleep(200)
+
+  await scanForBeats()
 }
-const ready = await page.evaluate(() => !!window.__FIGHT__?.ready())
-if (!ready) {
-  console.log('  FAILED: window.__FIGHT__ never became ready')
-  await browser.close()
-  process.exit(1)
-}
-
-// Freeze the loop, then warm a few frames so textures/pipeline are resident.
-await page.evaluate(() => {
-  window.__FIGHT__.pause()
-  window.__FIGHT__.step(2)
-})
-await sleep(200)
-
-let cur = await page.evaluate(() => window.__FIGHT__.frame())
-void cur
 
 // Hunt for the beats rather than trusting fixed frame numbers.
 //
@@ -140,30 +152,43 @@ const WANTED = ['intro', 'footsies', 'attack', 'hitstun', 'blocked', 'jump', 'ju
 const MAX_SCAN = Number(flag('scan', '2400'))
 const seen = new Map()
 
-for (let i = 0; i < MAX_SCAN && seen.size < WANTED.length; i++) {
-  const phase = await page.evaluate(() => {
-    window.__FIGHT__.step(1)
-    return window.__FIGHT__.phase()
-  })
-  if (!WANTED.includes(phase) || seen.has(phase)) continue
+async function scanForBeats() {
+  for (let i = 0; i < MAX_SCAN && seen.size < WANTED.length; i++) {
+    const phase = await page.evaluate(() => {
+      window.__FIGHT__.step(1)
+      return window.__FIGHT__.phase()
+    })
+    if (!WANTED.includes(phase) || seen.has(phase)) continue
 
-  const idx = String(seen.size).padStart(2, '0')
-  const name = `${idx}-${phase}`
-  seen.set(phase, name)
-  await sleep(60)
-  await shot(name)
-  const { proj, cov } = await assertFightersOnScreen(name)
-  console.log(`    (${name} @ frame ${i}, phase=${phase}, on-screen=${JSON.stringify(proj.map((p) => [p.x, p.y]))}, painted=${(cov.fraction * 100).toFixed(2)}%)`)
+    const idx = String(seen.size).padStart(2, '0')
+    const name = `${idx}-${phase}`
+    seen.set(phase, name)
+    await sleep(60)
+    await shot(name)
+    const { proj, cov } = await assertFightersOnScreen(name)
+    console.log(`    (${name} @ frame ${i}, phase=${phase}, on-screen=${JSON.stringify(proj.map((p) => [p.x, p.y]))}, painted=${(cov.fraction * 100).toFixed(2)}%)`)
+  }
+
+  // A situation that never occurs across the whole scan is a broken fight, not
+  // a quiet skip: no `ko` means nobody ever died, no `blocked` means the AI
+  // never defends. Exactly the kind of hole a "wrote 11 files" check sails past.
+  const missing = WANTED.filter((p) => !seen.has(p))
+  if (missing.length) {
+    console.log(`  FAILED: never observed ${missing.join(', ')} in ${MAX_SCAN} frames`)
+    failures.push(`missing:${missing.join('+')}`)
+  }
 }
 
-// A situation that never occurs across 2400 frames of fighting is a broken
-// fight, not a quiet skip: no `ko` means nobody ever died, no `blocked` means
-// the AI never defends. Both are exactly the kind of hole a "wrote 11 files"
-// check sails past.
-const missing = WANTED.filter((p) => !seen.has(p))
-if (missing.length) {
-  console.log(`  FAILED: never observed ${missing.join(', ')} in ${MAX_SCAN} frames`)
-  failures.push(`missing:${missing.join('+')}`)
+const ATTEMPTS = Number(flag('attempts', '3'))
+for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
+  try {
+    await runCapture()
+    break
+  } catch (err) {
+    if (!NAVIGATED.test(String(err?.message ?? err)) || attempt === ATTEMPTS) throw err
+    console.log(`  page reloaded mid-capture (concurrent edit → HMR); retrying ${attempt}/${ATTEMPTS - 1}`)
+    await sleep(1500)
+  }
 }
 
 // One more guard, on the pixels rather than the maths: a frame that is almost

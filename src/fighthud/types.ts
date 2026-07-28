@@ -6,6 +6,13 @@ export interface FighterDisplay {
   name: string
   /** Accent colour (hex). Tints the name badge + bar rim. */
   accent: string
+  /**
+   * Optional roster id (e.g. "chesky", "lenny"). When present, the HUD fetches
+   * that fighter's sprite atlas metadata and crops an idle frame into a real
+   * portrait, replacing the initial-letter badge. Falls back to the badge if
+   * the id is unknown or the atlas fails to load — so it's always safe to pass.
+   */
+  rosterId?: string
 }
 
 /** One frame handed to the HUD: authoritative state + that frame's events. */

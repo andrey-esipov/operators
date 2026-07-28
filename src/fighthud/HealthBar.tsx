@@ -1,5 +1,6 @@
 import { useRef } from 'react'
 import { useHudTick } from './hudContext'
+import { Portrait } from './Portrait'
 import type { FighterDisplay } from './types'
 
 interface Props {
@@ -94,13 +95,7 @@ export function HealthBar({ index, display }: Props) {
   return (
     <div ref={wrapRef} className={`fhud-hpwrap ${side}`}>
       <div className="fhud-namerow">
-        <span
-          className="fhud-badge"
-          style={{ background: display.accent }}
-          data-testid={`fhud-badge-${side}`}
-        >
-          <span>{initial}</span>
-        </span>
+        <Portrait side={side} rosterId={display.rosterId} accent={display.accent} initial={initial} />
         <span className="fhud-name" style={{ color: display.accent }}>
           {display.name}
         </span>

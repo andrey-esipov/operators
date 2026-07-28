@@ -2,7 +2,6 @@ import * as THREE from 'three'
 import type {
   FightState,
   FighterState,
-  FightEvent,
   FighterAssets,
   StepResult,
   Vec2,

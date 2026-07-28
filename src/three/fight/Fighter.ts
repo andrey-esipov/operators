@@ -253,7 +253,6 @@ export class Fighter {
     this.uniforms.uFacing.value = v.facing
 
     // ---- Weight: feet-pivoted squash / stretch / lean ---------------------
-    const speed = Math.hypot(v.vel.x, v.vel.y)
     let sx = 1, sy = 1, lean = 0
     const bob = Math.sin(v.globalFrame * 0.14) * 0.012
     switch (v.stance) {

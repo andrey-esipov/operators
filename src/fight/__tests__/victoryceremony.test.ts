@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { createFight, step } from '../sim'
 import { makeAI } from '../ai'
 import { resolveFrame } from '../../three/fight/AnimationDriver'
-import type { FightState, FightEvent, FighterAssets, SpriteFrameMeta } from '../types'
+import type { FightState, FighterAssets, SpriteFrameMeta } from '../types'
 
 /**
  * The victory ceremony. Every atlas ships a `victory` clip that had never been

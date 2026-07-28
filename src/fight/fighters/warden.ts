@@ -242,7 +242,6 @@ const PROJECTILES: Record<string, ProjectileSpawn> = {
 }
 
 const PUNCHES: Button[] = ['lp', 'mp', 'hp']
-const KICKS: Button[] = ['lk', 'mk', 'hk']
 
 function anyOf(set: ReadonlySet<Button>, bs: Button[]): boolean {
   return bs.some((b) => set.has(b))

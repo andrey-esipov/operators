@@ -248,7 +248,7 @@ export class MockSim {
         s.k[f].vel.y = apexCm * 0.045
         s.setStance(f, 'jump-rise')
       },
-      tick: (s, t) => {
+      tick: (s, _t) => {
         s.walk(f, dxCm / dur)
         s.gravity(f)
         s.setStance(f, s.k[f].vel.y >= 0 ? 'jump-rise' : 'jump-fall')

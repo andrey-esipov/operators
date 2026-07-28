@@ -269,8 +269,11 @@ export class ProjectileLayer {
         }
         let l = this.live.get(p.id)
         if (!l) {
-          l = this.spawn(p)
-          if (!l) continue
+          // spawn() returns `Live | null`, but `l` is `Live | undefined` from the
+          // map lookup — narrow through a local so the union stays assignable.
+          const spawned = this.spawn(p)
+          if (!spawned) continue
+          l = spawned
         }
         // Interpolated world position of the sim hot-point.
         const pp = prevById.get(p.id)

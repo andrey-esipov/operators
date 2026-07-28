@@ -18,6 +18,17 @@ const FightHarness = lazy(() =>
   import('./three/dev/FightHarness').then((m) => ({ default: m.FightHarness })),
 )
 
+/** Standalone fighting-game HUD preview at `?fighthud=1`. Lazy, dev-only. */
+const HudPreview = lazy(() =>
+  import('./fighthud/preview/HudPreview').then((m) => ({ default: m.HudPreview })),
+)
+
+/** The real-time fighter, playable, at `?play=1`. Human on the left, CPU on
+ *  the right. Unlike `?fight=1` this is the game rather than a dev harness. */
+const PlayableMatch = lazy(() =>
+  import('./play/PlayableMatch').then((m) => ({ default: m.PlayableMatch })),
+)
+
 function isLabRoute(): boolean {
   if (typeof window === 'undefined') return false
   return new URLSearchParams(window.location.search).get('lab') === '1'
@@ -28,6 +39,16 @@ function isFightRoute(): boolean {
   return new URLSearchParams(window.location.search).get('fight') === '1'
 }
 
+function isHudRoute(): boolean {
+  if (typeof window === 'undefined') return false
+  return new URLSearchParams(window.location.search).get('fighthud') === '1'
+}
+
+function isPlayRoute(): boolean {
+  if (typeof window === 'undefined') return false
+  return new URLSearchParams(window.location.search).get('play') === '1'
+}
+
 export function App() {
   const phase = useGame((s) => s.phase)
   const crtEnabled = useGame((s) => s.crtEnabled)
@@ -35,6 +56,8 @@ export function App() {
   const musicEnabled = useGame((s) => s.musicEnabled)
   const [lab] = useState(isLabRoute)
   const [fight] = useState(isFightRoute)
+  const [hud] = useState(isHudRoute)
+  const [play] = useState(isPlayRoute)
 
   // Arcade boot gate. Shown once per page load before anything else. The
   // press is a real user gesture, so it unlocks the soundtrack — the menu's
@@ -122,6 +145,22 @@ export function App() {
     return (
       <Suspense fallback={<div style={{ color: '#fff', padding: 24 }}>loading fight…</div>}>
         <FightHarness />
+      </Suspense>
+    )
+  }
+
+  if (hud) {
+    return (
+      <Suspense fallback={<div style={{ color: '#fff', padding: 24 }}>loading hud…</div>}>
+        <HudPreview />
+      </Suspense>
+    )
+  }
+
+  if (play) {
+    return (
+      <Suspense fallback={<div style={{ color: '#fff', padding: 24 }}>loading match…</div>}>
+        <PlayableMatch />
       </Suspense>
     )
   }

@@ -313,6 +313,19 @@ export const FRAMES: FrameSpec[] = [
       'recovering balance just after a blow to the head — head and torso swinging back forward toward centre and ' +
       'nearly upright again, both hands drawing back in toward a raised guard, weight resettling onto both feet, still a little rattled.',
   },
+  {
+    // The middle of the recovery, between the extreme snap-back and the near-
+    // guard settle. Without it the recoil collapses straight to a composed
+    // stance in a single tween; this gives the body a clean half-recovered beat
+    // to decelerate through, and halves the change each morph must cover.
+    name: 'hit-reel',
+    heightRatio: 0.96,
+    aspect: [0.4, 0.85],
+    pose:
+      'still reeling from a blow to the head, only beginning to recover — head still tipped back and off to one side, ' +
+      'torso still leaning away from the hit, arms loose and swinging back in from wide, weight caught on the rear ' +
+      'foot, clearly still rattled and not yet steady.',
+  },
 
   // ── Juggle: an airborne tumble arc, launch → apex → fall ─────────────────
   {
@@ -436,8 +449,8 @@ export interface TweenSpec {
 
 export const TWEENS: TweenSpec[] = [
   // Hitstun: snap-back → settle → back toward guard.
-  { name: 'tw-hh-hs', from: 'hit-high', to: 'hit-settle', t: 0.5 },
-  { name: 'tw-hs-idle', from: 'hit-settle', to: 'idle-1', t: 0.5 },
+  { name: 'tw-hh-hr', from: 'hit-high', to: 'hit-reel', t: 0.5 },
+  { name: 'tw-hr-hs', from: 'hit-reel', to: 'hit-settle', t: 0.5 },
   // Juggle arc: launch → apex → fall, a body tumbling through the air.
   { name: 'tw-jl-ja', from: 'juggle-launch', to: 'juggle-apex', t: 0.5 },
   { name: 'tw-ja-js', from: 'juggle-apex', to: 'juggle-spin', t: 0.5 },
@@ -538,7 +551,7 @@ export const CLIPS: Record<string, ClipSpec> = {
   attack: clip(false, ['mp-active', 8]),
   block: clip(true, ['block-stand', 6]),
   // Hitstun: a snap-back that settles back toward guard, not one frozen recoil.
-  hurt: clip(false, ['hit-high', 3], ['tw-hh-hs', 3], ['hit-settle', 4], ['tw-hs-idle', 4]),
+  hurt: clip(false, ['hit-high', 3], ['tw-hh-hr', 3], ['hit-reel', 4], ['tw-hr-hs', 3], ['hit-settle', 5]),
   // Juggle: a real airborne tumble through the arc — launch, apex, fall.
   juggle: clip(false, ['juggle-launch', 3], ['tw-jl-ja', 3], ['juggle-apex', 4], ['tw-ja-js', 3], ['juggle-spin', 4], ['tw-js-jf', 3], ['juggle-fall', 5]),
   // Knockdown: crash and bounce, then settle flat.

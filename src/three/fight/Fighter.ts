@@ -253,10 +253,11 @@ export class Fighter {
     // frame a still-capture lands on keeps a clearly readable silhouette (face,
     // fabric folds, limb pose) — a hot flash, never a blank white cutout. The
     // capture tool always samples the launch-contact frame for a juggle beat, so
-    // this cap is what a viewer judging a still actually sees: 0.72 leaves ~28%
-    // of the fighter's true albedo, which reads unmistakably as "flashing from a
-    // hit" rather than "the sprite failed to load".
-    this.uniforms.uHitFlash.value = Math.min(0.72, f * f * (3.0 - 2.0 * f))
+    // this cap is what a viewer judging a still actually sees. The flash is now
+    // ADDITIVE in the shader, so the same numeric peak lands far hotter than the
+    // old mix() did — 0.45 of added white already reads as a clear flashbulb pop
+    // while leaving the darker fabric regions un-clipped and still coloured.
+    this.uniforms.uHitFlash.value = Math.min(0.45, f * f * (3.0 - 2.0 * f))
 
     // ---- KO dissolve ------------------------------------------------------
     this.dissolve += (this.targetDissolve - this.dissolve) * Math.min(1, ctx.dt * 2.5)

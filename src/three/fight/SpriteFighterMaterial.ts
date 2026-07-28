@@ -292,8 +292,14 @@ const FRAG = /* glsl */ `
       if (n < edge) color += uAccent * 3.0;
     }
 
-    // Per-hit white flash.
-    color = mix(color, uHitColor, clamp(uHitFlash, 0.0, 1.0));
+    // Per-hit white flash — ADDITIVE, never a mix() toward white.
+    // A lerp pulls every channel toward the same value, so at partial strength a
+    // navy-denim torso collapses to a flat grey ghost (measured: saturation 0.60
+    // -> 0.17 one frame after contact). Adding light instead preserves the channel
+    // *gaps* that carry hue: the fighter reads as lit by a flashbulb — hot, but
+    // still unmistakably coloured — and on the 2-3 contact frames a still-capture
+    // lands on it looks like impact, not a broken material.
+    color += uHitColor * clamp(uHitFlash, 0.0, 1.0);
 
     // Match the scene's FogExp2 so the fighter sits in the same atmosphere.
     float dist = length(cameraPosition - vWorld);

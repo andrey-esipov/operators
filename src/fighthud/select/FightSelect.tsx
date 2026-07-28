@@ -525,7 +525,7 @@ export function FightSelect() {
                     <span className="fsel-stage-floor" aria-hidden />
                     <span className="fsel-stage-sheen" aria-hidden />
                     <span className="fsel-stage-vignette" aria-hidden />
-                    {g.note && <span className={`fsel-stage-flag ${g.note === 'UNTESTED' ? 'warn' : ''}`}>{g.note}</span>}
+                    {g.note && <span className="fsel-stage-flag">{g.note}</span>}
                   </span>
                   <span className="fsel-stage-name">{g.name}</span>
                 </motion.button>

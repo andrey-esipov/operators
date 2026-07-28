@@ -59,6 +59,13 @@ export interface StageEntry {
   name: string
   /** Short note the player sees — provenance from the blind rankings. */
   note?: string
+  /**
+   * QA-only: this arena has never been confirmed to render, so the capture
+   * tooling should assert it rather than assume it. Deliberately NOT `note`,
+   * which is player-facing — a dev marker rendered as a badge in the shipping
+   * picker reads as an unfinished game, and "UNTESTED" shipped that way once.
+   */
+  unverified?: boolean
   /** A swatch pair to stand in for a 3D thumbnail on the card. */
   swatch: [string, string]
 }
@@ -76,6 +83,6 @@ export const STAGES: StageEntry[] = [
   { id: 'distribution', name: 'THE CHANNEL', swatch: ['#06d6a0', '#0a1a1a'] },
   { id: 'plateau', name: 'THE FLATLINE', swatch: ['#6c7a89', '#12161a'] },
   { id: 'ipo-prep', name: 'THE LISTING FLOOR', swatch: ['#00b4d8', '#08121a'] },
-  { id: 'ai-native', name: 'THE MODEL FLOOR', note: 'UNTESTED', swatch: ['#b388ff', '#0c0a1a'] },
+  { id: 'ai-native', name: 'THE MODEL FLOOR', unverified: true, swatch: ['#b388ff', '#0c0a1a'] },
   { id: 'monetization', name: 'THE PRICING ROOM', swatch: ['#f72585', '#1a0a14'] },
 ]

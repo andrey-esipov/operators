@@ -87,21 +87,20 @@ export class FightVfx {
     const t = HIT[level] ?? HIT.medium
     const power = Math.min(1, damage / 120)
 
-    // Anchor the spark to where the blow actually lands. Raw event.at can sit at
-    // the pushbox centre (spark floats in the gap between the fighters) or drop
-    // to the floor on a low, which is the "ground starburst while the punch
-    // lands at the chin" tell. Pin it to the front edge of the defender's
-    // silhouette — the side facing the attacker — at the sim's contact height
-    // clamped to a plausible strike band. This is the exact rule the block clang
-    // uses, so a clean hit and a guard now spawn from one shared vocabulary at
-    // the same believable point on the hurt fighter.
     const target = (attacker === 0 ? 1 : 0) as 0 | 1
-    const def = this.d.fighters[target]
-    const atk = this.d.fighters[attacker]
-    const dir = Math.sign(atk.mesh.position.x - def.mesh.position.x) || 1
+    // Anchor the spark to the sim's reported contact point. `event.at` is the
+    // hitbox/hurtbox intersection the sim computed this frame: measured on the
+    // real route it sits on the defender's struck surface — on the fist tip at
+    // contact. The old reconstruction (defender centre + 0.35*bodyWidth toward
+    // the attacker, from possibly-stale mesh positions) overshot ~0.5 world units
+    // toward mid-stage on every hit, landing nearer the fighters' midpoint than
+    // the real contact — the "spark floats at centre-stage instead of on the
+    // fist" tell. Take x straight from the event; keep only a y safety-clamp so a
+    // freak-low contact can't drop the spark to the floor (the old low-hit tell).
+    const contactX = this.world(at).x
     const hitCm = THREE.MathUtils.clamp(at.y, 40, 175)
     const pos = this.p.set(
-      def.mesh.position.x + dir * def.bodyWidth * 0.35,
+      contactX,
       WORLD.GROUND_Y + hitCm * CM_TO_WORLD,
       0.05,
     )

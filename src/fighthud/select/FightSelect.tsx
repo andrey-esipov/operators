@@ -3,6 +3,8 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { Word } from '../Announcements'
 import { loadPortrait, preloadPortrait, type PortraitInfo } from '../portraits'
 import { Sfx } from '../../lib/audio'
+import { Voice } from '../../lib/voice'
+import { getFighter } from '../../data/fighters'
 import { ARCHETYPES, ROSTER, STAGES, type RosterEntry, type StageEntry } from './roster'
 import './select.css'
 import '../hud.css'
@@ -35,6 +37,20 @@ const ROSTER_COLS = 3
 const STAGE_COLS = 4
 
 const CPU = 'medium'
+
+/** Speak the chosen fighter's line on lock-in — the signature "the character
+ *  answers when you pick them" beat that every arcade fighter has and a silent
+ *  menu conspicuously lacks. Uses `matchStart`, the line written to be said at
+ *  the moment a fighter squares up.
+ *
+ *  Every failure path here is a no-op by construction: the select roster is
+ *  keyed by atlas `skin` id while voice lines live on the card-game fighter
+ *  defs, so a skin without a def simply stays silent, and `Voice.say` already
+ *  swallows blocked autoplay and missing TTS. A menu confirm must never throw. */
+function sayPick(entry: RosterEntry) {
+  const def = getFighter(entry.skin)
+  if (def) Voice.say(def.voiceLines.matchStart, def.id, 'matchStart')
+}
 
 /** Build a layered "place" out of a stage's two-colour swatch — sky glow, a
  *  horizon light-line and a grounded floor — so a card reads as somewhere you'd
@@ -239,6 +255,11 @@ export function FightSelect() {
     const s = snap.current
     if (s.phase === 'p1') {
       Sfx.menuSelect()
+      // Lock-in: the chosen fighter answers in their own voice — the signature
+      // "the character responds when you pick them" beat. Voice.say is
+      // fail-silent (swallows a blocked HTMLAudio play, no-ops without TTS), so
+      // it is safe on the gesture-driven confirm and in headless capture.
+      sayPick(ROSTER[s.cursor])
       setP1(s.cursor)
       setConfirmAccent(ROSTER[s.cursor].accent)
       setConfirmKey((k) => k + 1)
@@ -247,6 +268,7 @@ export function FightSelect() {
       setCursor((s.cursor + 1) % ROSTER.length)
     } else if (s.phase === 'p2') {
       Sfx.menuSelect()
+      sayPick(ROSTER[s.cursor])
       setP2(s.cursor)
       setConfirmAccent(ROSTER[s.cursor].accent)
       setConfirmKey((k) => k + 1)

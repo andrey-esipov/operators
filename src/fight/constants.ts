@@ -230,6 +230,21 @@ export const CHARGE_RELEASE_WINDOW = 10
 export const DOUBLE_TAP_WINDOW = 9
 
 /**
+ * Input buffer, in frames. A button pressed this many frames before a fighter
+ * becomes actionable (the tail of blockstun, hitstun, a dash, or a move's
+ * recovery) still comes out on the first free frame, instead of being dropped
+ * because the finger was a hair early. Every modern fighter does this; without
+ * it a player who inputs at the natural moment — as the stun visibly ends —
+ * gets nothing, and the game feels unresponsive in a way they can't name. On
+ * the ground any button press while actionable is consumed into a move that
+ * frame (so the next frame is non-actionable), which means an *unconsumed*
+ * press in the log can only have occurred during a non-actionable stretch —
+ * so replaying the most recent press within this window can never double-fire
+ * during continuous neutral play. Kept short so it buffers intent, not mashing.
+ */
+export const ACTION_BUFFER = 4
+
+/**
  * Parry (Third-Strike-style). The defining defensive mechanic of our reference
  * game: tap toward an incoming high/overhead (or straight down for a low) in a
  * tight window just before it lands, take no damage, and come out massively plus

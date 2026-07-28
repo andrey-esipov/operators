@@ -455,8 +455,14 @@ export class FighterAI {
     // tier's defensive read. The AI's long routes come from the whiff-punish
     // read above, where the opponent is committed and the string is guaranteed
     // to connect.
+    //
+    // The throw rate scales with aggression and is pulled down from its old flat
+    // floor so a low tier actually backs off: throws are unblockable, so a
+    // turtling beginner who can't yet tech should not eat one every few frames.
+    // The poke rate is left alone — pokes are the whiff-punish bait the AI's own
+    // combo game feeds on, so starving them silently guts combo consistency.
     const r = this.rng.next()
-    if (r < 0.08 + this.aggression * 0.12) {
+    if (r < 0.05 + this.aggression * 0.10) {
       return frame(toward(5, facing), ['lp', 'lk']) // go for a throw in the scramble
     }
     if (r < 0.55) return frame(toward(2, facing), ['lp'])

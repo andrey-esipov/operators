@@ -73,6 +73,14 @@ export function hasButton(mask: number, b: Button): boolean {
   return (mask & (1 << BUTTON_BIT[b])) !== 0
 }
 
+/** The buttons whose press-edge is recorded in a packed log frame. Used by the
+ *  input buffer to replay a press that landed a few frames before a fighter
+ *  became actionable. */
+export function pressedButtons(packed: number): Button[] {
+  const m = pressedOf(packed)
+  return ALL_BUTTONS.filter((b) => hasButton(m, b))
+}
+
 /** Is `dir` a forward direction (6/9/3)? Relative space, so "toward opponent". */
 function isForward(d: Direction): boolean {
   return d === 6 || d === 9 || d === 3

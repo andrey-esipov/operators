@@ -57,6 +57,19 @@ declare global {
       fraction: number
       bbox: { minX: number; maxX: number; minY: number; maxY: number } | null
     }
+    /**
+     * Pixels the live projectiles paint, measured the same isolated-readback
+     * way. Sampled across a span of frames it discriminates "never drew" and
+     * "flashed one spawn frame then vanished" from a genuinely sustained bolt.
+     */
+    projCoverage: () => {
+      lit: number
+      total: number
+      fraction: number
+      bbox: { minX: number; maxX: number; minY: number; maxY: number } | null
+    }
+    /** Count of mounted projectile sprites (liveness only, not proof of paint). */
+    projCount: () => number
     renderer: FightRenderer | null
     }
   }
@@ -115,6 +128,8 @@ export function FightHarness() {
         frame: () => sim.frame,
         setStage: (id) => renderer!.setStage(id),
         coverage: () => renderer!.fighterCoverage(),
+        projCoverage: () => renderer!.projectileCoverage(),
+        projCount: () => renderer!.projectileCount,
         renderer,
       }
       setStatus('running')

@@ -23,6 +23,7 @@ import { Fighter, type FighterView } from './Fighter'
 import { buildAtlasTextures, type AtlasSource } from './AtlasTextures'
 import { FightCamera, type StageBounds } from './FightCamera'
 import { FightVfx } from './FightVfx'
+import { ProjectileLayer } from './ProjectileLayer'
 import { simToWorld } from './worldScale'
 
 /**
@@ -57,6 +58,7 @@ export class FightRenderer {
   private vfx!: FightVfx
   private camera!: FightCamera
   private world!: FightWorld
+  private projectiles = new ProjectileLayer()
   private post = new PostPipeline()
   private scenario: ScenarioId
   private bounds: StageBounds
@@ -109,6 +111,10 @@ export class FightRenderer {
 
     engine.setRenderDriver(this.post)
     engine.scene.add(this.fighters[0].group, this.fighters[1].group)
+    engine.scene.add(this.projectiles.group)
+    // Warm the two shipped projectile atlases so the first bolt draws on the
+    // frame it spawns, not a few frames late. Unknown kinds still lazy-load.
+    void this.projectiles.preload(['ion-bolt', 'super-beam'])
     this.lightRig.setPreset(stageConfig(this.scenario).lighting, true)
     engine.setState(this.renderState())
     engine.start()
@@ -157,6 +163,7 @@ export class FightRenderer {
     this.engine.stop()
     this.fighters[0].dispose()
     this.fighters[1].dispose()
+    this.projectiles.dispose()
     this.engine.dispose()
   }
 
@@ -291,6 +298,74 @@ export class FightRenderer {
     this.shockwave.update(scaledDt)
   }
 
+  /** Reconcile the projectile sprites against the two most recent sim snapshots.
+   *  Runs on the scaled delta so bolts freeze in place during hitstop like the
+   *  rest of the world. */
+  updateProjectiles(alpha: number, scaledDt: number) {
+    this.projectiles.update(this.prev?.projectiles, this.latest?.projectiles, alpha, scaledDt)
+  }
+
+  /** Number of projectile sprites currently mounted. A liveness signal only —
+   *  NOT proof anything painted (see projectileCoverage). */
+  get projectileCount(): number {
+    return this.projectiles.liveCount
+  }
+
+  /**
+   * The projectile analogue of fighterCoverage: render just the projectile
+   * group into an offscreen target and read back how many pixels it actually
+   * lit. Projectiles are additive MeshBasic sprites, so a bright core writes
+   * high RGB even where its alpha is partial — count on luminance, not alpha.
+   *
+   * This exists for the same reason fighterCoverage does: a screenshot cannot
+   * tell "the bolt never drew" from "the bolt drew and something covered it",
+   * and projecting the sim position to screen is happy whether or not a texel is
+   * ever shaded. An isolated readback is the one check an invisible projectile
+   * cannot satisfy — and, sampled across a span of frames, one that a bolt which
+   * flashes for a single spawn frame and then vanishes cannot satisfy either.
+   */
+  projectileCoverage(width = 320, height = 180) {
+    const renderer = this.engine.renderer
+    const parent = this.projectiles.group.parent
+    const target = new THREE.WebGLRenderTarget(width, height)
+    const probeScene = new THREE.Scene()
+    probeScene.add(this.projectiles.group)
+
+    const prevTarget = renderer.getRenderTarget()
+    renderer.setRenderTarget(target)
+    renderer.setClearColor(0x000000, 0)
+    renderer.clear(true, true, true)
+    renderer.render(probeScene, this.engine.camera)
+
+    const buf = new Uint8Array(width * height * 4)
+    renderer.readRenderTargetPixels(target, 0, 0, width, height, buf)
+    renderer.setRenderTarget(prevTarget)
+
+    parent?.add(this.projectiles.group)
+    target.dispose()
+
+    let lit = 0
+    let minX = width, maxX = -1, minY = height, maxY = -1
+    for (let i = 0; i < width * height; i++) {
+      const r = buf[i * 4], g = buf[i * 4 + 1], b = buf[i * 4 + 2]
+      // Additive core writes bright RGB; a faint transparent halo does not.
+      if (Math.max(r, g, b) < 40) continue
+      lit++
+      const x = i % width
+      const y = Math.floor(i / width)
+      if (x < minX) minX = x
+      if (x > maxX) maxX = x
+      if (y < minY) minY = y
+      if (y > maxY) maxY = y
+    }
+    return {
+      lit,
+      total: width * height,
+      fraction: lit / (width * height),
+      bbox: lit ? { minX: minX / width, maxX: maxX / width, minY: minY / height, maxY: maxY / height } : null,
+    }
+  }
+
   /** Minimal synthetic render-state so the reused StageSubsystem has a scenario. */
   private renderState(): FightRenderState {
     const vis = (side: Side): FighterVisualState => ({
@@ -406,6 +481,7 @@ class FightWorld {
       })
     }
 
+    this.r.updateProjectiles(alpha, scaledDt)
     this.r.updateParticles(scaledDt)
   }
 

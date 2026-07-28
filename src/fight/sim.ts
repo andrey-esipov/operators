@@ -35,11 +35,13 @@ import {
   hasButton,
   heldOf,
   maskOf,
+  pressedButtons,
   releasedEdge,
   toRelative,
 } from './input/motion'
 import {
   AIR_DRAG,
+  ACTION_BUFFER,
   BACKDASH_FRAMES,
   BACKDASH_SPEED,
   CAMERA_MAX_ZOOM,
@@ -240,6 +242,27 @@ function buildContext(
   }
 }
 
+/** The input buffer. When the live frame carries no button press, replay the
+ *  most recent press-edge still inside ACTION_BUFFER frames of the log, so an
+ *  attack pressed a hair before a fighter became actionable comes out on the
+ *  first free frame instead of being dropped. Returns the live set unchanged
+ *  when it already has a press (the common case) or when nothing is buffered.
+ *  Only the most recent buffered frame is replayed, so unrelated taps a few
+ *  frames apart are never fused into an accidental two-button command. */
+function bufferedPressed(
+  s: FightState, i: number, live: ReadonlySet<Button>,
+): ReadonlySet<Button> {
+  if (live.size > 0) return live
+  const log = s.inputLog?.[i]
+  if (!log || log.length === 0) return live
+  const oldest = Math.max(0, log.length - ACTION_BUFFER)
+  for (let k = log.length - 1; k >= oldest; k--) {
+    const btns = pressedButtons(log[k])
+    if (btns.length > 0) return new Set(btns)
+  }
+  return live
+}
+
 function startMove(
   f: FighterState, i: number, move: Move, events: FightEvent[],
 ): void {
@@ -293,7 +316,12 @@ function processActions(
     return
   }
 
-  const ctx = buildContext(s, i, f, input, relDir)
+  const buffered = bufferedPressed(s, i, input.pressed)
+  const ctx = buildContext(
+    s, i, f,
+    buffered === input.pressed ? input : { ...input, pressed: buffered },
+    relDir,
+  )
 
   // Airborne: jumps commit, so only air attacks are allowed — no steering.
   if (!f.grounded) {

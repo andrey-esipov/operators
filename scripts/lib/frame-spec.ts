@@ -533,8 +533,14 @@ export const TWEENS: TweenSpec[] = [
   // the last tween lands adjacent to idle-1 for a seamless loop.
   { name: 'tw-i1-i2', from: 'idle-1', to: 'idle-2', t: 0.5 },
   { name: 'tw-i2-i4', from: 'idle-2', to: 'idle-4', t: 0.5 },
-  { name: 'tw-i4-i3', from: 'idle-4', to: 'idle-3', t: 0.5 },
-  { name: 'tw-i3-i1', from: 'idle-3', to: 'idle-1', t: 0.5 },
+  // The two edges around idle-3 (the exhale/settle) carry the largest silhouette
+  // excursion, so they get two inbetweens each (t=1/3, 2/3) rather than one at
+  // the midpoint — this keeps every per-frame delta even across the loop and
+  // clears the temporal spike the validator caught on lenny's settle.
+  { name: 'tw-i4-i3a', from: 'idle-4', to: 'idle-3', t: 0.34 },
+  { name: 'tw-i4-i3b', from: 'idle-4', to: 'idle-3', t: 0.67 },
+  { name: 'tw-i3-i1a', from: 'idle-3', to: 'idle-1', t: 0.34 },
+  { name: 'tw-i3-i1b', from: 'idle-3', to: 'idle-1', t: 0.67 },
   // Hitstun: snap-back → settle → back toward guard.
   { name: 'tw-hh-hr', from: 'hit-high', to: 'hit-reel', t: 0.5 },
   { name: 'tw-hr-hs', from: 'hit-reel', to: 'hit-settle', t: 0.5 },
@@ -632,9 +638,11 @@ export const CLIPS: Record<string, ClipSpec> = {
     ['idle-2', 7],
     ['tw-i2-i4', 4],
     ['idle-4', 7],
-    ['tw-i4-i3', 4],
-    ['idle-3', 8],
-    ['tw-i3-i1', 4],
+    ['tw-i4-i3a', 3],
+    ['tw-i4-i3b', 3],
+    ['idle-3', 7],
+    ['tw-i3-i1a', 3],
+    ['tw-i3-i1b', 3],
   ),
   'walk-fwd': clip(
     true,

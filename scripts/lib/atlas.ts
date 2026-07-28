@@ -99,11 +99,16 @@ function shelfPack(
     if (!ok) continue
     const usedH = shelfY + shelfH
     if (usedH > MAX_ATLAS) continue
-    let height = 512
-    while (height < usedH) height *= 2
+    // WebGL2 (three r180 is WebGL2-only) fully supports non-power-of-two
+    // textures with mipmaps and ClampToEdge, so round the packed height up to a
+    // small multiple instead of the next power of two. The pow2 rounding wasted
+    // up to ~2x the GPU memory and wire size — a fighter whose frames pack to
+    // 4341px tall was being stored in an 8192px texture (256MB vs ~136MB). Width
+    // stays a power of two (it's chosen by the shelf loop and frames fill it).
+    const height = Math.ceil(usedH / 8) * 8
     return { placements, width, height }
   }
-  throw new Error('frames do not fit in a 4096x4096 atlas')
+  throw new Error(`frames do not fit in a ${MAX_ATLAS}x${MAX_ATLAS} atlas`)
 }
 
 export interface PackResult {

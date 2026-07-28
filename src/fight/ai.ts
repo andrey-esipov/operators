@@ -19,7 +19,7 @@
 import type { Button, Direction, FightState, InputFrame } from './types'
 import { getFighterDef } from './fighters'
 import { makeRng, type Rng } from './rng'
-import { REACH_BONUS } from './constants'
+import { REACH_BONUS, PARRY_WINDOW } from './constants'
 
 interface Step {
   rel: Direction
@@ -86,9 +86,13 @@ interface Obs {
   /** Guard of the opponent's live strike (startup/active, not recovery), or null.
    *  Drives the parry direction: 'low' parries down, everything else forward. */
   attackGuard: string | null
-  /** Nearest incoming enemy projectile heading at me: its horizontal distance and
-   *  guard, or null. Lets the AI read a fireball and parry it. */
-  projectile: { dist: number; guard: string } | null
+  /** Nearest incoming enemy projectile heading at me, or null. `eta` is the
+   *  number of frames from NOW until it reaches parry range, already corrected
+   *  for this tier's reaction delay — so the AI taps when the bolt truly
+   *  arrives, not when a stale snapshot claims it is close (by which point the
+   *  real bolt has flown past). That correction is what makes fireball parry a
+   *  reachable action instead of dead code. */
+  projectile: { eta: number; guard: string } | null
 }
 
 export interface AIOptions {
@@ -151,14 +155,21 @@ export class FighterAI {
       opp.stance === 'attack' && !!oppMove && !!opp.move &&
       opp.move.frame <= oppMove.active[1] &&
       oppMove.hit.guard !== 'throw' && oppMove.hit.guard !== 'unblockable'
-    // Nearest enemy fireball actually closing on me.
-    let projectile: { dist: number; guard: string } | null = null
+    // Nearest enemy fireball actually closing on me, expressed as a reaction-
+    // corrected ETA. The obs is consumed reactionFrames later, by which point a
+    // bolt has flown reactionFrames*speed further; folding that delay in here is
+    // what lets the AI tap at the moment the bolt genuinely arrives.
+    const PARRY_CONTACT = 52 // centre distance at which a bolt overlaps the hurtbox
+    let projectile: { eta: number; guard: string } | null = null
     for (const p of state.projectiles ?? []) {
       if (p.owner === me) continue
       const closing = Math.sign(p.vel.x) === Math.sign(meF.pos.x - p.pos.x)
       if (!closing) continue
+      const speed = Math.abs(p.vel.x)
+      if (speed < 0.01) continue
       const d = Math.abs(p.pos.x - meF.pos.x)
-      if (!projectile || d < projectile.dist) projectile = { dist: d, guard: p.hit.guard }
+      const eta = (d - PARRY_CONTACT) / speed - this.tier.reactionFrames
+      if (!projectile || eta < projectile.eta) projectile = { eta, guard: p.hit.guard }
     }
     const cur: Obs = {
       grounded: opp.grounded,
@@ -235,8 +246,10 @@ export class FighterAI {
 
     // Read an incoming fireball and parry it head-on (tight window, meter reward)
     // instead of eating chip — the zoner-breaking answer a Third Strike player
-    // reaches for. Distance-gated so the tap lands inside the parry window.
-    if (o.projectile && o.projectile.dist < 80 && me.grounded &&
+    // reaches for. Gated on the reaction-corrected ETA so the tap arms the parry
+    // window exactly as the bolt arrives: tap when it lands inside our window.
+    if (o.projectile && me.grounded &&
+        o.projectile.eta >= 1 && o.projectile.eta <= PARRY_WINDOW - 1 &&
         this.rng.next() < this.tier.parryChance) {
       const pdir = o.projectile.guard === 'low' ? 2 : 6
       return frame(toward(pdir, facing))

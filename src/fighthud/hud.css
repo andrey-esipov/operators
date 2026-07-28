@@ -152,7 +152,7 @@
   box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.55);
 }
 .fhud-hpfill {
-  background: linear-gradient(180deg, #f2ff9e 0%, #c2ef44 16%, #8ecb1c 46%, #5b8f10 74%, #2f5308 100%);
+  background: linear-gradient(180deg, #eaf59a 0%, #c3d94a 16%, #93ab24 46%, #6a7d18 74%, #3f4a0e 100%);
   box-shadow:
     inset 0 2px 0 rgba(255, 255, 255, 0.85),
     inset 0 6px 7px rgba(255, 255, 255, 0.22),
@@ -214,31 +214,56 @@
 /* ── Super gauge ────────────────────────────────────────────────────── */
 .fhud-superrow {
   position: absolute;
-  bottom: 14px;
+  bottom: 20px;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
-.fhud-superrow.a { left: 18px; }
-.fhud-superrow.b { right: 18px; flex-direction: row-reverse; }
+.fhud-superrow.a { left: 30px; }
+.fhud-superrow.b { right: 30px; flex-direction: row-reverse; }
 
 .fhud-superlabel {
-  font-size: 8px;
+  position: relative;
+  font-size: 9px;
   letter-spacing: 0.28em;
-  color: #f9a8d4;
+  line-height: 1;
+}
+.fhud-superlabel-txt {
+  color: #c98fd6;
   text-shadow: 1px 1px 0 #000;
 }
+/* "READY" is stacked over "SUPER" and only revealed when a stock is charged. */
+.fhud-superlabel-rdy {
+  position: absolute;
+  left: 0;
+  top: 0;
+  color: #ffe27a;
+  text-shadow: 0 0 8px rgba(255, 196, 60, 0.9), 1px 1px 0 #000;
+  opacity: 0;
+}
+.fhud-superrow.charged .fhud-superlabel-txt { opacity: 0; }
+.fhud-superrow.charged .fhud-superlabel-rdy {
+  opacity: 1;
+  animation: fhudReadyBlink 0.7s steps(2) infinite;
+}
+@keyframes fhudReadyBlink { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+
 .fhud-superbars {
   display: flex;
-  gap: 4px;
+  gap: 5px;
 }
+/* Each stock is its own machined trough — same vocabulary as the health track. */
 .fhud-superbar {
   position: relative;
-  width: 118px;
-  height: 12px;
-  background: #180a22;
+  width: 120px;
+  height: 14px;
+  background: linear-gradient(180deg, #05030a 0%, #160a26 58%, #0a0512 100%);
   border: 2px solid #000;
-  box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.5);
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, 0.8),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.06),
+    0 0 0 1px rgba(176, 188, 214, 0.22),
+    3px 3px 0 rgba(0, 0, 0, 0.5);
   overflow: hidden;
   transform: skewX(-11deg);
 }
@@ -246,8 +271,9 @@
   position: absolute;
   inset: 0;
   left: 0;
-  background: linear-gradient(90deg, #7209b7, #f72585);
-  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.3);
+  /* Charging = a lit violet tube (vertical ramp for volume, not flat paint). */
+  background: linear-gradient(180deg, #d18bff 0%, #a021e0 32%, #7209b7 70%, #46067a 100%);
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.4), inset 0 -3px 5px rgba(0, 0, 0, 0.4);
   will-change: width;
 }
 .fhud-superrow.b .fhud-superfill { left: auto; right: 0; }
@@ -259,11 +285,38 @@
   );
   pointer-events: none;
 }
-.fhud-superbar.full .fhud-superfill { animation: fhudMeterFull 0.9s ease-in-out infinite; }
-.fhud-superbar.full { box-shadow: 3px 3px 0 rgba(0,0,0,0.5), 0 0 14px rgba(247,37,133,0.8); }
+
+/* ── Charged stock: the loudest non-character element on screen ────────── */
+.fhud-superbar.full {
+  animation: fhudMeterFull 0.85s ease-in-out infinite;
+}
+.fhud-superbar.full .fhud-superfill {
+  /* Flip from violet to a hot gold-white core so "spendable" is unmistakable. */
+  background: linear-gradient(180deg, #fff7c8 0%, #ffdb5c 34%, #ffab2e 74%, #e07b12 100%);
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.75), inset 0 -3px 6px rgba(0, 0, 0, 0.35);
+}
+/* A specular highlight sweeps across a charged stock — reads as "energised". */
+.fhud-superbar.full .fhud-superfill::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(110deg, transparent 34%, rgba(255, 255, 255, 0.8) 50%, transparent 66%);
+  transform: translateX(-120%);
+  animation: fhudMeterSweep 1.5s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes fhudMeterSweep { 0% { transform: translateX(-120%); } 55%, 100% { transform: translateX(120%); } }
 @keyframes fhudMeterFull {
-  0%, 100% { filter: brightness(1); }
-  50%      { filter: brightness(1.5); }
+  0%, 100% {
+    box-shadow:
+      inset 0 2px 4px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 220, 120, 0.9),
+      0 0 8px 1px rgba(255, 196, 60, 0.6), 3px 3px 0 rgba(0, 0, 0, 0.5);
+  }
+  50% {
+    box-shadow:
+      inset 0 2px 4px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 244, 190, 1),
+      0 0 17px 4px rgba(255, 196, 60, 0.95), 3px 3px 0 rgba(0, 0, 0, 0.5);
+  }
 }
 
 /* ── Timer + pips ───────────────────────────────────────────────────── */

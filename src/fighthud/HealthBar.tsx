@@ -21,7 +21,7 @@ const CRIT_PCT = 0.25
 // tube (SF6 / Strive) rather than flat paint. The healthy tier is a yellow-green
 // → amber-olive ramp on purpose: saturated mint green reads as a debug meter.
 const TIER_FILL = [
-  'linear-gradient(180deg,#f2ff9e 0%,#c2ef44 16%,#8ecb1c 46%,#5b8f10 74%,#2f5308 100%)',
+  'linear-gradient(180deg,#eaf59a 0%,#c3d94a 16%,#93ab24 46%,#6a7d18 74%,#3f4a0e 100%)',
   'linear-gradient(180deg,#fff3aa 0%,#ffd23a 18%,#f0a20e 50%,#b56d02 76%,#6b3f00 100%)',
   'linear-gradient(180deg,#ffd2d2 0%,#ff5252 18%,#e21f36 50%,#a10f22 76%,#560611 100%)',
 ]

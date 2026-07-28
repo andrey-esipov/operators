@@ -13,9 +13,11 @@ const BARS = 2
 /** Segmented super gauge — two spendable stocks, each glows when full. */
 export function SuperGauge({ index }: Props) {
   const side = index === 0 ? 'a' : 'b'
+  const rowRef = useRef<HTMLDivElement>(null)
   const fillRefs = useRef<(HTMLDivElement | null)[]>([])
   const barRefs = useRef<(HTMLDivElement | null)[]>([])
   const lastFull = useRef<number[]>([-1, -1])
+  const lastCharged = useRef(-1)
 
   useHudTick((frame) => {
     const meter = frame.state.fighters[index].meter
@@ -29,11 +31,20 @@ export function SuperGauge({ index }: Props) {
         barRefs.current[i]?.classList.toggle('full', full === 1)
       }
     }
+    // Row-level "a super is spendable right now" state — drives the label.
+    const charged = meter >= BAR_UNIT ? 1 : 0
+    if (charged !== lastCharged.current) {
+      lastCharged.current = charged
+      rowRef.current?.classList.toggle('charged', charged === 1)
+    }
   })
 
   return (
-    <div className={`fhud-superrow ${side}`} data-testid={`fhud-super-${side}`}>
-      <span className="fhud-superlabel">SUPER</span>
+    <div ref={rowRef} className={`fhud-superrow ${side}`} data-testid={`fhud-super-${side}`}>
+      <span className="fhud-superlabel">
+        <span className="fhud-superlabel-txt">SUPER</span>
+        <span className="fhud-superlabel-rdy">READY</span>
+      </span>
       <div className="fhud-superbars">
         {Array.from({ length: BARS }).map((_, i) => (
           <div

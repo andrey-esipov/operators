@@ -87,6 +87,42 @@ await page.evaluate(() => {
 let after = await read()
 check('post-mutation: real page still clean (no digits, gradient present)', after.hpDigits === false && after.isGradient === true)
 
+// ── Super gauge must have a *charged* state, not look identical empty vs full ─
+// The critic's note: a super gauge whose whole job is telegraphing "spendable
+// now" looked the same charged or not. We assert the charging fill is a shaded
+// gradient, and that flipping a stock to .full visibly changes its fill — the
+// falsifiable part: delete the `.full .fhud-superfill` rule and this goes red.
+const readSuper = () =>
+  page.evaluate(() => {
+    const bar = document.querySelector('.fhud-superbar')
+    const fill = bar?.querySelector('.fhud-superfill')
+    const row = document.querySelector('.fhud-superrow')
+    const bg = fill ? getComputedStyle(fill).backgroundImage : ''
+    return {
+      chargingIsGradient: /gradient/.test(bg),
+      chargingBg: bg,
+      hasCharged: !!(bar && row),
+    }
+  })
+let sp = await readSuper()
+check('super gauge charging fill is a shaded gradient', sp.chargingIsGradient === true)
+
+// Flip a stock to .full (and the row to .charged) and confirm the look changes.
+const fullBg = await page.evaluate(() => {
+  const bar = document.querySelector('.fhud-superbar')
+  const row = document.querySelector('.fhud-superrow')
+  bar?.classList.add('full')
+  row?.classList.add('charged')
+  const fill = bar?.querySelector('.fhud-superfill')
+  const bg = fill ? getComputedStyle(fill).backgroundImage : ''
+  const rdy = row ? getComputedStyle(row.querySelector('.fhud-superlabel-rdy')).opacity : '0'
+  bar?.classList.remove('full')
+  row?.classList.remove('charged')
+  return { bg, rdy }
+})
+check('MUTATION: a charged (.full) stock renders a different fill than charging', fullBg.bg !== sp.chargingBg)
+check('MUTATION: charged row reveals the READY label (opacity > 0)', parseFloat(fullBg.rdy) > 0)
+
 await browser.close()
 console.log(failures ? `\n=== ${failures} FAILED ===` : '\n=== ALL PASS ===')
 process.exit(failures ? 1 : 0)

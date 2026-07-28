@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { KernelSize } from 'postprocessing'
 import type { ScenarioId } from '../../types'
 
 /**
@@ -56,6 +57,16 @@ export interface StageGrade {
   bloomIntensity: number
   bloomThreshold: number
   bloomTint: [number, number, number]
+  /**
+   * Bloom blur kernel width. Optional; omitted grades keep the pipeline's HUGE
+   * default. A wide (HUGE) kernel turns any mid-bright background highlight —
+   * a reflective rib, a light shaft, a curtain sheen — into a big soft disc
+   * that reads as a dirty lens rather than intent. Narrowing to LARGE keeps the
+   * genuine stage glow (runway, spotlights, VFX cores measured within ~1% of
+   * HUGE) while roughly halving those parasitic corner "orbs". Discrete enum —
+   * applied from the destination grade, never cross-faded.
+   */
+  bloomKernel?: KernelSize
   /** Lens dirt / anamorphic streak strength for this arena. */
   lensDirt: number
   anamorphic: number
@@ -439,6 +450,7 @@ export const STAGE_GRADES: Record<ScenarioId, StageGrade> = {
     bloomIntensity: 1.15,
     bloomThreshold: 0.6,
     bloomTint: [1.0, 0.98, 0.92],
+    bloomKernel: KernelSize.LARGE,
     lensDirt: 0.3,
     anamorphic: 0.42,
     anamorphicTint: [0.7, 0.8, 1.0],

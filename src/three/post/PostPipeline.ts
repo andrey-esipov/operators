@@ -358,6 +358,15 @@ export class PostPipeline implements Subsystem, RenderDriver {
       g.bloomThreshold + i * 0.05 - this.superPunch * 0.08,
     )
 
+    // Bloom kernel width is a discrete enum, so it is applied from the
+    // destination grade rather than the cross-faded one (a lerped kernel index
+    // is meaningless). A narrower kernel on stages that ask for it stops
+    // mid-bright background highlights from blooming into big soft lens-dirt
+    // "orbs" without dimming the genuine stage glow. Guarded so it only writes
+    // on an actual change.
+    const wantKernel = this.targetGrade.bloomKernel ?? KernelSize.HUGE
+    if (this.bloom.kernelSize !== wantKernel) this.bloom.kernelSize = wantKernel
+
     // --- lens dirt / anamorphic ----------------------------------------
     this.lens.setBloomTexture(this.bloom.texture)
     this.lens.setDirt(g.lensDirt * (1 + i * 0.4))

@@ -71,10 +71,23 @@ export class FightCamera {
   //               frustum always outruns the pan and the grounded feet never
   //               fall off the bottom edge.
   //   vCamFollow  how fast the camera itself lifts (a touch under the aim pan).
+  //
+  // These are deliberately gentle. A jump raises topY, which raises halfSpanY
+  // and dollies the camera out — but if that term is too strong the whole scene
+  // shrinks every time anyone leaves the ground (measured: a mid jump zoomed the
+  // pair out ~26% on the mock, and worse in real matches where a launch stacks
+  // on horizontal separation, reading as a lurch). A fighting-game camera keeps
+  // the scale far more stable through a jump and lets the airborne fighter ride
+  // up in frame instead. So the vertical dolly-out per unit of rise is kept low;
+  // the invariant vCamFollow < vLookFollow < vFollow is preserved so the growing
+  // frustum still outruns the aim pan and the grounded fighter's feet never fall
+  // off the bottom edge. NOTE: for a grounded pair vRise is 0, so every term
+  // below multiplies to nothing — this tuning is provably a no-op on all
+  // grounded frames and only softens the airborne zoom-out.
   private readonly maxRiseFit = 3.5
-  private readonly vFollow = 0.34
-  private readonly vLookFollow = 0.3
-  private readonly vCamFollow = 0.24
+  private readonly vFollow = 0.24
+  private readonly vLookFollow = 0.2
+  private readonly vCamFollow = 0.16
 
   constructor(cam: THREE.PerspectiveCamera, bounds: StageBounds) {
     this.cam = cam

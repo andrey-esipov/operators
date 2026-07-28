@@ -1,0 +1,334 @@
+/* Fighting-game HUD — owned by src/fighthud/**.
+   Scoped with the `fhud-` prefix so nothing here collides with the card
+   game's combat-hud.css or the 3D hud.css. Carries the house language:
+   angular skewed plates, hard black borders, drop shadows, pixel fonts. */
+
+.fhud-root {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  pointer-events: none;
+  font-family: var(--font-display);
+  /* The HUD is authored for a 1600×900 frame; it scales fluidly via % / vw. */
+  user-select: none;
+}
+
+/* ── Top bar layout ─────────────────────────────────────────────────── */
+.fhud-topbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 18px 0;
+}
+
+/* ── Health bar ─────────────────────────────────────────────────────── */
+.fhud-hpwrap {
+  flex: 1 1 0;
+  max-width: 620px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.fhud-hpwrap.b { align-items: flex-end; }
+
+.fhud-namerow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 20px;
+  width: 100%;
+}
+.fhud-hpwrap.b .fhud-namerow { flex-direction: row-reverse; }
+
+.fhud-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  font-size: 12px;
+  color: #fff;
+  border: 2px solid #000;
+  box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.6), inset -2px -2px 0 rgba(0, 0, 0, 0.4);
+  transform: skewX(-8deg);
+}
+.fhud-badge > span { transform: skewX(8deg); }
+
+.fhud-name {
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  color: #fff;
+  text-shadow: 2px 2px 0 #000;
+  white-space: nowrap;
+}
+
+/* Two-layer track: trail (recoverable/chip) sits behind, main in front. */
+.fhud-hptrack {
+  position: relative;
+  width: 100%;
+  height: 20px;
+  background: #140d20;
+  border: 2px solid #000;
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.06), 4px 4px 0 rgba(0, 0, 0, 0.55);
+  overflow: hidden;
+  /* Skew the whole bar for that aggressive fighting-game rake. */
+  transform: skewX(-11deg);
+}
+.fhud-hpfill,
+.fhud-hptrail {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  /* width set imperatively (0–100%). */
+  will-change: width;
+}
+/* Right fighter drains toward the centre — anchor fills on the right. */
+.fhud-hpwrap.b .fhud-hpfill,
+.fhud-hpwrap.b .fhud-hptrail {
+  left: auto;
+  right: 0;
+}
+.fhud-hptrail {
+  background: #f7f7f7;
+  opacity: 0.85;
+}
+.fhud-hpfill {
+  background: linear-gradient(180deg, #12e39a 0%, #06d6a0 55%, #05b083 100%);
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.35), inset 0 -3px 0 rgba(0, 0, 0, 0.3);
+}
+/* Notch overlay — keeps the segmented arcade read on a smooth-draining bar. */
+.fhud-hpnotches {
+  position: absolute;
+  inset: 0;
+  background-image: repeating-linear-gradient(
+    90deg,
+    transparent 0 calc(10% - 2px),
+    rgba(0, 0, 0, 0.55) calc(10% - 2px) 10%
+  );
+  pointer-events: none;
+}
+.fhud-hpgloss {
+  position: absolute;
+  inset: 0 0 55% 0;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.28), transparent);
+  pointer-events: none;
+}
+
+.fhud-hpwrap.crit .fhud-hptrack {
+  animation: fhudHpCrit 0.7s ease-in-out infinite;
+}
+@keyframes fhudHpCrit {
+  0%, 100% { box-shadow: inset 0 0 0 2px rgba(255,255,255,0.06), 4px 4px 0 rgba(0,0,0,0.55), 0 0 0 0 rgba(239,35,60,0); }
+  50%      { box-shadow: inset 0 0 0 2px rgba(255,80,80,0.35), 4px 4px 0 rgba(0,0,0,0.55), 0 0 18px 3px rgba(239,35,60,0.75); }
+}
+
+.fhud-hpnum {
+  font-family: var(--font-num);
+  font-size: 22px;
+  line-height: 1;
+  color: #fff;
+  text-shadow: 2px 2px 0 #000;
+  min-width: 40px;
+  text-align: right;
+}
+.fhud-hpwrap.b .fhud-hpnum { text-align: left; }
+
+/* ── Super gauge ────────────────────────────────────────────────────── */
+.fhud-superrow {
+  position: absolute;
+  bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.fhud-superrow.a { left: 18px; }
+.fhud-superrow.b { right: 18px; flex-direction: row-reverse; }
+
+.fhud-superlabel {
+  font-size: 8px;
+  letter-spacing: 0.28em;
+  color: #f9a8d4;
+  text-shadow: 1px 1px 0 #000;
+}
+.fhud-superbars {
+  display: flex;
+  gap: 4px;
+}
+.fhud-superbar {
+  position: relative;
+  width: 118px;
+  height: 12px;
+  background: #180a22;
+  border: 2px solid #000;
+  box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+  transform: skewX(-11deg);
+}
+.fhud-superfill {
+  position: absolute;
+  inset: 0;
+  left: 0;
+  background: linear-gradient(90deg, #7209b7, #f72585);
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.3);
+  will-change: width;
+}
+.fhud-superrow.b .fhud-superfill { left: auto; right: 0; }
+.fhud-superticks {
+  position: absolute;
+  inset: 0;
+  background-image: repeating-linear-gradient(
+    90deg, transparent 0 calc(25% - 1px), rgba(0,0,0,0.5) calc(25% - 1px) 25%
+  );
+  pointer-events: none;
+}
+.fhud-superbar.full .fhud-superfill { animation: fhudMeterFull 0.9s ease-in-out infinite; }
+.fhud-superbar.full { box-shadow: 3px 3px 0 rgba(0,0,0,0.5), 0 0 14px rgba(247,37,133,0.8); }
+@keyframes fhudMeterFull {
+  0%, 100% { filter: brightness(1); }
+  50%      { filter: brightness(1.5); }
+}
+
+/* ── Timer + pips ───────────────────────────────────────────────────── */
+.fhud-center {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.fhud-timerplate {
+  position: relative;
+  min-width: 96px;
+  padding: 6px 10px 4px;
+  background: linear-gradient(135deg, #241340, #0f0a1a);
+  border: 3px solid #000;
+  box-shadow: 5px 5px 0 rgba(0, 0, 0, 0.6), inset 0 0 0 2px rgba(255, 255, 255, 0.06);
+  transform: skewX(-8deg);
+}
+.fhud-timernum {
+  font-family: var(--font-num);
+  font-size: 44px;
+  line-height: 1;
+  color: #ffe98a;
+  text-shadow: 3px 3px 0 #000, 0 0 14px rgba(255, 214, 10, 0.5);
+  text-align: center;
+  transform: skewX(8deg);
+  min-width: 72px;
+}
+.fhud-timernum.low { color: #ff5a5a; animation: fhudTimerLow 0.6s steps(2) infinite; }
+@keyframes fhudTimerLow {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.55; }
+}
+.fhud-pips {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  transform: skewX(-8deg);
+}
+.fhud-pipset { display: flex; gap: 5px; }
+.fhud-pip {
+  width: 12px;
+  height: 12px;
+  border: 2px solid #000;
+  background: #2a1f33;
+  box-shadow: inset -2px -2px 0 rgba(0, 0, 0, 0.4);
+  transform: rotate(45deg);
+}
+.fhud-pip.won {
+  background: radial-gradient(circle at 40% 35%, #ffe98a, #ffb703 70%);
+  box-shadow: 0 0 8px #ffb703, inset -1px -1px 0 rgba(0, 0, 0, 0.4);
+}
+
+/* ── Combo counter ──────────────────────────────────────────────────── */
+.fhud-combo {
+  position: absolute;
+  top: 21%;
+  display: flex;
+  flex-direction: column;
+}
+.fhud-combo.a { left: 8%; align-items: flex-start; }
+.fhud-combo.b { right: 8%; align-items: flex-end; }
+.fhud-combo-count {
+  font-family: var(--font-num);
+  font-size: 74px;
+  line-height: 0.8;
+  color: #ffd60a;
+  text-shadow: 4px 4px 0 #000, 0 0 18px rgba(247, 127, 0, 0.7);
+  transform: skewX(-8deg);
+}
+.fhud-combo-count small {
+  font-size: 26px;
+  color: #fff;
+  margin-left: 6px;
+}
+.fhud-combo-label {
+  font-family: var(--font-display);
+  font-size: 13px;
+  letter-spacing: 0.2em;
+  color: #fff;
+  text-shadow: 2px 2px 0 #000;
+  transform: skewX(-8deg);
+}
+.fhud-combo-dmg {
+  font-family: var(--font-num);
+  font-size: 20px;
+  color: #ff8fa3;
+  text-shadow: 2px 2px 0 #000;
+  transform: skewX(-8deg);
+}
+
+/* ── Flash chips (parry / throw-tech) ───────────────────────────────── */
+.fhud-flash {
+  position: absolute;
+  top: 34%;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 14px;
+  font-family: var(--font-display);
+  font-size: 16px;
+  letter-spacing: 0.24em;
+  color: #fff;
+  border: 3px solid #000;
+  box-shadow: 5px 5px 0 rgba(0, 0, 0, 0.6);
+}
+
+/* ── Announcements ──────────────────────────────────────────────────── */
+.fhud-announce {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.fhud-announce-plate {
+  padding: 16px 44px;
+  border: 4px solid #000;
+  transform: skewX(-10deg);
+}
+.fhud-announce-plate > div { transform: skewX(10deg); }
+.fhud-announce-kicker {
+  font-size: 16px;
+  letter-spacing: 0.4em;
+  color: #fff;
+  text-shadow: 2px 2px 0 #000;
+  text-align: center;
+  margin-bottom: 6px;
+}
+.fhud-announce-main {
+  font-size: 76px;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  text-align: center;
+  text-shadow: 6px 6px 0 #000, 0 0 24px rgba(0, 0, 0, 0.8);
+}

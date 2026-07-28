@@ -52,7 +52,12 @@ export class FightCamera {
   private readonly camBaseY = 2.12
   private readonly minZ = 6.5
   private readonly maxZ = 15.5
-  private readonly marginX = 1.85
+  // Horizontal breathing room (world units) added beyond the fighters' spread
+  // before the camera has to dolly back. Kept fairly tight so widely-spaced
+  // neutral/intro beats still fill the frame instead of pulling back into a
+  // small-fighters-with-a-dead-floor-band composition — SF6/3S keep the pair
+  // large in frame even at range.
+  private readonly marginX = 1.45
   private readonly marginY = 1.9
 
   constructor(cam: THREE.PerspectiveCamera, bounds: StageBounds) {

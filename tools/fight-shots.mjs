@@ -112,7 +112,12 @@ const runCapture = async () => {
   seen.clear()
   failures.length = 0
 
-  await page.goto(BASE, { waitUntil: 'networkidle' })
+  // `networkidle` is the wrong readiness signal here: the vite HMR socket stays
+  // open and the stage animates continuously, so on a retry after an HMR reload
+  // the page can never go idle and navigation times out — turning a recoverable
+  // reload into a failed run. The harness exposes an explicit ready() below,
+  // which is a direct answer to "can I drive the sim yet".
+  await page.goto(BASE, { waitUntil: 'domcontentloaded' })
 
   // Wait for the harness to finish building atlases and expose the API.
   for (let i = 0; i < 120; i++) {
@@ -152,6 +157,17 @@ const WANTED = ['intro', 'footsies', 'attack', 'hitstun', 'blocked', 'jump', 'ju
 const MAX_SCAN = Number(flag('scan', '2400'))
 const seen = new Map()
 
+// Frames to let a beat settle before shooting it.
+//
+// `juggle` and `hitstun` both begin on the frame of contact, which is the peak
+// of the hit flash — so capturing them the instant the stance changes samples
+// the one frame in ~40 where the victim is a white strobe. Every juggle
+// screenshot this project produced showed the flash rather than the tumble,
+// and it cost a wrong bug report to the renderer before anyone checked the
+// neighbouring frames. Measured recovery: achromatic pixels fall from 34% at
+// contact to 4% three frames later.
+const SETTLE = { juggle: 6, hitstun: 5, blocked: 3 }
+
 async function scanForBeats() {
   for (let i = 0; i < MAX_SCAN && seen.size < WANTED.length; i++) {
     const phase = await page.evaluate(() => {
@@ -160,13 +176,25 @@ async function scanForBeats() {
     })
     if (!WANTED.includes(phase) || seen.has(phase)) continue
 
+    // Settle, but only while the situation still holds — stepping past the end
+    // of the beat would put the old label on a different moment, which is the
+    // exact failure this scanner was written to stop.
+    let settled = 0
+    for (const want = phase; settled < (SETTLE[want] ?? 0); settled++) {
+      const now = await page.evaluate(() => {
+        window.__FIGHT__.step(1)
+        return window.__FIGHT__.phase()
+      })
+      if (now !== want) break
+    }
+
     const idx = String(seen.size).padStart(2, '0')
     const name = `${idx}-${phase}`
     seen.set(phase, name)
     await sleep(60)
     await shot(name)
     const { proj, cov } = await assertFightersOnScreen(name)
-    console.log(`    (${name} @ frame ${i}, phase=${phase}, on-screen=${JSON.stringify(proj.map((p) => [p.x, p.y]))}, painted=${(cov.fraction * 100).toFixed(2)}%)`)
+    console.log(`    (${name} @ frame ${i}+${settled}, phase=${phase}, on-screen=${JSON.stringify(proj.map((p) => [p.x, p.y]))}, painted=${(cov.fraction * 100).toFixed(2)}%)`)
   }
 
   // A situation that never occurs across the whole scan is a broken fight, not

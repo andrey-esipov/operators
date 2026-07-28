@@ -152,6 +152,17 @@ export const FRAMES: FrameSpec[] = [
       'crouching low in a defensive stance — knees deeply bent so the whole body is much lower to the ground, ' +
       'thighs near horizontal, hips dropped, both forearms raised in front of the chest and face to guard, chin tucked.',
   },
+  {
+    // The exhale of a crouching idle — players sit in crouch, so it must breathe.
+    // Same planted stance, a touch lower and looser as the breath settles.
+    name: 'crouch-2',
+    heightRatio: 0.66,
+    aspect: [0.56, 1.12],
+    pose:
+      'crouching low in a defensive stance at the settle of a breath — knees deeply bent and hips sunk a little ' +
+      'lower, shoulders dropping and chest easing down as the breath goes out, both forearms still raised guarding ' +
+      'the face and chest, chin tucked, feet planted flat.',
+  },
 
   // ── Jump: rise (tucked), apex (peak), fall (reaching down) ───────────────
   {
@@ -178,15 +189,48 @@ export const FRAMES: FrameSpec[] = [
       'the falling phase of a jump, airborne — legs beginning to extend downward reaching for the ground, ' +
       'body straightening, arms coming up to guard on landing, momentum clearly downward, feet not yet planted.',
   },
+  {
+    // Touchdown. Without it the long, fully-visible jump arc hard-cuts from
+    // airborne to standing. A knee-bend absorb gives the landing weight.
+    name: 'jump-land',
+    heightRatio: 0.8,
+    aspect: [0.5, 1.05],
+    pose:
+      'landing from a jump with both feet just planted on the ground — knees bending deeply to absorb the impact, ' +
+      'body compressing downward and hips sinking low, arms swinging out for balance, weight driving hard into the ' +
+      'ground on touchdown.',
+  },
 
   // ── Dashes ────────────────────────────────────────────────────────────
   {
+    // Anticipation. A dash is explosive, so it keyframes (coil -> burst ->
+    // settle) rather than morphing — an idle->dash tween double-images because
+    // the pose change is large. This coil doubles as the recovery frame.
+    name: 'dash-ready',
+    heightRatio: 0.9,
+    aspect: [0.5, 1.0],
+    pose:
+      'the coiled instant before an explosive forward dash — knees bending and weight loading down and back over ' +
+      'the rear leg, torso dropping and coiling slightly forward, both fists pulled in tight, gathering to spring ' +
+      'forward, feet planted flat on the ground.',
+  },
+  {
     name: 'dash',
     heightRatio: 0.94,
-    aspect: [0.55, 1.05],
+    aspect: [0.55, 1.35],
     pose:
       'an explosive forward dash — body pitched low and forward over a deeply bent front leg, back leg driving ' +
       'out straight behind, both fists pulled in tight, lunging toward the target with committed forward momentum.',
+  },
+  {
+    // Anticipation for the backward hop; also its recovery frame.
+    name: 'backdash-ready',
+    heightRatio: 0.94,
+    aspect: [0.5, 1.0],
+    pose:
+      'the coiled instant before an evasive backward hop while facing right — weight loading onto the front foot, ' +
+      'knees bending and body compressing slightly, fists tucked in tight, about to push off and spring backward, ' +
+      'feet planted flat on the ground.',
   },
   {
     name: 'backdash',
@@ -387,6 +431,17 @@ export const FRAMES: FrameSpec[] = [
       'vertical guard, shoulders hunched behind the arms, weight braced on a slightly back-leaning stance, bracing for impact.',
   },
   {
+    // The recoil of a hit landing on the guard. A held pose during a blocked hit
+    // is a tell; this absorbs the blow — pushed back, braced, shoulders driven in.
+    name: 'block-absorb',
+    heightRatio: 0.98,
+    aspect: [0.32, 0.66],
+    pose:
+      'absorbing a blocked hit while standing — both forearms clamped tight across the face and chest taking the ' +
+      'blow, the whole body shoved backward and braced against the impact, rear foot sliding back to hold ground, ' +
+      'shoulders driven hard into the guard, head tucked down behind the arms.',
+  },
+  {
     name: 'block-crouch',
     heightRatio: 0.66,
     aspect: [0.6, 1.15],
@@ -422,6 +477,18 @@ export const FRAMES: FrameSpec[] = [
     pose:
       'rising from a knockdown — pushing up off one hand and a bent knee, torso lifting off the ground and ' +
       'twisting back upright, other arm coming up to guard, halfway back to standing, gathering the feet under the body.',
+  },
+  {
+    // The last beat of the get-up, so wakeup isn't one held pose that undoes the
+    // knockdown. Nearly stood, legs straightening, guard coming up — hard-cuts to
+    // idle. Morphing kneel->stand double-images, so it keyframes.
+    name: 'wakeup-rise',
+    heightRatio: 0.92,
+    aspect: [0.4, 0.85],
+    pose:
+      'the last of getting up from a knockdown — nearly back to standing, legs straightening under the body and ' +
+      'torso lifting upright, both fists coming up into a guard, still a touch low and braced, about to settle ' +
+      'into the fighting stance, both feet under the body.',
   },
 
   // ── Ceremony ────────────────────────────────────────────────────────────
@@ -496,6 +563,12 @@ export const TWEENS: TweenSpec[] = [
   { name: 'tw-mp-rec', from: 'mp-active', to: 'idle-1', t: 0.5 },
   { name: 'tw-hp-wind', from: 'hp-startup', to: 'hp-active', t: 0.5 },
   { name: 'tw-hp-rec', from: 'hp-active', to: 'idle-1', t: 0.5 },
+  // Neutral-game density. Crouch and block get a subtle morph inbetween — small,
+  // continuous motion where the flow-morph is clean. Dash, the jump arc and the
+  // get-up are large pose changes that double-image under morph, so they keyframe
+  // instead (distinct AI poses, hard cuts) — the SF/Tekken way for fast actions.
+  { name: 'tw-cr-c2', from: 'crouch', to: 'crouch-2', t: 0.5 },
+  { name: 'tw-ba-bs', from: 'block-absorb', to: 'block-stand', t: 0.5 },
 ]
 
 /** All frame names, in generation order: free stance, generated keys, then synthesised tweens. */
@@ -573,20 +646,28 @@ export const CLIPS: Record<string, ClipSpec> = {
     ['walk-back-1', 5], ['tw-wb-12', 3], ['walk-back-2', 5], ['tw-wb-23', 3],
     ['walk-back-3', 5], ['tw-wb-34', 3], ['walk-back-4', 5], ['tw-wb-41', 3],
   ),
-  crouch: clip(true, ['crouch', 8]),
+  // Crouch breathes — players sit in it. Ping-pong crouch<->crouch-2 (subtle,
+  // morph-clean).
+  crouch: clip(true, ['crouch', 8], ['tw-cr-c2', 4], ['crouch-2', 8], ['tw-cr-c2', 4]),
+  // Jump arc keyframes through its phases (hard cuts — morph smears the airborne
+  // pose changes): rise -> apex, then apex -> fall -> land absorb.
   'jump-rise': clip(false, ['jump-rise', 6], ['jump-apex', 8]),
-  'jump-fall': clip(false, ['jump-fall', 8]),
-  dash: clip(false, ['dash', 10]),
-  backdash: clip(false, ['backdash', 10]),
+  'jump-fall': clip(false, ['jump-apex', 4], ['jump-fall', 6], ['jump-land', 6]),
+  // Dash keyframes coil -> burst -> settle; the coil doubles as the recovery.
+  dash: clip(false, ['dash-ready', 3], ['dash', 6], ['dash-ready', 4]),
+  backdash: clip(false, ['backdash-ready', 3], ['backdash', 6], ['backdash-ready', 4]),
   attack: clip(false, ['mp-active', 8]),
-  block: clip(true, ['block-stand', 6]),
+  // Block absorbs the hit then settles back to guard rather than holding a pose.
+  block: clip(true, ['block-absorb', 3], ['tw-ba-bs', 3], ['block-stand', 8]),
   // Hitstun: a snap-back that settles back toward guard, not one frozen recoil.
   hurt: clip(false, ['hit-high', 3], ['tw-hh-hr', 3], ['hit-reel', 4], ['tw-hr-hs', 3], ['hit-settle', 5]),
   // Juggle: a real airborne tumble through the arc — launch, apex, fall.
   juggle: clip(false, ['juggle-launch', 3], ['tw-jl-ja', 3], ['juggle-apex', 4], ['tw-ja-js', 3], ['juggle-spin', 4], ['tw-js-jf', 3], ['juggle-fall', 5]),
   // Knockdown: crash and bounce, then settle flat.
   knockdown: clip(false, ['knockdown-impact', 4], ['tw-ki-kd', 3], ['knockdown', 16]),
-  wakeup: clip(false, ['wakeup', 14]),
+  // Wakeup: rise off the floor through to the stance (hard cuts — kneel->stand
+  // smears under morph). kneel -> nearly up -> stance.
+  wakeup: clip(false, ['wakeup', 6], ['wakeup-rise', 6], ['idle-1', 4]),
   'throw-tech': clip(false, ['block-stand', 8]),
   ko: clip(false, ['ko', 30]),
 

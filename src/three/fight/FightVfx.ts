@@ -4,7 +4,8 @@ import type { ParticlePool } from '../vfx/ParticlePool'
 import type { Shockwave } from '../vfx/Shockwave'
 import type { Fighter } from './Fighter'
 import type { FightCamera } from './FightCamera'
-import { simToWorld } from './worldScale'
+import { CM_TO_WORLD, simToWorld } from './worldScale'
+import { WORLD } from '../types'
 
 /**
  * Translates simulation events into impact VFX.
@@ -65,7 +66,7 @@ export class FightVfx {
   handle(e: FightEvent) {
     switch (e.type) {
       case 'hit': return this.hit(e.at, e.attacker, e.level, e.damage)
-      case 'block': return this.block(e.at)
+      case 'block': return this.block(e.at, e.attacker)
       case 'parry': return this.parry(e.at)
       case 'throw': return this.throwFx(e.at)
       case 'launch': return this.launch(e.at)
@@ -111,17 +112,52 @@ export class FightVfx {
     this.d.emitEngine?.(attacker, target, level, power, 'hit')
   }
 
-  private block(at: Vec2) {
-    const pos = this.world(at)
-    const cool = new THREE.Color(0x8fd0ff)
-    const white = new THREE.Color(0xeaf6ff)
+  private block(at: Vec2, attacker: 0 | 1) {
+    // A block must read as a *deflection*, not a hit: a saturated-blue shield
+    // clang with sparks that fan up-and-back off the guard, instantly telling
+    // the eye "guarded, no damage" versus a hit's hot orange starburst. It gets
+    // anchored to the defender's guard (below), not the raw contact point, which
+    // can sit on the floor for a low and made blocks look like they had no VFX.
+    const di = (attacker === 0 ? 1 : 0) as 0 | 1
+    const def = this.d.fighters[di]
+    const atk = this.d.fighters[attacker]
+    const dir = Math.sign(atk.mesh.position.x - def.mesh.position.x) || 1
+    // Anchor to the sim's contact height (accurate per-attack) but pin it to the
+    // front edge of the defender's silhouette facing the attacker, and clamp the
+    // height into a knee..upper-chest guard band (in cm) so a freak-low contact
+    // can't drop the flash onto the floor — the old "stray floor spark" bug —
+    // while a high block still reads up near the forearms.
+    const guardCm = THREE.MathUtils.clamp(at.y, 55, 130)
+    const guard = this.p
+    guard.set(
+      def.mesh.position.x + dir * def.bodyWidth * 0.4,
+      WORLD.GROUND_Y + guardCm * CM_TO_WORLD,
+      0.02,
+    )
+
+    // Deep, saturated blues so the flash still reads as *blue* after the additive
+    // blend lifts it over the stage's warm key — a hit's hot orange core is the
+    // opposite pole, which is what makes blocked-vs-hit legible at a glance.
+    const cyan = new THREE.Color(0x2ea8ff)
+    const ice = new THREE.Color(0x9fe2ff)
+
+    // The "clang": a bold cyan shield ring is the dominant, unmistakable read —
+    // a ring can't ball up into a stray orb the way a dense spark burst does.
+    this.d.shockwave.spawn('shock', guard, 0.9, 0.26, cyan, ice, 1.6, 1.2)
+    // A crisp inner star gives the ring a bright heart without a solid blob.
+    this.d.shockwave.spawn('star', guard, 0.32, 0.18, ice, cyan, 1.1)
+    // Deflection shards — few, fast, wide, zero gravity and heavy drag so they
+    // shoot out and stop as radiating streaks rather than falling into a pom-pom.
     this.d.additive.emit({
-      position: pos, count: 22, speed: 6, color: white, color2: cool, size: 0.1,
-      life: 0.22, gravity: -6, drag: 4, shape: 'spark', intensity: 1.4,
-      spawnRadius: 0.2, stretch: 2.2, direction: new THREE.Vector3(0, 1, 0.2), spread: 1.1,
+      position: guard, count: 12, speed: 15, speedVariance: 0.7,
+      color: ice, color2: cyan, size: 0.1, sizeVariance: 0.5,
+      life: 0.2, lifeVariance: 0.4, gravity: 0, drag: 5.5,
+      shape: 'streak', intensity: 1.7, spawnRadius: 0.12, stretch: 4.2,
+      direction: new THREE.Vector3(-dir, 0.5, 0), spread: 1.5,
     })
-    this.d.shockwave.spawn('shock', pos, 0.42, 0.22, cool, white, 0.9, 1.2)
-    this.d.camera.addShake(0.06)
+    // Chip feel: a short freeze and a small shake, weaker than a clean hit.
+    this.d.requestHitstop(45, 0.2)
+    this.d.camera.addShake(0.07)
   }
 
   private parry(at: Vec2) {

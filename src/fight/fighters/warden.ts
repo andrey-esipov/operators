@@ -44,7 +44,7 @@ const stLP = mkMove({
   hitbox: [{ x: 24, y: 104, w: 54, h: 24 }],
   cancels: ['special', 'super'],
   hit: { damage: 26, blockstun: 10 /* +2 */, hitstun: 13 /* +5 */, guard: 'high',
-    level: 'light', kbx: 0.7, pushback: 0.5, hitstop: 8, meterGain: 11, meterGainOnBlock: 4 },
+    level: 'light', kbx: 0.7, pushback: 0.5, hitstop: 10, meterGain: 11, meterGainOnBlock: 4 },
 })
 const stMP = mkMove({
   id: 'st.MP', name: 'Extend Palm', tag: 'normal', button: 'mp', sprite: nextSprite(),
@@ -52,7 +52,7 @@ const stMP = mkMove({
   hitbox: [{ x: 44, y: 100, w: 76, h: 30 }],
   cancels: ['special', 'super'],
   hit: { damage: 50, blockstun: 13 /* -1 */, hitstun: 16 /* +2 */, guard: 'high',
-    level: 'medium', kbx: 1.2, pushback: 1.4, hitstop: 9, meterGain: 14, meterGainOnBlock: 6 },
+    level: 'medium', kbx: 1.2, pushback: 1.4, hitstop: 12, meterGain: 14, meterGainOnBlock: 6 },
 })
 const stHP = mkMove({
   // Stationary anti-air-ish: tall upward box, hits above and in front. Not
@@ -61,7 +61,7 @@ const stHP = mkMove({
   startup: 9, active: 4, recovery: 18, // total 31, busy 22 — unsafe if blocked
   hitbox: [{ x: 18, y: 90, w: 60, h: 96 }],
   hit: { damage: 80, blockstun: 16 /* -6 */, hitstun: 22, guard: 'high', level: 'heavy',
-    kbx: 2.0, pushback: 1.2, hitstop: 11, meterGain: 18, meterGainOnBlock: 7 },
+    kbx: 2.0, pushback: 1.2, hitstop: 14, meterGain: 18, meterGainOnBlock: 7 },
 })
 const stLK = mkMove({
   id: 'st.LK', name: 'Shin Kick', tag: 'normal', button: 'lk', sprite: nextSprite(),
@@ -69,21 +69,21 @@ const stLK = mkMove({
   hitbox: [{ x: 28, y: 66, w: 60, h: 28 }],
   cancels: ['special', 'super'],
   hit: { damage: 28, blockstun: 11 /* +1 */, hitstun: 14 /* +4 */, guard: 'high',
-    level: 'light', kbx: 0.7, pushback: 0.5, hitstop: 8, meterGain: 11, meterGainOnBlock: 4 },
+    level: 'light', kbx: 0.7, pushback: 0.5, hitstop: 10, meterGain: 11, meterGainOnBlock: 4 },
 })
 const stMK = mkMove({
   id: 'st.MK', name: 'Long Kick', tag: 'normal', button: 'mk', sprite: nextSprite(),
   startup: 8, active: 3, recovery: 13, // total 24, busy 16 — whiff-punish range
   hitbox: [{ x: 52, y: 78, w: 84, h: 30 }],
   hit: { damage: 55, blockstun: 13 /* -3 */, hitstun: 17 /* +1 */, guard: 'high',
-    level: 'medium', kbx: 1.6, pushback: 1.4, hitstop: 9, meterGain: 14, meterGainOnBlock: 6 },
+    level: 'medium', kbx: 1.6, pushback: 1.4, hitstop: 12, meterGain: 14, meterGainOnBlock: 6 },
 })
 const stHK = mkMove({
   id: 'st.HK', name: 'Sweeping Lance', tag: 'normal', button: 'hk', sprite: nextSprite(),
   startup: 12, active: 2, recovery: 20, // total 34, busy 22 — huge range, huge commit
   hitbox: [{ x: 56, y: 84, w: 96, h: 40 }],
   hit: { damage: 95, blockstun: 16 /* -6 */, hitstun: 24, guard: 'high', level: 'heavy',
-    kbx: 3.0, pushback: 2.0, hitstop: 12, meterGain: 20, meterGainOnBlock: 8 },
+    kbx: 3.0, pushback: 2.0, hitstop: 15, meterGain: 20, meterGainOnBlock: 8 },
 })
 
 // ── Crouching normals ────────────────────────────────────────────────────────
@@ -93,7 +93,7 @@ const crLP = mkMove({
   hitbox: [{ x: 22, y: 58, w: 52, h: 22 }],
   cancels: ['special', 'super'],
   hit: { damage: 24, blockstun: 10 /* +2 */, hitstun: 13 /* +5 */, guard: 'high',
-    level: 'light', kbx: 0.6, pushback: 0.4, hitstop: 8, meterGain: 10, meterGainOnBlock: 4 },
+    level: 'light', kbx: 0.6, pushback: 0.4, hitstop: 10, meterGain: 10, meterGainOnBlock: 4 },
 })
 const crMP = mkMove({
   id: 'cr.MP', name: 'Crouch Extend', tag: 'normal', button: 'mp', sprite: nextSprite(),
@@ -101,7 +101,7 @@ const crMP = mkMove({
   hitbox: [{ x: 40, y: 64, w: 72, h: 28 }],
   cancels: ['special', 'super'],
   hit: { damage: 48, blockstun: 12 /* -2 */, hitstun: 15 /* +1 */, guard: 'high',
-    level: 'medium', kbx: 1.0, pushback: 1.0, hitstop: 9, meterGain: 13, meterGainOnBlock: 6 },
+    level: 'medium', kbx: 1.0, pushback: 1.0, hitstop: 12, meterGain: 13, meterGainOnBlock: 6 },
 })
 const crHP = mkMove({
   // The Warden's only launcher and its dedicated anti-air. Tall box, pops up for
@@ -112,7 +112,7 @@ const crHP = mkMove({
   hitbox: [{ x: 12, y: 62, w: 54, h: 122 }],
   cancels: ['super'],
   hit: { damage: 80, blockstun: 16 /* -8 */, hitstun: 24, guard: 'high', level: 'launcher',
-    kbx: 1.0, kby: 9, pushback: 1.0, hitstop: 11, meterGain: 18, meterGainOnBlock: 7, juggle: true },
+    kbx: 1.0, kby: 9, pushback: 1.0, hitstop: 14, meterGain: 18, meterGainOnBlock: 7, juggle: true },
 })
 const crLK = mkMove({
   id: 'cr.LK', name: 'Low Shin', tag: 'normal', button: 'lk', sprite: nextSprite(),
@@ -120,7 +120,7 @@ const crLK = mkMove({
   hitbox: [{ x: 24, y: 18, w: 56, h: 22 }],
   cancels: ['special', 'super'],
   hit: { damage: 24, blockstun: 10 /* +1 */, hitstun: 13 /* +4 */, guard: 'low',
-    level: 'light', kbx: 0.6, pushback: 0.4, hitstop: 8, meterGain: 10, meterGainOnBlock: 4 },
+    level: 'light', kbx: 0.6, pushback: 0.4, hitstop: 10, meterGain: 10, meterGainOnBlock: 4 },
 })
 const crMK = mkMove({
   id: 'cr.MK', name: 'Low Sweep Poke', tag: 'normal', button: 'mk', sprite: nextSprite(),
@@ -128,14 +128,14 @@ const crMK = mkMove({
   hitbox: [{ x: 50, y: 22, w: 88, h: 24 }],
   cancels: ['special', 'super'], // low hit-confirm into a bolt
   hit: { damage: 52, blockstun: 13 /* -3 */, hitstun: 17 /* +1 */, guard: 'low',
-    level: 'medium', kbx: 1.2, pushback: 1.4, hitstop: 9, meterGain: 14, meterGainOnBlock: 6 },
+    level: 'medium', kbx: 1.2, pushback: 1.4, hitstop: 12, meterGain: 14, meterGainOnBlock: 6 },
 })
 const crHK = mkMove({
   id: 'cr.HK', name: 'Sweep', tag: 'normal', button: 'hk', sprite: nextSprite(),
   startup: 9, active: 3, recovery: 21, hurt: CROUCH_HURT, push: CROUCH_PUSH, // busy 24
   hitbox: [{ x: 44, y: 16, w: 90, h: 26 }],
   hit: { damage: 85, blockstun: 15 /* -9 */, hitstun: 28, guard: 'low', level: 'sweep',
-    kbx: 3.0, pushback: 1.0, hitstop: 12, meterGain: 18, meterGainOnBlock: 8 },
+    kbx: 3.0, pushback: 1.0, hitstop: 15, meterGain: 18, meterGainOnBlock: 8 },
 })
 
 // ── Jumping normals (overheads) ──────────────────────────────────────────────
@@ -144,21 +144,21 @@ const jLP = mkMove({
   airOk: true, startup: 5, active: 6, recovery: 6, hurt: AIR_HURT, push: AIR_PUSH,
   hitbox: [{ x: 16, y: 78, w: 54, h: 40 }],
   hit: { damage: 36, blockstun: 12, hitstun: 16, guard: 'overhead', level: 'light',
-    kbx: 0.8, hitstop: 9, meterGain: 11, meterGainOnBlock: 4 },
+    kbx: 0.8, hitstop: 11, meterGain: 11, meterGainOnBlock: 4 },
 })
 const jMK = mkMove({
   id: 'j.MK', name: 'Jump Kick', tag: 'normal', button: 'mk', sprite: nextSprite(),
   airOk: true, startup: 8, active: 4, recovery: 8, hurt: AIR_HURT, push: AIR_PUSH,
   hitbox: [{ x: 28, y: 38, w: 66, h: 46 }],
   hit: { damage: 56, blockstun: 14, hitstun: 18, guard: 'overhead', level: 'medium',
-    kbx: 1.2, hitstop: 10, meterGain: 14, meterGainOnBlock: 6 },
+    kbx: 1.2, hitstop: 13, meterGain: 14, meterGainOnBlock: 6 },
 })
 const jHP = mkMove({
   id: 'j.HP', name: 'Jump Lance', tag: 'normal', button: 'hp', sprite: nextSprite(),
   airOk: true, startup: 9, active: 4, recovery: 10, hurt: AIR_HURT, push: AIR_PUSH,
   hitbox: [{ x: 22, y: 68, w: 72, h: 52 }],
   hit: { damage: 85, blockstun: 16, hitstun: 20, guard: 'overhead', level: 'heavy',
-    kbx: 2.0, hitstop: 11, meterGain: 18, meterGainOnBlock: 8 },
+    kbx: 2.0, hitstop: 14, meterGain: 18, meterGainOnBlock: 8 },
 })
 
 // ── Command normal — a slow overhead to open up a crouch-blocker ─────────────
@@ -168,7 +168,7 @@ const fMP = mkMove({
   hitbox: [{ x: 26, y: 108, w: 62, h: 34 }],
   cancels: ['super'],
   hit: { damage: 60, blockstun: 16 /* -3 */, hitstun: 21 /* +2 */, guard: 'overhead',
-    level: 'medium', kbx: 1.2, pushback: 1.0, hitstop: 10, meterGain: 14, meterGainOnBlock: 6 },
+    level: 'medium', kbx: 1.2, pushback: 1.0, hitstop: 13, meterGain: 14, meterGainOnBlock: 6 },
 })
 
 // ── Fireball moves — no melee hitbox; the projectile does the work ───────────
@@ -202,7 +202,7 @@ const repelToss = mkMove({
   startup: 3, active: 2, recovery: 20,
   hitbox: [{ x: 18, y: 40, w: 44, h: 130 }],
   hit: { damage: 120, blockstun: 0, hitstun: 0, guard: 'throw', level: 'heavy',
-    kbx: 6, pushback: 0, hitstop: 12, meterGain: 12, meterGainOnBlock: 0 },
+    kbx: 6, pushback: 0, hitstop: 15, meterGain: 12, meterGainOnBlock: 0 },
 })
 
 const MOVES: Record<string, Move> = {
@@ -223,21 +223,21 @@ const PROJECTILES: Record<string, ProjectileSpawn> = {
     kind: 'ion-bolt', speed: 5.0, originX: 62, originY: 96,
     hitbox: { x: -28, y: -22, w: 56, h: 44 },
     hit: mkHit({ damage: 50, blockstun: 15, hitstun: 18, chip: 8, guard: 'high', level: 'medium',
-      kbx: 2.4, pushback: 0, hitstop: 10, meterGain: 14, meterGainOnBlock: 6, scaling: 0.85 }),
+      kbx: 2.4, pushback: 0, hitstop: 13, meterGain: 14, meterGainOnBlock: 6, scaling: 0.85 }),
     life: 200,
   },
   [boltFast.id]: {
     kind: 'ion-bolt', speed: 9.0, originX: 62, originY: 96,
     hitbox: { x: -30, y: -22, w: 60, h: 44 },
     hit: mkHit({ damage: 60, blockstun: 16, hitstun: 20, chip: 10, guard: 'high', level: 'medium',
-      kbx: 2.8, pushback: 0, hitstop: 10, meterGain: 16, meterGainOnBlock: 7, scaling: 0.85 }),
+      kbx: 2.8, pushback: 0, hitstop: 13, meterGain: 16, meterGainOnBlock: 7, scaling: 0.85 }),
     life: 150,
   },
   [ionStorm.id]: {
     kind: 'super-beam', speed: 12.0, originX: 60, originY: 96,
     hitbox: { x: -44, y: -52, w: 84, h: 112 },
     hit: mkHit({ damage: 240, blockstun: 22, hitstun: 30, chip: 24, guard: 'high', level: 'crumple',
-      kbx: 4.0, kby: 3, pushback: 0, hitstop: 15, meterGain: 0, meterGainOnBlock: 0, scaling: 0.5 }),
+      kbx: 4.0, kby: 3, pushback: 0, hitstop: 18, meterGain: 0, meterGainOnBlock: 0, scaling: 0.5 }),
     life: 120,
   },
 }

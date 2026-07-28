@@ -241,17 +241,20 @@ export const JUGGLE_ALLOWANCE = 4
  *  - HITSTUN +6f: enough extra advantage that a follow-up which does NOT combo on
  *    a normal hit now links — i.e. it opens routes that don't otherwise exist,
  *    which is the whole point of the mechanic.
- *  - HITSTOP +4f: YES, a counter freezes harder. A counter that doesn't hit the
+ *  - HITSTOP +8f: YES, a counter freezes distinctly harder — it must read as a
+ *    bigger EVENT, not a barely-perceptible tick. A counter that doesn't hit the
  *    brakes harder than a normal hit reads as a normal hit no matter what the HUD
- *    says; the extra freeze is the tactile half of the feedback (SF6/Tekken both
- *    do this — the freeze is how you FEEL the counter before you read it).
+ *    says; the extra freeze is the tactile half of the feedback (SF6/Tekken/GGST
+ *    all do this — the freeze is how you FEEL the counter before you read it).
+ *    Sized to GGST's mid counter-hit emphasis (+8f), double the old +4 that sat
+ *    inside a normal hit's noise floor and could not be felt.
  *  - JUGGLE +1: a counter-hit LAUNCHER grants one extra juggle unit, so the extra
  *    hitstun/height actually converts into a longer air route. Kept to +1 so it
  *    extends a combo without opening an infinite (allowance still terminates).
  */
 export const COUNTER_DAMAGE_MULT = 1.3
 export const COUNTER_HITSTUN_BONUS = 6
-export const COUNTER_HITSTOP_BONUS = 4
+export const COUNTER_HITSTOP_BONUS = 8
 export const COUNTER_JUGGLE_BONUS = 1
 
 /**

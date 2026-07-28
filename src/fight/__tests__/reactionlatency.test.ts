@@ -26,7 +26,7 @@ import { step } from '../sim'
 import { getFighterDef } from '../fighters'
 import type { FightState, InputFrame } from '../types'
 
-// Operator st.LP: hitstun 13, hitstop 8 — the fastest normal, so if its reaction
+// Operator st.LP: hitstun 13, hitstop 10 — the fastest normal, so if its reaction
 // outlasts its freeze, every heavier hit (longer stun) does too.
 const LP = getFighterDef('operator').moves['st.LP'].hit
 
@@ -84,7 +84,7 @@ describe('reaction latency (sim-level, no pixels)', () => {
     // After the freeze, the stun counts all the way down in real time — recovery
     // animates for the FULL hitstun, not hitstun-minus-hitstop. Because the freeze
     // preserved the counter, the victim is in hitstun for hitstop + hitstun frames
-    // total (8 frozen + 13 recovering here), and the whole reaction is on screen
+    // total (10 frozen + 13 recovering here), and the whole reaction is on screen
     // after the world resumes. If stun leaked during the freeze this count would
     // fall below hitstun.
     const recovering = trace.filter((t) => t.hitstop === 0 && t.stance === 'hitstun')

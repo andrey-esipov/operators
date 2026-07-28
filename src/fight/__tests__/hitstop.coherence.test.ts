@@ -2,8 +2,8 @@
  * HITSTOP WEIGHT COHERENCE — the tactile half of impact weight, across ALL three
  * archetypes, plus the counter-hit freeze, driven through the running sim.
  *
- * WHY THIS FILE EXISTS. `impact.test.ts` locks the hitstop ladder (light 8 <
- * medium 9 < heavy 11) but ONLY for the operator — it runs `createFight(
+ * WHY THIS FILE EXISTS. `impact.test.ts` locks the hitstop ladder (light 10 <
+ * medium 12 < heavy 14) but ONLY for the operator — it runs `createFight(
  * 'operator','operator')` and tests lp/mp/hp. That is the canonical lying-harness
  * shape this project has been burned by repeatedly: a guard that validates the
  * one character it imported while the others could be flat or inverted and
@@ -13,13 +13,17 @@
  * into asserted, mutation-proved law.
  *
  * CALIBRATION (external reference, aaa-targets / _reference-research.md):
- *   - SF6 (community frame analysis): light ~6-8f, medium ~8-10f, heavy ~10-14f.
- *   - GGST (published): L1 12 / L2 14 / L3 16 / L4 19 / L5 21.
- *   - SF6 Punish Counter: +3-6f beyond the normal hitstop.
- * Operators sits on the SF6 curve (8 / 9-10 / 11-12) with a +4 counter bonus —
- * the "original Street Fighter, snappier than GGST" read the project is going
- * for. These asserts pin THAT calibration, so a drift toward flat (cheap) or
- * toward GGST-wide is caught.
+ *   - SF6 contact-freeze bands: light ~9-11f, medium ~11-13f, heavy ~13-16f.
+ *   - GGST (published, heavier): L1 12 / L2 14 / L3 16 / L4 19 / L5 21.
+ *   - Counter emphasis: GGST mid CH +8f / large CH +16f; SF6 punish counter +3-6f.
+ * The ladder was RAISED into the SF6 band (operator/warden 10 / 12 / 14, and the
+ * grappler vanguard heavier at 10 / 13 / 15) with a +8 counter bonus — the
+ * "original Street Fighter lineage, snappier than GGST" read the project is going
+ * for: in-band with SF6, deliberately short of GGST's exaggeration. The previous
+ * 8 / 9 / 11 with a +4 counter sat BELOW both bands (under SF6's own light and
+ * heavy floors) and read as systematically weightless. These asserts pin the
+ * raised calibration, so a drift back toward flat/cheap OR up into GGST-wide is
+ * caught.
  *
  * METHOD (identical primitive to impact.test.ts): press the move point-blank
  * through the real sim, read `s.hitstop` on the frame the `hit` event fires.
@@ -27,14 +31,17 @@
  * the authored annotation. Every helper asserts the hit CONNECTED, so a move
  * that whiffs can't make an assertion pass silently.
  *
- * MUTATION-PROVEN (each done in a throwaway worktree, red confirmed, reverted):
- *   - flatten vanguard st.HP hitstop 12 -> 8: the vanguard ladder + the
- *     "grappler hits heaviest" anchor go red (operator-only impact.test.ts stays
- *     green — which is exactly the blind spot this file closes).
- *   - COUNTER_HITSTOP_BONUS 4 -> 0: every counter assertion reds across all three
- *     archetypes.
- *   - warden fireball projectile hitstop 10 -> 8: the projectile-weight assertion
- *     reds (the zoner's spacing tool goes weightless).
+ * MUTATION-PROVEN (each done in-place, red confirmed, restored byte-identical):
+ *   - flatten vanguard st.HP hitstop 15 -> 12 (dropping it below operator's 14):
+ *     the vanguard exact-ladder + the "grappler hits heaviest" anchor go red, and
+ *     operator-only impact.test.ts stays green — exactly the blind spot this file
+ *     closes.
+ *   - COUNTER_HITSTOP_BONUS 8 -> 0: every counter assertion reds across all three
+ *     archetypes, and the felt-floor guard reds too.
+ *   - COUNTER_HITSTOP_BONUS 8 -> 4: the felt-floor guard reds (proving the raised
+ *     floor forbids the old "barely perceptible" value a >=3 floor would pass).
+ *   - warden fireball projectile hitstop 13 -> 11 (below its medium normal 12):
+ *     the projectile-weight assertion reds (the zoner's spacing tool goes light).
  */
 import { describe, expect, it } from 'vitest'
 import { createFight, step } from '../sim'
@@ -79,7 +86,7 @@ function landHitstop(id: CharId, btn: Button): number {
 /** Force a counter: attacker jab (fast) and defender a slow heavy on the same
  *  frame. The jab beats the heavy's startup, so it lands as a counter. Returns
  *  the freeze; asserts the counter actually fired (so a timing regression that
- *  turned it into a clean hit can't let the +bonus assertion pass on 8==8). */
+ *  turned it into a clean hit can't let the +bonus assertion pass on 10==10). */
 function landCounterHitstop(id: CharId, fast: Button, slow: Button): number {
   let s = rig(id)
   for (let f = 0; f < 40; f++) {
@@ -118,9 +125,9 @@ describe('hitstop weight ladder — every archetype (not just operator)', () => 
   // Exact authored freeze per archetype, measured through the sim. Teeth: a
   // silent flatten of any tier reds a specific line here.
   const EXPECT: Record<CharId, [number, number, number]> = {
-    operator: [8, 9, 11],
-    vanguard: [8, 10, 12],
-    warden: [8, 9, 11],
+    operator: [10, 12, 14],
+    vanguard: [10, 13, 15],
+    warden: [10, 12, 14],
   }
 
   for (const id of ['operator', 'vanguard', 'warden'] as CharId[]) {
@@ -155,10 +162,14 @@ describe('counter-hit freezes harder — the tactile half of the counter reward'
     })
   }
 
-  it('the bonus is a real, felt amount (>= SF6 punish-counter floor of ~3f)', () => {
-    // Guards the constant itself from being tuned down to a cosmetic 1-2f that
-    // the player could never feel. SF6 punish counter is +3-6f.
-    expect(COUNTER_HITSTOP_BONUS).toBeGreaterThanOrEqual(3)
+  it('the bonus is a real, felt amount — a distinctly bigger event, not a tick', () => {
+    // Guards the constant from being tuned back down into the noise floor. The
+    // old +4 sat inside a normal hit's perceptual range and read as "barely
+    // there"; the calibrated value is +8 (GGST mid counter-hit emphasis). Floor
+    // at 6 (the top of SF6's +3-6 punish-counter range) so a regression toward
+    // the imperceptible +3-4 reds — that drift is exactly what this raise fixed,
+    // so the guard must forbid it, not merely rubber-stamp any positive number.
+    expect(COUNTER_HITSTOP_BONUS).toBeGreaterThanOrEqual(6)
   })
 })
 

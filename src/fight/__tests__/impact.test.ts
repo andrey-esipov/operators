@@ -89,10 +89,12 @@ describe('impact: knockback asymmetry', () => {
 
 describe('impact: hitstop weight', () => {
   it('freeze-on-contact lengthens with hit strength (exact frames)', () => {
-    // Operator normals' authored hitstop: light 8, medium 9, heavy 11.
-    expect(land('lp', 5).hitstop).toBe(8)
-    expect(land('mp', 5).hitstop).toBe(9)
-    expect(land('hp', 5).hitstop).toBe(11)
+    // Operator normals' authored hitstop: light 10, medium 12, heavy 14 —
+    // raised into the SF6 contact-freeze band (light ~9-11, medium ~11-13,
+    // heavy ~13-16), snappier than GGST's heavier 12/16/19 ladder.
+    expect(land('lp', 5).hitstop).toBe(10)
+    expect(land('mp', 5).hitstop).toBe(12)
+    expect(land('hp', 5).hitstop).toBe(14)
   })
 
   it('hitstop is strictly increasing light < medium < heavy', () => {

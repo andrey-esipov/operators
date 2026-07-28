@@ -61,7 +61,10 @@ describe('juggle gravity scaling', () => {
     let secondAirborne = false
     let minStunBetween = Infinity
     let sawNeutralBetween = false
-    const cancelAt = 20 // from the timing probe: dp.P connects airborne here
+    const cancelAt = 24 // dp.P connects airborne here (re-baselined: the raised
+    // cr.HP launcher hitstop, 12->15, lengthened the launch freeze, so the
+    // airborne cancel window moved later — measured green across [22,26], 24 is
+    // its center. The scaled-velocity/airborne/linkage teeth below are unchanged.
 
     for (let f = 0; f < 60; f++) {
       let in0: InputFrame

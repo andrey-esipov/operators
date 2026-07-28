@@ -72,7 +72,11 @@ describe('harness sim', () => {
       let sawZeroHealth = false
       let sawRoundEnd = false
 
-      for (let f = 0; f < 2000; f++) {
+      // 2400-frame budget (~40s): the raised hitstop ladder paces fights slightly
+      // slower, so the slowest sampled seed now resolves at round-end ~2043 (KO
+      // ~1953). Widened from 2000 so every seed still reaches a real KO + round-end
+      // with headroom; a genuine stalemate (no resolve at all) still reds.
+      for (let f = 0; f < 2400; f++) {
         const r = sim.step()
         for (const e of r.events) ev[e.type] = (ev[e.type] ?? 0) + 1
         seenPhases.add(sim.phase)

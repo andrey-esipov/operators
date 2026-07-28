@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import type { Projectile } from '../../fight/types'
 import { STAGE_HALF_W, PROJECTILE_MARGIN, SUPER_FREEZE_FRAMES } from '../../fight/constants'
 import { simToWorld, cmYToWorld } from './worldScale'
-import { energyTint, flashTint, makeGlowMesh, presenceFor, type Presence } from './ProjectileFx'
+import { energyTint, flashTint, makeGlowMesh, hotCoreTexture, presenceFor, type Presence } from './ProjectileFx'
 import {
   loadProjectileAtlas,
   type LoadedProjectile,
@@ -356,6 +356,16 @@ export class ProjectileLayer {
     superState?: SuperFreezeView | null,
     renderDt?: number,
   ) {
+    // Dev-only mutation hook: blank the whole projectile layer so a capture can
+    // diff layer-on vs layer-off at the same seed and see EXACTLY what the bolts
+    // paint (stage art and any overlay cancel in the diff). Also the house-rule
+    // "disable the layer, watch the measurement fall to zero" proof — projCoverage
+    // reads this same group, so hiding it drives the readback to 0.
+    if (import.meta.env.DEV) {
+      const muted = !!(globalThis as Record<string, unknown>).__MUT_NO_PROJ__
+      this.group.visible = !muted
+      if (muted) return
+    }
     const ticks = Math.min(dt * 60, MAX_TICKS)
     const prevById = new Map<number, Projectile>()
     if (prev) for (const p of prev) prevById.set(p.id, p)
@@ -444,7 +454,12 @@ export class ProjectileLayer {
     const loaded = this.loaded.get(p.kind)
     if (!loaded) return null
     const tint = energyTint(p.kind)
-    const presence = presenceFor(p.kind)
+    // Strength from the sim's authored travel speed: two ion-bolt buttons share
+    // one kind + art and differ ONLY in speed, so the renderer reads |vel.x| as
+    // heat here (a fast/charged bolt hotter + leaner, a slow "wall" bolt heavier
+    // + wider). See ProjectileFx.applyStrength. A super's ramp is 0, so its
+    // authored presence is untouched.
+    const presence = presenceFor(p.kind, Math.abs(p.vel.x))
     const wpp = WORLD_PER_PX * presence.spriteScale
     const geom = new THREE.PlaneGeometry(1, 1)
     const mat = new THREE.MeshBasicMaterial({
@@ -493,11 +508,14 @@ export class ProjectileLayer {
     // Core: a small, near-white hot center laid over the aura. Additive blending
     // is order-independent, so this simply sums a bright peak into the middle of
     // the volume — the core-contrast the broad aura lacks on a lit stage. A hot
-    // near-white tint (flashTint), not the energy hue, so it reads as white-hot.
+    // near-white tint (flashTint), not the energy hue, so it reads as white-hot,
+    // on the TIGHT hotCoreTexture (sharp centre) rather than the soft haze the
+    // trail/pool wear — that sharp falloff is what makes it read as a searing
+    // point instead of one more mushy blob summed into the glow.
     let core: THREE.Mesh | null = null
     let coreMat: THREE.MeshBasicMaterial | null = null
     if (presence.coreGlow > 0) {
-      core = makeGlowMesh(flashTint(p.kind), 18)
+      core = makeGlowMesh(flashTint(p.kind), 18, hotCoreTexture())
       coreMat = core.material as THREE.MeshBasicMaterial
       coreMat.opacity = 0
       this.group.add(core)
@@ -574,11 +592,16 @@ export class ProjectileLayer {
 
     // Floor pool tracks the bolt's x, glued to the ground. Footprint + brightness
     // are per-kind: a bolt lays a soft grounding smear, a super floods the floor
-    // with a wide reactive light so the stage visibly answers the shot.
+    // with a wide reactive light so the stage visibly answers the shot. A small
+    // two-octave shimmer on the pool's brightness (phase-offset per bolt id) makes
+    // the ground read as reacting to LIVE energy travelling over it rather than a
+    // static decal sliding along — the cheap "light interaction with the stage"
+    // tell. Kept to ±12% so it flickers as plasma, never strobes.
     const pr = l.presence
+    const shimmer = 1 + 0.12 * (0.6 * Math.sin(l.clock * 0.24 + l.id) + 0.4 * Math.sin(l.clock * 0.61 + l.id * 1.7))
     l.floor.position.set(l.lastWorld.x, this.groundY + worldH * 0.05, PROJ_Z - 0.02)
     l.floor.scale.set(worldW * pr.floorScaleX, worldW * pr.floorScaleY, 1)
-    l.floorMat.opacity = pr.floorOpacity
+    l.floorMat.opacity = pr.floorOpacity * shimmer
 
     // Aura rides the hot-point, wrapping the sprite in a soft body of light so a
     // super reads as a glowing volume rather than a lone cutout.

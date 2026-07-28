@@ -42,6 +42,44 @@ export function softGlowTexture(): THREE.Texture {
   return tex
 }
 
+let coreTex: THREE.Texture | null = null
+
+/**
+ * A TIGHT hot-core gradient: near-white out to ~15% of the radius, then a fast
+ * roll-off to nothing by ~70%. Where {@link softGlowTexture} is a gentle haze
+ * (good for a trail blob or a floor pool that must MELT into the scene), this is
+ * the opposite — a searing point with a sharp edge. It backs ONLY the bolt/beam
+ * hot core, which the genre uses for core-contrast: on a lit stage a soft glow
+ * washes to a flat pale puff, and the fix is a crisp bright centre, not more
+ * overall brightness (which just blooms the fighters out). Sharing the soft
+ * texture for the core is exactly what made the isolated bolt read as a mushy
+ * blue haze with no defined middle.
+ */
+export function hotCoreTexture(): THREE.Texture {
+  if (coreTex) return coreTex
+  const S = 64
+  const canvas = document.createElement('canvas')
+  canvas.width = S
+  canvas.height = S
+  const ctx = canvas.getContext('2d')!
+  const g = ctx.createRadialGradient(S / 2, S / 2, 0, S / 2, S / 2, S / 2)
+  g.addColorStop(0.0, 'rgba(255,255,255,1)')
+  g.addColorStop(0.15, 'rgba(255,255,255,0.88)')
+  g.addColorStop(0.4, 'rgba(255,255,255,0.28)')
+  g.addColorStop(0.7, 'rgba(255,255,255,0.05)')
+  g.addColorStop(1.0, 'rgba(255,255,255,0)')
+  ctx.fillStyle = g
+  ctx.fillRect(0, 0, S, S)
+  const tex = new THREE.CanvasTexture(canvas)
+  tex.colorSpace = THREE.SRGBColorSpace
+  tex.magFilter = THREE.LinearFilter
+  tex.minFilter = THREE.LinearFilter
+  tex.generateMipmaps = false
+  tex.needsUpdate = true
+  coreTex = tex
+  return tex
+}
+
 /**
  * Energy tint per projectile kind, keyed off the same string the sim tags a
  * `Projectile` with. Values track the authored art hue (ion-bolt is electric
@@ -113,9 +151,32 @@ export interface Presence {
    *  screen; an ion-bolt leaves both at 0 and nothing here runs. */
   worldDim: number
   screenFlash: number
+  /** How strongly the sim's projectile SPEED maps to visual strength (0 = ignore
+   *  speed and use the profile verbatim). Both ion-bolt buttons spawn the SAME
+   *  kind and art and differ ONLY in speed (lp = slow "wall", hp = fast
+   *  "charged"), so without this a charged bolt is pixel-identical to a lobbed
+   *  one — the archetype's whole read (a zoner whose fireballs ARE the gameplay)
+   *  collapses to one fireball. A positive ramp reads speed as HEAT: the fast
+   *  bolt gets a hotter core, a longer/fatter streak, a punchier muzzle and a
+   *  slightly larger silhouette; the slow bolt stays a heavier, rounder ball with
+   *  a wider floor wash. A super sets this to 0 — its presence is authored and
+   *  already maxed, and must never be re-scaled by how fast the beam happens to
+   *  travel. See applyStrength for the exact spread. */
+  strengthRamp: number
 }
 
-/** The tuned ion-bolt numbers, verbatim — every kind starts here. */
+/** The tuned ion-bolt numbers — every kind starts here. The ion-bolt now carries
+ *  a modest spawn muzzle (a birth TELL: a hard little pop of light at the palm
+ *  the instant the bolt appears, so a fireball announces itself instead of just
+ *  sliding into frame), a small travelling AURA and a tight hot CORE (so the bolt
+ *  reads as a lit energy object rather than the pale tan dot the bare atlas
+ *  sprite gave — a native on/off isolation showed the old bolt paint as a soft
+ *  floor haze with a near-dark centre, the exact "washes to a flat pale haze"
+ *  failure the coreGlow lever was written to fix), and opts INTO the
+ *  speed→strength ramp (strengthRamp: 1) so the light and heavy buttons read
+ *  apart. The aura/core are LOCAL additive light on the bolt, kept far below a
+ *  super's budget and nowhere near the full-screen worldDim/screenFlash levers
+ *  (still 0 here) that are the real blow-out risk. A super overrides all of it. */
 const DEFAULT_PRESENCE: Presence = {
   spriteScale: 1,
   coreBoost: 1.35,
@@ -124,17 +185,18 @@ const DEFAULT_PRESENCE: Presence = {
   floorScaleX: 1.15,
   floorScaleY: 0.36,
   floorOpacity: 0.3,
-  aura: 0,
-  auraOpacity: 0,
-  coreGlow: 0,
-  coreGlowOpacity: 0,
-  spawnFlash: 0,
-  spawnFlashTicks: 0,
-  spawnFlashOpacity: 0,
+  aura: 1.1,
+  auraOpacity: 0.15,
+  coreGlow: 0.8,
+  coreGlowOpacity: 0.78,
+  spawnFlash: 1.6,
+  spawnFlashTicks: 8,
+  spawnFlashOpacity: 0.62,
   impactScale: 1,
   impactOpacity: 0.9,
   worldDim: 0,
   screenFlash: 0,
+  strengthRamp: 1,
 }
 
 /**
@@ -164,11 +226,64 @@ const PRESENCE: Record<string, Partial<Presence>> = {
     impactOpacity: 1,
     worldDim: 0.6,
     screenFlash: 0.9,
+    strengthRamp: 0,
   },
 }
 
-export function presenceFor(kind: string): Presence {
-  return { ...DEFAULT_PRESENCE, ...(PRESENCE[kind] ?? {}) }
+/**
+ * Map a projectile's SPEED onto a 0..1 strength and push the profile that far
+ * from its slow baseline toward a hotter, leaner "charged" read. The mapping is
+ * a smoothstep over speed 4→10, so it needs no exact per-fighter numbers baked
+ * in and degrades gracefully if the sim retunes bolt speeds (a faster bolt just
+ * reads hotter). `ramp` scales the whole spread, so a kind can opt into a weaker
+ * response or (0) none at all. Mutates the passed profile in place.
+ *
+ * Every lever moves in the SAME direction a heavier hit would: the fast bolt is
+ * brighter (coreBoost), a touch larger (spriteScale), drags a longer fatter
+ * streak (trailSize/Opacity), pops a harder muzzle (spawnFlash), lands a bigger
+ * impact and burns a HOTTER, tighter core (coreGlowOpacity up, coreGlow size
+ * down); the slow "wall" bolt keeps the WIDER, softer floor wash and a rounder,
+ * larger travelling aura so it reads as a heavy grounded ball rather than a lean
+ * dart. Deliberately does NOT touch worldDim/screenFlash — those stay a
+ * super-only budget so a fast ion-bolt can never start dimming the stage or
+ * hard-flashing the whole screen, the two full-screen blow-out levers.
+ */
+function applyStrength(p: Presence, speed: number, ramp: number): void {
+  const s = THREE.MathUtils.smoothstep(speed, 4, 10) * ramp
+  const L = (a: number, b: number) => a + (b - a) * s
+  p.coreBoost *= L(0.9, 1.28)
+  p.spriteScale *= L(0.97, 1.06)
+  p.trailSize *= L(0.82, 1.42)
+  p.trailOpacity *= L(0.9, 1.12)
+  p.floorScaleX *= L(1.18, 0.98)
+  p.floorScaleY *= L(1.12, 0.9)
+  p.floorOpacity *= L(1.06, 0.9)
+  p.spawnFlash *= L(0.8, 1.35)
+  p.impactScale *= L(0.9, 1.18)
+  p.impactOpacity = Math.min(1, p.impactOpacity * L(0.96, 1.08))
+  // Core reads as HEAT: the fast bolt's core burns brighter (opacity) and tighter
+  // (smaller footprint, sharper falloff); the slow bolt's core is dimmer and
+  // broader. The aura is the opposite — a rounder, larger, slightly stronger
+  // volume on the slow "wall", leaner on the fast dart. Both stay well under a
+  // super's aura/core and never touch the full-screen wash levers.
+  p.coreGlowOpacity = Math.min(1, p.coreGlowOpacity * L(0.88, 1.16))
+  p.coreGlow *= L(1.14, 0.9)
+  p.aura *= L(1.18, 0.86)
+  p.auraOpacity = Math.min(0.4, p.auraOpacity * L(1.1, 0.92))
+}
+
+/**
+ * Resolve the effective presence for a projectile. `speed` (|vel.x|, cm/frame)
+ * is optional: when supplied and the kind opted into a strength ramp, the
+ * profile is pushed along the slow→fast axis (see applyStrength) so two buttons
+ * of the same kind read apart. Omitting it (or a kind with strengthRamp 0)
+ * returns the authored profile verbatim, so headless callers and supers are
+ * untouched.
+ */
+export function presenceFor(kind: string, speed?: number): Presence {
+  const p: Presence = { ...DEFAULT_PRESENCE, ...(PRESENCE[kind] ?? {}) }
+  if (p.strengthRamp > 0 && speed != null && speed > 0) applyStrength(p, speed, p.strengthRamp)
+  return p
 }
 
 /** A near-white flash colour (a super's spawn burst is hot light, not just a
@@ -184,10 +299,10 @@ export function flashTint(kind: string): THREE.Color {
  * `depthTest` is off so a floor pool or trail never gets z-killed by stage
  * geometry it is meant to wash over.
  */
-export function makeGlowMesh(tint: THREE.Color, renderOrder: number): THREE.Mesh {
+export function makeGlowMesh(tint: THREE.Color, renderOrder: number, tex?: THREE.Texture): THREE.Mesh {
   const geom = new THREE.PlaneGeometry(1, 1)
   const mat = new THREE.MeshBasicMaterial({
-    map: softGlowTexture(),
+    map: tex ?? softGlowTexture(),
     transparent: true,
     blending: THREE.AdditiveBlending,
     depthWrite: false,

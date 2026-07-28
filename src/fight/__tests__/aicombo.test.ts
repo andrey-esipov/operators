@@ -169,3 +169,64 @@ describe('AI combo routes', () => {
     expect(a).toEqual(b)
   })
 })
+
+describe('AI combo routes — Vanguard grappler juggle', () => {
+  // Per-archetype juggle IDENTITY, proven in AI play. Before this, startCombo
+  // returned a route only for Operator, so 2/3 of the roster never juggled in a
+  // real match — the grappler popped victims into the air with its cr.HP launcher
+  // and let them fall untouched. The engine's juggle-identity work (distinct
+  // juggleAllowance per archetype) was therefore invisible from the player's seat
+  // for Vanguard and Warden.
+  //
+  // Vanguard now runs a SHORT, heavy launcher juggle distinct from Operator's
+  // long rushdown BnB: cr.LK > cr.LP > cr.HP(launch) xx Rising Knee (dp.K). Its
+  // cr.HP was made special-cancellable (Operator's always was) so the launch
+  // actually converts, rather than being a launcher that cannot launch a combo.
+  const seeds = [0x51ac, 0x1234, 0xbeef, 0x77, 0xabcd, 1, 2, 3]
+
+  it('lands a real launcher juggle in AI play, not just grounded pokes', () => {
+    // The signature ask, per archetype: the grappler's launcher must convert into
+    // an AIRBORNE follow-up, not a flat ground string. Before the route existed the
+    // Vanguard mirror landed ZERO airborne hits on every one of these seeds
+    // (measured air=[0,0,0,0,0,0,0,0]); with it, a clear set of seeds catch the
+    // victim airborne for TWO hits — cr.HP pops them and Rising Knee connects in
+    // the air (anti-air starts land both the launch and the knee airborne).
+    // Measured now: air=[2,0,2,2,2,0,0,0]. The other seeds assemble grounded
+    // scramble chains (air=0), which is why "a combo happened" cannot satisfy this.
+    //
+    // Mutation-proved (see report): making comboRoute return null for Vanguard
+    // (removing the route) drops airborne hits to 0 across every seed -> both
+    // clauses red; swapping the dp.K ender for a grounded normal (a non-launching
+    // heavy) turns every airborne hit grounded -> both red. Reverting cr.HP's
+    // special-cancel (['special','super'] -> ['super']) makes the launch no longer
+    // convert, halving the juggle seeds -> the >=3 clauses red.
+    const combos = seeds.map((s) => longestLinkedCombo(s, 'vanguard', 'vanguard'))
+    const withAir = combos.filter((c) => c.air >= 1).length
+    expect(withAir).toBeGreaterThanOrEqual(3)
+    // And the juggle is genuine, not one stray airborne clip: the launcher pops the
+    // victim and a second hit lands while they are still off the ground.
+    const realJuggles = combos.filter((c) => c.air >= 2).length
+    expect(realJuggles).toBeGreaterThanOrEqual(3)
+  })
+
+  it('the grappler juggle is heavy but not degenerate', () => {
+    // Identity: fewer, heavier hits than Operator's seven — a four-hit route that
+    // hits about as hard (measured max 228 vs Operator's ~211), the grappler's
+    // high-damage / low-mobility trade. It must clearly beat trading single pokes
+    // (the heaviest Vanguard normal is ~95) yet scaling must stop it being a
+    // near-kill off one opening. The ceiling has teeth: with COMBO_SCALING removed
+    // the same route sums to 256, so 245 reds if the tail stops being taxed.
+    const best = seeds
+      .map((s) => longestLinkedCombo(s, 'vanguard', 'vanguard'))
+      .reduce((a, b) => (b.dmg > a.dmg ? b : a))
+    expect(best.dmg).toBeGreaterThan(150)
+    expect(best.dmg).toBeLessThan(245)
+  })
+
+  it('is deterministic: the same seed yields the same longest combo', () => {
+    const a = longestLinkedCombo(0xbeef, 'vanguard', 'vanguard')
+    const b = longestLinkedCombo(0xbeef, 'vanguard', 'vanguard')
+    expect(a).toEqual(b)
+    expect(a.air).toBeGreaterThanOrEqual(2) // the juggle-route seed, pinned
+  })
+})

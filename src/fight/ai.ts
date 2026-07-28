@@ -63,6 +63,57 @@ function toward(dir: Direction, facing: 1 | -1): Direction {
 
 export type Difficulty = 'easy' | 'medium' | 'hard'
 
+/** Every fighter's move table, keyed by id. */
+type MoveTable = ReturnType<typeof getFighterDef>['moves']
+
+/**
+ * The hit-confirm juggle route for whichever archetype the AI is driving, or
+ * null if the character lacks the moves for one. Each archetype juggles in a
+ * DIFFERENT SHAPE — a grappler and a shoto must not run the same string — and
+ * that shape is chosen here by which launcher-canceller the character owns:
+ *
+ *   - Shoto (operator): a long rushdown light chain into the cr.HP launcher,
+ *     caught in the air by Surge Palm and, with meter, the super. Seven hits.
+ *   - Grappler (vanguard): a SHORT heavy chain into cr.HP, cancelled into the
+ *     Rising Knee (dp.K) — itself a launcher, so it re-pops the victim for a
+ *     stubby, high-commitment air hit. Four hits: a grappler converts less off
+ *     a stray poke than a shoto, matching its shortest juggle allowance.
+ *
+ * The route is gated on the moves it actually needs (as the operator route
+ * always was), so a character without them falls through to single-hit offence
+ * rather than firing a string into the void.
+ */
+function comboRoute(moves: MoveTable, haveSuper: boolean): ComboStep[] | null {
+  // Shoto: rushdown chain -> launcher -> Surge Palm (+ super with meter).
+  if (['cr.LK', 'cr.LP', 'cr.HP', 'qcf.P'].every((id) => moves[id])) {
+    const plan: ComboStep[] = [
+      { id: 'cr.LK', rel: 2, btn: 'lk' },
+      { id: 'cr.LP', rel: 2, btn: 'lp' },
+      { id: 'cr.LK', rel: 2, btn: 'lk' },
+      { id: 'cr.LP', rel: 2, btn: 'lp' },
+      { id: 'cr.LK', rel: 2, btn: 'lk' },
+      { id: 'cr.HP', rel: 2, btn: 'hp' },
+      { id: 'qcf.P', rel: 6, btn: 'lp', motion: '236' },
+    ]
+    if (haveSuper) {
+      const sup = Object.values(moves).find((m) => m.tag === 'super' && !!m.motion)
+      if (sup && sup.motion) plan.push({ id: sup.id, rel: 6, btn: 'hp', motion: sup.motion })
+    }
+    return plan
+  }
+  // Grappler: short heavy chain -> launcher -> Rising Knee (dp.K) re-launch. No
+  // super tail — the grappler's super is a command grab that cannot juggle.
+  if (['cr.LK', 'cr.LP', 'cr.HP', 'dp.K'].every((id) => moves[id])) {
+    return [
+      { id: 'cr.LK', rel: 2, btn: 'lk' },
+      { id: 'cr.LP', rel: 2, btn: 'lp' },
+      { id: 'cr.HP', rel: 2, btn: 'hp' },
+      { id: 'dp.K', rel: 6, btn: 'lk', motion: '623' },
+    ]
+  }
+  return null
+}
+
 interface Tier {
   /** How many frames stale the opponent read is — the human reaction lag. */
   reactionFrames: number
@@ -272,36 +323,17 @@ export class FighterAI {
     return frame(toward(2, facing))
   }
 
-  /** Build the operator hit-confirm BnB and fire its opener. The route is a
-   *  rushdown light chain into a launcher juggle:
-   *    cr.LK > cr.LP > cr.LK > cr.LP > cr.LK > cr.HP(launch) > Surge Palm(air)
-   *  — a meterless 7-hit that pops the victim airborne on the Rising Uppercut and
-   *  catches them falling with the palm, extended with the super (also airborne)
-   *  when meter is up. The five-light opener carries the length the HUD's NICE@5
-   *  tier needs; the launcher turns the tail into a genuine juggle rather than a
-   *  flat ground string. The launcher must follow a light (only lights cancel into
-   *  a heavy normal), which is why the opener is light-heavy. Returns the opener
-   *  input, or null if this character lacks the route's moves (only the operator
-   *  has it for now, so other archetypes fall through to their normal offense). */
+  /** Fire the opener of this archetype's hit-confirm juggle route (built by
+   *  `comboRoute`) and latch the rest of the plan for `stepCombo` to drive. The
+   *  launcher must follow a light (only lights cancel into a heavy normal), which
+   *  is why every route opens light-into-heavy. Returns the opener input, or null
+   *  if this character has no route — in which case the caller falls through to
+   *  single-hit offence. */
    private startCombo(state: FightState, i: 0 | 1, haveSuper: boolean): InputFrame | null {
     const me = state.fighters[i]
     const moves = getFighterDef(me.id).moves
-    const need = ['cr.LK', 'cr.LP', 'cr.HP', 'qcf.P']
-    if (!need.every((id) => moves[id])) return null
-
-    const plan: ComboStep[] = [
-      { id: 'cr.LK', rel: 2, btn: 'lk' },
-      { id: 'cr.LP', rel: 2, btn: 'lp' },
-      { id: 'cr.LK', rel: 2, btn: 'lk' },
-      { id: 'cr.LP', rel: 2, btn: 'lp' },
-      { id: 'cr.LK', rel: 2, btn: 'lk' },
-      { id: 'cr.HP', rel: 2, btn: 'hp' },
-      { id: 'qcf.P', rel: 6, btn: 'lp', motion: '236' },
-    ]
-    if (haveSuper) {
-      const sup = Object.values(moves).find((m) => m.tag === 'super' && !!m.motion)
-      if (sup && sup.motion) plan.push({ id: sup.id, rel: 6, btn: 'hp', motion: sup.motion })
-    }
+    const plan = comboRoute(moves, haveSuper)
+    if (!plan) return null
     this.combo = { plan, idx: 1, mp: 0, age: 0 }
     return frame(toward(plan[0].rel, me.facing), plan[0].btn ? [plan[0].btn] : undefined)
   }

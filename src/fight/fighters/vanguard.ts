@@ -103,11 +103,16 @@ const crMP = mkMove({
     level: 'medium', kbx: 0.9, pushback: 0.7, hitstop: 9, meterGain: 15, meterGainOnBlock: 6 },
 })
 const crHP = mkMove({
-  // Anti-air launcher, like Operator's but slower and higher-reward.
+  // Anti-air launcher, like Operator's but slower and higher-reward. Special-
+  // cancellable so the launch converts into a juggle: the grappler cancels it
+  // into Rising Knee (dp.K) for a short, heavy air combo. (Operator's launcher
+  // is likewise special-cancellable; before this, Vanguard's only cancelled into
+  // super, so its cr.HP launch popped the victim up with nothing to catch them —
+  // a launcher that could not launch a combo.)
   id: 'cr.HP', name: 'Uppercut', tag: 'normal', button: 'hp', sprite: nextSprite(),
   startup: 9, active: 4, recovery: 19, hurt: CROUCH_HURT, push: CROUCH_PUSH, // busy 24
   hitbox: [{ x: 14, y: 58, w: 54, h: 126 }],
-  cancels: ['super'],
+  cancels: ['special', 'super'],
   hit: { damage: 95, blockstun: 17 /* -7 */, hitstun: 26, guard: 'high', level: 'launcher',
     kbx: 1.0, kby: 10, pushback: 1.0, hitstop: 12, meterGain: 20, meterGainOnBlock: 8, juggle: true },
 })

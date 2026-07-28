@@ -94,10 +94,24 @@ function invulnOf(f: FighterState, def: FighterDef): 'none' | 'full' | 'strike' 
   return 'none'
 }
 
-/** Can this defender block the incoming guard, given the direction they hold? */
-function isBlocking(d: FighterState, guard: Hit['guard'], relDir: Direction): boolean {
-  if (!d.grounded || d.stunRemaining > 0 || d.stance === 'attack') return false
+/** Can this defender block the incoming hit, given the direction they hold?
+ *  Grounded blocking is the classic high/low guard. Air-blocking (Strive-style)
+ *  lets an airborne fighter holding back or up-back guard air-to-air normals and
+ *  projectiles — but NOT lows (nothing to crouch under in the air), and NOT the
+ *  heavy grounded threats a jumper should fear: launchers/anti-airs, sweeps and
+ *  supers punch straight through, so the ground keeps its answer to a jump-in.
+ *  A fighter in stun (hitstun/blockstun/juggle) or mid-attack can't block either
+ *  way — that's what keeps a juggle a juggle. */
+function isBlocking(d: FighterState, hit: Hit, relDir: Direction): boolean {
+  if (d.stunRemaining > 0 || d.stance === 'attack') return false
+  const guard = hit.guard
   if (guard === 'throw' || guard === 'unblockable') return false
+  if (!d.grounded) {
+    if (guard === 'low') return false
+    if (hit.level === 'launcher' || hit.level === 'sweep' || hit.level === 'crumple') return false
+    // 4 = back, 7 = up-back: an air guard is a held back-direction, same as ground.
+    return relDir === 4 || relDir === 7
+  }
   // 4 = standing back, 1 = crouching back.
   if (guard === 'low') return relDir === 1
   if (guard === 'overhead') return relDir === 4
@@ -208,8 +222,12 @@ export function resolveCombat(
       continue
     }
 
-    // Juggle gating: an airborne defender out of allowance can't be hit.
-    if (!D.grounded && D.juggleLeft <= 0) continue
+    // Juggle gating: a fighter already in a juggle who has spent their allowance
+    // can't be hit again — that's what terminates a juggle. A *fresh* jumper
+    // (stance jump-rise/fall) also carries juggleLeft 0, but must stay hittable,
+    // or you could never anti-air or trade air-to-air with a jump. Gate on the
+    // juggle stance specifically, not the counter alone.
+    if (!D.grounded && D.stance === 'juggle' && D.juggleLeft <= 0) continue
 
     const inv = invulnOf(D, defD)
     if (inv === 'full' || inv === 'strike') continue // all our attacks are strikes
@@ -226,7 +244,7 @@ export function resolveCombat(
     const parried = isParrying(D, move.hit.guard, logD)
     pending.push({
       ai,
-      blocked: !parried && isBlocking(D, move.hit.guard, relDirs[di]),
+      blocked: !parried && isBlocking(D, move.hit, relDirs[di]),
       parried,
       hit: move.hit,
       at,
@@ -365,7 +383,15 @@ function applyBlock(
   gainMeter(A, hit.meterGainOnBlock * 0.5)
   D.stance = 'blockstun'
   D.stunRemaining = hit.blockstun
-  D.vel.x = A.facing * hit.knockback.x * 0.5
+  if (D.grounded) {
+    D.vel.x = A.facing * hit.knockback.x * 0.5
+  } else {
+    // Air-block: shove the blocker back through the air (with a floor so even a
+    // zero-knockback projectile pushes them), keep them airborne, and let gravity
+    // bring them down — they recover on landing via land(). No lift, so it reads
+    // as a deflection, not a hop.
+    D.vel.x = A.facing * Math.max(hit.knockback.x, 3) * 0.6
+  }
   A.vel.x += -A.facing * hit.pushback
   D.lastHitAt = at
   events.push({ type: 'block', at, attacker: ai })
@@ -496,7 +522,7 @@ export function updateProjectiles(
         const logD = s.inputLog?.[di] ?? []
         s.hitstop = Math.max(s.hitstop, p.hit.hitstop)
         if (isParrying(D, p.hit.guard, logD)) resolveParry(s, A, D, at, p.owner, events)
-        else if (isBlocking(D, p.hit.guard, relDirs[di])) applyBlock(A, D, p.hit, at, p.owner, events)
+        else if (isBlocking(D, p.hit, relDirs[di])) applyBlock(A, D, p.hit, at, p.owner, events)
         else applyHit(A, D, p.hit, at, p.owner, events)
         consumed = true
       }

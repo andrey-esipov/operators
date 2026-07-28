@@ -10,8 +10,12 @@
  */
 
 import { fightAudio } from './index'
-import { renderOffline, ALL_SOUNDS, type SoundName } from './catalog'
-import type { StageId } from './reverb'
+import { renderOffline, renderSound, ALL_SOUNDS, type SoundName } from './catalog'
+import { buildMasterGraph } from './master'
+import { stageImpulse, STAGE_ACOUSTICS, type StageId } from './reverb'
+import { FightAudioReactor, type FightAudioSink } from './reactor'
+import type { ImpactRouting, ImpactOpts, Flavor } from './impacts'
+import type { FightEvent } from '../fight/types'
 import { Voice } from '../lib/voice'
 import { Announcer } from '../lib/announcer'
 import { Music } from '../lib/music'
@@ -50,11 +54,101 @@ async function renderForMetrics(name: SoundName, opts: { stage?: StageId; dry?: 
   return { name, sampleRate: buf.sampleRate, length: buf.length, channels: 2, b64: f32ToB64(inter) }
 }
 
+// ─── offline TIMELINE render (proves the reactor wiring, not just the catalog) ─
+//
+// `render()` above measures one catalog sound in isolation. `renderTimeline()`
+// drives the ACTUAL `FightAudioReactor` — the exact class the game wires into
+// the renderer — over a script of sim events, rendering its synth one-shots
+// into one OfflineAudioContext at scripted times. So what a headless script
+// measures is the whole seam: event → reactor → sink → PCM. The announcer/voice
+// /music/tension calls are MP3- or live-only, so the offline sink no-ops them;
+// what remains is every audible synth moment, at the right time.
+
+interface TimelineItem { t: number; ev: FightEvent }
+type TimelineMutate = 'none' | 'no-wiring' | 'drop-hit'
+
+/**
+ * An offline sink: every synth one-shot the reactor asks for is scheduled into
+ * `ctx` at `now` (set by the driver before each event). Everything MP3/live-
+ * backed is a no-op — it cannot be rendered offline and is not what this probe
+ * measures.
+ */
+class OfflineTimelineSink implements FightAudioSink {
+  now = 0
+  private readonly ctx: BaseAudioContext
+  private readonly routing: ImpactRouting
+  constructor(ctx: BaseAudioContext, routing: ImpactRouting) {
+    this.ctx = ctx
+    this.routing = routing
+  }
+  private fire(name: SoundName, opts?: ImpactOpts) { renderSound(this.ctx, this.routing, this.now, name, opts ?? {}) }
+  impact(flavor: Flavor, opts?: ImpactOpts) { this.fire(flavor, opts) }
+  ko(opts?: ImpactOpts) { this.fire('ko', opts) }
+  shatter(opts?: ImpactOpts) { this.fire('shatter', opts) }
+  whiff(opts?: ImpactOpts) { this.fire('whiff', opts) }
+  footstep(opts?: ImpactOpts) { this.fire('footstep', opts) }
+  cloth(opts?: ImpactOpts) { this.fire('cloth', opts) }
+  meterCharge() { this.fire('meterCharge') }
+  superStinger() { this.fire('superStinger') }
+  victory() { this.fire('victory') }
+  defeat() { this.fire('defeat') }
+  setStage() {}
+  setTension() {}
+  duckMusic() {}
+  announce() {}
+  voice() {}
+  musicStart() {}
+  musicStop() {}
+}
+
+async function renderTimeline(
+  script: TimelineItem[],
+  o: { stage?: StageId; sampleRate?: number; seconds?: number; dry?: boolean; mutate?: TimelineMutate } = {},
+): Promise<RenderResult> {
+  const sampleRate = o.sampleRate ?? 48000
+  const stage = o.stage ?? 'hypergrowth'
+  const dry = o.dry ?? true
+  const mutate = o.mutate ?? 'none'
+  const lastT = script.reduce((m, s) => Math.max(m, s.t), 0)
+  const seconds = o.seconds ?? lastT + 3.4 // tail long enough for ko/ult (~3s decay)
+
+  const OAC: typeof OfflineAudioContext =
+    (globalThis as unknown as { OfflineAudioContext: typeof OfflineAudioContext }).OfflineAudioContext
+  const ctx = new OAC(2, Math.ceil(seconds * sampleRate), sampleRate)
+
+  const graph = buildMasterGraph(ctx, ctx.destination, 0.9)
+  graph.convolver.buffer = stageImpulse(ctx, stage)
+  graph.reverbReturn.gain.value = STAGE_ACOUSTICS[stage].wet
+  const routing: ImpactRouting = { out: graph.sfxBus, reverb: dry ? null : graph.reverbBus }
+
+  const sink = new OfflineTimelineSink(ctx, routing)
+  const reactor = new FightAudioReactor(sink)
+
+  for (const item of script) {
+    // Mutations exercise the real wiring path, so the measure tool can watch a
+    // specific window collapse to silence:
+    //   no-wiring : never drive the reactor at all → the exact shipped defect
+    //   drop-hit  : skip only `hit` events → hit windows silent, others sound
+    if (mutate === 'no-wiring') break
+    if (mutate === 'drop-hit' && item.ev.type === 'hit') continue
+    sink.now = item.t
+    reactor.handle(item.ev)
+  }
+
+  const buf = await ctx.startRendering()
+  const L = buf.getChannelData(0)
+  const R = buf.numberOfChannels > 1 ? buf.getChannelData(1) : L
+  const inter = new Float32Array(buf.length * 2)
+  for (let i = 0; i < buf.length; i++) { inter[i * 2] = L[i]; inter[i * 2 + 1] = R[i] }
+  return { name: 'timeline', sampleRate: buf.sampleRate, length: buf.length, channels: 2, b64: f32ToB64(inter) }
+}
+
 ;(window as unknown as { __AUDIOLAB__: unknown }).__AUDIOLAB__ = {
   ready: () => true,
   sounds: ALL_SOUNDS,
   stages: STAGES,
   render: (name: SoundName, opts?: { stage?: StageId; dry?: boolean; opts?: import('./impacts').ImpactOpts }) => renderForMetrics(name, opts),
+  renderTimeline: (script: TimelineItem[], opts?: { stage?: StageId; sampleRate?: number; seconds?: number; dry?: boolean; mutate?: TimelineMutate }) => renderTimeline(script, opts),
 }
 
 // ─── interactive UI ───────────────────────────────────────────────────────

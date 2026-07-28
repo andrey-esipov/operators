@@ -119,6 +119,23 @@ const runCapture = async () => {
   // which is a direct answer to "can I drive the sim yet".
   await page.goto(BASE, { waitUntil: 'domcontentloaded' })
 
+  // Vite paints compile errors into a <vite-error-overlay> web component that
+  // sits on top of the canvas. The harness itself keeps running underneath, so
+  // __FIGHT__.ready() stays true and every probe below reports healthy — while
+  // the actual screenshots are of a grey dialog box. This cost a full analysis
+  // cycle: a black-level measurement came back "fixed, 38% -> 5%" and it was
+  // measuring the error overlay. Fail loudly instead, with the message.
+  const overlay = await page.evaluate(() => {
+    const el = document.querySelector('vite-error-overlay')
+    if (!el) return null
+    return el.shadowRoot?.querySelector('.message')?.textContent?.trim().slice(0, 300) ?? 'present'
+  })
+  if (overlay) {
+    console.log(`  FAILED: vite error overlay is covering the page —\n    ${overlay}`)
+    failures.push('vite-error-overlay')
+    return
+  }
+
   // Wait for the harness to finish building atlases and expose the API.
   for (let i = 0; i < 120; i++) {
     const ok = await page.evaluate(() => !!window.__FIGHT__?.ready())

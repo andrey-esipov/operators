@@ -159,13 +159,25 @@ vec3 agx(vec3 color, vec3 slope, vec3 offset, vec3 power, float sat) {
 // rolloff, then S-curve contrast. Run identically on both branches so the
 // fighters stay tonally locked to the scene.
 vec3 finishValue(vec3 c) {
-  // True black point — remap so the darkest authored value is a clean 0 and
-  // the frame is no longer sitting milky in the mids.
-  c = max(c - blackPoint, 0.0) / max(1.0 - blackPoint, 1e-3);
+  // Black point — anchor the darkest authored value near 0 so the frame is not
+  // sitting milky in the mids. This used to be a hard subtract-and-clamp,
+  // max(c - blackPoint, 0.0), which is a guillotine: every value under the black
+  // point became exactly 0 with no way back. Measured on the shipped grades, the
+  // fighting-game preset was clipping the entire bottom 24% of the range, and
+  // 32-38% of every captured frame came out literally #000 — including the
+  // shadow half of the fighters' denim and the whole of a black t-shirt.
+  //
+  // Softplus-style soft-min against 0 instead: identical above the black point,
+  // asymptotic below it. Deep shadows compress toward black rather than falling
+  // off a cliff, so fabric, geometry and stage detail survive down there.
+  vec3 bp = (c - blackPoint) / max(1.0 - blackPoint, 1e-3);
+  float knee = max(blackPoint * 0.5, 0.004);
+  c = 0.5 * (bp + sqrt(bp * bp + knee * knee)) - knee * 0.5;
+  c = max(c, 0.0);
 
   // Filmic shadow toe (density without a hard floor).
   vec3 toeP = vec3(1.0) + black * 3.0 * (1.0 - clamp(c, 0.0, 1.0));
-  c = pow(max(c, 0.0), toeP);
+  c = pow(max(c, 1e-5), toeP);
 
   // Confident highlight shoulder — a filmic knee that starts earlier and
   // compresses harder so bright practical lamps and specular hits roll off with
@@ -174,8 +186,19 @@ vec3 finishValue(vec3 c) {
   // tamed (a former 1.0 tops out near 0.74, restoring rolloff below the clip).
   c = c / (1.0 + max(c - 0.56, 0.0) * 1.0);
 
-  // S-curve contrast around mid grey.
-  c = clamp(0.5 + (c - 0.5) * contrast, 0.0, 1.0);
+  // S-curve contrast around mid grey. Formerly a straight line through the 0.5
+  // pivot with a hard clamp, which meant contrast itself manufactured pure black:
+  // at contrast 1.2 everything under 0.083 clamped to 0, stacking a second
+  // guillotine on top of the black point.
+  //
+  // This form is bijective on [0,1] — it fixes 0, 0.5 and 1 exactly and is
+  // monotonic between them, so it can steepen the mids as hard as asked without
+  // ever flattening a range of distinct inputs onto black or white. Base clamped
+  // off 0 because pow(0.0, g) is compiled as exp2(g * log2(0.0)) and yields NaN
+  // on ANGLE/Metal — the same trap documented in agxLook().
+  vec3 lo = pow(clamp(c, 1e-5, 1.0), vec3(contrast));
+  vec3 hi = pow(clamp(1.0 - c, 1e-5, 1.0), vec3(contrast));
+  c = clamp(lo / max(lo + hi, 1e-5), 0.0, 1.0);
 
   // Neutral black anchor: desaturate ONLY the deepest shadows toward their own
   // luma so the true black point reads neutral instead of carrying the stage's

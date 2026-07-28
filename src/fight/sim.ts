@@ -66,6 +66,7 @@ import {
   ROUNDS_TO_WIN,
   STAGE_HALF_W,
   START_X,
+  SUPER_FREEZE_FRAMES,
   VEL_EPSILON,
   WAKEUP_FRAMES,
   WALK_BACK_SPEED,
@@ -264,7 +265,7 @@ function bufferedPressed(
 }
 
 function startMove(
-  f: FighterState, i: number, move: Move, events: FightEvent[],
+  s: FightState, f: FighterState, i: number, move: Move, events: FightEvent[],
 ): void {
   f.move = { id: move.id, frame: 0 }
   f.stance = 'attack'
@@ -273,7 +274,34 @@ function startMove(
   if (move.cost) f.meter -= move.cost
   if (move.tag === 'super') {
     events.push({ type: 'super-flash', who: i as 0 | 1, moveId: move.id })
+    // Stop the world for a beat. The owner (superFreezeWho) keeps animating its
+    // wind-up through the freeze; everything else holds. See the superFreeze
+    // block in step().
+    s.superFreeze = SUPER_FREEZE_FRAMES
+    s.superFreezeWho = i as 0 | 1
   }
+}
+
+/**
+ * Advance ONLY the super's owner during a super-activation freeze. The owner
+ * winds up through the held world — that asymmetry is what reads as power (a
+ * freeze where both fighters are statues reads as a hitch). We cap the frame at
+ * the LAST startup frame (active[0] - 1): the wind-up plays, then the owner holds
+ * the fully-charged pose for the rest of the flash. Crucially the cap keeps the
+ * move short of active[0], which is the exact frame spawnProjectiles fires — so
+ * the super's damage cannot travel until the freeze ends and the world resumes.
+ * No super-startup clip loops, so "winds up then holds" is the genre look; the
+ * projectile + full-screen VFX carry the rest.
+ */
+function advanceSuperOwner(s: FightState): void {
+  const who = s.superFreezeWho
+  if (who === undefined) return
+  const f = s.fighters[who]
+  if (!f.move) return
+  const move = getFighterDef(f.id).moves[f.move.id]
+  if (!move) return
+  const cap = move.active[0] - 1
+  if (f.move.frame < cap) f.move.frame++
 }
 
 function tryCancel(
@@ -292,7 +320,7 @@ function tryCancel(
   if (!move || move.id === f.move.id) return
   if (!fr.cancels.includes(move.tag)) return
   if (move.cost && f.meter < move.cost) return
-  startMove(f, i, move, events)
+  startMove(s, f, i, move, events)
 }
 
 function processActions(
@@ -326,7 +354,7 @@ function processActions(
   // Airborne: jumps commit, so only air attacks are allowed — no steering.
   if (!f.grounded) {
     const move = def.select(ctx)
-    if (move) startMove(f, i, move, events)
+    if (move) startMove(s, f, i, move, events)
     return
   }
 
@@ -342,7 +370,7 @@ function processActions(
   // Attacks (normals/specials/supers) resolved by the character.
   const move = def.select(ctx)
   if (move) {
-    startMove(f, i, move, events)
+    startMove(s, f, i, move, events)
     return
   }
 
@@ -622,6 +650,20 @@ export function step(state: FightState, inputs: [InputFrame, InputFrame]): StepR
   if (s.hitstop > 0) {
     s.hitstop--
     updateCamera(s)
+    s.frame++
+    return { state: s, events }
+  }
+
+  // Super-activation freeze: the world stops for a beat when a super comes out.
+  // Only the owner's wind-up advances (advanceSuperOwner); the opponent, physics,
+  // combat, projectiles, the camera and the round timer all hold. Round time is
+  // not consumed (matching hitstop's early return above the timer tick), so a
+  // super can never be used to run out the clock. The owner's move is deliberately
+  // held short of its active frame, so the super's damage doesn't travel until the
+  // freeze ends — the projectile spawns on the first resumed frame.
+  if (s.superFreeze && s.superFreeze > 0) {
+    s.superFreeze--
+    advanceSuperOwner(s)
     s.frame++
     return { state: s, events }
   }

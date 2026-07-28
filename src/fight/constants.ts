@@ -304,6 +304,24 @@ export const PARRY_METER = 120
 // move recovery so a parry is always a genuine plus — you get your turn.
 export const PARRY_LOCK = 2
 
+/**
+ * Super-activation freeze, in frames at 60fps. When a super comes out the world
+ * holds for a beat before the damage travels — the single most expensive moment
+ * in a fighting game, and the one the genre always freezes for (SF6 Critical Art,
+ * Tekken Rage Art, Strive Overdrive) so the audience understands something
+ * enormous is happening and the opponent gets the "I'm about to eat this" beat.
+ *
+ * WHY 60. The genre band is ~40-90 frames. 40 (0.67s) reads as rushed — the beat
+ * is over before it lands. 90 (1.5s) drags inside a 60-second round, especially
+ * if two supers fire. 60 is exactly one second: long enough to register as a
+ * held, deliberate stop, short enough to keep tempo, and it matches SF6's
+ * Critical Art superflash almost exactly. Unlike hitstop this does NOT freeze the
+ * super's owner — their wind-up animates through it (see sim.step) — and, like
+ * hitstop, it does not consume round time (the freeze returns before the timer
+ * tick), so a super is never a way to run out the clock.
+ */
+export const SUPER_FREEZE_FRAMES = 60
+
 /** How far past the wall a projectile travels before it despawns. A little
  *  slack so a fireball visibly reaches the corner rather than popping at it. */
 export const PROJECTILE_MARGIN = 60

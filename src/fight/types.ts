@@ -237,6 +237,20 @@ export interface FightState {
   /** Non-zero while the world is frozen for impact. */
   hitstop: number
   /**
+   * Super-activation freeze: the world holds for a beat when a super comes out,
+   * before its damage travels — the genre's "stop the world" moment (SF6
+   * Critical Art, Tekken Rage Art, Strive Overdrive). Additive and optional, so
+   * anything built before supers froze safely ignores it.
+   *
+   * `superFreeze` is frames remaining in the freeze. `superFreezeWho` is the
+   * fighter whose animation keeps advancing THROUGH the freeze — the owner winds
+   * up while everyone/everything else holds; that asymmetry is what reads as
+   * power. Renderer binds a background dim + full-screen flash to
+   * `superFreeze > 0` (and can key the flash colour off the owner).
+   */
+  superFreeze?: number
+  superFreezeWho?: 0 | 1
+  /**
    * Countdown for the current non-fight phase (intro / ko / round-end), in
    * frames. Additive, sim-owned; the renderer can also use it to time intro and
    * KO flourishes.

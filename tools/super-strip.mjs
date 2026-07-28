@@ -14,7 +14,9 @@ const OUT = flag('out', 'critique/super-strip')
 const FRAMES = Number(flag('frames', '48'))
 const STAGE = flag('stage', 'pre-pmf')
 const A = flag('a', 'lenny'); const B = flag('b', 'spiegel')
-const BASE = `http://localhost:${PORT}/?fight=1&stage=${STAGE}&a=${A}&b=${B}`
+const P1 = flag('p1', ''); const P2 = flag('p2', '')
+const arche = (P1 ? `&p1=${P1}` : '') + (P2 ? `&p2=${P2}` : '')
+const BASE = `http://localhost:${PORT}/?fight=1&stage=${STAGE}&a=${A}&b=${B}${arche}`
 mkdirSync(OUT, { recursive: true })
 
 const browser = await chromium.launch({

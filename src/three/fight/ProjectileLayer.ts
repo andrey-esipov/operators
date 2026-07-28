@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import type { Projectile } from '../../fight/types'
-import { STAGE_HALF_W, PROJECTILE_MARGIN } from '../../fight/constants'
+import { STAGE_HALF_W, PROJECTILE_MARGIN, SUPER_FREEZE_FRAMES } from '../../fight/constants'
 import { simToWorld, cmYToWorld } from './worldScale'
 import { energyTint, flashTint, makeGlowMesh, presenceFor, type Presence } from './ProjectileFx'
 import {
@@ -76,6 +76,47 @@ const MAX_TICKS = 4
 /** Past this |x| (cm) the sim retires a bolt for leaving the stage; matches the
  *  sim's own off-stage test so the renderer infers that death, not a hit. */
 const OFFSTAGE_CM = STAGE_HALF_W + PROJECTILE_MARGIN
+
+/**
+ * The super-freeze envelope, DERIVED from `SUPER_FREEZE_FRAMES` so the VFX and
+ * the sim's "stop the world" beat are ONE parameter, never two that can drift.
+ * The original defect was exactly this desync: the freeze ran its full length
+ * while the activation burst died at the midpoint, leaving ~24 static frames the
+ * critic called "the super running out of things to show at its own midpoint."
+ *
+ * `SUPER_FREEZE_FRAMES` frames of held world get four beats, all as FRACTIONS of
+ * the freeze so they rescale the instant the sim retunes the constant:
+ *   - anticipation  t∈[0, .10)  the flash punches, the charge ignites small,
+ *   - build         t∈[.10, .82) the charge GROWS — this is the back half that
+ *                                was dead; it must visibly gather, not sit,
+ *   - compress      t∈[.82, .96) the aura inhales while the core spikes white,
+ *   - release       t∈[.96, 1]   the core flares as the beam is about to launch.
+ * The beam then spawns on the first resumed frame and carries its own travel.
+ */
+const SUPER = {
+  /** Peak of the world-dim held through the freeze. Matches super-beam's own
+   *  `presence.worldDim` (0.6) so the freeze dim hands off to the travelling
+   *  beam's dim with no visible step. */
+  DIM_PEAK: 0.6,
+  /** Charge core/aura live on this z, just behind the owner (drawn before the
+   *  fighter at renderOrder 10) so the halo frames the body instead of washing
+   *  over it — the TASK-3 "never erase the fighter" rule, by construction. */
+  Z: 0.04,
+  /** Number of inward-spiralling gather motes; enough to read as "power being
+   *  pulled in" without becoming a swarm. */
+  MOTES: 7,
+} as const
+
+/** Owner + freeze state handed to the layer each frame so the super envelope can
+ *  be driven by the sim's authoritative "stop the world" countdown rather than
+ *  by a self-firing timer that could tick to completion mid-freeze. `ownerPos`
+ *  is the owner's chest anchor in world space; `freeze` is frames remaining. */
+export interface SuperFreezeView {
+  freeze: number
+  who: 0 | 1
+  ownerPos: THREE.Vector3
+  facing: 1 | -1
+}
 
 type Phase = 'spawn' | 'travel' | 'impact' | 'fizzle'
 
@@ -173,6 +214,50 @@ export class ProjectileLayer {
   private flashColor = new THREE.Color(1.4, 1.5, 1.8)
   private tmpFwd = new THREE.Vector3()
 
+  // --- Super charge (owner-anchored gather that fills the held freeze) --------
+  // A hot core + halo + expanding shells + inward-spiralling motes, anchored at
+  // the OWNER's chest, that ignite on the activation flash and GROW across the
+  // whole `SUPER_FREEZE_FRAMES` beat. This is the fix for the dead back half: the
+  // freeze holds the world for its full length but the owner only has a ~6-frame
+  // wind-up clip and then a static hold, so the VFX must carry the remaining ~50
+  // frames. Everything sits just BEHIND the fighter (renderOrder < 10) so the
+  // halo frames the body rather than washing over it. Built lazily on the first
+  // super freeze; disposed with the layer.
+  private chargeGroup: THREE.Group | null = null
+  private chargeCore: THREE.Mesh | null = null
+  private chargeCoreMat: THREE.MeshBasicMaterial | null = null
+  private chargeAura: THREE.Mesh | null = null
+  private chargeAuraMat: THREE.MeshBasicMaterial | null = null
+  private chargeRings: THREE.Mesh[] = []
+  private chargeRingMats: THREE.MeshBasicMaterial[] = []
+  private chargeMotes: THREE.Mesh[] = []
+  private chargeMoteMats: THREE.MeshBasicMaterial[] = []
+  private chargeMoteAngles: number[] = []
+  /** Eased 0..1 overall charge presence. Tracks the freeze-progress envelope
+   *  directly while frozen (so it visibly BUILDS, never eases into a plateau);
+   *  decays to 0 on release so the hand-off to the launched beam is a flare-down
+   *  rather than a pop. */
+  private chargeCur = 0
+  /** Render-frames elapsed since the charge ignited, cycling the expanding
+   *  shells and orbiting motes so SOMETHING moves on every held frame — the one
+   *  thing a still can't verify and a filmstrip proved was missing. */
+  private chargeClock = 0
+  /** Last owner chest anchor + facing, held through the release fade after the
+   *  freeze clears (when the sim no longer reports an owner). */
+  private chargePos = new THREE.Vector3()
+  private chargeFacing: 1 | -1 = 1
+  /** Previous freeze count, to detect the rising edge (0 → FREEZE_FRAMES) that
+   *  marks activation — the one frame the screen flash should punch. */
+  private prevFreeze = 0
+  /** Whether the charge was active last frame, so the cycle clock resets cleanly
+   *  at the START of each super rather than mid-build. */
+  private chargePrevActive = false
+  /** 0..1 gather progress, held through the release fade (when the sim no longer
+   *  reports a freeze) so the motes stay converged as the charge flares down. */
+  private chargeProg = 0
+  private chargeEnergy = new THREE.Color()
+  private chargeWhite = new THREE.Color()
+
   constructor() {
     this.group.name = 'projectiles'
     // Dev-only introspection: capture tooling needs to see WHAT each live bolt is
@@ -199,6 +284,14 @@ export class ProjectileLayer {
         flash: Math.round(this.flashCur * 1000) / 1000,
         dimVisible: !!this.worldDimMesh?.visible,
         flashVisible: !!this.superFlashMesh?.visible,
+      })
+      // Owner-anchored super charge, so a filmstrip capture can assert the back
+      // half of the freeze is ALIVE (charge present + growing + cycling) rather
+      // than inferring it from a lit-pixel count a mistimed frame could fake.
+      ;(globalThis as Record<string, unknown>).__PROJCHARGE__ = () => ({
+        charge: Math.round(this.chargeCur * 1000) / 1000,
+        clock: Math.round(this.chargeClock * 100) / 100,
+        visible: !!this.chargeGroup?.visible,
       })
     }
   }
@@ -248,12 +341,20 @@ export class ProjectileLayer {
    * @param cur   projectiles from the latest sim snapshot
    * @param alpha 0..1 interpolation fraction between prev and cur
    * @param dt    scaled seconds this frame (freezes with hitstop, like the world)
+   * @param superState owner + freeze countdown while the sim holds the world for
+   *   a super, or null/undefined when no super is freezing. Drives the charge
+   *   envelope and the freeze-held world-dim; see updateSuperAtmosphere/Charge.
+   * @param renderDt UNSCALED seconds this frame (does NOT freeze with hitstop).
+   *   The super atmosphere + charge run on this so the held freeze stays alive;
+   *   omitted in headless tests, where it falls back to `dt`.
    */
   update(
     prev: Projectile[] | undefined,
     cur: Projectile[] | undefined,
     alpha: number,
     dt: number,
+    superState?: SuperFreezeView | null,
+    renderDt?: number,
   ) {
     const ticks = Math.min(dt * 60, MAX_TICKS)
     const prevById = new Map<number, Projectile>()
@@ -318,10 +419,14 @@ export class ProjectileLayer {
     // (their flash disposed in retire), so this only touches live ones.
     for (const l of this.live.values()) this.tickSpawnFlash(l, ticks)
 
-    // Full-screen super atmosphere: dim the world behind the fighters and punch
-    // an activation flash. Reads live sim state each frame, so it stays correct
-    // on any frame — including a frozen one (see updateSuperAtmosphere).
-    this.updateSuperAtmosphere(cur, ticks)
+    // Full-screen super atmosphere + the owner-anchored charge. Both run on the
+    // UNSCALED render delta (not `ticks`, which collapses to ~0 while the sim is
+    // frozen for the super) so the held "stop the world" beat keeps easing and
+    // building. The freeze view is the sim's authoritative countdown; when it's
+    // null nothing super-related draws.
+    const renderTicks = Math.min((renderDt ?? dt) * 60, MAX_TICKS)
+    this.updateSuperAtmosphere(cur, renderTicks, superState ?? null)
+    this.updateSuperCharge(superState ?? null, renderTicks)
   }
 
   /** Did the sim drop this bolt because it CONNECTED, versus running out of life
@@ -619,19 +724,24 @@ export class ProjectileLayer {
    * The super's screen-wide beats, done entirely inside this additive layer: a
    * world-dim that drops the stage back and a hard activation flash.
    *
-   * Freeze-safety is by construction. The dim eases toward a target READ FROM
-   * LIVE STATE every frame (the strongest `presence.worldDim` among sim-owned
-   * bolts), never a self-firing countdown — so when the sim is frozen for the
-   * super (today a long hitstop; soon a dedicated FightState field) the target
-   * holds and the dim simply STAYS across the frozen frames. A self-timed ramp
-   * would tick to completion mid-freeze and drop the world back in exactly the
-   * beat that wants it held. When that field lands, point `dimTarget` at it
-   * instead of at projectile presence — one line, no rewrite. The flash is
-   * deliberately the opposite: a transient that decays on render time, so a
-   * freeze-at-spawn clears the white to reveal the pose rather than holding a
-   * full-screen white-out.
+   * Freeze-safety is by construction, now driven by the sim's AUTHORITATIVE
+   * freeze countdown (`superState.freeze`) rather than inferred from a live bolt.
+   * The old design read the dim target from the strongest `presence.worldDim`
+   * among sim-owned bolts — but the super BEAM does not exist during the freeze
+   * (it spawns on the first resumed frame), so across the entire held beat the
+   * target was 0 and the world never dropped back. The dead back half followed
+   * directly: an undimmed, fully-lit stage behind a static wind-up pose. Now the
+   * freeze itself pins `dimTarget` to `SUPER.DIM_PEAK` for its whole length, and
+   * that peak MATCHES the beam's own `worldDim` so the hand-off from freeze-dim
+   * to travelling-beam-dim is seamless. The activation flash fires once, on the
+   * rising edge of the freeze, and decays on render time so it clears to reveal
+   * the charge rather than holding a white-out (the TASK-3 rule).
    */
-  private updateSuperAtmosphere(cur: Projectile[] | undefined, ticks: number) {
+  private updateSuperAtmosphere(
+    cur: Projectile[] | undefined,
+    ticks: number,
+    superState: SuperFreezeView | null,
+  ) {
     if (!this.camera) return
 
     // Target read from state: the strongest worldDim among sim-owned bolts, and
@@ -654,6 +764,26 @@ export class ProjectileLayer {
       }
     }
     this.superSeen = superIds
+
+    // The freeze holds the world back for its FULL length: pin the dim to its
+    // peak while frozen so the back half is no longer a lit, static stage. This
+    // is the max() with any live-beam dim, so nothing regresses when the beam
+    // later carries the same value on its own.
+    const freeze = superState?.freeze ?? 0
+    if (freeze > 0 && SUPER.DIM_PEAK > dimTarget) dimTarget = SUPER.DIM_PEAK
+
+    // Activation flash on the freeze's RISING edge (0 → FREEZE_FRAMES): the one
+    // frame the world stops. Fires from the beam's own flash tint so the freeze
+    // burst and the eventual beam birth read as the same weapon lighting up.
+    // Kept DELIBERATELY MODEST (0.5, not the beam-birth 0.9): the world-dim, the
+    // FightVfx chest burst and the igniting charge already carry the activation,
+    // so a full-strength screen flash here just ghosts the owner into the white —
+    // the exact "blow out the frame" failure the house has fought for 21 rounds.
+    if (freeze > this.prevFreeze && this.prevFreeze === 0) {
+      flashPunch = Math.max(flashPunch, 0.5)
+      this.flashColor.copy(flashTint('super-beam'))
+    }
+    this.prevFreeze = freeze
 
     // Nothing showing, nothing fading out, and never built: bail before touching
     // anything so an all-ion-bolt match pays exactly zero cost.
@@ -701,6 +831,167 @@ export class ProjectileLayer {
       fm.visible = true
     } else {
       fm.visible = false
+    }
+  }
+
+  /** Build the owner-anchored charge rig once: a broad energy aura + a hot near-
+   *  white core (both drawn BEHIND the fighter so the halo frames the body), two
+   *  expanding energy pulses, and a ring of inward-spiralling gather motes drawn
+   *  just in front. Lazy so a match with no warden super never allocates it. */
+  private ensureSuperCharge() {
+    if (this.chargeGroup) return
+    this.chargeEnergy.copy(energyTint('super-beam'))
+    this.chargeWhite.copy(flashTint('super-beam'))
+
+    const g = new THREE.Group()
+    g.name = 'super-charge'
+    g.visible = false
+
+    // renderOrder 9: after the world-dim (8), before the fighters (10) — the
+    // aura/core/pulses read as light gathering behind the owner, never a wash
+    // over the face. This is the TASK-3 "frame, don't erase" rule by geometry.
+    const aura = makeGlowMesh(this.chargeEnergy, 9)
+    aura.visible = false
+    g.add(aura)
+    this.chargeAura = aura
+    this.chargeAuraMat = aura.material as THREE.MeshBasicMaterial
+
+    const core = makeGlowMesh(this.chargeWhite, 9)
+    core.visible = false
+    g.add(core)
+    this.chargeCore = core
+    this.chargeCoreMat = core.material as THREE.MeshBasicMaterial
+
+    for (let i = 0; i < 2; i++) {
+      const pulse = makeGlowMesh(this.chargeEnergy, 9)
+      pulse.visible = false
+      g.add(pulse)
+      this.chargeRings.push(pulse)
+      this.chargeRingMats.push(pulse.material as THREE.MeshBasicMaterial)
+    }
+
+    // Motes at renderOrder 11 (just IN FRONT of the fighter) so the "power being
+    // pulled in" reads, but small and faded as they converge so 7 additive
+    // points can't stack into a hot blob over the chest.
+    for (let i = 0; i < SUPER.MOTES; i++) {
+      const mote = makeGlowMesh(this.chargeEnergy, 11)
+      mote.visible = false
+      g.add(mote)
+      this.chargeMotes.push(mote)
+      this.chargeMoteMats.push(mote.material as THREE.MeshBasicMaterial)
+      this.chargeMoteAngles.push((i / SUPER.MOTES) * Math.PI * 2)
+    }
+
+    this.group.add(g)
+    this.chargeGroup = g
+  }
+
+  /**
+   * The owner-anchored super charge — the fix for the dead back half. The freeze
+   * holds the world for its FULL `SUPER_FREEZE_FRAMES`, but the owner only has a
+   * ~6-frame wind-up clip and then a static hold, so from roughly the midpoint on
+   * nothing on screen moved. This gathers a hot core + halo at the owner's chest
+   * that IGNITES on activation and visibly GROWS across the whole beat, with
+   * expanding pulses and inward-spiralling motes guaranteeing motion on EVERY
+   * held frame (the one thing a still can't prove and the baseline filmstrip
+   * proved was missing). All timing is a FRACTION of the freeze, so it rescales
+   * the instant the sim retunes the constant — the freeze and the VFX are one
+   * parameter, never two that can drift into the mirrored-desync failure.
+   *
+   * Runs on the UNSCALED render delta: sim time is pinned at ~0 during the freeze
+   * (Engine multiplies dt by the hitstop timeScale), so a sim-time clock would
+   * itself freeze and rebuild the very defect this removes.
+   */
+  private updateSuperCharge(superState: SuperFreezeView | null, ticks: number) {
+    const active = !!superState && superState.freeze > 0
+
+    if (active) {
+      // Gather progress across the held freeze, 0 at the first frozen frame → ~1
+      // at the last. Anticipation ignites fast, then a long steady BUILD carries
+      // the back half, then a brief peak/compress hand-off to the beam launch.
+      const t = THREE.MathUtils.clamp(1 - superState!.freeze / SUPER_FREEZE_FRAMES, 0, 1)
+      let env: number
+      if (t < 0.12) env = THREE.MathUtils.smoothstep(t, 0, 0.12) * 0.55
+      else if (t < 0.82) env = 0.55 + THREE.MathUtils.smoothstep(t, 0.12, 0.82) * 0.45
+      else env = 1
+      this.chargeCur = env
+      this.chargeProg = t
+      this.chargePos.copy(superState!.ownerPos)
+      this.chargeFacing = superState!.facing
+      if (!this.chargePrevActive) this.chargeClock = 0
+    } else {
+      // Release: flare down on render time; the beam's spawnFlash (born on the
+      // first resumed frame) covers the hand-off so this reads as a launch, not
+      // a cut. chargeProg holds, so the motes stay gathered as it fades.
+      this.chargeCur = Math.max(0, this.chargeCur - 0.16 * ticks)
+    }
+    this.chargePrevActive = active
+
+    if (this.chargeCur < 0.002 && !this.chargeGroup) return
+    this.ensureSuperCharge()
+    const g = this.chargeGroup!
+    if (this.chargeCur < 0.002) {
+      g.visible = false
+      return
+    }
+    g.visible = true
+    this.chargeClock += ticks
+
+    const c = this.chargeCur
+    const prog = this.chargeProg
+    const clk = this.chargeClock
+    // Gather in front of the torso (toward the palms), a torso-scaled distance
+    // ahead so it belongs to the owner without drifting off-body.
+    const cx = this.chargePos.x + this.chargeFacing * 0.4
+    const cy = this.chargePos.y
+    const cz = SUPER.Z
+    const breathe = 1 + 0.1 * Math.sin(clk * 0.5)
+
+    // Aura: broad energy halo that grows with the build and breathes.
+    const auraD = THREE.MathUtils.lerp(1.6, 2.9, prog) * breathe
+    this.chargeAura!.position.set(cx, cy, cz)
+    this.chargeAura!.scale.set(auraD, auraD, 1)
+    this.chargeAuraMat!.opacity = 0.42 * c
+    this.chargeAura!.visible = true
+
+    // Core: hot near-white centre that brightens as it builds and INHALES
+    // (compresses) into the launch — the classic "wind the weapon" tell.
+    const compress = 1 - THREE.MathUtils.smoothstep(prog, 0.82, 1) * 0.28
+    const coreD = THREE.MathUtils.lerp(0.7, 1.3, prog) * breathe * compress
+    this.chargeCore!.position.set(cx, cy, cz)
+    this.chargeCore!.scale.set(coreD, coreD, 1)
+    this.chargeCoreMat!.opacity = (0.5 + 0.38 * prog) * c
+    this.chargeCore!.visible = true
+
+    // Two energy pulses, half a cycle apart, so a shell is always mid-flight —
+    // the per-frame motion guarantee that a filmstrip (not a still) checks.
+    const period = 15
+    for (let i = 0; i < this.chargeRings.length; i++) {
+      const phase = ((clk / period) + i * 0.5) % 1
+      const d = THREE.MathUtils.lerp(0.8, 3.6, phase)
+      const m = this.chargeRings[i]
+      const mat = this.chargeRingMats[i]
+      m.position.set(cx, cy, cz)
+      m.scale.set(d, d, 1)
+      mat.opacity = Math.pow(1 - phase, 1.3) * 0.34 * c
+      m.visible = mat.opacity > 0.004
+    }
+
+    // Motes: spiral inward and gather into the core, fading as they merge so the
+    // convergence point never stacks into a blowout.
+    const rad = THREE.MathUtils.lerp(1.95, 0.12, Math.pow(prog, 0.85))
+    const moteSz = 0.3 * (0.7 + 0.3 * prog)
+    for (let i = 0; i < this.chargeMotes.length; i++) {
+      const ang = this.chargeMoteAngles[i] - clk * 0.14
+      const wob = 0.9 + 0.1 * Math.sin(clk * 0.7 + i)
+      const mx = cx + Math.cos(ang) * rad * wob
+      const my = cy + Math.sin(ang) * rad * wob * 0.85
+      const m = this.chargeMotes[i]
+      const mat = this.chargeMoteMats[i]
+      m.position.set(mx, my, SUPER.Z)
+      m.scale.set(moteSz, moteSz, 1)
+      mat.opacity = 0.55 * c * (1 - 0.7 * prog)
+      m.visible = mat.opacity > 0.004
     }
   }
 
@@ -872,6 +1163,7 @@ export class ProjectileLayer {
     }
     this.live.clear()
     this.disposeSuperQuads()
+    this.disposeSuperCharge()
     for (const res of this.loaded.values()) res.texture.dispose()
     this.loaded.clear()
   }
@@ -892,6 +1184,33 @@ export class ProjectileLayer {
       this.superFlashMesh = null
       this.superFlashMat = null
     }
+  }
+
+  /** Tear down the owner-anchored super-charge rig (if it was ever built). */
+  private disposeSuperCharge() {
+    if (!this.chargeGroup) return
+    const meshes: Array<THREE.Mesh | null> = [
+      this.chargeAura,
+      this.chargeCore,
+      ...this.chargeRings,
+      ...this.chargeMotes,
+    ]
+    for (const m of meshes) {
+      if (!m) continue
+      ;(m.geometry as THREE.BufferGeometry).dispose()
+      ;(m.material as THREE.Material).dispose()
+    }
+    this.group.remove(this.chargeGroup)
+    this.chargeGroup = null
+    this.chargeAura = null
+    this.chargeAuraMat = null
+    this.chargeCore = null
+    this.chargeCoreMat = null
+    this.chargeRings = []
+    this.chargeRingMats = []
+    this.chargeMotes = []
+    this.chargeMoteMats = []
+    this.chargeMoteAngles = []
   }
 }
 

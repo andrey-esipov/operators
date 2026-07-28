@@ -23,8 +23,12 @@ import { Fighter, type FighterView } from './Fighter'
 import { buildAtlasTextures, type AtlasSource } from './AtlasTextures'
 import { FightCamera, type StageBounds } from './FightCamera'
 import { FightVfx } from './FightVfx'
-import { ProjectileLayer } from './ProjectileLayer'
+import { ProjectileLayer, type SuperFreezeView } from './ProjectileLayer'
 import { simToWorld } from './worldScale'
+// Type-only: the reactor is a pure event→sink mapper with no Three or audio-
+// backend dependency, so importing its *type* costs nothing at runtime and
+// pulls no audio code into the capture/harness builds that never set one.
+import type { FightAudioReactor } from '../../audio/reactor'
 
 /**
  * Top-level controller that turns a running simulation into a rendered fight.
@@ -62,6 +66,12 @@ export class FightRenderer {
   private post = new PostPipeline()
   private scenario: ScenarioId
   private bounds: StageBounds
+  /**
+   * Optional audio reactor — the sound mirror of `vfx`. Left null on the dev
+   * harness and every headless capture path (they never call `setAudio`), so
+   * no `AudioContext` is ever built there; only the playable route sets one.
+   */
+  private audio: FightAudioReactor | null = null
 
   private step: (() => StepResult) | null = null
   private latest: FightState | null = null
@@ -146,6 +156,18 @@ export class FightRenderer {
     this.lightRig.setPreset(stageConfig(this.scenario).lighting, false)
     this.renderStateObj = this.renderState()
     this.engine.setState(this.renderStateObj)
+    // Point per-arena reverb at the new stage. StageId and ScenarioId are the
+    // same eight-arena string union, so this is a pure re-tag.
+    this.audio?.setStage(scenario)
+  }
+
+  /**
+   * Attach (or detach) the audio reactor — the sound mirror of `vfx`. Only the
+   * playable route calls this; harness/capture builds leave it null and stay
+   * silent. Passing null detaches without disposing the backend.
+   */
+  setAudio(reactor: FightAudioReactor | null) {
+    this.audio = reactor
   }
 
   setStep(step: () => StepResult) {
@@ -157,6 +179,32 @@ export class FightRenderer {
     this.prev = state
   }
 
+  /** Latest super-activation freeze state, for measurement. `freeze` is frames
+   *  remaining (0 when not frozen); `who` is the owner. Read straight off the
+   *  authoritative snapshot so a capture can log the freeze envelope frame by
+   *  frame rather than inferring it from a phase label. */
+  get superFreezeState(): { freeze: number; who: 0 | 1 | null } {
+    return {
+      freeze: this.latest?.superFreeze ?? 0,
+      who: this.latest?.superFreezeWho ?? null,
+    }
+  }
+
+  /** The owner-anchored super-freeze view the projectile layer needs to drive
+   *  its charge envelope: the freeze countdown plus the OWNER's chest anchor and
+   *  facing in world space. Null unless the sim is actively holding the world for
+   *  a super. Built here because `latest` (the authoritative FightState) is
+   *  private to the renderer; the layer never reaches into sim state itself. */
+  superFreezeView(): SuperFreezeView | null {
+    if (import.meta.env.DEV && (globalThis as Record<string, unknown>).__MUT_NO_SUPER__) return null
+    const who = this.latest?.superFreezeWho ?? null
+    const freeze = this.latest?.superFreeze ?? 0
+    if (who === null || freeze <= 0) return null
+    const anchor = this.fighters[who].chestAnchor()
+    const facing = this.latest?.fighters[who]?.facing ?? 1
+    return { freeze, who, ownerPos: anchor, facing }
+  }
+
   async setFighterAssets(side: 0 | 1, assets: FighterAssets, atlas: AtlasSource, accent: string) {
     const tex = buildAtlasTextures(atlas, 8)
     this.fighters[side].setAssets(assets, tex, accent)
@@ -165,11 +213,13 @@ export class FightRenderer {
   reset() {
     this.fighters[0].setDissolve(0)
     this.fighters[1].setDissolve(0)
+    this.audio?.reset()
   }
 
   dispose() {
     this.disposed = true
     this.engine.stop()
+    this.audio?.dispose()
     this.fighters[0].dispose()
     this.fighters[1].dispose()
     this.projectiles.dispose()
@@ -186,7 +236,7 @@ export class FightRenderer {
       this.prev = this.latest
       const res = this.step()
       this.latest = res.state
-      for (const e of res.events) this.vfx.handle(e)
+      for (const e of res.events) { this.vfx.handle(e); this.audio?.handle(e) }
       this._derived(this.prev, this.latest)
       this._acc -= DT
       // Only advance the animation clock when the sim actually advanced. A
@@ -201,6 +251,10 @@ export class FightRenderer {
       if (this.latest.frame !== this.prev.frame) {
         this._globalFrame++
         this._tickReactions(this.prev, this.latest)
+        // Derived audio (footsteps, meter charge, HP tension, phase/music) runs
+        // only on genuine sim advancement — never on a frozen capture frame, so
+        // a `step(0)` control produces zero derived sound.
+        this.audio?.step(this.prev, this.latest)
       }
       steps++
     }
@@ -358,10 +412,19 @@ export class FightRenderer {
   }
 
   /** Reconcile the projectile sprites against the two most recent sim snapshots.
-   *  Runs on the scaled delta so bolts freeze in place during hitstop like the
-   *  rest of the world. */
-  updateProjectiles(alpha: number, scaledDt: number) {
-    this.projectiles.update(this.prev?.projectiles, this.latest?.projectiles, alpha, scaledDt)
+   *  Bolts run on the scaled delta so they freeze in place during hitstop like
+   *  the rest of the world; the super atmosphere + charge run on the UNSCALED
+   *  `renderDt` and the freeze view, so the "stop the world" beat stays alive and
+   *  builds while sim time is held at zero. */
+  updateProjectiles(alpha: number, scaledDt: number, renderDt: number) {
+    this.projectiles.update(
+      this.prev?.projectiles,
+      this.latest?.projectiles,
+      alpha,
+      scaledDt,
+      this.superFreezeView(),
+      renderDt,
+    )
   }
 
   /** Number of projectile sprites currently mounted. A liveness signal only —
@@ -543,7 +606,7 @@ class FightWorld {
       })
     }
 
-    this.r.updateProjectiles(alpha, scaledDt)
+    this.r.updateProjectiles(alpha, scaledDt, realDt)
     this.r.updateParticles(scaledDt)
   }
 

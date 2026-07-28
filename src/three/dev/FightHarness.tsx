@@ -70,6 +70,9 @@ declare global {
     }
     /** Count of mounted projectile sprites (liveness only, not proof of paint). */
     projCount: () => number
+    /** Latest super-activation freeze: frames remaining + owner. For capture
+     *  tooling to log the super envelope frame by frame. */
+    superFreeze: () => { freeze: number; who: 0 | 1 | null }
     renderer: FightRenderer | null
     }
   }
@@ -130,6 +133,7 @@ export function FightHarness() {
         coverage: () => renderer!.fighterCoverage(),
         projCoverage: () => renderer!.projectileCoverage(),
         projCount: () => renderer!.projectileCount,
+        superFreeze: () => renderer!.superFreezeState,
         renderer,
       }
       setStatus('running')

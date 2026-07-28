@@ -81,6 +81,9 @@ export const FightHud = forwardRef<FightHudHandle, FightHudProps>(function Fight
   const prevPhase = useRef<FightState['phase'] | null>(null)
   const prevStance = useRef<[Stance | null, Stance | null]>([null, null])
   const koThisRound = useRef(false)
+  // Display names, kept fresh so applyFrame (a stable callback) can name the
+  // match winner without re-subscribing when the fighters prop identity changes.
+  const dispRef = useRef<[FighterDisplay, FighterDisplay]>(FALLBACK)
   const comboAccum = useRef<{ defender: 0 | 1; damage: number }>({ defender: 0, damage: 0 })
   const comboTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const announceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -89,11 +92,13 @@ export const FightHud = forwardRef<FightHudHandle, FightHudProps>(function Fight
   const wipeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const impactTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const pushAnnounce = useCallback((a: Omit<AnnounceState, 'key'>) => {
+  const pushAnnounce = useCallback((a: Omit<AnnounceState, 'key'>, hold = false) => {
     const withKey = { ...a, key: ++keySeq.current }
     setAnnounce(withKey)
     if (announceTimer.current) clearTimeout(announceTimer.current)
-    announceTimer.current = setTimeout(() => setAnnounce(null), ANNOUNCE_MS[a.kind])
+    // Held banners (the match-end WINS) stay until the next beat replaces them —
+    // the match is over, there is nothing to reveal underneath.
+    if (!hold) announceTimer.current = setTimeout(() => setAnnounce(null), ANNOUNCE_MS[a.kind])
   }, [])
 
   const applyFrame = useCallback(
@@ -191,6 +196,22 @@ export const FightHud = forwardRef<FightHudHandle, FightHudProps>(function Fight
         } else if (s.phase === 'round-end' && !koThisRound.current) {
           // Reached the time limit without a KO.
           pushAnnounce({ kind: 'time-over', main: 'TIME OVER', color: '#90E0EF', accent: '#0077B6' })
+        } else if (s.phase === 'match-end') {
+          // The KO banner has long cleared and the winner has had a beat to
+          // pose; land the WINS plate on the victor. Winner is whoever holds
+          // the round lead (ties break to the healthier fighter — double-KO).
+          const w =
+            s.wins[0] > s.wins[1]
+              ? 0
+              : s.wins[1] > s.wins[0]
+                ? 1
+                : s.fighters[0].health >= s.fighters[1].health
+                  ? 0
+                  : 1
+          pushAnnounce(
+            { kind: 'win', kicker: dispRef.current[w].name, main: 'WINS', color: '#FFE24A', accent: '#F77F00' },
+            true,
+          )
         }
         prevPhase.current = s.phase
       }
@@ -242,6 +263,7 @@ export const FightHud = forwardRef<FightHudHandle, FightHudProps>(function Fight
 
   const ctx = useMemo(() => ({ frameRef, register }), [register])
   const disp = fighters ?? FALLBACK
+  dispRef.current = disp
 
   return (
     <HudTickContext.Provider value={ctx}>

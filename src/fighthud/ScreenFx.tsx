@@ -47,8 +47,8 @@ export function ScreenFx({ ko, wipe, impact }: Props) {
             <motion.div
               className="fhud-fx-flash"
               initial={{ opacity: 0 }}
-              animate={{ opacity: [0, 0.92, 0] }}
-              transition={{ duration: 0.5, times: [0, 0.08, 1], ease: 'easeOut' }}
+              animate={{ opacity: [0, 0.8, 0] }}
+              transition={{ duration: 0.32, times: [0, 0.05, 1], ease: 'easeOut' }}
             />
             <motion.div
               className="fhud-fx-shock"
@@ -59,8 +59,8 @@ export function ScreenFx({ ko, wipe, impact }: Props) {
             <motion.div
               className="fhud-fx-vignette"
               initial={{ opacity: 0 }}
-              animate={{ opacity: [0, 1, 0.88, 0] }}
-              transition={{ duration: 1.5, times: [0, 0.12, 0.6, 1], ease: 'easeOut' }}
+              animate={{ opacity: [0, 0.82, 0.42, 0] }}
+              transition={{ duration: 1.1, times: [0, 0.1, 0.5, 1], ease: 'easeOut' }}
             />
           </motion.div>
         )}

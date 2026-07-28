@@ -44,10 +44,15 @@ const ROSTER: Array<[string, FighterAssets]> = (
  *     but the SUSTAINED cadence must be reduced: the typical (median) key holds
  *     at least MIN_MEDIAN_HOLD sim frames.
  *
- * Measured at authoring time across the whole roster (1620 holds): 0% on-ones,
- * median hold 6 (~10 fps effective) — already firmly on threes-or-slower. The
- * floors below sit under that with margin so real art has room to breathe while
- * a regression toward 60 fps smoothness reddens.
+ * Measured at authoring time across the whole roster (1650 holds): 0% on-ones,
+ * median hold 6 (~10 fps effective) — already firmly on threes-or-slower. (The
+ * count rose from 1620 to 1650 when the kick contact-cel fix gave each of the 30
+ * LK/MK clips across the six playable skins one active-window key: those clips
+ * went from a 2-key [active, idle] reel to a 3-key [idle, active, idle] reel so
+ * the contact pose lands on the move's active frame. That adds 30 held keys; it
+ * does not add a single on-ones key, and the median is unmoved.) The floors below
+ * sit under that with margin so real art has room to breathe while a regression
+ * toward 60 fps smoothness reddens.
  */
 export const SIM_FPS = 60
 /** At most this fraction of all holds may be single-frame smear accents. */

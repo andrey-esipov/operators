@@ -120,4 +120,32 @@ describe('every attacking move freezes on its contact cel, not the idle pose', (
       .join('\n  ')
     expect(failures.map((f) => `${f.skin}:${f.moveId}`), `idle-at-contact:\n  ${detail}`).toEqual([])
   })
+
+  // Anti-scope-shrink tripwire. A CPU-landing census (108 fights, 172,817 frames)
+  // found cr.MK is the #2 most-landed attack at 22.7%, cr.LK 7.0%, and j.MK is a
+  // human air-to-ground staple — all three alias to the startup-less LK/MK clips
+  // and were in the broken set (29.7% of all landed contact). The whole defect is
+  // this project's recurring shape: a check that validates one member of a set
+  // (standing kicks) while the rest (crouch/air) go unwatched. A future edit that
+  // narrows collect() to st.* moves would turn this file green while a third of
+  // contact silently re-broke. So assert, per playable skin, that the gate ACTUALLY
+  // produced a row for each high-frequency crouch/air kick the fighter defines with
+  // a dedicated clip — coverage of the exact moves, not just an aggregate count.
+  it('keeps watching the high-frequency crouch/air kicks (anti-scope-shrink)', () => {
+    const HIGH_FREQ = ['cr.LK', 'cr.MK', 'j.MK']
+    const checked: Record<string, Set<string>> = {}
+    for (const r of rows) (checked[r.skin] ??= new Set()).add(r.moveId)
+    const gaps: string[] = []
+    for (const entry of ROSTER) {
+      const A = SKINS[entry.skin]
+      if (!A) continue
+      const def = FIGHTERS[entry.archetype]
+      const clips = A.clips as unknown as Record<string, { frames: number[] }>
+      for (const m of HIGH_FREQ) {
+        const defined = Boolean(def.moves[m]) && Boolean(clips[m]?.frames?.length)
+        if (defined && !checked[entry.skin]?.has(m)) gaps.push(`${entry.skin}:${m}`)
+      }
+    }
+    expect(gaps, `gate stopped covering high-frequency kicks: ${gaps.join(', ')}`).toEqual([])
+  })
 })

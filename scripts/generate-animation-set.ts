@@ -33,6 +33,7 @@ import { clipApng } from './lib/apng'
 import { morph } from './lib/inbetween'
 import { analyzeClip, type TemporalReport } from './lib/temporal'
 import { toRGBA, fromRGBA, applyKeyline, thinFeatureSurvival } from './lib/keyline'
+import { coverageAA, edgeSmoothness, interiorSharpness } from './lib/edge-aa'
 
 // Shared registration frame, matching the probe. A 512 canvas with the feet at
 // (256, 470) and a 380px neutral height leaves headroom above for a jump and
@@ -58,6 +59,9 @@ const DRIFT_TOL = 2.5 * SCALE
 const KEYLINE_BAND = 1.5 * SCALE
 const KEYLINE_DARKEN = 0.34
 const KEYLINE_THIN_RADIUS = 2 * SCALE
+// Coverage-AA: soften the hard binary silhouette into a ~1px ramp. Guarded so a
+// frame is only accepted if its interior stays at least this fraction as sharp.
+const AA_MIN_INTERIOR_RATIO = 0.85
 const DEFAULT_HEIGHT_CM = 180
 const MAX_ATTEMPTS = 3
 const CONCURRENCY = 2
@@ -250,32 +254,56 @@ export async function generateFighter(
   }
   if (tweens) log(`  synthesised ${tweens} inbetween frame(s)`)
 
-  // ── Keyline ────────────────────────────────────────────────────────────────
-  // Bake a constant-weight ink rim into every frame (keys and tweens) so the
-  // silhouette reads as drawn rather than cut out. applyKeyline only multiplies
-  // RGB, never alpha, so foot anchors and the atlas trim are unaffected. Each
-  // frame is guarded by the thin-feature probe: if inking would eat a thin
-  // feature (a mic boom, fingers) the frame keeps its un-inked pixels and the
-  // drop is reported rather than silently shipped.
-  let inkedFrames = 0
+  // ── Keyline + coverage AA ────────────────────────────────────────────────
+  // Two edge passes, once per frame, sharing a single RGBA round-trip:
+  //   1. Keyline bakes a constant-weight ink rim so the silhouette reads as
+  //      drawn, not cut out. Guarded by the thin-feature probe — if inking would
+  //      eat a mic boom / fingers, the frame keeps its un-inked pixels.
+  //   2. Coverage AA softens the hard binary silhouette into a ~1px ramp so the
+  //      edge stops stair-stepping at native 1:1. It only ramps alpha and pulls
+  //      the edge colour outward (never blurs interior RGB), guarded by the
+  //      interior-sharpness probe so it can never mush the art. Runs AFTER the
+  //      keyline so the ramp is inked-edge coloured, not background grey.
+  // applyKeyline never touches alpha and coverageAA never touches interior RGB,
+  // so foot anchors and the atlas trim survive both.
+  let inkedFrames = 0, aaFrames = 0
   const keylineWarn: string[] = []
+  const aaWarn: string[] = []
   for (const rf of registered) {
-    const before = await toRGBA(rf.buf)
-    const after = { data: before.data.slice(), width: before.width, height: before.height }
-    applyKeyline(after, { band: KEYLINE_BAND, darken: KEYLINE_DARKEN, protectThin: true, coreDepth: KEYLINE_THIN_RADIUS })
-    const surv = thinFeatureSurvival(before, after, { thinRadius: KEYLINE_THIN_RADIUS })
-    if (!surv.ok) {
+    const orig = await toRGBA(rf.buf)
+    const work = { data: orig.data.slice(), width: orig.width, height: orig.height }
+    let dirty = false
+
+    applyKeyline(work, { band: KEYLINE_BAND, darken: KEYLINE_DARKEN, protectThin: true, coreDepth: KEYLINE_THIN_RADIUS })
+    const surv = thinFeatureSurvival(orig, work, { thinRadius: KEYLINE_THIN_RADIUS })
+    if (surv.ok) { dirty = true; inkedFrames++ }
+    else {
       keylineWarn.push(`${rf.name}: thin-feature survival ${surv.survival.toFixed(2)} (bright ${surv.brightBefore}->${surv.brightAfter}) — shipped un-inked`)
-      continue
+      // revert keyline, keep original RGB for the AA step
+      work.data.set(orig.data)
     }
-    const inkedBuf = await fromRGBA(after)
-    rf.buf = inkedBuf
-    const rm = regMap.get(rf.name)
-    if (rm) rm.buf = inkedBuf
-    inkedFrames++
+
+    const sharpBefore = interiorSharpness(work)
+    const preAA = work.data.slice()
+    coverageAA(work, { radius: 1 })
+    const sharpAfter = interiorSharpness(work)
+    const smooth = edgeSmoothness(work).smoothness
+    if (sharpAfter >= AA_MIN_INTERIOR_RATIO * sharpBefore) { dirty = true; aaFrames++ }
+    else {
+      aaWarn.push(`${rf.name}: interior sharpness ${sharpBefore.toFixed(3)}->${sharpAfter.toFixed(3)} (smooth ${(100 * smooth).toFixed(0)}%) — AA skipped`)
+      work.data.set(preAA)
+    }
+
+    if (dirty) {
+      const outBuf = await fromRGBA(work)
+      rf.buf = outBuf
+      const rm = regMap.get(rf.name)
+      if (rm) rm.buf = outBuf
+    }
   }
-  log(`  keyline: inked ${inkedFrames}/${registered.length} frame(s)`)
+  log(`  keyline: inked ${inkedFrames}/${registered.length}  coverage-AA: ${aaFrames}/${registered.length}`)
   if (keylineWarn.length) log(`  KEYLINE (thin-feature) WARNINGS:\n    ${keylineWarn.join('\n    ')}`)
+  if (aaWarn.length) log(`  AA (interior-sharpness) WARNINGS:\n    ${aaWarn.join('\n    ')}`)
 
   // ── Temporal coherence ────────────────────────────────────────────────────
   // Per-frame validation cannot see a stutter; measure the frame-to-frame

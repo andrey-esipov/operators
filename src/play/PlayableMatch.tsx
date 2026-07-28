@@ -59,6 +59,9 @@ export function PlayableMatch() {
   const [phase, setPhase] = useState<Phase>('booting')
   const [error, setError] = useState<string | null>(null)
   const [matchOver, setMatchOver] = useState(false)
+  // Controls belong to the pre-round beat. Once the round is live the player is
+  // busy and a legend on screen is just a dev overlay.
+  const [fightStarted, setFightStarted] = useState(false)
 
   const params = new URLSearchParams(window.location.search)
   const stageParam = (params.get('stage') as ScenarioId) || 'ipo-prep'
@@ -111,6 +114,7 @@ export function PlayableMatch() {
         renderer.setInitialState(sim.initialState)
 
         let lastOver = false
+        let announced = false
         // Capture tools need the world to hold still. Reading state and then
         // taking a DPR-2 screenshot of a 3200x1800 page takes long enough for
         // the sim to advance a dozen frames, so an unpaused capture can label a
@@ -128,6 +132,12 @@ export function PlayableMatch() {
           if (over !== lastOver) {
             lastOver = over
             setMatchOver(over)
+          }
+          // The control hint belongs to the pre-round moment, not the match.
+          // One transition, one setState, once per mount.
+          if (!announced && res.state.phase === 'fight') {
+            announced = true
+            setFightStarted(true)
           }
           return res
         })
@@ -215,7 +225,7 @@ export function PlayableMatch() {
         </div>
       )}
 
-      {phase === 'playing' && <ControlHint />}
+      {phase === 'playing' && <ControlHint hide={fightStarted} />}
 
       {matchOver && (
         <div style={{ ...overlayStyle, background: 'rgba(3,5,10,0.55)' }}>
@@ -240,9 +250,10 @@ const overlayStyle: React.CSSProperties = {
 
 /** Dismissable because a permanent keymap legend over the stage is the fastest
  *  way to make a fighting game look like a tutorial instead of a game. */
-function ControlHint() {
+function ControlHint({ hide }: { hide: boolean }) {
   const [visible, setVisible] = useState(true)
   const [mounted, setMounted] = useState(true)
+  const bornAt = useRef(Date.now())
 
   useEffect(() => {
     // Dismiss the moment the player demonstrates they know the controls. The
@@ -257,6 +268,20 @@ function ControlHint() {
     }
   }, [])
 
+  // The round going live is the real deadline — no fighting game leaves a
+  // control legend up over a live match. But the intro is only ~1.5s, measured,
+  // which is not long enough to read three groups of keys, so the round start
+  // is honoured no earlier than a readable floor. Pressing anything still
+  // clears it instantly, so this only ever extends the hint for someone who
+  // hasn't worked out the controls yet.
+  useEffect(() => {
+    if (!hide) return
+    const READABLE_MS = 3200
+    const remaining = Math.max(0, READABLE_MS - (Date.now() - bornAt.current))
+    const t = window.setTimeout(() => setVisible(false), remaining)
+    return () => window.clearTimeout(t)
+  }, [hide])
+
   // Stay mounted until the fade finishes, otherwise it pops out of existence.
   useEffect(() => {
     if (visible) return
@@ -267,31 +292,59 @@ function ControlHint() {
   if (!mounted) return null
 
   const cap: CSSProperties = {
-    display: 'inline-block',
-    minWidth: 17,
-    padding: '2px 5px',
-    marginRight: 3,
-    borderRadius: 4,
-    background: 'linear-gradient(180deg,#2b3444,#161c26)',
-    border: '1px solid rgba(180,205,230,0.28)',
-    borderBottomColor: 'rgba(0,0,0,0.6)',
-    boxShadow: '0 1px 0 rgba(255,255,255,0.12) inset, 0 1px 2px rgba(0,0,0,0.5)',
-    color: '#dce8f4',
-    font: '600 10px ui-monospace, monospace',
-    textAlign: 'center',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 22,
+    height: 22,
+    padding: '0 5px',
+    borderRadius: 5,
+    // A keycap is a physical object: lit from above, darker at the bottom lip,
+    // sitting slightly proud of its surface. Flat rectangles read as web UI.
+    background: 'linear-gradient(180deg,#39445a 0%,#232c3c 46%,#161d29 100%)',
+    border: '1px solid rgba(150,180,215,0.34)',
+    borderTopColor: 'rgba(200,225,255,0.5)',
+    borderBottomColor: 'rgba(0,0,0,0.72)',
+    boxShadow:
+      '0 1px 0 rgba(255,255,255,0.16) inset, 0 -2px 3px rgba(0,0,0,0.45) inset, 0 2px 3px rgba(0,0,0,0.55)',
+    color: '#e6eef8',
+    font: '700 11px/1 Inter, system-ui, sans-serif',
+    letterSpacing: '0.02em',
+    textShadow: '0 1px 1px rgba(0,0,0,0.6)',
   }
 
   const group = (keys: string[], label: string) => (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
-      {keys.map((k) => (
-        <kbd key={k} style={cap}>
-          {k}
-        </kbd>
-      ))}
-      <span style={{ marginLeft: 5, color: '#8ba0b6', font: '10px ui-monospace, monospace', letterSpacing: '0.14em' }}>
+    <span style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+      <span style={{ display: 'inline-flex', gap: 3 }}>
+        {keys.map((k) => (
+          <kbd key={k} style={cap}>
+            {k}
+          </kbd>
+        ))}
+      </span>
+      <span
+        style={{
+          color: 'rgba(214,229,245,0.86)',
+          font: '600 10px/1 Inter, system-ui, sans-serif',
+          letterSpacing: '0.24em',
+          textIndent: '0.24em',
+          textShadow: '0 1px 3px rgba(0,0,0,0.9)',
+        }}
+      >
         {label}
       </span>
     </span>
+  )
+
+  const divider = (
+    <span
+      style={{
+        width: 1,
+        alignSelf: 'stretch',
+        margin: '2px 0 12px',
+        background: 'linear-gradient(180deg,transparent,rgba(150,180,215,0.26),transparent)',
+      }}
+    />
   )
 
   return (
@@ -299,18 +352,27 @@ function ControlHint() {
       style={{
         position: 'absolute',
         left: '50%',
-        bottom: 26,
-        transform: `translateX(-50%) translateY(${visible ? 0 : 6}px)`,
+        bottom: 30,
+        transform: `translateX(-50%) translateY(${visible ? 0 : 8}px)`,
         display: 'flex',
-        gap: 20,
-        alignItems: 'center',
+        alignItems: 'flex-start',
+        gap: 18,
+        padding: '20px 44px 16px',
+        // A scrim, not a panel. It has to reach fully transparent well inside
+        // its own box or the falloff stops being a falloff and becomes an edge —
+        // which is exactly what a rounded translucent rectangle looks like
+        // sitting on top of a game.
+        background:
+          'radial-gradient(closest-side at 50% 48%, rgba(6,10,17,0.72) 0%, rgba(6,10,17,0.46) 38%, rgba(6,10,17,0.14) 68%, rgba(6,10,17,0) 88%)',
         pointerEvents: 'none',
         opacity: visible ? 1 : 0,
         transition: 'opacity 380ms ease, transform 380ms ease',
       }}
     >
       {group(['W', 'A', 'S', 'D'], 'MOVE')}
+      {divider}
       {group(['U', 'I', 'O'], 'PUNCH')}
+      {divider}
       {group(['J', 'K', 'L'], 'KICK')}
     </div>
   )

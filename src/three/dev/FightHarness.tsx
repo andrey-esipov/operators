@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { FightRenderer } from '../fight/FightRenderer'
 import { MockSim } from '../fight/mockSim'
+import { HarnessSim } from '../../fight/harnessSim'
 import { buildMockAtlas } from '../fight/mockAtlas'
 import { STAGE_ORDER } from '../stage/StageRegistry'
 import type { ScenarioId } from '../../types'
@@ -9,9 +10,18 @@ import { getFighter } from '../../data/fighters'
 /**
  * Dev harness for the real-time fight renderer at `?fight=1`.
  *
- * It wires the scripted MockSim into the FightRenderer against the frozen
- * contract, loads two fighters' placeholder atlases, and exposes
- * `window.__FIGHT__` so the screenshot tooling can drive it deterministically.
+ * It drives the FightRenderer from the real simulation against the frozen
+ * contract, loads two fighters' atlases, and exposes `window.__FIGHT__` so the
+ * screenshot tooling can drive it deterministically.
+ *
+ * Two independent axes, which is easy to confuse:
+ *   - `a`/`b` pick the VISUALS (sprite atlases: chesky, lenny, ...).
+ *   - `p1`/`p2` pick the MECHANICS (sim archetypes: operator, vanguard, warden).
+ * A shoto and a zoner can wear the same face; that is intentional.
+ *
+ * `?sim=mock` falls back to the scripted MockSim. That exists only because the
+ * scripted beats hit every VFX path on a fixed schedule, which is useful when
+ * bisecting a rendering problem in isolation from AI behaviour. It is not the game.
  *
  * The automation surface steps the ENGINE, which advances the same renderer the
  * user sees — there is no separate offscreen path that could screenshot a
@@ -59,13 +69,19 @@ export function FightHarness() {
   const stageParam = (params.get('stage') as ScenarioId) || 'ipo-prep'
   const aId = params.get('a') || DEFAULT_A
   const bId = params.get('b') || DEFAULT_B
+  const useMock = params.get('sim') === 'mock'
+  const p1 = params.get('p1') || undefined
+  const p2 = params.get('p2') || undefined
+  const seedParam = Number(params.get('seed'))
 
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
     let renderer: FightRenderer | null = null
     let disposed = false
-    const sim = new MockSim()
+    const sim = useMock
+      ? new MockSim()
+      : new HarnessSim({ p1, p2, seed: Number.isFinite(seedParam) && seedParam ? seedParam : undefined })
 
     void (async () => {
       const scenario: ScenarioId = STAGE_ORDER.includes(stageParam) ? stageParam : 'ipo-prep'

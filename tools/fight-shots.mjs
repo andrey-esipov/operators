@@ -123,16 +123,47 @@ await page.evaluate(() => {
 await sleep(200)
 
 let cur = await page.evaluate(() => window.__FIGHT__.frame())
-for (const [name, target] of SHOTS) {
-  // Step forward to the target sim frame (loop-aware).
-  const delta = ((target - cur) % 596 + 596) % 596
-  await page.evaluate((n) => window.__FIGHT__.step(n), delta)
-  cur = target
-  const phase = await page.evaluate(() => window.__FIGHT__.phase())
+void cur
+
+// Hunt for the beats rather than trusting fixed frame numbers.
+//
+// The frame targets in SHOTS were tuned against the scripted MockSim, whose
+// beats landed on a fixed schedule. The real simulation is an AI-vs-AI fight,
+// so frame 496 is no longer the KO — it is whatever those two happened to be
+// doing. Captures kept their old names and quietly showed the wrong situation,
+// which is the same "label says one thing, pixels say another" trap that had a
+// DEFEAT screenshot actually capturing VICTORY for weeks.
+//
+// So: step frame by frame and capture the first time each situation actually
+// occurs, naming the file after what the sim says it is.
+const WANTED = ['intro', 'footsies', 'attack', 'hitstun', 'blocked', 'jump', 'juggle', 'super', 'ko']
+const MAX_SCAN = Number(flag('scan', '2400'))
+const seen = new Map()
+
+for (let i = 0; i < MAX_SCAN && seen.size < WANTED.length; i++) {
+  const phase = await page.evaluate(() => {
+    window.__FIGHT__.step(1)
+    return window.__FIGHT__.phase()
+  })
+  if (!WANTED.includes(phase) || seen.has(phase)) continue
+
+  const idx = String(seen.size).padStart(2, '0')
+  const name = `${idx}-${phase}`
+  seen.set(phase, name)
   await sleep(60)
   await shot(name)
   const { proj, cov } = await assertFightersOnScreen(name)
-  console.log(`    (${name} @ frame ${target}, phase=${phase}, on-screen=${JSON.stringify(proj.map((p) => [p.x, p.y]))}, painted=${(cov.fraction * 100).toFixed(2)}%)`)
+  console.log(`    (${name} @ frame ${i}, phase=${phase}, on-screen=${JSON.stringify(proj.map((p) => [p.x, p.y]))}, painted=${(cov.fraction * 100).toFixed(2)}%)`)
+}
+
+// A situation that never occurs across 2400 frames of fighting is a broken
+// fight, not a quiet skip: no `ko` means nobody ever died, no `blocked` means
+// the AI never defends. Both are exactly the kind of hole a "wrote 11 files"
+// check sails past.
+const missing = WANTED.filter((p) => !seen.has(p))
+if (missing.length) {
+  console.log(`  FAILED: never observed ${missing.join(', ')} in ${MAX_SCAN} frames`)
+  failures.push(`missing:${missing.join('+')}`)
 }
 
 // One more guard, on the pixels rather than the maths: a frame that is almost

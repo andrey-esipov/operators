@@ -62,6 +62,14 @@ export interface FighterView {
   maxHealth: number
   grounded: boolean
   globalFrame: number
+  /**
+   * Frames elapsed inside the current reaction (hitstun, block, juggle,
+   * knockdown, wakeup). A victim carries no `move` -- only attackers do -- so
+   * without this the reaction clip has no clock of its own and falls back to
+   * `globalFrame`, which for a non-looping clip clamps to its last frame
+   * forever.
+   */
+  reactionFrame: number
 }
 
 export interface FighterUpdateCtx {
@@ -159,12 +167,21 @@ export class Fighter {
         map: shadowTexture(),
         transparent: true,
         depthWrite: false,
+        // The shadow sits a hair above the floor (y≈0.02). At the near-level
+        // fighting-game camera that gap is far below the depth buffer's ability
+        // to separate it from the reflective floor plane at y=0, so with depth
+        // testing on the shadow z-fought the floor and dropped out entirely —
+        // the "sprite pasted on the floor with no contact" tell that survived
+        // for five sessions. It's a ground decal: draw it purely by renderOrder
+        // (after the floor/groundfog at <=4, before the sprite at 10) and never
+        // depth-test it against the floor it is meant to darken.
+        depthTest: false,
         opacity: 0.85,
         color: 0x000000,
       }),
     )
     this.shadow.rotation.x = -Math.PI / 2
-    this.shadow.position.y = WORLD.GROUND_Y + 0.012
+    this.shadow.position.y = WORLD.GROUND_Y + 0.02
     this.shadow.renderOrder = 5
 
     this.group.add(this.shadow, this.mesh, this.bloomMask)
@@ -227,7 +244,7 @@ export class Fighter {
     if (!this.assets) return
 
     // ---- Discrete frame selection (never interpolated) --------------------
-    const idx = resolveFrame(this.assets, { stance: v.stance, move: v.move, globalFrame: v.globalFrame })
+    const idx = resolveFrame(this.assets, { stance: v.stance, move: v.move, globalFrame: v.globalFrame, reactionFrame: v.reactionFrame })
     this.applyFrame(idx)
 
     // ---- Placement: feet land on the sim position -------------------------
@@ -289,16 +306,28 @@ export class Fighter {
     this.uniforms.uOpacity.value = 1
 
     // ---- Contact shadow ---------------------------------------------------
+    // A ground decal that ties the fighter to the floor. It must SHRINK, fade
+    // and soften as the fighter leaves the ground (a small faint pool directly
+    // below reads as height; a shadow that grew would read as nearing a light),
+    // and it must lean away from the stage key light rather than sit as a
+    // symmetric blob.
     const airborne = Math.max(0, v.pos.y) * CM_TO_WORLD // world units above floor
     const w = this.bodyWidth
-    // Directly under the feet on the floor; spreads + fades with height.
-    const spread = 1 + airborne * 0.5
-    const shadowW = w * 0.9 * spread
-    const shadowD = w * 0.4 * spread
-    this.shadow.position.set(feet.x, WORLD.GROUND_Y + 0.012, 0)
+    const lift = THREE.MathUtils.clamp(airborne / (WORLD.FIGHTER_HEIGHT * 0.9), 0, 1)
+    const shrink = 1 - 0.5 * lift // tight on the ground, ~half size at jump apex
+    const shadowW = w * 0.92 * shrink
+    const shadowD = w * 0.3 * shrink
+    // Cast opposite the key light's horizontal direction. uKeyDir points from the
+    // surface toward the light (set by applyLighting above), so the pool leans to
+    // the far side; the offset eases toward centre as the fighter rises.
+    const kd = this.uniforms.uKeyDir.value
+    const away = kd.x >= 0 ? -1 : 1
+    const offX = away * w * 0.14 * (1 - 0.5 * lift)
+    this.shadow.position.set(feet.x + offX, WORLD.GROUND_Y + 0.02, 0)
     this.shadow.scale.set(shadowW, shadowD, 1)
     const smat = this.shadow.material as THREE.MeshBasicMaterial
-    smat.opacity = THREE.MathUtils.clamp(0.8 - airborne * 0.16, 0.18, 0.8) * (1 - this.dissolve)
+    // Dark and crisp planted, lighter and softer airborne.
+    smat.opacity = THREE.MathUtils.clamp(0.85 - 0.62 * lift, 0.16, 0.85) * (1 - this.dissolve)
   }
 
   /** Chest-height world anchor (x, y, z) for the stage's shadow/reflection sync. */

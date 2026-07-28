@@ -71,37 +71,46 @@ describe('AI difficulty tiers', () => {
     }
   })
 
-  // Count tech break-outs and successful grabs against a fixed throw offense.
-  function throwDefence(diff: Difficulty, seed: number): { techs: number; grabbed: number } {
+  // Count defensive escapes and successful grabs against a fixed throw offense.
+  // An "escape" is any read that gets the AI out of the throw pressure: teching
+  // the throw outright, or — once knocked down — an invulnerable wakeup reversal.
+  // Both are defensive reads gated by the tier, so counting only techs would
+  // undercount a hard AI that increasingly escapes via reversal instead.
+  function throwDefence(diff: Difficulty, seed: number): { escapes: number; grabbed: number } {
     let s = fightAtRange(60)
     const ai = makeAI({ difficulty: diff, seed })
-    let techs = 0
+    let escapes = 0
     let grabbed = 0
     let prevTech = false
     let prevKD = false
+    let prevStance: string | undefined
     for (let k = 0; k < 600; k++) {
       const atk = k % 40 === 20 ? inp(5, 'lp', 'lk') : inp(6)
       s = step(s, [atk, ai.decide(s, 1)]).state
-      const teching = s.fighters[1].stance === 'throw-tech'
-      const kd = s.fighters[1].stance === 'knockdown'
-      if (teching && !prevTech) techs++
+      const f = s.fighters[1]
+      const teching = f.stance === 'throw-tech'
+      const kd = f.stance === 'knockdown'
+      const reversed = prevStance === 'wakeup' && f.stance === 'attack' && f.move?.id === 'dp.P'
+      if (teching && !prevTech) escapes++
+      if (reversed) escapes++
       if (kd && !prevKD) grabbed++
       prevTech = teching
       prevKD = kd
+      prevStance = f.stance
     }
-    return { techs, grabbed }
+    return { escapes, grabbed }
   }
 
-  it('a hard AI techs throws far more — and gets grabbed less — than an easy AI', () => {
+  it('a hard AI escapes throw pressure far more — and gets grabbed less — than an easy AI', () => {
     const easy = seeds.reduce(
-      (a, s) => { const r = throwDefence('easy', s); return { t: a.t + r.techs, g: a.g + r.grabbed } },
-      { t: 0, g: 0 },
+      (a, s) => { const r = throwDefence('easy', s); return { e: a.e + r.escapes, g: a.g + r.grabbed } },
+      { e: 0, g: 0 },
     )
     const hard = seeds.reduce(
-      (a, s) => { const r = throwDefence('hard', s); return { t: a.t + r.techs, g: a.g + r.grabbed } },
-      { t: 0, g: 0 },
+      (a, s) => { const r = throwDefence('hard', s); return { e: a.e + r.escapes, g: a.g + r.grabbed } },
+      { e: 0, g: 0 },
     )
-    expect(hard.t).toBeGreaterThan(easy.t)
+    expect(hard.e).toBeGreaterThan(easy.e)
     expect(hard.g).toBeLessThan(easy.g)
   })
 

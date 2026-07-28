@@ -69,7 +69,29 @@ export const BACKDASH_INVULN = 7
 export const LANDING_LAG = 3
 
 /** Hard knockdown then wake-up, in frames. A swept fighter is on the floor
- *  long enough to lose their turn but not so long it stalls the match. */
+ *  long enough to lose their turn but not so long it stalls the match.
+ *
+ *  OKIZEME — the getup game. Knockdown + wakeup are both fully invulnerable
+ *  (combat.hurtboxesOf returns no boxes for either stance), so the downed
+ *  fighter can't be hit until the frame they return to idle. That first
+ *  actionable frame is the mixup, and it resolves as a rock-paper-scissors:
+ *    - MEATY: the attacker times an active hitbox onto the wake frame. Beats a
+ *      passive getup clean (it connects as the defender becomes vulnerable).
+ *    - REVERSAL: the defender buffers a strike-invulnerable DP (e.g. dp.P,
+ *      invuln frames 0-5) during the last ~3 wakeup frames so it fires on the
+ *      first actionable frame. Its startup invuln eats the meaty and launches —
+ *      a reversal beats a meaty. WAKEUP_FRAMES sits under MOTION_WINDOW (12) and
+ *      the reversal's press lands inside ACTION_BUFFER (4) of the wake frame, so
+ *      the motion is still live when the fighter can act; that's what makes the
+ *      reversal reachable rather than a 1-frame trick.
+ *    - BAIT: the attacker blocks instead of pressing. The reversal whiffs into
+ *      its long recovery (dp.P recovers 20f, wildly unsafe) and the attacker
+ *      punishes — a block beats a reversal.
+ *  So meaty > passive, reversal > meaty, bait > reversal: a real triangle, none
+ *  of it free. A zoner has no meterless reversal (only its full-invuln super),
+ *  which is the archetype paying for its getup with meter. The AI plays this:
+ *  see ai.ts's wakeup branch, a tier-scaled, once-per-knockdown gamble that a
+ *  smart attacker baits. Proven end-to-end in okizeme.test.ts. */
 export const KNOCKDOWN_FRAMES = 40
 export const WAKEUP_FRAMES = 10
 

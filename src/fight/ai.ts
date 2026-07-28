@@ -78,16 +78,22 @@ interface Tier {
    *  parrying it instead of blocking — the Third Strike defensive read. Higher
    *  tiers parry far more; a beginner almost never lands one. */
   parryChance: number
+  /** Probability of gambling an invulnerable wakeup reversal when pressured on
+   *  getup. Deliberately never certain — a reversal that always fires is a
+   *  frame-perfect autopilot the attacker can't bait, which is exactly the
+   *  "inhuman opponent" anti-pattern. A beginner AI mostly just eats the meaty;
+   *  a hard AI makes you respect its getup. */
+  reversalChance: number
 }
 
 const TIERS: Record<Difficulty, Tier> = {
   // Slow to react, drops most blocks, barely techs — a beginner punching bag
   // that still occasionally defends itself.
-  easy: { reactionFrames: 22, blockChance: 0.30, punishChance: 0.20, techChance: 0.10, aggression: 0.30, parryChance: 0.05 },
+  easy: { reactionFrames: 22, blockChance: 0.30, punishChance: 0.20, techChance: 0.10, aggression: 0.30, parryChance: 0.05, reversalChance: 0.10 },
   // Competent: blocks the obvious, punishes the slow, techs some throws.
-  medium: { reactionFrames: 14, blockChance: 0.65, punishChance: 0.55, techChance: 0.40, aggression: 0.55, parryChance: 0.28 },
+  medium: { reactionFrames: 14, blockChance: 0.65, punishChance: 0.55, techChance: 0.40, aggression: 0.55, parryChance: 0.28, reversalChance: 0.24 },
   // Sharp but still human-shaped: an 8-frame read is fast, not frame-perfect.
-  hard: { reactionFrames: 8, blockChance: 0.92, punishChance: 0.85, techChance: 0.70, aggression: 0.78, parryChance: 0.6 },
+  hard: { reactionFrames: 8, blockChance: 0.92, punishChance: 0.85, techChance: 0.70, aggression: 0.78, parryChance: 0.6, reversalChance: 0.42 },
 }
 
 /** What the AI reacts to — the opponent's state, snapshotted so we can react to
@@ -123,15 +129,32 @@ export class FighterAI {
   private queue: Step[] = []
   private combo: ComboRun | null = null
   private readonly rng: Rng
+  /** A SEPARATE stream for the wakeup-reversal roll. Reversal is the newest
+   *  behaviour and it must not perturb the main decision cadence: if it drew from
+   *  `rng`, every knockdown would shift the shared stream and silently re-roll
+   *  every other tuned decision downstream (which broke the throw-tech and combo
+   *  baselines). Seeding it off the same seed keeps the AI fully deterministic
+   *  while making the reversal additive to everything that came before it. */
+  private readonly revRng: Rng
   private readonly tier: Tier
   private readonly aggression: number
   private readonly obs: Obs[] = []
   /** Cached lookup of this fighter's super (motion + cost), resolved once from
    *  its def. `null` means the character has no motion super. */
   private superInfo?: { motion: string; cost: number } | null
+  /** Cached lookup of this fighter's invulnerable meterless reversal (a DP-style
+   *  special with startup invuln + a motion), or `null` for archetypes that have
+   *  none — a zoner is meant to have no getup escape but its super. */
+  private reversalInfo?: { motion: string; btn: Button } | null
+  /** Latched so the wakeup reversal is rolled at most once per knockdown, never
+   *  re-rolled every frame of the getup (which would inflate the real rate far
+   *  past the tier value and make it near-certain). Re-armed once we're actionable
+   *  and no longer knocked down. */
+  private wakeupArmed = true
 
   constructor(opts: AIOptions = {}) {
     this.rng = makeRng(opts.seed ?? 0x51ac)
+    this.revRng = makeRng((opts.seed ?? 0x51ac) ^ 0x5eed)
     this.tier = TIERS[opts.difficulty ?? 'medium']
     this.aggression = opts.aggression ?? this.tier.aggression
   }
@@ -157,6 +180,33 @@ export class FighterAI {
     const rest = digits.slice(1)
     this.queue = rest.map((d, idx) =>
       idx === rest.length - 1 ? { rel: d, buttons: ['hp'] as Button[] } : { rel: d },
+    )
+    return frame(toward(digits[0], facing))
+  }
+
+  /** This fighter's invulnerable reversal, or null. A reversal is a special that
+   *  carries startup invuln AND a motion (so it can be buffered on wakeup). We
+   *  read the trigger button from the id suffix — `.K` is kick-triggered, every
+   *  other reversal is punch — matching how `select` gates each motion. */
+  private getReversal(id: string): { motion: string; btn: Button } | null {
+    if (this.reversalInfo !== undefined) return this.reversalInfo
+    const cand = Object.values(getFighterDef(id).moves).find(
+      (m) => m.tag === 'special' && !!m.motion &&
+        m.frames.some((fr) => fr.invuln === 'strike' || fr.invuln === 'full'),
+    )
+    this.reversalInfo = cand && cand.motion
+      ? { motion: cand.motion, btn: cand.id.endsWith('.K') ? 'hk' : 'hp' }
+      : null
+    return this.reversalInfo
+  }
+
+  /** Feed a reversal motion, ending on its trigger button. Identical shape to
+   *  `startSuper` but the terminal button varies (punch vs kick). */
+  private startReversal(motion: string, btn: Button, facing: 1 | -1): InputFrame {
+    const digits = motion.split('').map((c) => Number(c) as Direction)
+    const rest = digits.slice(1)
+    this.queue = rest.map((d, idx) =>
+      idx === rest.length - 1 ? { rel: d, buttons: [btn] } : { rel: d },
     )
     return frame(toward(digits[0], facing))
   }
@@ -347,6 +397,27 @@ export class FighterAI {
     const canAct = state.hitstop === 0 && me.stunRemaining === 0 &&
       (me.stance === 'idle' || me.stance === 'walk-fwd' || me.stance === 'walk-back' ||
         me.stance === 'crouch')
+
+    // Okizeme — the getup gamble. On the last frames of wakeup, under close
+    // pressure, roll the tier's reversal chance and, on a hit, buffer an
+    // invulnerable DP so it fires on the first actionable frame: it beats a meaty
+    // clean (its startup invuln eats the attack, then launches) but whiffs into a
+    // full punish if the attacker simply blocks. Rolled ONCE per knockdown (the
+    // arm latch) and never certain, so it's a read the attacker baits, not a wall.
+    // Only when genuinely pressured — a reversal into empty space is a free punish
+    // the AI should never hand out. A zoner has no meterless reversal and skips it.
+    if (me.stance === 'wakeup' && this.wakeupArmed && me.stunRemaining <= 3) {
+      this.wakeupArmed = false
+      const rev = this.getReversal(me.id)
+      if (rev && o.dist < 100 + REACH_BONUS &&
+          this.revRng.next() < this.tier.reversalChance) {
+        return this.startReversal(rev.motion, rev.btn, facing)
+      }
+    }
+    // Re-arm only once we're back to neutral, so the next knockdown gets a fresh
+    // single roll rather than inheriting this one's spent latch.
+    if (canAct) this.wakeupArmed = true
+
     if (!canAct) return frame(toward(downBack, facing))
 
     // Throw defence: read a close throw startup and roll the tier's tech chance,

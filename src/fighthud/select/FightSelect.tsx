@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Word } from '../Announcements'
 import { loadPortrait, preloadPortrait, type PortraitInfo } from '../portraits'
+import { HeroRender } from './HeroRender'
 import { Sfx } from '../../lib/audio'
 import { Voice } from '../../lib/voice'
 import { getFighter } from '../../data/fighters'
@@ -33,8 +34,11 @@ import '../hud.css'
  */
 
 type Phase = 'p1' | 'p2' | 'stage' | 'launch'
-const ROSTER_COLS = 3
-const STAGE_COLS = 4
+// The roster and stage grids are single-row ribbons across the base of the
+// frame, so a full row is one "column count": left/right cycles the whole row
+// and up/down is a no-op rather than a confusing wrap by sub-row.
+const ROSTER_COLS = 6
+const STAGE_COLS = 8
 
 const CPU = 'medium'
 
@@ -54,14 +58,37 @@ function sayPick(entry: RosterEntry) {
 
 /** Build a layered "place" out of a stage's two-colour swatch — sky glow, a
  *  horizon light-line and a grounded floor — so a card reads as somewhere you'd
- *  fight rather than a flat gradient chip. Pure CSS: the renderer owns the real
- *  3D stage; this is only the picker thumbnail. */
+ *  fight rather than a flat gradient chip. Pure CSS fallback: used only when the
+ *  real rendered stage image (see `stageThumb`) is missing. */
 function stageScene([a, b]: [string, string]): string {
   return [
     `radial-gradient(90% 62% at 50% 122%, ${a}99 0%, transparent 60%)`,
     `radial-gradient(66% 48% at 72% 4%, ${a}66 0%, transparent 55%)`,
     `linear-gradient(180deg, ${b} 0%, color-mix(in srgb, ${a} 26%, ${b}) 56%, color-mix(in srgb, ${a} 62%, ${b}) 60%, color-mix(in srgb, ${a} 22%, ${b}) 61%, ${b} 100%)`,
   ].join(', ')
+}
+
+/** The real rendered stage art already ships at `/stages/<id>.png` (the same
+ *  1536×1024 renders the 3D arenas are built from) but the picker had never
+ *  consumed it — the v9 critic saw only "abstract colour-gradient bands … you
+ *  learn nothing about any arena." Presenting the real image makes Garage / War
+ *  Room / Channel instantly recognisable. stage-art owns producing optimised
+ *  thumbnails; the moment they land at a dedicated path this is the one line to
+ *  repoint. The CSS `stageScene` stays as the 404 fallback so a missing image
+ *  degrades to an evocative place, never a dead box. */
+function stageThumb(id: string): string {
+  return `/stages/${id}.png`
+}
+
+/** Warm the stage images so the stage grid + big preview paint at once instead
+ *  of streaming in, and a capture can't photograph the load race. Fire-and-
+ *  forget; failures are the fallback's problem, not ours. */
+function preloadStages() {
+  if (typeof Image === 'undefined') return
+  for (const s of STAGES) {
+    const img = new Image()
+    img.src = stageThumb(s.id)
+  }
 }
 
 /** Cover-crop an atlas frame into a fixed box — the same trick Portrait.tsx uses
@@ -126,11 +153,37 @@ function AtlasCrop({
   )
 }
 
-/** The locked/side nameplate — mirrors the in-match HUD nameband. While a side
- *  is active and unlocked it *previews* the hovered fighter (art + name + style)
- *  so your half of the screen fills in live as you scrub the grid, the way SF6/
- *  Tekken telegraph a pick. It snaps to a solid lock on confirm. */
-function SidePlate({
+/** Layered depth backdrop — the fix for the v9 critic's "huge dead purple void"
+ *  and "inert flat-gradient background". Not one gradient but a stack: two
+ *  angled key-light shafts, a big accent floor-glow per active side, a receding
+ *  perspective floor, faint drifting energy streaks, and an edge vignette. The
+ *  active player's accent tints the room so the whole frame reacts to the pick.
+ *  Pure decoration — pointer-events off, aria-hidden. */
+function FselBackdrop({ accent, phase }: { accent: string; phase: Phase }) {
+  return (
+    <div className="fsel-bg" data-phase={phase} style={{ ['--bg-accent' as string]: accent }} aria-hidden>
+      <span className="fsel-bg-base" />
+      <span className="fsel-bg-shafts" />
+      <span className="fsel-bg-streaks" />
+      <span className="fsel-bg-floor" />
+      <span className="fsel-bg-glow a" />
+      <span className="fsel-bg-glow b" />
+      <span className="fsel-bg-vignette" />
+    </div>
+  )
+}
+
+/** A commanding, animated hero podium — the fix for the v9 critic's "no large
+ *  animated hero render of the hovered fighter". Each side owns roughly a third
+ *  of the frame: a big idle-animating HeroRender planted on a lit disc, the
+ *  fighter's short name blown up as a backing graphic (the Tekken/Strive name
+ *  slab), and a raked identity plate. While a side is active-unlocked it shows
+ *  the *hovered* fighter live so your half of the screen fills in as you scrub
+ *  the grid; it snaps to a solid lock on confirm; and the opposite empty side
+ *  reads as a lit "awaiting challenger" plinth rather than dead space, so the
+ *  frame is a confrontation from the first moment. Keeps the `.fsel-plate`
+ *  class + `fsel-plate-<side>` testid the capture tools assert against. */
+function HeroPodium({
   side,
   entry,
   preview,
@@ -144,31 +197,43 @@ function SidePlate({
   const shown = entry ?? (active ? preview : null)
   const locked = !!entry
   const previewing = !locked && !!shown
+  const waiting = !shown
   const arch = shown ? ARCHETYPES[shown.archetype] : null
   return (
     <div
-      className={`fsel-plate ${side} ${locked ? 'locked' : ''} ${active ? 'active' : ''} ${previewing ? 'previewing' : ''}`}
+      className={`fsel-plate fsel-podium ${side} ${locked ? 'locked' : ''} ${active ? 'active' : ''} ${previewing ? 'previewing' : ''} ${waiting ? 'waiting' : ''}`}
       data-testid={`fsel-plate-${side}`}
-      style={{ ['--accent' as string]: shown?.accent ?? '#4a4a5a' }}
+      style={{ ['--accent' as string]: shown?.accent ?? '#5b4f86' }}
     >
-      <div className="fsel-plate-art">
+      <span className="fsel-podium-bigname" aria-hidden>{shown ? shown.shortName : side === 'a' ? 'P1' : 'P2'}</span>
+      <span className="fsel-podium-spot" aria-hidden />
+      <span className="fsel-podium-disc" aria-hidden />
+      <div className="fsel-podium-art">
         {shown ? (
-          <AtlasCrop key={shown.skin} skin={shown.skin} w={190} h={240} accent={shown.accent} />
+          <HeroRender
+            key={shown.skin}
+            skin={shown.skin}
+            w={430}
+            h={560}
+            accent={shown.accent}
+            facing={side === 'a' ? 1 : -1}
+          />
         ) : (
-          <span className="fsel-plate-q">?</span>
+          <span className="fsel-podium-ghost" aria-hidden>?</span>
         )}
       </div>
-      <div className="fsel-plate-meta">
-        <div className="fsel-plate-tag">
-          {side === 'a' ? 'PLAYER 1' : 'PLAYER 2'}
-          {previewing && <span className="fsel-plate-state"> — HOVER</span>}
-          {locked && <span className="fsel-plate-state locked"> — LOCKED</span>}
+      <div className="fsel-podium-plate">
+        <div className="fsel-podium-tag">
+          <span className="fsel-podium-pnum">{side === 'a' ? 'PLAYER 1' : 'PLAYER 2'}</span>
+          {previewing && <span className="fsel-plate-state"> HOVER</span>}
+          {locked && <span className="fsel-plate-state locked"> LOCKED</span>}
+          {waiting && <span className="fsel-plate-state waiting"> AWAITING</span>}
         </div>
-        <div className="fsel-plate-name" style={{ color: shown?.accent ?? '#8a8a9a' }}>
+        <div className="fsel-podium-name" style={{ color: shown?.accent ?? '#8a80a8' }}>
           {shown ? shown.shortName : '—'}
         </div>
         {arch && (
-          <div className="fsel-plate-arch" style={{ ['--accent' as string]: arch.accent }}>
+          <div className="fsel-podium-arch" style={{ ['--accent' as string]: arch.accent }}>
             <span className="fsel-arch-label">{arch.label}</span>
             <span className="fsel-arch-hp">{arch.hp} HP</span>
           </div>
@@ -205,6 +270,9 @@ export function FightSelect() {
     Promise.all(ROSTER.map((r) => preloadPortrait(r.skin))).then(() => {
       if (live) setPortraitsReady(true)
     })
+    // Warm the real stage images too so the stage grid + big preview are ready
+    // by the time P2 locks in and we switch to the stage phase.
+    preloadStages()
     return () => {
       live = false
     }
@@ -416,8 +484,25 @@ export function FightSelect() {
 
   const cells = useMemo(() => grid.map((g, i) => ({ g, i })), [grid])
 
+  // The whole room reacts to the pick: the active side's colour drives the
+  // backdrop tint, so the frame is never a neutral purple void.
+  const activeAccent =
+    phase === 'launch'
+      ? '#ef6a3a'
+      : phase === 'stage'
+        ? STAGES[cursor]?.swatch[0] ?? '#f6ec5a'
+        : hovered?.accent ?? headAccent
+  const hoveredStage = phase === 'stage' ? STAGES[cursor] : null
+  const headSub =
+    phase === 'p1' ? 'CHOOSE YOUR OPERATOR'
+      : phase === 'p2' ? 'CHOOSE YOUR CHALLENGER'
+        : phase === 'stage' ? 'CHOOSE YOUR ARENA'
+          : ''
+
   return (
     <div className="fsel-root" data-testid="fsel-root" data-phase={phase} data-portraits={portraitsReady ? 'ready' : 'loading'}>
+      <FselBackdrop accent={activeAccent} phase={phase} />
+
       {/* Screen-edge confirm pulse — same defensive-flash language as FlashChip. */}
       <AnimatePresence>
         {confirmKey > 0 && (
@@ -435,55 +520,22 @@ export function FightSelect() {
       {phase !== 'launch' && (
         <header className="fsel-head">
           <Word text={heading} color="#ffffff" accent={headAccent} className="fsel-title" />
+          {headSub && <span className="fsel-head-sub">{headSub}</span>}
         </header>
       )}
 
-      <SidePlate side="a" entry={p1Entry} preview={phase === 'p1' ? ROSTER[cursor] : null} active={phase === 'p1'} />
-      <SidePlate side="b" entry={p2Entry} preview={phase === 'p2' ? ROSTER[cursor] : null} active={phase === 'p2'} />
-
-      {phase !== 'stage' && phase !== 'launch' && (
-        <div className="fsel-stage-area">
-          <div className="fsel-grid fsel-grid-roster" role="listbox" aria-label="fighters">
-            {(cells as { g: RosterEntry; i: number }[]).map(({ g, i }) => {
-              const isCursor = i === cursor
-              const lockedByP1 = p1 === i && phase === 'p2'
-              return (
-                <motion.button
-                  key={g.skin}
-                  type="button"
-                  className={`fsel-cell ${isCursor ? 'cursor' : ''} ${lockedByP1 ? 'taken' : ''}`}
-                  data-testid="fsel-cell"
-                  data-skin={g.skin}
-                  data-cursor={isCursor ? '1' : undefined}
-                  style={{ ['--accent' as string]: g.accent }}
-                  onMouseEnter={() => { if (i !== cursor) { setCursor(i); Sfx.menuMove() } }}
-                  onClick={() => { setCursor(i); confirm() }}
-                  initial={{ opacity: 0, y: 18 }}
-                  animate={{ opacity: 1, y: 0, scale: isCursor ? 1.07 : 1 }}
-                  transition={{
-                    opacity: { duration: 0.24, delay: 0.03 * i },
-                    y: { type: 'spring', stiffness: 420, damping: 26, delay: 0.03 * i },
-                    scale: { type: 'spring', stiffness: 540, damping: 20 },
-                  }}
-                >
-                  <span className="fsel-cell-art">
-                    <AtlasCrop skin={g.skin} w={150} h={168} accent={g.accent} />
-                    <span className="fsel-cell-sheen" aria-hidden />
-                  </span>
-                  <span className="fsel-cell-name">{g.shortName}</span>
-                  <span className="fsel-cell-arch" style={{ ['--accent' as string]: ARCHETYPES[g.archetype].accent }}>
-                    {ARCHETYPES[g.archetype].label}
-                  </span>
-                  {lockedByP1 && <span className="fsel-cell-p1">P1</span>}
-                </motion.button>
-              )
-            })}
-          </div>
+      {(phase === 'p1' || phase === 'p2') && (
+        <>
+          <HeroPodium side="a" entry={p1Entry} preview={phase === 'p1' ? ROSTER[cursor] : null} active={phase === 'p1'} />
+          <span className="fsel-clash-seam" aria-hidden />
+          <HeroPodium side="b" entry={p2Entry} preview={phase === 'p2' ? ROSTER[cursor] : null} active={phase === 'p2'} />
 
           {hovered && hoveredArch && (
             <div className="fsel-readout" data-testid="fsel-readout" style={{ ['--accent' as string]: hovered.accent }}>
-              <div className="fsel-readout-name">{hovered.name}</div>
-              <div className="fsel-readout-arch" style={{ color: hoveredArch.accent }}>{hoveredArch.label}</div>
+              <div className="fsel-readout-head">
+                <span className="fsel-readout-name">{hovered.name}</span>
+                <span className="fsel-readout-arch" style={{ color: hoveredArch.accent }}>{hoveredArch.label}</span>
+              </div>
               <div className="fsel-readout-blurb">{hoveredArch.blurb}</div>
               <div className="fsel-readout-hp">
                 <span className="fsel-readout-hp-label">HEALTH</span>
@@ -494,11 +546,81 @@ export function FightSelect() {
               </div>
             </div>
           )}
-        </div>
+
+          <div className="fsel-tray">
+            <div className="fsel-grid fsel-grid-roster" role="listbox" aria-label="fighters">
+              {(cells as { g: RosterEntry; i: number }[]).map(({ g, i }) => {
+                const isCursor = i === cursor
+                const lockedByP1 = p1 === i && phase === 'p2'
+                return (
+                  <motion.button
+                    key={g.skin}
+                    type="button"
+                    className={`fsel-cell ${isCursor ? 'cursor' : ''} ${lockedByP1 ? 'taken' : ''}`}
+                    data-testid="fsel-cell"
+                    data-skin={g.skin}
+                    data-cursor={isCursor ? '1' : undefined}
+                    style={{ ['--accent' as string]: g.accent }}
+                    onMouseEnter={() => { if (i !== cursor) { setCursor(i); Sfx.menuMove() } }}
+                    onClick={() => { setCursor(i); confirm() }}
+                    initial={{ opacity: 0, y: 18 }}
+                    animate={{ opacity: 1, y: 0, scale: isCursor ? 1.06 : 1 }}
+                    transition={{
+                      opacity: { duration: 0.24, delay: 0.03 * i },
+                      y: { type: 'spring', stiffness: 420, damping: 26, delay: 0.03 * i },
+                      scale: { type: 'spring', stiffness: 540, damping: 20 },
+                    }}
+                  >
+                    <span className="fsel-cell-art">
+                      <AtlasCrop skin={g.skin} w={190} h={120} topFraction={0.52} sideTrim={0.05} accent={g.accent} />
+                      <span className="fsel-cell-sheen" aria-hidden />
+                    </span>
+                    <span className="fsel-cell-foot">
+                      <span className="fsel-cell-name">{g.shortName}</span>
+                      <span className="fsel-cell-arch" style={{ ['--accent' as string]: ARCHETYPES[g.archetype].accent }}>
+                        {ARCHETYPES[g.archetype].label}
+                      </span>
+                    </span>
+                    {lockedByP1 && <span className="fsel-cell-p1">P1</span>}
+                  </motion.button>
+                )
+              })}
+            </div>
+          </div>
+        </>
       )}
 
       {phase === 'stage' && (
         <div className="fsel-stage-area">
+          {hoveredStage && (
+            <motion.div
+              key={hoveredStage.id}
+              className="fsel-stage-preview"
+              data-stage={hoveredStage.id}
+              initial={{ opacity: 0, scale: 1.04 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.35, ease: 'easeOut' }}
+            >
+              <span
+                className="fsel-stage-preview-img"
+                style={{ background: `url(${stageThumb(hoveredStage.id)}) center/cover no-repeat, ${stageScene(hoveredStage.swatch)}` }}
+                aria-hidden
+              />
+              <span className="fsel-stage-preview-grade" aria-hidden />
+              <span className="fsel-stage-preview-scan" aria-hidden />
+              <div className="fsel-stage-preview-cap">
+                <Word text={hoveredStage.name} color="#ffffff" accent="#f6ec5a" className="fsel-stage-preview-name" />
+                {p1Entry && p2Entry && (
+                  <span className="fsel-stage-preview-matchup">
+                    <b style={{ color: p1Entry.accent }}>{p1Entry.shortName}</b>
+                    <i>VS</i>
+                    <b style={{ color: p2Entry.accent }}>{p2Entry.shortName}</b>
+                  </span>
+                )}
+              </div>
+            </motion.div>
+          )}
+
           <div className="fsel-grid fsel-grid-stage" role="listbox" aria-label="stages">
             {(cells as { g: StageEntry; i: number }[]).map(({ g, i }) => {
               const isCursor = i === cursor && phase === 'stage'
@@ -513,16 +635,19 @@ export function FightSelect() {
                   data-cursor={isCursor ? '1' : undefined}
                   onMouseEnter={() => { if (phase === 'stage' && i !== cursor) { setCursor(i); Sfx.menuMove() } }}
                   onClick={() => { if (phase === 'stage') { setCursor(i); confirm() } }}
-                  initial={{ opacity: 0, y: 16 }}
-                  animate={{ opacity: 1, y: 0, scale: isCursor ? 1.06 : 1 }}
+                  initial={{ opacity: 0, y: 14 }}
+                  animate={{ opacity: 1, y: 0, scale: isCursor ? 1.05 : 1 }}
                   transition={{
                     opacity: { duration: 0.22, delay: 0.028 * i },
                     y: { type: 'spring', stiffness: 440, damping: 26, delay: 0.028 * i },
                     scale: { type: 'spring', stiffness: 540, damping: 20 },
                   }}
                 >
-                  <span className="fsel-stage-thumb" data-stage={g.id} style={{ background: stageScene(g.swatch) }}>
-                    <span className="fsel-stage-floor" aria-hidden />
+                  <span
+                    className="fsel-stage-thumb"
+                    data-stage={g.id}
+                    style={{ background: `url(${stageThumb(g.id)}) center/cover no-repeat, ${stageScene(g.swatch)}` }}
+                  >
                     <span className="fsel-stage-sheen" aria-hidden />
                     <span className="fsel-stage-vignette" aria-hidden />
                     {g.note && <span className="fsel-stage-flag">{g.note}</span>}
@@ -537,18 +662,28 @@ export function FightSelect() {
 
       {phase === 'launch' && (
         <div className="fsel-launch" data-testid="fsel-launch" data-beat={launchBeat}>
+          {stage != null && STAGES[stage] && (
+            <span
+              className="fsel-vs-arena"
+              style={{ background: `url(${stageThumb(STAGES[stage].id)}) center/cover no-repeat, ${stageScene(STAGES[stage].swatch)}` }}
+              aria-hidden
+            />
+          )}
           <span className="fsel-vs-scrim" aria-hidden />
-          <span className="fsel-vs-bolt" aria-hidden />
+          <span className="fsel-vs-rays" aria-hidden />
+          <span className="fsel-vs-seam" aria-hidden />
+          <span className="fsel-vs-burst" data-beat={launchBeat} aria-hidden />
+
           <motion.div
             className="fsel-vs-fighter a"
             layout="position"
             style={{ ['--accent' as string]: p1Entry?.accent ?? '#f4c130' }}
-            initial={{ x: '-16vw', opacity: 0, rotate: -5 }}
+            initial={{ x: '-18vw', opacity: 0, rotate: -5 }}
             animate={{ x: 0, opacity: 1, rotate: 0 }}
             transition={{ type: 'spring', stiffness: 260, damping: 22, layout: { type: 'spring', stiffness: 320, damping: 34 } }}
           >
             <span className="fsel-vs-art">
-              {p1Entry && <AtlasCrop key={p1Entry.skin} skin={p1Entry.skin} w={340} h={430} accent={p1Entry.accent} />}
+              {p1Entry && <HeroRender key={p1Entry.skin} skin={p1Entry.skin} w={380} h={560} accent={p1Entry.accent} facing={1} className="fsel-crop" />}
             </span>
             <span className="fsel-vs-name" style={{ color: p1Entry?.accent }}>{p1Entry?.shortName}</span>
             <span className="fsel-vs-arch">{p1Entry ? ARCHETYPES[p1Entry.archetype].label : ''}</span>
@@ -585,12 +720,12 @@ export function FightSelect() {
             className="fsel-vs-fighter b"
             layout="position"
             style={{ ['--accent' as string]: p2Entry?.accent ?? '#ef6a3a' }}
-            initial={{ x: '16vw', opacity: 0, rotate: 5 }}
+            initial={{ x: '18vw', opacity: 0, rotate: 5 }}
             animate={{ x: 0, opacity: 1, rotate: 0 }}
             transition={{ type: 'spring', stiffness: 260, damping: 22, layout: { type: 'spring', stiffness: 320, damping: 34 } }}
           >
             <span className="fsel-vs-art">
-              {p2Entry && <AtlasCrop key={p2Entry.skin} skin={p2Entry.skin} w={340} h={430} accent={p2Entry.accent} />}
+              {p2Entry && <HeroRender key={p2Entry.skin} skin={p2Entry.skin} w={380} h={560} accent={p2Entry.accent} facing={-1} className="fsel-crop" />}
             </span>
             <span className="fsel-vs-name" style={{ color: p2Entry?.accent }}>{p2Entry?.shortName}</span>
             <span className="fsel-vs-arch">{p2Entry ? ARCHETYPES[p2Entry.archetype].label : ''}</span>

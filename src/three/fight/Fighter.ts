@@ -13,6 +13,44 @@ import {
 import { resolveFrame } from './AnimationDriver'
 import { CM_TO_WORLD, simToWorld, FIGHTER_Z } from './worldScale'
 
+/**
+ * How long a hit flash reads before it hard-cuts to zero, in unscaled seconds.
+ * ~3 frames at 60fps. The flash is boxed from the contact event, NOT the hurt
+ * stance, so it can never persist across a multi-frame juggle/hitstun and erase
+ * the pose underneath. Exported so a guard test can assert the box actually
+ * expires (the failure mode that produced the "white silhouette" regression).
+ */
+export const FLASH_SECONDS = 0.05
+
+/**
+ * The hit-flash envelope as a self-contained, testable unit.
+ *
+ * The one invariant that matters: the flash is a fixed-length box armed at the
+ * moment of contact. It reads at a constant, hit-weighted intensity for
+ * FLASH_SECONDS and then HARD-CUTS to exactly zero — it is never bound to a
+ * hurt STANCE. `juggle`/`hitstun` are multi-frame states; a flash keyed off
+ * "is this fighter hurt" holds for the whole beat and whites-out the pose
+ * underneath (the regression this guards against). A combo's next hit re-arms
+ * the box (a fresh flashbulb per connect). Peak is capped so even the frame a
+ * still-capture lands on keeps a readable silhouette; additive in the shader.
+ */
+export class HitFlashBox {
+  private timer = 0
+  private strength = 0
+  /** Latch a fresh flash from a contact event. */
+  arm(strength: number) {
+    this.strength = Math.min(1, Math.max(0, strength))
+    this.timer = FLASH_SECONDS
+  }
+  /** Advance by unscaled dt and return the visible additive value (0 once the
+   *  box has expired — a hard cut, not a fade). */
+  step(realDt: number): number {
+    if (this.timer > 0) this.timer = Math.max(0, this.timer - realDt)
+    return this.timer > 0 ? Math.min(0.45, this.strength) : 0
+  }
+}
+
+
 /** The interpolated, render-ready view of one fighter for a single frame. */
 export interface FighterView {
   pos: Vec2
@@ -73,7 +111,7 @@ export class Fighter {
   private assets: FighterAssets | null = null
   private pxToWorld = CM_TO_WORLD
   private curFrame = -1
-  private hitFlash = 0
+  private flash = new HitFlashBox()
   private dissolve = 0
   private targetDissolve = 0
   private accent = new THREE.Color(0xffa53c)
@@ -160,7 +198,10 @@ export class Fighter {
   }
 
   triggerHitFlash(strength = 1) {
-    this.hitFlash = Math.min(1, strength)
+    // Arm the box from THIS contact event. See HitFlashBox — the flash is a
+    // fixed-length flashbulb, never bound to the victim's hurt stance, so it
+    // cannot persist across a juggle/hitstun and erase the pose underneath.
+    this.flash.arm(strength)
   }
 
   setDissolve(target: number) {
@@ -235,29 +276,12 @@ export class Fighter {
     this.uniforms.uAccent.value.copy(this.accent)
     this.uniforms.uTime.value += ctx.dt
 
-    // ---- Hit flash (brief; rides unscaled dt so hitstop can't hold it) ----
-    // A hit flash is a fighting-game convention, but it must read as a crisp
-    // white STROBE, not a lingering desaturating wash. The old envelope sat at a
-    // muddy ~0.4-0.7 mix-to-white for several frames, so the victim held a flat
-    // grey mid-tone that read as a broken material — and because a knockdown or
-    // juggle begins only a few frames after the launching hit, a still of that
-    // pose caught the fighter mid-wash as a colourless ghost. Two changes fix it:
-    // a smoothstep shoulder biases the visible value toward a hot near-white peak
-    // (a clean impact silhouette) or toward zero, spending almost no time in the
-    // grey middle; and a faster decay clears it in ~2-3 frames so the downed pose
-    // that follows shows the character's true albedo. Peak strength is set per
-    // hit weight by the caller (light taps barely flash, launchers flash hard).
-    if (this.hitFlash > 0) this.hitFlash = Math.max(0, this.hitFlash - ctx.realDt * 18)
-    const f = this.hitFlash
-    // Cap the visible peak well below full white so even the single contact
-    // frame a still-capture lands on keeps a clearly readable silhouette (face,
-    // fabric folds, limb pose) — a hot flash, never a blank white cutout. The
-    // capture tool always samples the launch-contact frame for a juggle beat, so
-    // this cap is what a viewer judging a still actually sees. The flash is now
-    // ADDITIVE in the shader, so the same numeric peak lands far hotter than the
-    // old mix() did — 0.45 of added white already reads as a clear flashbulb pop
-    // while leaving the darker fabric regions un-clipped and still coloured.
-    this.uniforms.uHitFlash.value = Math.min(0.45, f * f * (3.0 - 2.0 * f))
+    // ---- Hit flash (a fixed-length flashbulb, boxed from the contact event) ----
+    // Driven off a timer armed at contact (see HitFlashBox), NOT the hurt stance:
+    // full intensity for FLASH_SECONDS (~3 frames), then a HARD CUT to zero.
+    // Fighting games cut; a fade reads as motion blur. For the rest of a juggle
+    // the victim shows its true albedo instead of a white-silhouette wash.
+    this.uniforms.uHitFlash.value = this.flash.step(ctx.realDt)
 
     // ---- KO dissolve ------------------------------------------------------
     this.dissolve += (this.targetDissolve - this.dissolve) * Math.min(1, ctx.dt * 2.5)

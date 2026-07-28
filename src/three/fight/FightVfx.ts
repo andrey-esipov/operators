@@ -29,17 +29,19 @@ interface HitTuning {
   shake: number
   push: number
   core: number
+  /** Peak of the victim's white impact strobe, 0..1, scaled with hit weight. */
+  flash: number
   hot: THREE.Color
   cool: THREE.Color
 }
 
 const HIT: Record<HitLevel, HitTuning> = {
-  light:   { count: 26, speed: 7,  size: 0.13, hitstopMs: 60,  hitstopScale: 0.14, shake: 0.10, push: 0.15, core: 1.0, hot: new THREE.Color(0xffffff), cool: new THREE.Color(0xffd27a) },
-  medium:  { count: 40, speed: 9,  size: 0.16, hitstopMs: 90,  hitstopScale: 0.09, shake: 0.16, push: 0.28, core: 1.3, hot: new THREE.Color(0xffffff), cool: new THREE.Color(0xffb04a) },
-  heavy:   { count: 64, speed: 12, size: 0.20, hitstopMs: 130, hitstopScale: 0.05, shake: 0.26, push: 0.5,  core: 1.7, hot: new THREE.Color(0xfff4e0), cool: new THREE.Color(0xff7a2a) },
-  launcher:{ count: 72, speed: 13, size: 0.22, hitstopMs: 140, hitstopScale: 0.05, shake: 0.30, push: 0.6,  core: 1.8, hot: new THREE.Color(0xffffff), cool: new THREE.Color(0x8ad2ff) },
-  sweep:   { count: 50, speed: 11, size: 0.19, hitstopMs: 110, hitstopScale: 0.06, shake: 0.22, push: 0.4,  core: 1.5, hot: new THREE.Color(0xfff0dd), cool: new THREE.Color(0xffa030) },
-  crumple: { count: 84, speed: 14, size: 0.24, hitstopMs: 170, hitstopScale: 0.03, shake: 0.36, push: 0.7,  core: 2.0, hot: new THREE.Color(0xffffff), cool: new THREE.Color(0xff5a3c) },
+  light:   { count: 26, speed: 7,  size: 0.13, hitstopMs: 60,  hitstopScale: 0.14, shake: 0.10, push: 0.15, core: 1.0, flash: 0.55, hot: new THREE.Color(0xffffff), cool: new THREE.Color(0xffd27a) },
+  medium:  { count: 40, speed: 9,  size: 0.16, hitstopMs: 90,  hitstopScale: 0.09, shake: 0.16, push: 0.28, core: 1.3, flash: 0.72, hot: new THREE.Color(0xffffff), cool: new THREE.Color(0xffb04a) },
+  heavy:   { count: 64, speed: 12, size: 0.20, hitstopMs: 130, hitstopScale: 0.05, shake: 0.26, push: 0.5,  core: 1.7, flash: 0.9,  hot: new THREE.Color(0xfff4e0), cool: new THREE.Color(0xff7a2a) },
+  launcher:{ count: 72, speed: 13, size: 0.22, hitstopMs: 140, hitstopScale: 0.05, shake: 0.30, push: 0.6,  core: 1.8, flash: 1.0,  hot: new THREE.Color(0xffffff), cool: new THREE.Color(0x8ad2ff) },
+  sweep:   { count: 50, speed: 11, size: 0.19, hitstopMs: 110, hitstopScale: 0.06, shake: 0.22, push: 0.4,  core: 1.5, flash: 0.82, hot: new THREE.Color(0xfff0dd), cool: new THREE.Color(0xffa030) },
+  crumple: { count: 84, speed: 14, size: 0.24, hitstopMs: 170, hitstopScale: 0.03, shake: 0.36, push: 0.7,  core: 2.0, flash: 1.0,  hot: new THREE.Color(0xffffff), cool: new THREE.Color(0xff5a3c) },
 }
 
 export interface FightVfxDeps {
@@ -83,8 +85,26 @@ export class FightVfx {
 
   private hit(at: Vec2, attacker: 0 | 1, level: HitLevel, damage: number) {
     const t = HIT[level] ?? HIT.medium
-    const pos = this.world(at)
     const power = Math.min(1, damage / 120)
+
+    // Anchor the spark to where the blow actually lands. Raw event.at can sit at
+    // the pushbox centre (spark floats in the gap between the fighters) or drop
+    // to the floor on a low, which is the "ground starburst while the punch
+    // lands at the chin" tell. Pin it to the front edge of the defender's
+    // silhouette — the side facing the attacker — at the sim's contact height
+    // clamped to a plausible strike band. This is the exact rule the block clang
+    // uses, so a clean hit and a guard now spawn from one shared vocabulary at
+    // the same believable point on the hurt fighter.
+    const target = (attacker === 0 ? 1 : 0) as 0 | 1
+    const def = this.d.fighters[target]
+    const atk = this.d.fighters[attacker]
+    const dir = Math.sign(atk.mesh.position.x - def.mesh.position.x) || 1
+    const hitCm = THREE.MathUtils.clamp(at.y, 40, 175)
+    const pos = this.p.set(
+      def.mesh.position.x + dir * def.bodyWidth * 0.35,
+      WORLD.GROUND_Y + hitCm * CM_TO_WORLD,
+      0.05,
+    )
 
     // Sharp spark star at the exact contact point.
     this.d.additive.emit({
@@ -112,8 +132,7 @@ export class FightVfx {
     this.d.requestHitstop(t.hitstopMs, t.hitstopScale)
     this.d.camera.addShake(t.shake)
     this.d.camera.punchIn(t.push)
-    const target = (attacker === 0 ? 1 : 0) as 0 | 1
-    this.d.fighters[target]?.triggerHitFlash(0.9)
+    this.d.fighters[target]?.triggerHitFlash(t.flash)
     this.d.emitEngine?.(attacker, target, level, power, 'hit')
   }
 

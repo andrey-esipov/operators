@@ -236,13 +236,23 @@ export class Fighter {
     this.uniforms.uTime.value += ctx.dt
 
     // ---- Hit flash (brief; rides unscaled dt so hitstop can't hold it) ----
-    // A hit flash is a fighting-game convention, but it must SNAP: a couple of
-    // frames of near-white on the contact frame, then gone. Decaying too slowly
-    // (and, previously, letting bloom amplify it) turned the defender into a
-    // sustained white ghost. Fast unscaled decay keeps it to ~3-4 frames, and
-    // squaring the envelope makes it spike and clear rather than linger.
-    if (this.hitFlash > 0) this.hitFlash = Math.max(0, this.hitFlash - ctx.realDt * 12)
-    this.uniforms.uHitFlash.value = this.hitFlash * this.hitFlash * 0.85
+    // A hit flash is a fighting-game convention, but it must read as a crisp
+    // white STROBE, not a lingering desaturating wash. The old envelope sat at a
+    // muddy ~0.4-0.7 mix-to-white for several frames, so the victim held a flat
+    // grey mid-tone that read as a broken material — and because a knockdown or
+    // juggle begins only a few frames after the launching hit, a still of that
+    // pose caught the fighter mid-wash as a colourless ghost. Two changes fix it:
+    // a smoothstep shoulder biases the visible value toward a hot near-white peak
+    // (a clean impact silhouette) or toward zero, spending almost no time in the
+    // grey middle; and a faster decay clears it in ~2-3 frames so the downed pose
+    // that follows shows the character's true albedo. Peak strength is set per
+    // hit weight by the caller (light taps barely flash, launchers flash hard).
+    if (this.hitFlash > 0) this.hitFlash = Math.max(0, this.hitFlash - ctx.realDt * 18)
+    const f = this.hitFlash
+    // Cap the visible peak below full white so even the single contact frame a
+    // still-capture might land on keeps a readable silhouette (face, fabric
+    // folds) — a hot flash, never a blank white cutout.
+    this.uniforms.uHitFlash.value = Math.min(0.86, f * f * (3.0 - 2.0 * f))
 
     // ---- KO dissolve ------------------------------------------------------
     this.dissolve += (this.targetDissolve - this.dissolve) * Math.min(1, ctx.dt * 2.5)

@@ -83,17 +83,26 @@ async function waitStableFight() {
 
 async function main() {
   await page.goto(URL, { waitUntil: 'domcontentloaded' })
-  if (!(await waitStableFight())) throw new Error('never reached a stable fight phase')
-  await page.mouse.click(800, 450)
-  await page.waitForTimeout(400)
 
-  // The scenario id is NOT exposed on __PLAY__ and PlayableMatch.tsx is not ours
-  // to edit, so stage identity is confirmed VISUALLY from the crops: ipo-prep is
-  // the gold big-board + bell rostrum + columns; pre-pmf is the roll-up door +
-  // shelving + string-lights. A wrong-arena capture is unmistakable on sight.
-  if (!NO_PAUSE) {
-    await page.evaluate(() => window.__PLAY__?.pause?.())
-    await page.waitForTimeout(120)
+  // This shared tree reloads constantly (six other agents saving files), which
+  // drops the page back to "loading match…" mid-capture. Retry the whole
+  // settle+freeze until we get a live, painted, non-reloaded frame.
+  const settleMs = Number(arg('--settle', '1600'))
+  for (let attempt = 0; attempt < 8; attempt++) {
+    if (!(await waitStableFight())) continue
+    await page.mouse.click(800, 450)
+    reloaded = false // arm only after warm-up
+    // Let the round-intro "FIGHT!" banner clear before we freeze, or it paints a
+    // translucent word across the stage art we came to inspect.
+    await page.waitForTimeout(settleMs)
+    if (!NO_PAUSE) {
+      await page.evaluate(() => window.__PLAY__?.pause?.())
+      await page.waitForTimeout(120)
+    }
+    const live = await page.evaluate(() => !!window.__PLAY__?.ready?.() && window.__PLAY__.state().phase === 'fight').catch(() => false)
+    if (live && !reloaded) break
+    if (!NO_PAUSE) await page.evaluate(() => window.__PLAY__?.resume?.()).catch(() => {})
+    await page.waitForTimeout(400)
   }
 
   writeFileSync(`${OUT}/full.png`, await page.screenshot({ clip: { x: 0, y: 0, width: W, height: H } }))

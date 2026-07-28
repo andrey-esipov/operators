@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import type { QualityFlags } from '../../core/QualityManager'
 import type { StageConfig } from '../StageRegistry'
-import { StageBuild, structureMat, glowMat, makeScreen } from '../StageKit'
+import { StageBuild, structureMat, glowMat, makeScreen, fresnelShell } from '../StageKit'
 import { overhead, foreground } from './StageSet'
 
 export function buildIpoPrep(b: StageBuild, cfg: StageConfig, flags: QualityFlags) {
@@ -19,20 +19,38 @@ export function buildIpoPrep(b: StageBuild, cfg: StageConfig, flags: QualityFlag
   }
   // marble columns — ASYMMETRIC colonnade: a full three-column run receding on
   // the LEFT, only two (with a wider gap) on the RIGHT to make room for a
-  // presenter's podium, so the hall isn't mirrored.
+  // presenter's podium, so the hall isn't mirrored. Each column is real fluted
+  // marble now (a lighter stone body through the marble bakery preset) wrapped in
+  // a fresnel rim shell so its cylindrical form reads in LIGHT against the bright
+  // window facade behind it, instead of collapsing to the black silhouette the
+  // brief flagged. A gold base ring ties the foot into the gold capital and
+  // breaks up the dark lower mass.
   const ipoCols: { sign: number; count: number }[] = [{ sign: -1, count: 3 }, { sign: 1, count: 2 }]
   for (const plan of ipoCols) {
     for (let i = 0; i < plan.count; i++) {
+      const cx = plan.sign * (4.5 + i * 2.2)
+      const cz = -8 - i * 2
       const col = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.7, 0.8, 12, 20),
-        structureMat({ color: 0x2a3648, roughness: 0.35, metalness: 0.4 }),
+        new THREE.CylinderGeometry(0.7, 0.8, 12, 28),
+        structureMat({ color: 0x6f7788, roughness: 0.46, metalness: 0.16, preset: 'marble', repeat: [2, 6], normalScale: 0.32 }),
       )
-      col.position.set(plan.sign * (4.5 + i * 2.2), 6, -8 - i * 2)
+      col.position.set(cx, 6, cz)
       col.castShadow = true
       b.add(col)
+      // fresnel rim + 14 flutes: the cool facade light wrapping a fluted shaft
+      const rim = fresnelShell(new THREE.CylinderGeometry(0.72, 0.82, 12, 28), 0xbcd6ff, 0.95, 14)
+      rim.mesh.position.set(cx, 6, cz)
+      b.add(rim.mesh)
+      // gold base ring (echoes the capital)
+      const base = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.9, 1.0, 0.5, 28),
+        structureMat({ color: 0x8a6a1c, roughness: 0.3, metalness: 0.95, emissive: 0x3a2a06, emissiveIntensity: 0.55 }),
+      )
+      base.position.set(cx, 0.25, cz)
+      b.add(base)
       // gold capital
-      const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.95, 0.75, 0.6, 20), structureMat({ color: 0x8a6a1c, roughness: 0.3, metalness: 0.95, emissive: 0x3a2a06, emissiveIntensity: 0.7 }))
-      cap.position.set(plan.sign * (4.5 + i * 2.2), 12.2, -8 - i * 2)
+      const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.95, 0.75, 0.6, 28), structureMat({ color: 0x8a6a1c, roughness: 0.3, metalness: 0.95, emissive: 0x3a2a06, emissiveIntensity: 0.7 }))
+      cap.position.set(cx, 12.2, cz)
       b.add(cap)
     }
   }

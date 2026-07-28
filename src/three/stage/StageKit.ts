@@ -214,6 +214,61 @@ export function glowMat(color: number, opacity = 1): THREE.MeshBasicMaterial {
 }
 
 // ---------------------------------------------------------------------------
+// Fresnel rim shell. A large solid prop that is BACK-lit (a column in front of a
+// bright facade, say) collapses to a flat black silhouette — no form, no
+// material, the amateur tell the brief called out on the ipo-prep pillars. This
+// returns a thin additive shell whose brightness rides a fresnel term, so it
+// glows only at grazing angles — i.e. exactly the silhouette EDGES — re-drawing
+// the form's outline in light regardless of where the scene lights sit. Optional
+// fluting modulates the rim around the surface so a column reads as fluted stone
+// rather than a plain glowing tube. It is static (no per-frame uniform churn), so
+// it adds no background motion.
+// ---------------------------------------------------------------------------
+
+export function fresnelShell(
+  geo: THREE.BufferGeometry,
+  color: number,
+  intensity = 1,
+  flutes = 0,
+): { mesh: THREE.Mesh; mat: THREE.ShaderMaterial } {
+  const mat = new THREE.ShaderMaterial({
+    uniforms: {
+      uColor: { value: new THREE.Color(color) },
+      uIntensity: { value: intensity },
+      uFlutes: { value: flutes },
+    },
+    vertexShader: /* glsl */ `
+      varying vec3 vN; varying vec3 vV; varying vec2 vUv;
+      void main(){
+        vUv = uv;
+        vec4 wp = modelMatrix * vec4(position, 1.0);
+        vN = normalize(mat3(modelMatrix) * normal);
+        vV = normalize(cameraPosition - wp.xyz);
+        gl_Position = projectionMatrix * viewMatrix * wp;
+      }
+    `,
+    fragmentShader: /* glsl */ `
+      precision highp float;
+      varying vec3 vN; varying vec3 vV; varying vec2 vUv;
+      uniform vec3 uColor; uniform float uIntensity; uniform float uFlutes;
+      void main(){
+        float f = pow(1.0 - clamp(dot(normalize(vN), normalize(vV)), 0.0, 1.0), 2.4);
+        float flute = uFlutes > 0.5 ? (0.55 + 0.45 * abs(sin(vUv.x * uFlutes * 3.14159265))) : 1.0;
+        float rim = f * flute * uIntensity;
+        gl_FragColor = vec4(uColor * rim, rim);
+      }
+    `,
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    side: THREE.FrontSide,
+    toneMapped: false,
+    fog: false,
+  })
+  return { mesh: new THREE.Mesh(geo, mat), mat }
+}
+
+// ---------------------------------------------------------------------------
 // Radial light glow — a soft blooming disc of light (dawn through a door,
 // a blown-out practical, a projector cone hitting fog). Additive, animated
 // with a slow breathing shimmer + faint vertical light bars so it reads as

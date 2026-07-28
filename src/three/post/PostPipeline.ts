@@ -261,7 +261,14 @@ export class PostPipeline implements Subsystem, RenderDriver {
     }
     if (e.kind === 'ko') {
       this.impact = 1.7
-      this.flash = Math.min(0.6, this.flash + 0.4)
+      // Punch-and-decay, not a wash. setFlash drives an exposure lift of
+      // 1 + flash*2.4 plus a warm (0.9,0.85,0.7) tint in the grade, so the old
+      // 0.6 spike lifted the WHOLE frame ~2.4x and flattened both fighters into
+      // near-unreadable yellow silhouettes at exactly the KO frame the player
+      // wants to read. Peak lowered so it lands as a bright hit accent (~1.8x)
+      // that clears in a few frames on the real-dt decay, mirroring fight-hud
+      // shortening their own KO flash to punch-and-decay.
+      this.flash = Math.min(0.32, this.flash + 0.26)
     }
     if (e.kind === 'shatter') this.impact = Math.max(this.impact, 1.15)
   }

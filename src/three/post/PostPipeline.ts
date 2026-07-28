@@ -30,13 +30,27 @@ declare global {
      * softened the fighters" failure with every other variable held constant, so
      * a probe can watch the fighter crop go from bit-exact to blurred in one build.
      * `hasDof()` reports whether the pass is actually present (quality/?nodof).
+     * `sepDefeat(true)` forces the behind-fighter local separation to 0 so the
+     * separation gate can prove the body/edge-contrast gain comes from that term.
      */
     __POST__?: {
       dofDefeat: (on: boolean) => void
       hasDof: () => boolean
+      sepDefeat: (on: boolean) => void
     }
+    /** DEV mutation hook: force behind-fighter separation off (see the gate). */
+    __MUT_SEP_BEHIND_OFF__?: boolean
   }
 }
+
+/**
+ * Behind-fighter local separation strength (see MasterGradeEffect.setSepBehind).
+ * Tuned so the darkening at the silhouette lifts the worst measured body-vs-wall
+ * and edge contrast onto the gate floor across ALL stages, while feathering out
+ * fast enough that it reads as contact occlusion, not a stamped box. Owned here
+ * (not per-stage) so the guarantee is stage-independent.
+ */
+const SEP_BEHIND_STRENGTH = 0.85
 
 /**
  * Post-processing pipeline — the show's final image authorship.
@@ -70,6 +84,7 @@ export class PostPipeline implements Subsystem, RenderDriver {
       finalize: q.has('nofinalize'),
       bgFloor: q.has('nobgfloor'),
       dof: q.has('nodof'),
+      sep: q.has('nosep'),
     }
   }
   readonly name = 'post'
@@ -92,6 +107,10 @@ export class PostPipeline implements Subsystem, RenderDriver {
   private dofDefeat = false
   /** ?nobgfloor — disables the background contrast floor for QA bisects. */
   private bgFloorOff = false
+  /** ?nosep — disables behind-fighter local separation for QA bisects. */
+  private sepOff = false
+  /** __POST__.sepDefeat / dev mutation — forces behind-fighter separation off. */
+  private sepDefeat = false
   private smaa: SMAAEffect | null = null
   private dirtTexture!: THREE.Texture
 
@@ -233,6 +252,7 @@ export class PostPipeline implements Subsystem, RenderDriver {
     const off = PostPipeline.qaFlags()
     this.bgFloorOff = off.bgFloor
     if (off.bgFloor) this.grade.setBgFloor(1e6, 1e6 + 1, undefined, 0)
+    this.sepOff = off.sep
 
     const gradeEffects: Effect[] = []
     if (flags.bloom && !off.bloom) {
@@ -345,6 +365,9 @@ export class PostPipeline implements Subsystem, RenderDriver {
           this.dofDefeat = on
         },
         hasDof: () => !!this.dof,
+        sepDefeat: (on: boolean) => {
+          this.sepDefeat = on
+        },
       }
     }
 
@@ -590,6 +613,16 @@ export class PostPipeline implements Subsystem, RenderDriver {
     // within seven units. Fighters themselves sit at or nearer than farDist, so
     // the gate is exactly 0 on them.
     if (!this.bgFloorOff) this.grade.setBgFloor(farDist + 1.4, farDist + 7.0)
+
+    // Behind-fighter local separation rides the SAME fighter plane + ellipse as
+    // the matte/bgFloor, so it darkens only the wall directly behind each fighter
+    // and never the fighters themselves. Forced to 0 by ?nosep, the __POST__
+    // sepDefeat handle, or the DEV mutation global so the separation gate can
+    // prove the body/edge-contrast lift comes from THIS term, not the instrument.
+    const sepMutOff =
+      import.meta.env.DEV && (globalThis as Record<string, unknown>).__MUT_SEP_BEHIND_OFF__
+    const sepEnabled = !this.sepOff && !this.sepDefeat && !sepMutOff
+    this.grade.setSepBehind(sepEnabled ? SEP_BEHIND_STRENGTH : 0)
 
     // The finalize pass re-asserts the same matte after bloom (see below).
     this.finalize.setCharDepth(farDist + 1.1, 2.4)

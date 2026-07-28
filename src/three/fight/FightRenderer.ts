@@ -622,6 +622,7 @@ class FightWorld {
           bounceColor: this.bounceColor,
           dt: scaledDt,
           realDt,
+          viewportH: this.ctx.renderer.domElement.height,
         })
         const side: Side = i === 0 ? 'a' : 'b'
         this.ctx.anchors.set(`fighter:${side}`, f.chestAnchor())

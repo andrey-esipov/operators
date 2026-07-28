@@ -23,6 +23,22 @@ import { CM_TO_WORLD, simToWorld, FIGHTER_Z } from './worldScale'
 export const FLASH_SECONDS = 0.05
 
 /**
+ * Silhouette keyline tuning (see SpriteFighterMaterial's keyline term).
+ *
+ *  - WIDTH is expressed as a fraction of the drawing-buffer height so the cool
+ *    edge holds a constant screen presence at any resolution / DPR. 0.0038 of a
+ *    900px measure buffer is ~3.4 device px; ~4.1px at 1080p — inside the AAA
+ *    2–6px @1080p target with headroom for the rim-width floor.
+ *  - INTENSITY is the additive strength in linear scene colour, tamed by the
+ *    material's highlight knee so the edge reads bright-cool, not clipped white.
+ *
+ * Both are module-owned (not stage-driven) on purpose: the keyline's entire job
+ * is to make the read STAGE-INDEPENDENT, so it must not ride the arena rig.
+ */
+export const KEYLINE_WIDTH_FRAC = 0.0038
+export const KEYLINE_INTENSITY = 2.2
+
+/**
  * The hit-flash envelope as a self-contained, testable unit.
  *
  * The one invariant that matters: the flash is a fixed-length box armed at the
@@ -81,6 +97,12 @@ export interface FighterUpdateCtx {
   dt: number
   /** Unscaled dt — presentation accents like the hit flash. */
   realDt: number
+  /**
+   * Drawing-buffer height in device px. Drives the silhouette keyline width so
+   * it holds a constant screen fraction across resolutions / DPR. Optional so
+   * older call sites (and tests) default to a sane 1080p-ish width.
+   */
+  viewportH?: number
 }
 
 let sharedShadowTex: THREE.Texture | null = null
@@ -414,6 +436,19 @@ export class Fighter {
     this.uniforms.uBounceColor.value.copy(ctx.bounceColor)
     this.uniforms.uAccent.value.copy(this.accent)
     this.uniforms.uTime.value += ctx.dt
+
+    // ---- Silhouette keyline (stage-independent separation) ----------------
+    // Width tracks the drawing buffer so the cool edge is the same screen
+    // fraction on every stage and at any DPR. Intensity is a fixed module
+    // constant — deliberately NOT from the stage rig — so the guaranteed read
+    // does not ride the arena's light. The DEV mutation hook forces it fully
+    // off so the separation gate can prove the rim-width / edge-contrast gain
+    // comes from THIS term and not from the measuring instrument.
+    const vpH = ctx.viewportH && ctx.viewportH > 0 ? ctx.viewportH : 1080
+    this.uniforms.uKeylineWidthPx.value = Math.max(2, KEYLINE_WIDTH_FRAC * vpH)
+    const keylineOff =
+      import.meta.env.DEV && (globalThis as Record<string, unknown>).__MUT_KEYLINE_OFF__
+    this.uniforms.uKeylineIntensity.value = keylineOff ? 0 : KEYLINE_INTENSITY
 
     // ---- Hit flash (a fixed-length flashbulb, boxed from the contact event) ----
     // Driven off a timer armed at contact (see HitFlashBox), NOT the hurt stance:

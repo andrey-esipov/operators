@@ -95,6 +95,7 @@ uniform float bgCeil;       // luminance the background is allowed to reach
 uniform float bgKnock;      // how hard to compress everything above bgCeil
 uniform float bgFloorStart; // depth where the compressor begins
 uniform float bgFloorEnd;   // depth where it reaches full strength
+uniform float sepBehind;    // behind-fighter local background darkening strength
 
 const mat3 LINEAR_SRGB_TO_LINEAR_REC2020 = mat3(
   0.6274, 0.0691, 0.0164,
@@ -447,6 +448,31 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, const in float depth,
     c *= max(k, 0.04);
   }
 
+  // ── behind-fighter local separation ─────────────────────────────────────
+  // bgFloor above only tames backgrounds BRIGHTER than bgCeil. It does nothing
+  // for the other half of the failure: a wall directly behind the fighter whose
+  // value merely EQUALS or slightly beats a dark body (measured pre-pmf: body
+  // ~44 vs wall ~90 — the fighter is DARKER than the wall it stands against).
+  // No highlight ceiling can reach that; the LOCAL value relationship needs its
+  // own owner.
+  //
+  // This is it: a soft, feathered darkening of the background that sits INSIDE
+  // the character ellipse and BEHIND the fighter plane. It reuses the exact same
+  // depth gate as bgFloor (far=0 on the fighter and everything co-planar with
+  // it), so it can never touch the character — only the stage that recedes
+  // behind them. It is a monotone multiply, strongest right at the silhouette
+  // and feathering out across the ellipse, so it reads as the figure occluding
+  // the arena light (a wide contact shadow) rather than a stamped fighter-shaped
+  // box. Lowering the LOCAL background value the eye compares the body against
+  // lifts BOTH body-vs-wall and edge contrast on every stage — a guaranteed,
+  // stage-independent read that does NOT flatten the arena palette globally
+  // (untouched everywhere the fighters are not).
+  if (sepBehind > 0.001) {
+    float behindFar = smoothstep(bgFloorStart, bgFloorEnd, dist);
+    float behind = charMask(uv) * behindFar * sepBehind;
+    c *= 1.0 - clamp(behind, 0.0, 0.55);
+  }
+
   // Dynamic response: colour drain + danger cast (low HP / KO), keyed to the
   // environment (1 - matte) so the centred fighters stay clear while the arena
   // reddens and drains hard.
@@ -553,6 +579,7 @@ export class MasterGradeEffect extends Effect {
       ['bgKnock', new THREE.Uniform(0.70)],
       ['bgFloorStart', new THREE.Uniform(16)],
       ['bgFloorEnd', new THREE.Uniform(30)],
+      ['sepBehind', new THREE.Uniform(0.0)],
       ['camNear', new THREE.Uniform(0.1)],
       ['camFar', new THREE.Uniform(320)],
     ])
@@ -684,5 +711,16 @@ export class MasterGradeEffect extends Effect {
     this.u('bgFloorEnd').value = end
     if (ceil !== undefined) this.u('bgCeil').value = ceil
     if (knock !== undefined) this.u('bgKnock').value = knock
+  }
+
+  /**
+   * Behind-fighter local separation strength (0 disables the block). Reuses the
+   * bgFloor depth band and the character ellipse to darken ONLY the background
+   * behind each fighter, lifting the local body-vs-wall and edge contrast the
+   * highlight-only bgFloor cannot reach. Driven live from the pipeline so a QA
+   * flag / DEV mutation can force it to 0.
+   */
+  setSepBehind(strength: number) {
+    this.u('sepBehind').value = strength
   }
 }

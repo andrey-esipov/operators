@@ -66,6 +66,11 @@ export interface SpriteFighterUniforms {
   uCameraPos: { value: THREE.Vector3 }
   uTexel: { value: THREE.Vector2 }
   uTime: { value: number }
+
+  // Controlled-width silhouette keyline (stage-independent separation).
+  uKeylineColor: { value: THREE.Color }
+  uKeylineIntensity: { value: number }
+  uKeylineWidthPx: { value: number }
 }
 
 export function createSpriteUniforms(): SpriteFighterUniforms {
@@ -107,6 +112,16 @@ export function createSpriteUniforms(): SpriteFighterUniforms {
     uCameraPos: { value: new THREE.Vector3(0, 2.5, 11) },
     uTexel: { value: new THREE.Vector2(1 / 1024, 1 / 1024) },
     uTime: { value: 0 },
+
+    // Bright cool-white silhouette keyline. Kept STAGE-INDEPENDENT on purpose:
+    // its whole job is to guarantee the fighter/background read no matter what
+    // colour the arena is, so it is NOT driven from LightRig. Width is in device
+    // px and set per-frame from the viewport height so it holds a constant
+    // screen fraction across resolutions / DPR. Intensity default matches the
+    // module constant in Fighter.ts (that path owns the live value + mutation).
+    uKeylineColor: { value: new THREE.Color(0.72, 0.86, 1.0) },
+    uKeylineIntensity: { value: 2.2 },
+    uKeylineWidthPx: { value: 3.0 },
   }
 }
 
@@ -198,6 +213,10 @@ const FRAG = /* glsl */ `
   uniform float uFogDensity;
   uniform vec2 uTexel;
   uniform float uTime;
+
+  uniform vec3 uKeylineColor;
+  uniform float uKeylineIntensity;
+  uniform float uKeylineWidthPx;
 
   varying vec2 vUv;
   varying vec3 vWorld;
@@ -300,6 +319,43 @@ const FRAG = /* glsl */ `
 
     vec3 rim = (stageRim + accentRim + backRim) * interior;
 
+    // ---- Controlled-width silhouette keyline ------------------------------
+    // The fresnel/back rims above are the ONLY thing separating the fighter
+    // from the wall behind it, and they fail: their brightness rides the stage
+    // light and their width collapses to ~1px on most stage/fighter combos, so
+    // the "you can always tell where the fighter ends" guarantee was left to
+    // luck (measured: some stages the body is DARKER than the wall behind it,
+    // rescued only by that razor rim). This is a second, deterministic edge
+    // that does NOT depend on the normal map or the stage rig: it marches out
+    // to the alpha silhouette in SCREEN space and lights a fixed device-pixel
+    // band just inside the edge in a bright cool white — same width, same value
+    // on every arena. That is what converts a lucky read into a guaranteed one.
+    //
+    // It only ever lights fragments already inside the silhouette (base.a>=0.5)
+    // and marches OUTWARD (toward falling alpha), so it can never paint a halo
+    // outside the character; the fighter is bloom-excluded so it cannot smear.
+    // Placed BEFORE the highlight knee below so the additive is tamed, not left
+    // to clip to a flat white slab.
+    float keyline = 0.0;
+    if (uKeylineIntensity > 0.0 && base.a >= 0.5) {
+      vec2 aGrad = vec2(dFdx(base.a), dFdy(base.a)); // d(alpha)/d(screen px)
+      float aGm = length(aGrad);
+      if (aGm > 1e-4) {
+        vec2 outward = -aGrad / aGm;                 // toward the edge, screen px
+        vec2 stepUv = outward.x * dFdx(vUv) + outward.y * dFdy(vUv); // uv / screen px
+        float wpx = clamp(uKeylineWidthPx, 1.0, 7.0);
+        for (int k = 1; k <= 8; k++) {
+          float fk = float(k);
+          if (fk > wpx) break;
+          // If a sample this many px outward has fallen outside the silhouette,
+          // we are within wpx of the edge → light it, brightest nearest the rim.
+          if (texture2D(uAlbedo, vUv + stepUv * fk).a < 0.5) {
+            keyline = max(keyline, 1.0 - (fk - 1.0) / wpx);
+          }
+        }
+      }
+    }
+
     // ---- Transient impact point light -------------------------------------
     vec3 toFlash = uFlashPos.xyz - vWorld;
     float fd = length(toFlash);
@@ -313,6 +369,12 @@ const FRAG = /* glsl */ `
     float ao = mix(0.72, 1.0, height);
     vec3 albedo = albedoRgb;
     vec3 color = albedo * (ambient + diffuse * ao + fill * ao) + rim * (0.5 + 0.5 * albedo) + flash;
+
+    // Additive keyline in linear scene colour (post owns the tonemap). Added
+    // before the knee below so the bright cool edge is compressed rather than
+    // clipped, and kept independent of albedo so it holds its value over both a
+    // dark and a pale body.
+    color += uKeylineColor * (uKeylineIntensity * keyline);
 
     // Soft highlight knee on the lit body. The fighter is bloom-excluded, so
     // pale fabrics (lenny's shirt, chesky's shoes) don't smear — but a strong

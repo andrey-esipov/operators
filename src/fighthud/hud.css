@@ -212,12 +212,35 @@
 /* Backlit-glass fill: bright top highlight line, a lit upper third and a
    distinctly darker bottom third so the bar reads as a curved, lit surface
    rather than paint. */
+/* Backlit-glass fill. The background is a *horizontal* yellow→amber→orange hue
+   ramp across the length of the bar (bright/safe at the outer end, hot toward
+   the centre) — a ramp reads as a gauge where a single flat hue reads as a UI
+   control. The box-shadow adds the vertical volume: bright top highlight line, a
+   lit upper third and a distinctly darker bottom third, so the bar is a lit,
+   curved surface rather than paint. Tier + side own the ramp via classes. */
 .fhud-hpfill {
-  background: linear-gradient(180deg, #eaf59a 0%, #c3d94a 16%, #93ab24 46%, #6a7d18 74%, #3f4a0e 100%);
+  background: linear-gradient(90deg, #f6ec5a 0%, #f4c130 40%, #ef9420 72%, #e7761c 100%);
   box-shadow:
     inset 0 2px 0 rgba(255, 255, 255, 0.92),
     inset 0 7px 8px rgba(255, 255, 255, 0.28),
     inset 0 -7px 9px rgba(0, 0, 0, 0.58);
+}
+.fhud-hpfill.tier-warn {
+  background: linear-gradient(90deg, #ffcf3a 0%, #f79020 45%, #e35414 100%);
+}
+.fhud-hpfill.tier-crit {
+  background: linear-gradient(90deg, #ff7a52 0%, #ec2833 50%, #a5101f 100%);
+}
+/* Right fighter is mirrored: the safe/bright end stays on its outer (right)
+   edge, so the ramp runs the opposite direction. */
+.fhud-hpwrap.b .fhud-hpfill {
+  background: linear-gradient(270deg, #f6ec5a 0%, #f4c130 40%, #ef9420 72%, #e7761c 100%);
+}
+.fhud-hpwrap.b .fhud-hpfill.tier-warn {
+  background: linear-gradient(270deg, #ffcf3a 0%, #f79020 45%, #e35414 100%);
+}
+.fhud-hpwrap.b .fhud-hpfill.tier-crit {
+  background: linear-gradient(270deg, #ff7a52 0%, #ec2833 50%, #a5101f 100%);
 }
 /* Bright draining edge — the crisp lit lip at the front of the bar that sells
    the "this is a live gauge" read in SF6 / Strive. Anchored to the inner end. */
@@ -312,8 +335,8 @@
   line-height: 1;
 }
 .fhud-superlabel-txt {
-  color: #c98fd6;
-  text-shadow: 1px 1px 0 #000;
+  color: #e6b8f0;
+  text-shadow: 1px 1px 0 #000, 0 0 7px rgba(168, 74, 230, 0.6);
 }
 /* "READY" is stacked over "SUPER" and only revealed when a stock is charged. */
 .fhud-superlabel-rdy {
@@ -344,14 +367,16 @@
   width: 120px;
   height: 16px;
   background:
-    linear-gradient(180deg, rgba(126, 40, 180, 0.22), rgba(60, 12, 96, 0.12) 55%, transparent),
-    linear-gradient(180deg, #06040c 0%, #180b28 58%, #0a0512 100%);
+    linear-gradient(180deg, rgba(150, 58, 214, 0.34), rgba(74, 16, 118, 0.18) 55%, rgba(30, 8, 50, 0.1)),
+    linear-gradient(180deg, #0a0616 0%, #1e0d32 58%, #0c0616 100%);
   border: 2px solid #000;
   box-shadow:
-    inset 0 2px 4px rgba(0, 0, 0, 0.8),
-    inset 0 0 8px rgba(150, 60, 210, 0.28),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.07),
-    0 0 0 1px rgba(176, 188, 214, 0.26),
+    inset 0 1px 0 rgba(214, 176, 255, 0.28),
+    inset 0 2px 4px rgba(0, 0, 0, 0.7),
+    inset 0 0 9px rgba(168, 74, 230, 0.4),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.06),
+    0 0 0 1px rgba(200, 206, 232, 0.42),
+    0 0 7px rgba(126, 52, 196, 0.4),
     3px 3px 0 rgba(0, 0, 0, 0.5);
   overflow: hidden;
   transform: skewX(-11deg);

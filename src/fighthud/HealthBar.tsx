@@ -16,15 +16,11 @@ const TAU_TRAIL = 260
 const TRAIL_HOLD_MS = 150
 const CRIT_PCT = 0.25
 
-// Health fill per tier (good / warn / crit). Each is a bright-top → deep-base
-// vertical ramp with a wide luminance spread so the fill reads as a lit, curved
-// tube (SF6 / Strive) rather than flat paint. The healthy tier is a yellow-green
-// → amber-olive ramp on purpose: saturated mint green reads as a debug meter.
-const TIER_FILL = [
-  'linear-gradient(180deg,#eaf59a 0%,#c3d94a 16%,#93ab24 46%,#6a7d18 74%,#3f4a0e 100%)',
-  'linear-gradient(180deg,#fff3aa 0%,#ffd23a 18%,#f0a20e 50%,#b56d02 76%,#6b3f00 100%)',
-  'linear-gradient(180deg,#ffd2d2 0%,#ff5252 18%,#e21f36 50%,#a10f22 76%,#560611 100%)',
-]
+// Front-bar colour tier (good / warn / crit) is toggled as a class so the CSS
+// can own the per-side ramp *direction* (the fill runs a horizontal hue ramp,
+// mirrored on the right fighter). A flat single hue reads as a UI control; a
+// yellow→amber→orange ramp across the bar reads as a gauge (SF6 / Tekken).
+const TIER_CLASS = ['tier-good', 'tier-warn', 'tier-crit']
 
 /** Smoothing factor for a given time constant and frame delta. */
 function alpha(dtMs: number, tau: number): number {
@@ -75,13 +71,14 @@ export function HealthBar({ index, display }: Props) {
     if (mainRef.current) mainRef.current.style.width = `${mainDisp.current * 100}%`
     if (trailRef.current) trailRef.current.style.width = `${trailDisp.current * 100}%`
 
-    // Front-bar colour shifts good → warn → crit as a coarse read. Each tier is
-    // a bright-top → deep-base vertical ramp so the fill reads as a shaded tube
-    // (SF6/Strive) rather than flat debug paint. Only rewritten on tier change.
+    // Front-bar colour shifts good → warn → crit as a coarse read. Toggled as a
+    // class (not an inline background) so the CSS owns the horizontal hue ramp
+    // and its per-side mirroring. Only rewritten on tier change.
     const tier = target > 0.6 ? 0 : target > 0.3 ? 1 : 2
     if (tier !== lastTier.current && mainRef.current) {
       lastTier.current = tier
-      mainRef.current.style.background = TIER_FILL[tier]
+      mainRef.current.classList.remove('tier-good', 'tier-warn', 'tier-crit')
+      mainRef.current.classList.add(TIER_CLASS[tier])
     }
 
     const crit = target > 0 && target <= CRIT_PCT

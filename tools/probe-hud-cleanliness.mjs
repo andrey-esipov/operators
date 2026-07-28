@@ -123,6 +123,48 @@ const fullBg = await page.evaluate(() => {
 check('MUTATION: a charged (.full) stock renders a different fill than charging', fullBg.bg !== sp.chargingBg)
 check('MUTATION: charged row reveals the READY label (opacity > 0)', parseFloat(fullBg.rdy) > 0)
 
+// ── Health fill is a horizontal hue *ramp*, not a flat hue ────────────────
+// The critic's finding: a single flat hue (at any saturation) reads as a UI
+// control; a yellow→orange ramp across the bar reads as a gauge. A vertical
+// gradient of one hue family would satisfy the "is a gradient" checks above
+// while still being the flat programmer-green tell — so guard the ramp itself:
+// the gradient must run horizontally and its stops must span a real hue range.
+const rampInfo = () =>
+  page.evaluate(() => {
+    const toHue = (r, g, b) => {
+      r /= 255; g /= 255; b /= 255
+      const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn
+      if (d === 0) return 0
+      let h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4
+      h *= 60
+      return h < 0 ? h + 360 : h
+    }
+    const fill = document.querySelector('.fhud-hpfill')
+    const bg = fill ? getComputedStyle(fill).backgroundImage : ''
+    const stops = [...bg.matchAll(/rgba?\(([^)]+)\)/g)].map((m) => m[1].split(',').slice(0, 3).map(Number))
+    const hues = stops.map(([r, g, b]) => toHue(r, g, b))
+    const spread = hues.length ? Math.max(...hues) - Math.min(...hues) : 0
+    const horizontal = /(^|[\s(])(90deg|270deg|to right|to left)/.test(bg)
+    return { spread, horizontal }
+  })
+let ramp = await rampInfo()
+check('health fill runs a horizontal ramp (gradient is 90/270deg)', ramp.horizontal === true)
+check('health fill spans a real hue range (yellow→orange, not a flat hue)', ramp.spread > 12)
+
+// Prove-can-fail: replace the fill with the old flat programmer-green look — a
+// vertical single-hue-family gradient. Both the horizontal and hue-spread
+// assertions must go red.
+await page.evaluate(() => {
+  const el = document.querySelector('.fhud-hpfill')
+  if (el) el.style.background = 'linear-gradient(180deg, #9acb2a 0%, #6a7d18 100%)'
+})
+let flatHue = await rampInfo()
+check('MUTATION: a flat-hue vertical fill fails the ramp check', !(flatHue.horizontal && flatHue.spread > 12))
+await page.evaluate(() => {
+  const el = document.querySelector('.fhud-hpfill')
+  if (el) el.style.background = ''
+})
+
 await browser.close()
 console.log(failures ? `\n=== ${failures} FAILED ===` : '\n=== ALL PASS ===')
 process.exit(failures ? 1 : 0)

@@ -65,27 +65,46 @@ async function renderForMetrics(name: SoundName, opts: { stage?: StageId; dry?: 
 // what remains is every audible synth moment, at the right time.
 
 interface TimelineItem { t: number; ev: FightEvent }
-type TimelineMutate = 'none' | 'no-wiring' | 'drop-hit'
+type TimelineMutate = 'none' | 'no-wiring' | 'drop-hit' | 'flatten' | 'crush-master'
+
+/** The constant trim `flatten` forces onto every impact/ko/whiff — a mid-ladder
+ *  level so the mix stays audible but the per-tier hierarchy collapses. This is
+ *  the mutation the loudness-ladder assertions must go red on. */
+const FLATTEN_GAIN = 1.4
 
 /**
  * An offline sink: every synth one-shot the reactor asks for is scheduled into
  * `ctx` at `now` (set by the driver before each event). Everything MP3/live-
  * backed is a no-op — it cannot be rendered offline and is not what this probe
- * measures.
+ * measures. When `flatten` is set, the per-tier `gain` on impacts/ko/whiff is
+ * overridden with a single constant, collapsing the loudness ladder while
+ * leaving every event audible (the hierarchy-specific failure mode).
  */
 class OfflineTimelineSink implements FightAudioSink {
   now = 0
+  flatten = false
+  private seedN = 0
   private readonly ctx: BaseAudioContext
   private readonly routing: ImpactRouting
   constructor(ctx: BaseAudioContext, routing: ImpactRouting) {
     this.ctx = ctx
     this.routing = routing
   }
-  private fire(name: SoundName, opts?: ImpactOpts) { renderSound(this.ctx, this.routing, this.now, name, opts ?? {}) }
-  impact(flavor: Flavor, opts?: ImpactOpts) { this.fire(flavor, opts) }
-  ko(opts?: ImpactOpts) { this.fire('ko', opts) }
-  shatter(opts?: ImpactOpts) { this.fire('shatter', opts) }
-  whiff(opts?: ImpactOpts) { this.fire('whiff', opts) }
+  // The engine defaults an unset impact seed to Math.random() so live hits vary
+  // and never sound robotic — correct for the game, fatal for a measurement gate
+  // (the same tier renders a different spectrum every run, flickering assertions
+  // across their threshold). Inject a deterministic, monotonically-distinct seed
+  // per one-shot here so the offline render is reproducible while each event
+  // still gets its own noise. Both render passes replay from a fresh sink, so
+  // the seed sequence — and thus the pre/post comparison — is identical.
+  private fire(name: SoundName, opts?: ImpactOpts) {
+    renderSound(this.ctx, this.routing, this.now, name, { seed: 0x5eed + this.seedN++, ...opts })
+  }
+  private flat(opts?: ImpactOpts): ImpactOpts { return this.flatten ? { ...opts, gain: FLATTEN_GAIN } : (opts ?? {}) }
+  impact(flavor: Flavor, opts?: ImpactOpts) { this.fire(flavor, this.flat(opts)) }
+  ko(opts?: ImpactOpts) { this.fire('ko', this.flat(opts)) }
+  shatter(opts?: ImpactOpts) { this.fire('shatter', this.flat(opts)) }
+  whiff(opts?: ImpactOpts) { this.fire('whiff', this.flat(opts)) }
   footstep(opts?: ImpactOpts) { this.fire('footstep', opts) }
   cloth(opts?: ImpactOpts) { this.fire('cloth', opts) }
   meterCharge() { this.fire('meterCharge') }
@@ -103,7 +122,7 @@ class OfflineTimelineSink implements FightAudioSink {
 
 async function renderTimeline(
   script: TimelineItem[],
-  o: { stage?: StageId; sampleRate?: number; seconds?: number; dry?: boolean; mutate?: TimelineMutate } = {},
+  o: { stage?: StageId; sampleRate?: number; seconds?: number; dry?: boolean; mutate?: TimelineMutate; bypassMaster?: boolean } = {},
 ): Promise<RenderResult> {
   const sampleRate = o.sampleRate ?? 48000
   const stage = o.stage ?? 'hypergrowth'
@@ -116,19 +135,35 @@ async function renderTimeline(
     (globalThis as unknown as { OfflineAudioContext: typeof OfflineAudioContext }).OfflineAudioContext
   const ctx = new OAC(2, Math.ceil(seconds * sampleRate), sampleRate)
 
-  const graph = buildMasterGraph(ctx, ctx.destination, 0.9)
-  graph.convolver.buffer = stageImpulse(ctx, stage)
-  graph.reverbReturn.gain.value = STAGE_ACOUSTICS[stage].wet
-  const routing: ImpactRouting = { out: graph.sfxBus, reverb: dry ? null : graph.reverbBus }
+  // `bypassMaster` routes the reactor straight to the destination through a fixed
+  // -12 dB pad (headroom so the loud tiers don't hard-clip the offline render),
+  // so the tool can measure the PRE-master synth loudness and quantify exactly
+  // how much dynamic range the master gives back or takes away. Otherwise build
+  // the real mastering chain — 'ship' by default, or the pre-fix 'crush-master'
+  // profile that levels the ladder (the regression proof for the master relax).
+  let routing: ImpactRouting
+  if (o.bypassMaster) {
+    const pad = ctx.createGain(); pad.gain.value = 0.25; pad.connect(ctx.destination)
+    routing = { out: pad, reverb: null }
+  } else {
+    const graph = buildMasterGraph(ctx, ctx.destination, 0.9, mutate === 'crush-master' ? { dynamics: 'legacy' } : {})
+    graph.convolver.buffer = stageImpulse(ctx, stage)
+    graph.reverbReturn.gain.value = STAGE_ACOUSTICS[stage].wet
+    routing = { out: graph.sfxBus, reverb: dry ? null : graph.reverbBus }
+  }
 
   const sink = new OfflineTimelineSink(ctx, routing)
+  sink.flatten = mutate === 'flatten'
   const reactor = new FightAudioReactor(sink)
 
   for (const item of script) {
     // Mutations exercise the real wiring path, so the measure tool can watch a
-    // specific window collapse to silence:
-    //   no-wiring : never drive the reactor at all → the exact shipped defect
-    //   drop-hit  : skip only `hit` events → hit windows silent, others sound
+    // specific window collapse:
+    //   no-wiring    : never drive the reactor → the exact shipped defect
+    //   drop-hit     : skip only `hit` events → hit windows silent, others sound
+    //   flatten      : force one gain on every impact → the loudness LADDER
+    //                  collapses (ascending-loudness assertions must go red)
+    //   crush-master : the pre-fix master (built above) levels the same ladder
     if (mutate === 'no-wiring') break
     if (mutate === 'drop-hit' && item.ev.type === 'hit') continue
     sink.now = item.t
@@ -148,7 +183,7 @@ async function renderTimeline(
   sounds: ALL_SOUNDS,
   stages: STAGES,
   render: (name: SoundName, opts?: { stage?: StageId; dry?: boolean; opts?: import('./impacts').ImpactOpts }) => renderForMetrics(name, opts),
-  renderTimeline: (script: TimelineItem[], opts?: { stage?: StageId; sampleRate?: number; seconds?: number; dry?: boolean; mutate?: TimelineMutate }) => renderTimeline(script, opts),
+  renderTimeline: (script: TimelineItem[], opts?: { stage?: StageId; sampleRate?: number; seconds?: number; dry?: boolean; mutate?: TimelineMutate; bypassMaster?: boolean }) => renderTimeline(script, opts),
 }
 
 // ─── interactive UI ───────────────────────────────────────────────────────

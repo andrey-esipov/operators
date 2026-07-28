@@ -95,20 +95,26 @@ export function HealthBar({ index, display }: Props) {
 
   return (
     <div ref={wrapRef} className={`fhud-hpwrap ${side}`}>
-      <div className="fhud-namerow">
-        <Portrait side={side} rosterId={display.rosterId} name={display.name} accent={display.accent} initial={initial} />
-        <span
-          className="fhud-name"
-          style={{ color: display.accent, ['--accent' as string]: display.accent } as CSSProperties}
-        >
-          <span>{display.name}</span>
-        </span>
-      </div>
-      <div className="fhud-hptrack" data-testid={`fhud-hptrack-${side}`}>
-        <div ref={trailRef} className="fhud-hptrail" data-testid={`fhud-hptrail-${side}`} />
-        <div ref={mainRef} className="fhud-hpfill" data-testid={`fhud-hpfill-${side}`} />
-        <div className="fhud-hpgloss" />
-        <div className="fhud-hpnotches" />
+      <Portrait side={side} rosterId={display.rosterId} name={display.name} accent={display.accent} initial={initial} />
+      <div className="fhud-hpcol">
+        <div className="fhud-nameband">
+          <span
+            className="fhud-name"
+            style={{ ['--accent' as string]: display.accent } as CSSProperties}
+          >
+            <span>{display.name}</span>
+          </span>
+        </div>
+        <div className="fhud-hphousing">
+          <div className="fhud-hptrack" data-testid={`fhud-hptrack-${side}`}>
+            <div ref={trailRef} className="fhud-hptrail" data-testid={`fhud-hptrail-${side}`} />
+            <div ref={mainRef} className="fhud-hpfill" data-testid={`fhud-hpfill-${side}`}>
+              <div className="fhud-hphazard" />
+            </div>
+            <div className="fhud-hpgloss" />
+            <div className="fhud-hpnotches" />
+          </div>
+        </div>
       </div>
     </div>
   )

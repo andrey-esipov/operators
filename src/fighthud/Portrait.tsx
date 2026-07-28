@@ -16,7 +16,7 @@ interface Props {
 // arm-spread so the face reads at name-plate size.
 const TOP_FRACTION = 0.52
 const SIDE_TRIM = 0.16
-const BOX_H = 40 // px
+const BOX_H = 58 // px
 
 /**
  * Fighter portrait. Crops an idle frame out of the sprite atlas via a CSS

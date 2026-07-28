@@ -26,54 +26,91 @@
   padding: 14px 18px 0;
 }
 
-/* ── Health bar ─────────────────────────────────────────────────────── */
+/* ── Health assembly ────────────────────────────────────────────────────
+   One integrated unit per side: an enlarged portrait frame notched into a
+   thick, skewed housing that the bar is *inset into*, with the nameplate
+   riding the top edge of the housing. Portrait / name / bar read as a single
+   continuous object spanning the top of the screen (SF6 / Tekken), not four
+   floating parts. The whole housing rakes toward the centre. */
 .fhud-hpwrap {
   flex: 1 1 0;
-  max-width: 620px;
+  max-width: 640px;
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+}
+.fhud-hpwrap.b { flex-direction: row-reverse; }
+
+.fhud-hpcol {
+  flex: 1 1 auto;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 4px;
+  /* Tuck the bar/name under the portrait frame so the two connect. */
+  margin-left: -10px;
+  padding-left: 12px;
 }
-.fhud-hpwrap.b { align-items: flex-end; }
+.fhud-hpwrap.b .fhud-hpcol {
+  margin-left: 0;
+  margin-right: -10px;
+  padding-left: 0;
+  padding-right: 12px;
+  align-items: flex-end;
+}
 
-.fhud-namerow {
+.fhud-nameband {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 34px;
+  align-items: flex-end;
   width: 100%;
+  padding-left: 4px;
 }
-.fhud-hpwrap.b .fhud-namerow { flex-direction: row-reverse; }
+.fhud-hpwrap.b .fhud-nameband { justify-content: flex-end; padding-left: 0; padding-right: 4px; }
 
 .fhud-badge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
-  font-size: 12px;
+  flex: 0 0 auto;
+  z-index: 2;
+  width: 46px;
+  height: 58px;
+  font-size: 26px;
   color: #fff;
-  border: 2px solid #000;
-  box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.6), inset -2px -2px 0 rgba(0, 0, 0, 0.4);
-  transform: skewX(-8deg);
+  border: 3px solid #04030a;
+  box-shadow:
+    inset 0 4px 8px rgba(255, 255, 255, 0.22),
+    inset 0 -10px 16px rgba(0, 0, 0, 0.55),
+    4px 5px 0 rgba(0, 0, 0, 0.6);
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 9px 100%, 0 calc(100% - 9px));
+  text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.6);
 }
-.fhud-badge > span { transform: skewX(8deg); }
 
-/* Cropped-atlas portrait. Hard black frame + accent rim + drop shadow keeps it
-   in the house language; the right fighter is mirrored to face inward. */
+/* Enlarged cropped-atlas portrait. Shaped, layered frame — hard black outer,
+   accent inner rim, top bevel highlight and a deep inner shadow — so it reads
+   as a machined frame with real thickness, not a flat bordered rect. The inner
+   edge notches under the bar housing (negative margin on the column). */
 .fhud-portrait {
   position: relative;
+  z-index: 2;
   flex: 0 0 auto;
   display: inline-block;
   overflow: hidden;
-  background: linear-gradient(180deg, #241340, #0f0a1a);
-  border: 2px solid #000;
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
-  box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.6), 0 0 10px -2px var(--accent);
+  background: linear-gradient(180deg, #2a1650, #0d0818);
+  border: 3px solid #04030a;
+  box-shadow:
+    inset 0 0 0 2px var(--accent),
+    inset 0 4px 8px rgba(255, 255, 255, 0.22),
+    inset 0 -10px 16px rgba(0, 0, 0, 0.55),
+    4px 5px 0 rgba(0, 0, 0, 0.6),
+    0 0 14px -2px var(--accent);
+  /* Angled outer corner — a shaped frame, not a plain rectangle. */
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 9px 100%, 0 calc(100% - 9px));
   image-rendering: pixelated;
 }
-.fhud-portrait.b { transform: scaleX(-1); }
+.fhud-portrait.b {
+  transform: scaleX(-1);
+}
 .fhud-portrait::after {
   /* Bottom accent shelf for the arcade name-plate read. */
   content: '';
@@ -81,9 +118,9 @@
   left: 0;
   right: 0;
   bottom: 0;
-  height: 3px;
+  height: 4px;
   background: var(--accent);
-  box-shadow: 0 0 6px var(--accent);
+  box-shadow: 0 0 8px var(--accent);
 }
 /* Brief holding state while the atlas resolves — an accent tile, never a
    debug letter. Pulses so a capture that catches it reads as alive. */
@@ -94,42 +131,63 @@
 }
 
 .fhud-name {
-  font-size: 11px;
-  letter-spacing: 0.16em;
+  font-size: 12px;
+  letter-spacing: 0.15em;
   color: #fff;
-  text-shadow: 1px 1px 0 #000, 2px 2px 0 rgba(0, 0, 0, 0.6);
+  text-shadow: 1px 1px 0 #000, 0 0 6px rgba(0, 0, 0, 0.9);
   white-space: nowrap;
-  /* Angled plate so the name reads as a stamped nameplate, not floating text. */
-  padding: 3px 12px 2px;
-  background: linear-gradient(180deg, rgba(28, 18, 44, 0.94), rgba(9, 6, 17, 0.94));
+  padding: 3px 14px 2px 10px;
+  /* Accent-keyed dark plate with a solid colour tab on the leading edge, so the
+     name is tied to the assembly (not floating red-on-black) and high-contrast. */
+  background: linear-gradient(180deg, rgba(34, 24, 52, 0.96), rgba(9, 6, 17, 0.96));
   border: 2px solid #000;
-  border-bottom: 2px solid var(--accent, #fff);
-  box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.12);
-  transform: skewX(-8deg);
+  border-left: 5px solid var(--accent, #fff);
+  box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  transform: skewX(-13deg);
+}
+.fhud-hpwrap.b .fhud-name {
+  padding: 3px 10px 2px 14px;
+  border-left: 2px solid #000;
+  border-right: 5px solid var(--accent, #fff);
+  transform: skewX(13deg);
 }
 /* Counter-skew the label so the text stays upright inside the raked plate. */
 .fhud-name > span {
   display: inline-block;
-  transform: skewX(8deg);
+  transform: skewX(13deg);
 }
+.fhud-hpwrap.b .fhud-name > span { transform: skewX(-13deg); }
 
-/* Two-layer track: trail (recoverable/chip) sits behind, main in front. The
-   track is a deep, dark trough with a metallic outer rim so the fill reads as
-   sitting *inside* a machined channel (SF6 / Strive), not painted on a flat bar. */
+/* Thick housing the bar is inset into. Skewing the housing rakes the entire
+   bar silhouette into a parallelogram (not just the notched ends) — the single
+   biggest "fighting game vs. web progress bar" signal. Both sides lean toward
+   the centre. */
+.fhud-hphousing {
+  position: relative;
+  width: 100%;
+  padding: 4px;
+  background: linear-gradient(180deg, #4a3a5e 0%, #241a34 42%, #0c0814 100%);
+  border: 2px solid #04030a;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 -2px 3px rgba(0, 0, 0, 0.6),
+    0 0 0 1px rgba(176, 188, 214, 0.3),
+    5px 5px 0 rgba(0, 0, 0, 0.55);
+  transform: skewX(-13deg);
+}
+.fhud-hpwrap.b .fhud-hphousing { transform: skewX(13deg); }
+
+/* Two-layer track inset in the housing: trail (recoverable/chip) sits behind,
+   main in front, both inside a deep dark trough. */
 .fhud-hptrack {
   position: relative;
   width: 100%;
   height: 22px;
   background: linear-gradient(180deg, #05030a 0%, #17102a 55%, #0a0713 100%);
-  border: 2px solid #000;
   box-shadow:
-    inset 0 3px 5px rgba(0, 0, 0, 0.8),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.07),
-    0 0 0 1px rgba(176, 188, 214, 0.28),
-    5px 5px 0 rgba(0, 0, 0, 0.55);
+    inset 0 3px 6px rgba(0, 0, 0, 0.85),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.06);
   overflow: hidden;
-  /* Skew the whole bar for that aggressive fighting-game rake. */
-  transform: skewX(-11deg);
 }
 .fhud-hpfill,
 .fhud-hptrail {
@@ -151,12 +209,15 @@
   opacity: 0.9;
   box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.55);
 }
+/* Backlit-glass fill: bright top highlight line, a lit upper third and a
+   distinctly darker bottom third so the bar reads as a curved, lit surface
+   rather than paint. */
 .fhud-hpfill {
   background: linear-gradient(180deg, #eaf59a 0%, #c3d94a 16%, #93ab24 46%, #6a7d18 74%, #3f4a0e 100%);
   box-shadow:
-    inset 0 2px 0 rgba(255, 255, 255, 0.85),
-    inset 0 6px 7px rgba(255, 255, 255, 0.22),
-    inset 0 -5px 7px rgba(0, 0, 0, 0.5);
+    inset 0 2px 0 rgba(255, 255, 255, 0.92),
+    inset 0 7px 8px rgba(255, 255, 255, 0.28),
+    inset 0 -7px 9px rgba(0, 0, 0, 0.58);
 }
 /* Bright draining edge — the crisp lit lip at the front of the bar that sells
    the "this is a live gauge" read in SF6 / Strive. Anchored to the inner end. */
@@ -166,9 +227,9 @@
   top: 0;
   bottom: 0;
   right: 0;
-  width: 3px;
-  background: linear-gradient(180deg, #ffffff, rgba(255, 255, 255, 0.35));
-  box-shadow: 0 0 7px rgba(255, 255, 255, 0.7);
+  width: 4px;
+  background: linear-gradient(180deg, #ffffff, rgba(255, 255, 255, 0.4));
+  box-shadow: 0 0 9px rgba(255, 255, 255, 0.85);
   pointer-events: none;
 }
 .fhud-hpwrap.b .fhud-hpfill::after {
@@ -192,22 +253,44 @@
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.06) 72%, transparent);
   pointer-events: none;
 }
+/* Danger hazard hatching — hidden until crit, then the bar changes *character*
+   (animated red diagonals over the fill) rather than just getting shorter. */
+.fhud-hphazard {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    45deg,
+    rgba(255, 40, 40, 0) 0 9px,
+    rgba(255, 46, 46, 0.32) 9px 18px
+  );
+  mix-blend-mode: screen;
+}
 
-.fhud-hpwrap.crit .fhud-hptrack {
-  animation: fhudHpCrit 0.7s ease-in-out infinite;
+.fhud-hpwrap.crit .fhud-hphazard {
+  opacity: 1;
+  animation: fhudHazard 0.6s linear infinite;
+}
+@keyframes fhudHazard {
+  from { background-position: 0 0; }
+  to { background-position: 25px 0; }
+}
+.fhud-hpwrap.crit .fhud-hphousing {
+  animation: fhudHpCrit 0.66s ease-in-out infinite;
 }
 @keyframes fhudHpCrit {
   0%, 100% {
     box-shadow:
-      inset 0 3px 5px rgba(0, 0, 0, 0.8), inset 0 -1px 0 rgba(255, 255, 255, 0.07),
-      0 0 0 1px rgba(176, 188, 214, 0.28), 5px 5px 0 rgba(0, 0, 0, 0.55),
+      inset 0 1px 0 rgba(255, 255, 255, 0.22), inset 0 -2px 3px rgba(0, 0, 0, 0.6),
+      0 0 0 1px rgba(176, 188, 214, 0.3), 5px 5px 0 rgba(0, 0, 0, 0.55),
       0 0 0 0 rgba(239, 35, 60, 0);
   }
   50% {
     box-shadow:
-      inset 0 3px 5px rgba(0, 0, 0, 0.8), inset 0 -1px 0 rgba(255, 255, 255, 0.07),
-      0 0 0 1px rgba(255, 90, 90, 0.6), 5px 5px 0 rgba(0, 0, 0, 0.55),
-      0 0 18px 3px rgba(239, 35, 60, 0.75);
+      inset 0 1px 0 rgba(255, 255, 255, 0.22), inset 0 -2px 3px rgba(0, 0, 0, 0.6),
+      0 0 0 1px rgba(255, 90, 90, 0.7), 5px 5px 0 rgba(0, 0, 0, 0.55),
+      0 0 22px 4px rgba(239, 35, 60, 0.8);
   }
 }
 
@@ -252,20 +335,42 @@
   display: flex;
   gap: 5px;
 }
-/* Each stock is its own machined trough — same vocabulary as the health track. */
+/* Each stock is its own machined trough — same vocabulary as the health track.
+   Even empty it must read as a defined, charge-capable slot, so the trough
+   carries a faint violet inner glow and a slow idle sheen rather than looking
+   like an unfilled form field. */
 .fhud-superbar {
   position: relative;
   width: 120px;
-  height: 14px;
-  background: linear-gradient(180deg, #05030a 0%, #160a26 58%, #0a0512 100%);
+  height: 16px;
+  background:
+    linear-gradient(180deg, rgba(126, 40, 180, 0.22), rgba(60, 12, 96, 0.12) 55%, transparent),
+    linear-gradient(180deg, #06040c 0%, #180b28 58%, #0a0512 100%);
   border: 2px solid #000;
   box-shadow:
     inset 0 2px 4px rgba(0, 0, 0, 0.8),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.06),
-    0 0 0 1px rgba(176, 188, 214, 0.22),
+    inset 0 0 8px rgba(150, 60, 210, 0.28),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.07),
+    0 0 0 1px rgba(176, 188, 214, 0.26),
     3px 3px 0 rgba(0, 0, 0, 0.5);
   overflow: hidden;
   transform: skewX(-11deg);
+}
+/* Slow idle sheen so an empty gauge still reads as a live, present element. */
+.fhud-superbar::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(110deg, transparent 38%, rgba(190, 130, 240, 0.22) 50%, transparent 62%);
+  transform: translateX(-120%);
+  animation: fhudSuperIdle 3.8s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 1;
+}
+.fhud-superbar.full::before { animation: none; opacity: 0; }
+@keyframes fhudSuperIdle {
+  0% { transform: translateX(-120%); }
+  60%, 100% { transform: translateX(120%); }
 }
 .fhud-superfill {
   position: absolute;
@@ -275,13 +380,20 @@
   background: linear-gradient(180deg, #d18bff 0%, #a021e0 32%, #7209b7 70%, #46067a 100%);
   box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.4), inset 0 -3px 5px rgba(0, 0, 0, 0.4);
   will-change: width;
+  z-index: 2;
 }
 .fhud-superrow.b .fhud-superfill { left: auto; right: 0; }
+/* Beveled segment dividers — a dark cut with a lit edge, so the stock reads as
+   physically segmented rather than printed with flat lines. */
 .fhud-superticks {
   position: absolute;
   inset: 0;
+  z-index: 3;
   background-image: repeating-linear-gradient(
-    90deg, transparent 0 calc(25% - 1px), rgba(0,0,0,0.5) calc(25% - 1px) 25%
+    90deg,
+    transparent 0 calc(25% - 2px),
+    rgba(0, 0, 0, 0.6) calc(25% - 2px) calc(25% - 1px),
+    rgba(255, 255, 255, 0.14) calc(25% - 1px) 25%
   );
   pointer-events: none;
 }

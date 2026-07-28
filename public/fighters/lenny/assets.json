@@ -1529,56 +1529,66 @@
     },
     "st.LK": {
       "frames": [
+        0,
         28,
         0
       ],
       "durations": [
         4,
-        5
+        2,
+        8
       ],
       "loop": false
     },
     "cr.LK": {
       "frames": [
+        0,
         28,
         0
       ],
       "durations": [
         4,
-        5
+        2,
+        7
       ],
       "loop": false
     },
     "st.MK": {
       "frames": [
+        0,
         29,
         0
       ],
       "durations": [
-        5,
-        7
+        6,
+        3,
+        12
       ],
       "loop": false
     },
     "cr.MK": {
       "frames": [
+        0,
         29,
         0
       ],
       "durations": [
-        5,
-        7
+        6,
+        3,
+        13
       ],
       "loop": false
     },
     "j.MK": {
       "frames": [
+        0,
         29,
         0
       ],
       "durations": [
-        5,
-        7
+        7,
+        4,
+        8
       ],
       "loop": false
     },
@@ -1589,9 +1599,9 @@
         0
       ],
       "durations": [
-        6,
-        6,
-        10
+        10,
+        2,
+        20
       ],
       "loop": false
     },
@@ -1602,9 +1612,9 @@
         0
       ],
       "durations": [
-        6,
-        6,
-        10
+        8,
+        3,
+        20
       ],
       "loop": false
     },
@@ -1615,9 +1625,9 @@
         0
       ],
       "durations": [
-        6,
-        6,
-        10
+        8,
+        3,
+        12
       ],
       "loop": false
     },
@@ -1628,9 +1638,9 @@
         0
       ],
       "durations": [
-        6,
-        6,
-        10
+        12,
+        3,
+        18
       ],
       "loop": false
     },

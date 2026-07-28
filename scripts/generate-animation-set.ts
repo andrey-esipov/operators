@@ -28,6 +28,7 @@ import {
 } from './lib/frame-spec'
 import { referenceHistogram, validateFrame, type ValidationResult } from './lib/sprite-validate'
 import { packAtlas, assertAnchorsPreserved, type RegisteredFrame } from './lib/atlas'
+import { attackTimingForSkin } from './lib/fighter-timing'
 import { contactSheet, clipFilmstrip, previewHtml, FILMSTRIP_CLIPS, type RegMap } from './lib/preview'
 import { clipApng } from './lib/apng'
 import { morph } from './lib/inbetween'
@@ -341,7 +342,11 @@ export async function generateFighter(
 
   // Pack the atlas and prove the anchors survived the trim.
   const atlasHref = `/fighters/${id}/atlas.png`
-  const { atlas, assets } = await packAtlas(id, atlasHref, registered, opts.heightCm ?? DEFAULT_HEIGHT_CM)
+  // Kick clips are laid out from this skin's archetype move timing so the
+  // contact cel sits on the active window by construction (undefined for
+  // unplayable card-art skins, which fall back to the static kick clips).
+  const attackTiming = attackTimingForSkin(id)
+  const { atlas, assets } = await packAtlas(id, atlasHref, registered, opts.heightCm ?? DEFAULT_HEIGHT_CM, attackTiming)
   const meta = await import('sharp').then((m) => m.default(atlas).metadata())
   // Anchor-preservation tolerance is pixel-absolute, so it scales with SCALE too.
   const anchorCheck = await assertAnchorsPreserved(atlas, assets, 1.5 * SCALE)

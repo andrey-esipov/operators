@@ -17,7 +17,7 @@
 import sharp from 'sharp'
 import { findAnchor, footAnchorX } from './sprite-pipeline'
 import type { Box, FighterAssets, SpriteFrameMeta, Vec2 } from '../../src/fight/types'
-import { CLIPS, FALLBACK_CLIPS, FRAME_ORDER, frameIndex, resolveClip } from './frame-spec'
+import { CLIPS, FALLBACK_CLIPS, FRAME_ORDER, frameIndex, resolveClip, deriveAttackClip, type MoveTiming } from './frame-spec'
 
 /**
  * Max GPU texture dimension we allow. 8192 is the WebGL2 spec floor that every
@@ -121,6 +121,7 @@ export async function packAtlas(
   atlasPath: string,
   frames: RegisteredFrame[],
   heightCm: number,
+  attackTiming?: Map<string, MoveTiming>,
 ): Promise<PackResult> {
   const trimmed = await Promise.all(frames.map(trim))
   const byName = new Map(trimmed.map((t) => [t.name, t]))
@@ -146,18 +147,7 @@ export async function packAtlas(
     return { name, rect, anchor: t.anchor }
   })
 
-  // Build clips, remapping frame names to indices into frameMeta. A clip whose
-  // rich (authored) form references a pose this fighter never generated drops to
-  // a core-pose-only fallback (see FALLBACK_CLIPS) so the stance still plays a
-  // real reel; if neither resolves, the clip is skipped rather than emitted with
-  // a hole.
-  const nameToMeta = new Map(frameMeta.map((m, i) => [m.name, i]))
-  const clips: FighterAssets['clips'] = {}
-  for (const clipName of Object.keys(CLIPS)) {
-    const built = resolveClip(CLIPS[clipName], nameToMeta) ??
-      resolveClip(FALLBACK_CLIPS[clipName], nameToMeta)
-    if (built) clips[clipName] = built
-  }
+  const clips = buildClips(frameMeta.map((m) => m.name), attackTiming)
 
   const assets: FighterAssets = {
     id: fighterId,
@@ -167,6 +157,42 @@ export async function packAtlas(
     heightCm,
   }
   return { atlas, assets }
+}
+
+/**
+ * Remap every CLIP to indices into this fighter's packed frames.
+ *
+ * Attack clips in the derived kick ladder (see DERIVED_ATTACKS) are laid out
+ * from `attackTiming` — the fighter's own per-move startup/active/recovery — so
+ * the contact cel sits on the active window by construction, per archetype.
+ * Without timing (the unplayable card-art skins have no moveset) every clip uses
+ * the static CLIPS entry, which is the prior behaviour exactly.
+ *
+ * A clip whose rich (authored) form references a pose this fighter never
+ * generated drops to a core-pose-only fallback (see FALLBACK_CLIPS) so the
+ * stance still plays a real reel; if neither resolves, the clip is skipped
+ * rather than emitted with a hole.
+ *
+ * Lives here so the full atlas pipeline builds every clip in one place; the
+ * derived kick ladder specifically is shared with the manifest-only rebuild
+ * (scripts/rebuild-manifest-clips.ts) through `deriveAttackClip`, so the two
+ * cannot disagree about where a kick's contact cel lands — the same discipline
+ * as the shared resolveClip.
+ */
+export function buildClips(
+  frameNames: string[],
+  attackTiming?: Map<string, MoveTiming>,
+): FighterAssets['clips'] {
+  const nameToMeta = new Map(frameNames.map((n, i) => [n, i]))
+  const clips: FighterAssets['clips'] = {}
+  for (const clipName of Object.keys(CLIPS)) {
+    const timing = attackTiming?.get(clipName)
+    const derived = timing ? deriveAttackClip(clipName, timing) : null
+    const built = resolveClip(derived ?? CLIPS[clipName], nameToMeta) ??
+      resolveClip(FALLBACK_CLIPS[clipName], nameToMeta)
+    if (built) clips[clipName] = built
+  }
+  return clips
 }
 
 /**

@@ -653,12 +653,131 @@ export function resolveClip(
 const LP = clip(false, ['lp-startup', 3], ['lp-active', 4], ['tw-lp-rec', 4])
 const MP = clip(false, ['idle-1', 3], ['mp-active', 5], ['tw-mp-rec', 5])
 const HP = clip(false, ['hp-startup', 5], ['tw-hp-wind', 3], ['hp-active', 5], ['tw-hp-rec', 6])
+// Kick STATIC fallbacks. These fixed durations cannot align to a real active
+// window — the `*-active` cel is spent during startup and has snapped back to
+// idle by the frame the kick connects (LK/MK reserve NO startup cel; HK's 6f
+// startup only happens to cover operator's 10f-startup active window and misses
+// vanguard/warden's 12f). They are used ONLY for skins with no moveset (the
+// unplayable card art); every playable fighter's kicks are laid out per-move
+// from that move's own startup/active/recovery via `deriveAttackClip` below.
 const LK = clip(false, ['lk-active', 4], ['idle-1', 5])
 const MK = clip(false, ['mk-active', 5], ['idle-1', 7])
 const HK = clip(false, ['hk-startup', 6], ['hk-active', 6], ['idle-1', 10])
 const FIREBALL = clip(false, ['special-fireball-charge', 8], ['special-fireball-release', 6], ['idle-1', 8])
 const UPPERCUT = clip(false, ['crouch', 4], ['special-uppercut', 6], ['jump-fall', 6])
 const SUPER = clip(false, ['special-fireball-charge', 6], ['special-uppercut', 8], ['special-fireball-release', 8])
+
+// ── Timing-derived attack layout ────────────────────────────────────────────
+/**
+ * An attack clip laid out from the move's OWN startup/active/recovery, so the
+ * contact cel is on screen exactly while the hitbox is live — per archetype, by
+ * construction. One shared clip with hand-tuned durations cannot satisfy the
+ * three archetypes' different startups at once (st.LK startup is 4 for operator
+ * but 5 for vanguard/warden; st.HK 10 vs 12), which is exactly how the kick
+ * ladder shipped freezing on the idle breathing cel. The active window is the
+ * single parameter the layout reads — never a second number that can drift out
+ * of sync with it, the same discipline as SUPER_FREEZE_FRAMES and its envelope.
+ */
+export interface AttackShape {
+  /** Cels covering the startup window [0, startup). Empty ⇒ hold `neutral`:
+   *  a two-cel kick has no windup drawing, so it holds the neutral pose and
+   *  extends only at contact (extended-at-contact beats telegraphing startup). */
+  startup: string[]
+  /** The contact cel, held across the whole active window [startup, startup+active). */
+  active: string
+  /** Cels covering the recovery tail. Empty ⇒ hold `neutral`. */
+  recovery: string[]
+  /** Filler pose for a phase with no dedicated cel. */
+  neutral: string
+}
+
+export interface MoveTiming {
+  startup: number
+  active: number
+  recovery: number
+}
+
+/**
+ * Tile `dur` sim frames across `cels` (even split, remainder to the earlier
+ * cels), merging into a trailing identical hold so the clip stays minimal. An
+ * empty cel list emits one `neutral` hold spanning the whole duration.
+ */
+function tilePhase(
+  cels: string[],
+  dur: number,
+  neutral: string,
+  outFrames: string[],
+  outDurations: number[],
+): void {
+  if (dur <= 0) return
+  const list = cels.length ? cels : [neutral]
+  const base = Math.floor(dur / list.length)
+  let rem = dur - base * list.length
+  for (const cel of list) {
+    const d = base + (rem > 0 ? 1 : 0)
+    if (rem > 0) rem--
+    if (d <= 0) continue
+    if (outFrames.length && outFrames[outFrames.length - 1] === cel) {
+      outDurations[outDurations.length - 1] += d
+    } else {
+      outFrames.push(cel)
+      outDurations.push(d)
+    }
+  }
+}
+
+/**
+ * Lay an AttackShape out against a move's timing. The active cel spans EXACTLY
+ * the active window and is emitted as its own key (never merged into a
+ * neighbouring idle hold), so `frameAt(clip, startup)` — the cel the attacker
+ * freezes on at point-blank, since sim.ts freezes move.frame during hitstop and
+ * combat latches the hit on the first active-window overlap — is the contact
+ * cel for any startup, on any archetype.
+ */
+export function layoutAttack(shape: AttackShape, t: MoveTiming): ClipSpec {
+  const frames: string[] = []
+  const durations: number[] = []
+  tilePhase(shape.startup, t.startup, shape.neutral, frames, durations)
+  frames.push(shape.active)
+  durations.push(Math.max(1, t.active))
+  tilePhase(shape.recovery, t.recovery, shape.neutral, frames, durations)
+  return { frames, durations, loop: false }
+}
+
+/**
+ * The kick ladder's per-button shapes. LK/MK have no windup drawing (hold the
+ * neutral idle pose through startup, extend at contact); HK has a windup cel.
+ * Punches already reserve a startup cel so their static clips place `*-active`
+ * at the move's startup frame — they pass the contact-cel gate unchanged and are
+ * deliberately left on their hand-tuned, visually-reviewed clips; the roster-wide
+ * gate still enforces the invariant for them.
+ */
+const KICK_SHAPES: Record<'lk' | 'mk' | 'hk', AttackShape> = {
+  lk: { startup: [], active: 'lk-active', recovery: [], neutral: 'idle-1' },
+  mk: { startup: [], active: 'mk-active', recovery: [], neutral: 'idle-1' },
+  hk: { startup: ['hk-startup'], active: 'hk-active', recovery: [], neutral: 'idle-1' },
+}
+
+/**
+ * Sim move-ids whose clip is DERIVED from the move's timing (the normal kick
+ * ladder — ground, crouch, jump and the operator's f.HK command kick). Specials
+ * that reuse a kick clip (qcb.K) stay on the static clip and are covered by the
+ * gate. Everything not listed here uses the static CLIPS entry.
+ */
+export const DERIVED_ATTACKS: Record<string, 'lk' | 'mk' | 'hk'> = {
+  'st.LK': 'lk', 'cr.LK': 'lk',
+  'st.MK': 'mk', 'cr.MK': 'mk', 'j.MK': 'mk',
+  'st.HK': 'hk', 'cr.HK': 'hk', 'j.HK': 'hk', 'f.HK': 'hk',
+}
+
+/**
+ * The timing-derived clip for a move-id, or null when the move-id is not part of
+ * the derived kick ladder (the caller then falls back to the static CLIPS entry).
+ */
+export function deriveAttackClip(moveId: string, t: MoveTiming): ClipSpec | null {
+  const shape = DERIVED_ATTACKS[moveId]
+  return shape ? layoutAttack(KICK_SHAPES[shape], t) : null
+}
 
 export const CLIPS: Record<string, ClipSpec> = {
   // ── Stance-enum clips ────────────────────────────────────────────────────

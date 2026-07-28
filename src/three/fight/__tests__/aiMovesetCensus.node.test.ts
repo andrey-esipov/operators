@@ -156,18 +156,27 @@ function censusMatrix() {
   let matches = 0
   let completed = 0
   let frames = 0
-  // Per (tier) round win/length, keyed for the strength readout.
-  const perTier: Record<string, { rounds: number; frames: number }> = {}
+  // Per (tier) round win/length + per-level contact, keyed for the strength
+  // readout AND the per-tier landed-rate readout. The per-tier split matters
+  // because the shipped single-player CPU (PlayableMatch -> MatchSim -> makeAI)
+  // defaults to the EASY tier, and the showcase rates scale with aggression /
+  // punishChance, so an aggregate floor could go green while the DEFAULT player
+  // still sees no heavy or sweep. The per-tier numbers keep the gate honest to
+  // what a first-time buyer actually fights.
+  const perTier: Record<string, { rounds: number; frames: number; completed: number; contact: Record<HitLevel, number> }> = {}
 
   for (const tier of TIERS) {
-    perTier[tier] = { rounds: 0, frames: 0 }
+    perTier[tier] = { rounds: 0, frames: 0, completed: 0, contact: zeroLevels() }
     for (const [p1, p2] of matchups()) {
       for (const seed of SEEDS) {
         const r = runFight(seed, tier, tier, p1, p2, byMove)
         matches++
-        if (r.matchEnded) completed++
+        if (r.matchEnded) { completed++; perTier[tier].completed++ }
         frames += r.frames
-        for (const k of LEVELS) { byLevel[k] += r.levelHits[k]; byLevelCH[k] += r.levelCounter[k] }
+        for (const k of LEVELS) {
+          byLevel[k] += r.levelHits[k]; byLevelCH[k] += r.levelCounter[k]
+          perTier[tier].contact[k] += r.levelHits[k] + r.levelCounter[k]
+        }
         for (const rd of r.rounds) { perTier[tier].rounds++; perTier[tier].frames += rd.length }
       }
     }
@@ -252,7 +261,13 @@ describe('AI moveset census', () => {
         `\n\n=== SAFETY PROFILE (committal tiers) ===\n` +
         safety('heavy') + '\n' + safety('sweep') + '\n' + safety('launcher') +
         `\n\n=== MEAN ROUND LENGTH by tier ===\n` +
-        TIERS.map((t) => `  ${t.padEnd(7)} ${(c.perTier[t].frames / Math.max(1, c.perTier[t].rounds)).toFixed(0)}f over ${c.perTier[t].rounds} rounds`).join('\n'),
+        TIERS.map((t) => `  ${t.padEnd(7)} ${(c.perTier[t].frames / Math.max(1, c.perTier[t].rounds)).toFixed(0)}f over ${c.perTier[t].rounds} rounds`).join('\n') +
+        `\n\n=== PER-TIER LANDED RATE /match (easy = shipped single-player default) ===\n` +
+        TIERS.map((t) => {
+          const pt = c.perTier[t]; const cm = Math.max(1, pt.completed)
+          return `  ${t.padEnd(7)} ` + (['light', 'medium', 'heavy', 'launcher', 'sweep', 'crumple'] as HitLevel[])
+            .map((k) => `${k[0]}${k === 'launcher' ? 'a' : ''}=${(pt.contact[k] / cm).toFixed(2)}`).join(' ')
+        }).join('\n'),
       )
     }
 
@@ -287,6 +302,28 @@ describe('AI moveset census', () => {
         perMatch(k),
         `${k} landed ${(perMatch(k)).toFixed(3)}/match, floor ${FLOOR[k]}/match — authored VFX that never reaches the reel`,
       ).toBeGreaterThanOrEqual(FLOOR[k])
+    }
+
+    // PER-TIER FLOOR for the two moves that WERE the defect (pre-fix heavy
+    // ~0.03/match, sweep 0/match). The shipped single-player CPU
+    // (PlayableMatch -> MatchSim -> makeAI) defaults to the EASY tier when no
+    // ?cpu override is set, and the showcase rates scale with aggression /
+    // punishChance (both lowest at easy), so the aggregate floor above could in
+    // principle go green on medium+hard volume while the DEFAULT tier a
+    // first-time buyer fights still shows neither move. Asserting per-tier
+    // closes that gap: every selectable tier must individually clear the floor,
+    // not just the 108-match average. The matrix is deterministic (fixed seeds),
+    // so these are exact, not sampled — observed at commit: heavy
+    // easy/med/hard = 2.00/2.50/1.64, sweep = 4.86/4.42/5.17, all well clear.
+    const perTierMatch = (t: string, k: HitLevel) =>
+      c.perTier[t].contact[k] / Math.max(1, c.perTier[t].completed)
+    for (const t of TIERS) {
+      for (const k of ['heavy', 'sweep'] as HitLevel[]) {
+        expect(
+          perTierMatch(t, k),
+          `${t}-tier ${k} landed ${perTierMatch(t, k).toFixed(3)}/match, floor ${FLOOR[k]} — the ${t} CPU is a tier a real player selects, and it never shows this move`,
+        ).toBeGreaterThanOrEqual(FLOOR[k])
+      }
     }
   })
 

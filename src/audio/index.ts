@@ -17,7 +17,7 @@
 
 import { renderSound, type SoundName } from './catalog'
 import type { ImpactRouting, ImpactOpts, Flavor } from './impacts'
-import { buildMasterGraph, type MasterGraph } from './master'
+import { buildMasterGraph, duckMusicRamp, type MasterGraph } from './master'
 import { stageImpulse, STAGE_ACOUSTICS, type StageId } from './reverb'
 import { buildAmbience, type AmbienceHandle } from './ambience'
 import { clamp, impulseResponse } from './dsp'
@@ -88,18 +88,13 @@ function routing(): ImpactRouting {
 
 /**
  * Sidechain duck of music + reverb return on each hit. Bigger hits duck
- * harder and recover slower — the classic "punch" pump.
+ * harder and recover slower — the classic "punch" pump. The envelope itself is
+ * `duckMusicRamp` in master.ts, shared with the offline duck measurement so the
+ * probe proves the exact curve the game plays.
  */
 function duck(when: number, intensity: number) {
   if (!graph) return
-  const amt = clamp(intensity, 0, 1.2)
-  const depth = clamp(0.32 + amt * 0.4, 0, 0.85)
-  const recover = 0.18 + amt * 0.25
-  const md = graph.musicDuck.gain
-  md.cancelScheduledValues(when)
-  md.setValueAtTime(md.value, when)
-  md.linearRampToValueAtTime(1 - depth, when + 0.012)
-  md.setTargetAtTime(1, when + 0.02, recover)
+  duckMusicRamp(graph.musicDuck.gain, when, intensity)
 }
 
 /** Track a decaying concurrency budget; return true if a voice is allowed. */

@@ -11,7 +11,7 @@
 
 import { fightAudio } from './index'
 import { renderOffline, renderSound, ALL_SOUNDS, type SoundName } from './catalog'
-import { buildMasterGraph } from './master'
+import { buildMasterGraph, duckMusicRamp } from './master'
 import { stageImpulse, STAGE_ACOUSTICS, type StageId } from './reverb'
 import { FightAudioReactor, type FightAudioSink } from './reactor'
 import type { ImpactRouting, ImpactOpts, Flavor } from './impacts'
@@ -120,6 +120,56 @@ class OfflineTimelineSink implements FightAudioSink {
   musicStop() {}
 }
 
+/**
+ * DUCK PROBE — measures the sidechain music duck the way the game plays it.
+ *
+ * The timeline sink no-ops `duckMusic` (music is an MP3, unrenderable offline),
+ * so the loudness-ladder tool cannot see the duck. This renders a steady tone
+ * through the REAL music bus (the same node the live bed routes through) and
+ * fires the SHIP `duckMusicRamp` at t=1.0s, so a headless script can measure how
+ * many dB the bed drops out from under a super/KO — the loudness *contrast* that
+ * gives them weight. `duck:false` renders the identical tone with no duck, the
+ * control that proves the measured drop is the duck and not the master.
+ */
+async function renderDuckProbe(
+  o: { intensity?: number; duck?: boolean; sampleRate?: number; seconds?: number } = {},
+): Promise<RenderResult> {
+  const sampleRate = o.sampleRate ?? 48000
+  const seconds = o.seconds ?? 2.2
+  const intensity = o.intensity ?? 1.0
+  const duckOn = o.duck ?? true
+
+  const OAC: typeof OfflineAudioContext =
+    (globalThis as unknown as { OfflineAudioContext: typeof OfflineAudioContext }).OfflineAudioContext
+  const ctx = new OAC(2, Math.ceil(seconds * sampleRate), sampleRate)
+
+  const graph = buildMasterGraph(ctx, ctx.destination, 0.9)
+  graph.convolver.buffer = stageImpulse(ctx, 'hypergrowth')
+  graph.reverbReturn.gain.value = 0 // dry: isolate the bed level, no reverb tail
+
+  // A steady sawtooth bed through the music bus — a measurable stand-in for the
+  // MP3 track, routed exactly where the live bed goes (musicBus → musicDuck).
+  const osc = ctx.createOscillator()
+  osc.type = 'sawtooth'
+  osc.frequency.value = 174.6
+  const bed = ctx.createGain()
+  bed.gain.value = 0.22
+  osc.connect(bed)
+  bed.connect(graph.musicBus)
+  osc.start(0)
+  osc.stop(seconds)
+
+  // Fire the duck at 1.0s (well after the bed steadies) using the SHIP curve.
+  if (duckOn) duckMusicRamp(graph.musicDuck.gain, 1.0, intensity)
+
+  const buf = await ctx.startRendering()
+  const L = buf.getChannelData(0)
+  const R = buf.numberOfChannels > 1 ? buf.getChannelData(1) : L
+  const inter = new Float32Array(buf.length * 2)
+  for (let i = 0; i < buf.length; i++) { inter[i * 2] = L[i]; inter[i * 2 + 1] = R[i] }
+  return { name: 'duck', sampleRate: buf.sampleRate, length: buf.length, channels: 2, b64: f32ToB64(inter) }
+}
+
 async function renderTimeline(
   script: TimelineItem[],
   o: { stage?: StageId; sampleRate?: number; seconds?: number; dry?: boolean; mutate?: TimelineMutate; bypassMaster?: boolean } = {},
@@ -184,6 +234,7 @@ async function renderTimeline(
   stages: STAGES,
   render: (name: SoundName, opts?: { stage?: StageId; dry?: boolean; opts?: import('./impacts').ImpactOpts }) => renderForMetrics(name, opts),
   renderTimeline: (script: TimelineItem[], opts?: { stage?: StageId; sampleRate?: number; seconds?: number; dry?: boolean; mutate?: TimelineMutate; bypassMaster?: boolean }) => renderTimeline(script, opts),
+  renderDuckProbe: (opts?: { intensity?: number; duck?: boolean; sampleRate?: number; seconds?: number }) => renderDuckProbe(opts),
 }
 
 // ─── interactive UI ───────────────────────────────────────────────────────

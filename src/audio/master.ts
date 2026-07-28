@@ -24,6 +24,28 @@
 
 import { type Ctx, softClipCurve, hardClipCurve } from './dsp'
 
+/**
+ * The sidechain music-duck envelope — the single source of the "punch pump".
+ * Shared by the live engine (every impact, and the harder super/KO ducks) and
+ * the offline duck measurement (tools/measure-duck.mjs), so both exercise ONE
+ * curve rather than a live implementation and a drifting copy in the probe.
+ *
+ * A bigger `intensity` ducks DEEPER and recovers SLOWER — which is what gives a
+ * super (0.95) or KO (1.0) their loudness *contrast*: the bed drops ~10–11 dB
+ * out from under them, then eases back. `when` is the context time it begins.
+ * The 12 ms down-ramp is fast enough to be under the transient but slow enough
+ * not to click.
+ */
+export function duckMusicRamp(param: AudioParam, when: number, intensity: number): void {
+  const amt = Math.max(0, Math.min(1.2, intensity))
+  const depth = Math.min(0.85, 0.32 + amt * 0.4)
+  const recover = 0.18 + amt * 0.25
+  param.cancelScheduledValues(when)
+  param.setValueAtTime(param.value, when)
+  param.linearRampToValueAtTime(1 - depth, when + 0.012)
+  param.setTargetAtTime(1, when + 0.02, recover)
+}
+
 export interface MasterGraph {
   sfxBus: GainNode
   voiceBus: GainNode

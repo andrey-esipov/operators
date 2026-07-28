@@ -69,6 +69,9 @@ export class LightRig implements Subsystem {
   private targetPreset: StageLightingPreset = DEFAULT_PRESET
   private blend = 1
 
+  /** DEV/measurement-only multiplier on all rig intensities (1 = normal). */
+  private debugScale = 1
+
   private flashLife = 0
   private flashMax = 0
   private flashPeak = 0
@@ -165,9 +168,30 @@ export class LightRig implements Subsystem {
     this.ambient.color.copy(d.ambientColor)
     this.ambient.intensity = d.ambientIntensity
 
+    if (this.debugScale !== 1) {
+      this.key.intensity *= this.debugScale
+      this.rim.intensity *= this.debugScale
+      this.fill.intensity *= this.debugScale
+      this.ambient.intensity *= this.debugScale
+    }
+
     this.ctx.scene.fog = new THREE.FogExp2(p.fog.color, p.fog.density)
     ;(this.ctx.scene.background as THREE.Color)?.setHex?.(p.background)
     this.ctx.renderer.toneMappingExposure = p.exposure
+  }
+
+  /**
+   * DEV/measurement only: scale the whole directional/fill/ambient rig by `s`
+   * (1 = normal, 0 = dark). Used by the decal light-coupling probe to prove a
+   * painted decal actually responds to the light rig: a lit surface dims as the
+   * rig dims, an unlit `toneMapped:false` sticker does not move at all.
+   */
+  debugSetLightScale(s: number) {
+    this.debugScale = s
+    this.key.intensity = this.description.keyIntensity * s
+    this.rim.intensity = this.description.rimIntensity * 0.5 * s
+    this.fill.intensity = this.description.fillIntensity * s
+    this.ambient.intensity = this.description.ambientIntensity * s
   }
 
   onEvent(e: FightEvent) {

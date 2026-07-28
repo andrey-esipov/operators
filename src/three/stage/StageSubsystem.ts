@@ -40,6 +40,11 @@ declare global {
        *  the downed fighter — instead of the loose two-fighter coverage union —
        *  so it measures occlusion of the fighter's silhouette, not the framing. */
       project: (x: number, y: number, z: number) => [number, number]
+      /** Dev/QA: scale the whole light rig (1 = normal, 0 = dark). The decal
+       *  light-coupling probe dims the rig and watches which surfaces move: a
+       *  lit painted decal darkens with it, an unlit `toneMapped:false` sticker
+       *  does not — proving decals actually take the stage's directional light. */
+      setLightScale: (s: number) => void
     }
   }
 }
@@ -391,6 +396,9 @@ export class StageSubsystem implements Subsystem {
             cam.updateMatrixWorld()
             const v = new THREE.Vector3(x, y, z).project(cam)
             return [v.x, v.y]
+          },
+          setLightScale: (s: number) => {
+            this.getLightRig()?.debugSetLightScale(s)
           },
         }
     }

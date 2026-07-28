@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import type { QualityFlags } from '../../core/QualityManager'
 import type { StageConfig } from '../StageRegistry'
-import { StageBuild, structureMat, glowMat, makeScreen, radialGlow, lightShaft, mulberry } from '../StageKit'
+import { StageBuild, structureMat, glowMat, paintedDecal, makeScreen, radialGlow, lightShaft, mulberry } from '../StageKit'
 import { SHAFT_ON, overhead, foreground } from './StageSet'
 
 export function buildPrePmf(b: StageBuild, cfg: StageConfig, flags: QualityFlags) {
@@ -95,27 +95,31 @@ export function buildPrePmf(b: StageBuild, cfg: StageConfig, flags: QualityFlags
   const wbSurf = new THREE.Mesh(new THREE.PlaneGeometry(5.9, 3.7), structureMat({ color: 0xeceadf, roughness: 0.5, metalness: 0.0, emissive: 0xb8b09a, emissiveIntensity: 0.5 }))
   wbSurf.position.set(-8.32, 5.0, -13.5); wbSurf.rotation.y = 0.32
   b.add(wbSurf)
-  // marker scribble: rising line (drawn as small dark segments on the board)
+  // marker scribble: rising line (drawn as small segments on the board).
+  // Marker ink is PAINT on the board, not a UI overlay pasted on top: a lit
+  // material (so it takes the warm key, tone map and fog like the board) with a
+  // luminous emissive floor so a fresh-marker line still reads, plus real relief
+  // — thicker, proud segments — so it catches the light and parallaxes.
   const scrib = new THREE.Group()
   const sp: [number, number][] = [[0.08, 0.2], [0.28, 0.32], [0.5, 0.44], [0.72, 0.66], [0.92, 0.86]]
-  const smat = new THREE.MeshBasicMaterial({ color: 0x1c4fd8, fog: false, toneMapped: false })
-  const smat2 = new THREE.MeshBasicMaterial({ color: 0xd8402c, fog: false, toneMapped: false })
+  const smat = paintedDecal(0x4a7cff, { roughness: 0.5, emissiveScale: 0.22 })
+  const smat2 = paintedDecal(0xff5a44, { roughness: 0.5, emissiveScale: 0.22 })
   for (let i = 0; i < sp.length - 1; i++) {
     const a = new THREE.Vector3(-2.6 + 5.2 * sp[i][0], -1.5 + 3.0 * sp[i][1], 0)
     const c = new THREE.Vector3(-2.6 + 5.2 * sp[i + 1][0], -1.5 + 3.0 * sp[i + 1][1], 0)
     const len = a.distanceTo(c)
-    const seg = new THREE.Mesh(new THREE.BoxGeometry(len, 0.09, 0.02), smat)
+    const seg = new THREE.Mesh(new THREE.BoxGeometry(len, 0.14, 0.05), smat)
     seg.position.copy(a).lerp(c, 0.5); seg.rotation.z = Math.atan2(c.y - a.y, c.x - a.x)
     scrib.add(seg)
   }
   // a scrawled circle + arrow accent
   for (let k = 0; k < 8; k++) {
-    const dot = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 0.02), smat2)
+    const dot = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.15, 0.05), smat2)
     const ang = (k / 8) * Math.PI * 2
     dot.position.set(1.9 + Math.cos(ang) * 0.5, 1.0 + Math.sin(ang) * 0.5, 0)
     scrib.add(dot)
   }
-  scrib.position.set(-8.32, 5.0, -13.42); scrib.rotation.y = 0.32
+  scrib.position.set(-8.32, 5.0, -13.38); scrib.rotation.y = 0.32
   b.add(scrib)
   const wbLeg = new THREE.Mesh(new THREE.BoxGeometry(0.16, 3.0, 0.16), structureMat({ color: 0x2a2420, roughness: 0.7, metalness: 0.5 }))
   wbLeg.position.set(-8.4, 1.4, -13.6); wbLeg.rotation.y = 0.32
@@ -163,6 +167,12 @@ export function buildPrePmf(b: StageBuild, cfg: StageConfig, flags: QualityFlags
   const mon = makeScreen(1.9, 1.2, 'data', 0x3aa0ff, 0x66ffe0, 0.9, 12)
   mon.mesh.position.set(-7.6, 2.9, -10.9); mon.mesh.rotation.y = 0.35
   b.add(mon.mesh)
+  // Lit housing behind the emissive panel so the monitor reads as a physical
+  // device catching the room light, not a pixel rectangle floating on the wall.
+  const monBezel = new THREE.Mesh(new THREE.BoxGeometry(2.12, 1.42, 0.12), structureMat({ color: 0x14110e, roughness: 0.5, metalness: 0.6 }))
+  monBezel.position.set(-7.6, 2.9, -10.98); monBezel.rotation.y = 0.35
+  monBezel.castShadow = true
+  b.add(monBezel)
   b.onUpdate((t) => (mon.mat.uniforms.uTime.value = t))
 
   // hanging work-lamps (bright bulb + shade) that gently swing
@@ -261,15 +271,28 @@ export function buildPrePmf(b: StageBuild, cfg: StageConfig, flags: QualityFlags
     ;(strandMat as THREE.MeshBasicMaterial).opacity = 0.8 + 0.18 * Math.sin(t * 2.3)
   })
 
-  // Sticky-note colour pops on the wall beside the whiteboard.
-  const noteCols = [0xffd23a, 0xff5aa0, 0x46d0ff, 0xff8a3a, 0x9be25a, 0xffd23a]
-  const notePos: [number, number][] = [[-6.9, 7.6], [-6.1, 6.9], [-7.2, 6.6], [-5.7, 7.9], [-6.5, 7.2], [-5.4, 6.6]]
-  for (let i = 0; i < notePos.length; i++) {
-    const [nx, ny] = notePos[i]
-    const note = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.5), new THREE.MeshBasicMaterial({ color: noteCols[i], fog: false, toneMapped: false, transparent: true, opacity: 0.92 }))
-    note.position.set(nx, ny, -15.25); note.rotation.z = (i - 3) * 0.06
-    b.add(note)
+  // Sticky-note colour pops along the bottom tray of the whiteboard — paper, not
+  // colour chips. They live in the board's own local frame (so they share its
+  // facing and sit in the lit, camera-facing zone instead of the dark upper wall
+  // where a lit note would just vanish), each a thin proud slab that shades
+  // across its face under the key and parallaxes against the board.
+  const noteCols = [0xffd23a, 0xff5aa0, 0x46d0ff, 0xff8a3a, 0x9be25a]
+  const noteLocal: [number, number][] = [[-1.5, 1.4], [-0.7, 1.46], [-1.55, 0.92], [-0.62, 0.98], [-1.08, 1.42]]
+  const noteGroup = new THREE.Group()
+  noteGroup.position.set(-8.32, 5.0, -13.36)
+  noteGroup.rotation.y = 0.32
+  for (let i = 0; i < noteLocal.length; i++) {
+    const [lx, ly] = noteLocal[i]
+    const note = new THREE.Mesh(
+      new THREE.BoxGeometry(0.5, 0.5, 0.05),
+      paintedDecal(noteCols[i], { roughness: 0.82, emissiveScale: 0.28 }),
+    )
+    note.castShadow = true
+    note.position.set(lx, ly, 0.08)
+    note.rotation.z = (i - 2) * 0.05
+    noteGroup.add(note)
   }
+  b.add(noteGroup)
 
   // Second cool practical: a laptop on a low crate, right of centre, facing
   // camera so the right flank reads and the palette gets a cool counterpoint.
@@ -279,6 +302,10 @@ export function buildPrePmf(b: StageBuild, cfg: StageConfig, flags: QualityFlags
   const lap = makeScreen(1.3, 0.85, 'data', 0x46b4ff, 0x8fffe0, 0.85, 27)
   lap.mesh.position.set(6.4, 1.75, -7.2); lap.mesh.rotation.y = -0.38; lap.mesh.rotation.x = -0.14
   b.add(lap.mesh)
+  // Lit laptop lid behind the panel — same reason as the monitor bezel.
+  const lapBezel = new THREE.Mesh(new THREE.BoxGeometry(1.46, 1.0, 0.08), structureMat({ color: 0x17130f, roughness: 0.5, metalness: 0.55 }))
+  lapBezel.position.set(6.4, 1.75, -7.26); lapBezel.rotation.y = -0.38; lapBezel.rotation.x = -0.14
+  b.add(lapBezel)
   b.onUpdate((t) => (lap.mat.uniforms.uTime.value = t))
   const lapGlow = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 1.0), glowMat(0x3aa0ff, 0.28))
   lapGlow.position.set(6.4, 1.9, -7.6); lapGlow.rotation.y = -0.38

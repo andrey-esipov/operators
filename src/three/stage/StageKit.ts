@@ -240,6 +240,44 @@ export function glowMat(color: number, opacity = 1): THREE.MeshBasicMaterial {
   })
 }
 
+/**
+ * Lit paint / paper / ink on a surface — a marker line on a whiteboard, a
+ * sticky note, a stencil on a wall. Unlike {@link glowMat} (which is additive,
+ * `toneMapped:false` and renders its source colour verbatim regardless of the
+ * scene), a painted decal is a real `MeshStandardMaterial`: it obeys the
+ * stage's directional key/rim/fill, tone mapping, and fog exactly like the
+ * structure it sits on. That is the whole point — flat pigment that ignores the
+ * light rig reads as a sticker pasted onto a screenshot, not paint on a wall.
+ *
+ * A small emissive floor (default 6% of the base colour) keeps the pigment from
+ * crushing to black in a deep-shadow arena while leaving it ~94% light-driven,
+ * so it still warms/cools and gains a gradient as the key sweeps across it.
+ */
+export function paintedDecal(
+  color: number,
+  opts: {
+    roughness?: number
+    metalness?: number
+    /** Emissive floor as a fraction of the base colour (0 = purely lit). */
+    emissiveScale?: number
+    /** Override the emissive tint (defaults to the base colour). */
+    emissive?: number
+    transparent?: boolean
+    opacity?: number
+  } = {},
+): THREE.MeshStandardMaterial {
+  const emissiveScale = opts.emissiveScale ?? 0.06
+  return new THREE.MeshStandardMaterial({
+    color,
+    roughness: opts.roughness ?? 0.62,
+    metalness: opts.metalness ?? 0.0,
+    emissive: opts.emissive ?? color,
+    emissiveIntensity: emissiveScale,
+    transparent: opts.transparent ?? false,
+    opacity: opts.opacity ?? 1,
+  })
+}
+
 // ---------------------------------------------------------------------------
 // Fresnel rim shell. A large solid prop that is BACK-lit (a column in front of a
 // bright facade, say) collapses to a flat black silhouette — no form, no

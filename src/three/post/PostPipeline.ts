@@ -417,10 +417,28 @@ export class PostPipeline implements Subsystem, RenderDriver {
     // is the character's own lit skin -- exactly the pixels that must stay
     // readable. Lifting it keeps the bloom on the genuinely hot stuff (the
     // spark, the flare, the arena neon) and off the face.
-    this.bloom.intensity = g.bloomIntensity + i * 0.5 + this.superPunch * 0.35
+    //
+    // The SUPER obeys the exact same rule, and used to violate it. The Ion
+    // Storm beam is drawn additively and un-tone-mapped at 1.5-2.9 linear, so
+    // its core sits FAR above threshold before the bloom pass ever runs -- it
+    // does not need help to glow. The old super drive nonetheless pushed bloom
+    // intensity up (+0.35) AND dropped the threshold (-0.08) while the beam
+    // fired. That did to the beam exactly what the impact boost did to the
+    // fighter's face: a HUGE-kernel SCREEN blend recruited the golden charge
+    // flare's high-R/G bloom across the whole band and stacked it onto the
+    // indigo core, driving every channel to 1.0 so the signature colour
+    // clipped to white and only survived as a faint fringe. A saturated colour
+    // has to stay BELOW the bloom clip to read as itself. So the super now
+    // takes NO intensity boost (energy is not added to an already-clipping
+    // core) and RAISES the threshold by the same amount it used to lower it,
+    // keeping the bloom on the genuinely hottest specular/flare pixels while
+    // the indigo body of the beam stays below the clip and keeps its hue. The
+    // super's spectacle rides the anamorphic streak, contrast and warmth drives
+    // below -- none of which whiten the core.
+    this.bloom.intensity = g.bloomIntensity + i * 0.5
     this.bloom.luminanceMaterial.threshold = Math.max(
       0.34,
-      g.bloomThreshold + i * 0.05 - this.superPunch * 0.08,
+      g.bloomThreshold + i * 0.05 + this.superPunch * 0.08,
     )
 
     // Bloom kernel width is a discrete enum, so it is applied from the

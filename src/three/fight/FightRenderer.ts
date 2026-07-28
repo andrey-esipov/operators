@@ -67,6 +67,12 @@ export class FightRenderer {
   private step: (() => StepResult) | null = null
   private latest: FightState | null = null
   private prev: FightState | null = null
+  /**
+   * The render-state object handed to the engine. Held by reference so its
+   * `celebrate` flag can be updated in place each sim advance — the stage reads
+   * it to fire victory-only set-dressing without any per-frame allocation.
+   */
+  private renderStateObj: FightRenderState | null = null
 
   /**
    * Set by dispose(). `init()` is async and interleaves with it: React's
@@ -117,7 +123,8 @@ export class FightRenderer {
     // frame it spawns, not a few frames late. Unknown kinds still lazy-load.
     void this.projectiles.preload(['ion-bolt', 'super-beam'])
     this.lightRig.setPreset(stageConfig(this.scenario).lighting, true)
-    engine.setState(this.renderState())
+    this.renderStateObj = this.renderState()
+    engine.setState(this.renderStateObj)
     engine.start()
   }
 
@@ -137,7 +144,8 @@ export class FightRenderer {
   setStage(scenario: ScenarioId) {
     this.scenario = scenario
     this.lightRig.setPreset(stageConfig(this.scenario).lighting, false)
-    this.engine.setState(this.renderState())
+    this.renderStateObj = this.renderState()
+    this.engine.setState(this.renderStateObj)
   }
 
   setStep(step: () => StepResult) {
@@ -181,8 +189,26 @@ export class FightRenderer {
       for (const e of res.events) this.vfx.handle(e)
       this._derived(this.prev, this.latest)
       this._acc -= DT
-      this._globalFrame++
+      // Only advance the animation clock when the sim actually advanced. A
+      // frozen capture returns the *same* state without stepping (see
+      // PlayableMatch's stepBudget), but this loop still runs on render ticks --
+      // so an unconditional increment kept every looping clip (idle, walks,
+      // block) playing during a "frozen" frame. That made looping animation
+      // unmeasurable by construction: it advanced identically in the measured
+      // pair and the zero-step control, cancelling out to exactly 1.00x. Tying
+      // the clock to real sim advancement makes `step(n)` move the animation by
+      // exactly n frames, and makes a frozen frame genuinely frozen.
+      if (this.latest.frame !== this.prev.frame) this._globalFrame++
       steps++
+    }
+    // Level-triggered celebration signal for the stage. True only while the
+    // match sits in a victory / round-over beat, so the IPO ticker-tape falls
+    // at the payoff and never during neutral. Read from the authoritative sim
+    // snapshot every advance (including while paused/frozen for capture), so it
+    // tracks the real phase rather than a one-shot event that a freeze misses.
+    if (this.renderStateObj) {
+      const ph = this.latest.phase
+      this.renderStateObj.celebrate = ph === 'ko' || ph === 'round-end' || ph === 'match-end'
     }
     return { alpha: clamp(this._acc / DT, 0, 1), steps }
   }
@@ -389,6 +415,7 @@ export class FightRenderer {
       timeLeft: 99,
       round: 1,
       cinematic: false,
+      celebrate: false,
     }
   }
 }

@@ -36,6 +36,10 @@ const FRAMES = Number(arg('--frames', '48'))
 // instrument: with no animation the signal/floor ratio must collapse to ~1.0.
 const STEP = Number(arg('--step', '1'))
 const ACTION = arg('--action', 'idle')
+// How much of the frame to discard as background, ranked by how much each pixel
+// moves while the sim is frozen. 15% is enough to take the confetti and the
+// window bank without touching the fighter, who is motionless in the control.
+const MASK_PCT = Number(arg('--mask', '15'))
 const SHA = arg('--build', execSync('git rev-parse --short HEAD').toString().trim())
 const URL = `http://localhost:${PORT}/?${QUERY}`
 
@@ -223,21 +227,77 @@ for (let i = 0; i < FRAMES; i++) {
 await page.evaluate(() => window.__PLAY__.resume())
 
 const grey = async (b) => (await sharp(b).greyscale().resize(160).raw().toBuffer({ resolveWithObject: true }))
-const meanAbs = (x, y) => {
-  let s = 0
-  for (let p = 0; p < x.data.length; p++) s += Math.abs(x.data[p] - y.data[p])
-  return s / x.data.length
+const absMap = (x, y) => {
+  const m = new Float32Array(x.data.length)
+  for (let p = 0; p < x.data.length; p++) m[p] = Math.abs(x.data[p] - y.data[p])
+  return m
 }
 
-const floorDeltas = []
-for (const [a, aP] of floors) floorDeltas.push(meanAbs(await grey(a), await grey(aP)))
+// Per-pixel, not per-frame. The critic's charge against v1 was fair: on the two
+// busy-background beats the scalar mean folded confetti and stage animation in
+// with the fighter, so a livelier background read as a livelier character. The
+// interleaved zero-step control already knows exactly which pixels move without
+// the sim, so the background mask is derivable from data we were already
+// collecting -- no new capture, no hand-drawn rectangle, no code change to the
+// game. A hand-tuned crop is what put an empty rectangle in this tool once
+// already; this replaces the judgement call with a measurement.
+const floorMaps = []
+for (const [a, aP] of floors) floorMaps.push(absMap(await grey(a), await grey(aP)))
+const stepMaps = []
+for (const [control, stepped] of bufs) stepMaps.push(absMap(await grey(control), await grey(stepped)))
 
-const deltas = []
-for (const [control, stepped] of bufs) deltas.push(meanAbs(await grey(control), await grey(stepped)))
+const NPX = floorMaps[0].length
+// A pixel's background activity is what it does while the sim is frozen.
+// Confetti, camera easing and stage animation are all hot here; the fighter is
+// not, because a frozen sim cannot move him.
+const bgActivity = new Float32Array(NPX)
+for (const m of floorMaps) for (let p = 0; p < NPX; p++) bgActivity[p] += m[p] / floorMaps.length
+
+const order = [...bgActivity.keys()].sort((a, b) => bgActivity[a] - bgActivity[b])
+const scoreAt = (pct) => {
+  const keep = order.slice(0, Math.floor(NPX * (1 - pct / 100)))
+  const mean = (m) => {
+    let s = 0
+    for (const p of keep) s += m[p]
+    return s / keep.length
+  }
+  return { keep, sig: stepMaps.map(mean), flr: floorMaps.map(mean) }
+}
 
 const med = (xs) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)]
+// Report the sensitivity rather than defending one knob setting. If the reading
+// only survives at one mask percentage it is a knob, not a measurement.
+const SWEEP = [0, 5, MASK_PCT, 30].filter((v, i, a) => a.indexOf(v) === i).sort((a, b) => a - b)
+const sweep = SWEEP.map((pct) => {
+  const { sig, flr } = scoreAt(pct)
+  return { pct, ratio: med(sig) / med(flr), signal: med(sig), floor: med(flr) }
+})
+
+const chosen = scoreAt(MASK_PCT)
+const deltas = chosen.sig
+const floorDeltas = chosen.flr
 const median = med(deltas)
 const floor = med(floorDeltas)
+
+// The mask must not eat the subject. This tool has already reported a confident
+// "6.0 keys/sec" about a rectangle the fighter had jumped out of, so a mask that
+// silently removed the fighter is the same defect wearing a new hat. Masking
+// background can only raise the ratio -- but only when there is signal to
+// protect. Under `--step 0` nothing moves, both ratios sit at 1.0, and their
+// difference is pure noise, so the check is inapplicable and says so rather than
+// failing on a mutant it was never meant to judge.
+const unmasked = sweep.find((s) => s.pct === 0).ratio
+if (MASK_PCT > 0 && unmasked > 1.15 && median / floor < unmasked * 0.95) {
+  console.log(
+    `FAILED: masking the top ${MASK_PCT}% most background-active pixels LOWERED the ` +
+      `signal ratio (${unmasked.toFixed(2)}x -> ${(median / floor).toFixed(2)}x). ` +
+      `Removing background can only help, so the mask is removing the fighter.`,
+  )
+  process.exit(1)
+}
+if (unmasked <= 1.15) {
+  console.log(`  (no motion above floor unmasked at ${unmasked.toFixed(2)}x — mask integrity check not applicable)`)
+}
 // "Held" has to be defined against the measured floor, not an absolute: a frame
 // that only changed as much as the camera drift did is a held drawing.
 const HELD = floor * 1.25
@@ -251,9 +311,11 @@ for (const d of deltas) {
 const spikes = deltas.filter((d) => d > median * 4).length
 
 console.log(`motion strip: ${ACTION}  ${FRAMES} consecutive sim frames  build ${SHA}`)
-console.log(`  noise floor (0 steps)  : ${floor.toFixed(2)}   <- camera drift + stage animation`)
+console.log(`  background mask        : top ${MASK_PCT}% most sim-frozen-active pixels dropped`)
+console.log(`  noise floor (0 steps)  : ${floor.toFixed(2)}   <- residual camera drift`)
 console.log(`  median delta (1 step)  : ${median.toFixed(2)}`)
 console.log(`  signal / floor         : ${(median / floor).toFixed(2)}x`)
+console.log(`  mask sensitivity       : ${sweep.map((s) => `${s.pct}%->${s.ratio.toFixed(2)}x`).join('  ')}`)
 console.log(`  max                    : ${Math.max(...deltas).toFixed(2)}`)
 console.log(`  held frames (<=floor)  : ${held}/${deltas.length}  (${((held / deltas.length) * 100).toFixed(0)}%)`)
 console.log(`  longest held run       : ${longest} frames`)
@@ -263,7 +325,7 @@ console.log(`  strip written to       : ${OUT}/`)
 writeFileSync(
   `${OUT}/motion.json`,
   JSON.stringify(
-    { build: SHA, action: ACTION, frames: FRAMES, floor, median, ratio: median / floor, held, longest, spikes, deltas, floorDeltas },
+    { build: SHA, action: ACTION, frames: FRAMES, maskPct: MASK_PCT, sweep, floor, median, ratio: median / floor, held, longest, spikes, deltas, floorDeltas },
     null,
     2,
   ),

@@ -276,7 +276,7 @@ export function radialGlow(
 // Animated screen panel
 // ---------------------------------------------------------------------------
 
-export type ScreenMode = 'data' | 'ticker' | 'ekg' | 'equalizer' | 'grid' | 'alert' | 'crowd' | 'neural'
+export type ScreenMode = 'data' | 'ticker' | 'ekg' | 'equalizer' | 'grid' | 'alert' | 'crowd' | 'neural' | 'windows'
 
 const SCREEN_SHADER = {
   vertex: /* glsl */ `
@@ -351,7 +351,7 @@ const SCREEN_SHADER = {
         float tw = hash(g + floor(uTime*3.0));
         float on = step(0.6, tw);
         col = mix(uColor2, uColor, hash(g)) * on * (0.6+0.4*sin(uTime*4.0+g.x));
-      } else {
+      } else if (m < 7.5) {
         // neural: flowing node network
         vec2 p = uv*vec2(8.0,6.0);
         float n = 0.0;
@@ -362,10 +362,57 @@ const SCREEN_SHADER = {
         }
         float flow = 0.5+0.5*sin(p.x*2.0 - uTime*2.0 + p.y);
         col = uColor*clamp(n,0.0,1.0) + uColor2*flow*0.15;
+      } else {
+        // windows: a lit high-rise facade. The mid-ground must read as a city
+        // block behind the hall, not a flat noise panel, so this draws a
+        // structured mullioned grid with warm/cool/dark window occupancy, a
+        // stepped near-tower roofline that OCCLUDES a dimmer tower behind it
+        // (parallax depth), a vertical city-glow gradient (bright occupied base
+        // fading to dark sky) and one brighter focal storey. It is near-static:
+        // occupancy shifts only every ~6s at tiny amplitude so the facade adds
+        // no per-frame background motion (the confetti lesson).
+        vec2 uvw = uv;
+
+        // FAR tower: denser, cooler, dimmer, offset so it peeks past the roofline
+        vec2 gF = uvw * vec2(22.0, 34.0) + vec2(3.0, 0.0);
+        vec2 idF = floor(gF); vec2 fF = fract(gF);
+        float paneF = step(0.14, fF.x) * step(fF.x, 0.86) * step(0.16, fF.y) * step(fF.y, 0.84);
+        float litF = step(0.45, hash(idF));
+        float coolF = step(0.55, hash(idF + 5.0));
+        vec3 facFar = mix(uColor, uColor2, coolF) * paneF * litF * (0.35 + 0.5 * hash(idF + 2.0));
+        facFar *= 0.55;
+
+        // NEAR tower: larger warmer windows with structural piers
+        vec2 gN = uvw * vec2(11.0, 20.0);
+        vec2 idN = floor(gN); vec2 fN = fract(gN);
+        float paneN = step(0.16, fN.x) * step(fN.x, 0.84) * step(0.18, fN.y) * step(fN.y, 0.82);
+        float rN = hash(idN);
+        float occ = step(0.40, rN + 0.08 * (hash(idN + floor(uTime * 0.16)) - 0.5) * 2.0);
+        float coolN = step(0.78, hash(idN + 9.0));
+        float briN = 0.55 + 0.45 * hash(idN + 3.0);
+        vec3 facNear = mix(uColor, uColor2, coolN) * paneN * occ * briN;
+        // vertical structural piers every ~3 columns read as building massing
+        facNear *= (1.0 - 0.7 * step(0.92, fract(uvw.x * 3.667)));
+
+        // stepped roofline: near-building silhouette, height varies in 3 blocks
+        float bx = floor(uvw.x * 3.0);
+        float roof = 0.60 + 0.18 * hash1(bx + 11.0);
+        float nearMask = step(uvw.y, roof);
+        float focal = smoothstep(0.05, 0.0, abs(uvw.y - 0.16)) * nearMask;
+
+        vec3 fac = mix(facFar, facNear, nearMask);
+        // city-glow gradient: bright occupied base fading to dark sky
+        fac *= mix(1.15, 0.42, clamp(uvw.y, 0.0, 1.0));
+        fac += uColor * smoothstep(0.22, 0.0, uvw.y) * 0.18;  // warm street bloom
+        fac += mix(uColor, uColor2, 0.2) * focal * 0.5;        // focal storey
+        col = fac;
       }
 
-      // scanlines + vignette so panels read as real emissive displays
-      col *= 0.82 + 0.18*sin(uv.y*380.0);
+      // scanlines read as a monitor — right for data panels, wrong for a window
+      // facade, so the windows mode (m=8) opts out and keeps only the depth
+      // vignette; every other mode still gets the emissive-display scanline.
+      float scan = 0.82 + 0.18*sin(uv.y*380.0);
+      col *= (m > 7.5) ? 1.0 : scan;
       float vig = smoothstep(1.15,0.35,length(uv-0.5));
       col *= vig;
       col *= uBright;
@@ -384,7 +431,7 @@ export function makeScreen(
   seed = 0,
 ): { mesh: THREE.Mesh; mat: THREE.ShaderMaterial } {
   const modeIndex: Record<ScreenMode, number> = {
-    data: 0, ticker: 1, ekg: 2, equalizer: 3, grid: 4, alert: 5, crowd: 6, neural: 7,
+    data: 0, ticker: 1, ekg: 2, equalizer: 3, grid: 4, alert: 5, crowd: 6, neural: 7, windows: 8,
   }
   const mat = new THREE.ShaderMaterial({
     uniforms: {

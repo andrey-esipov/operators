@@ -7,11 +7,11 @@ import { overhead, foreground } from './StageSet'
 export function buildIpoPrep(b: StageBuild, cfg: StageConfig, flags: QualityFlags) {
   // THE LISTING FLOOR — stock-exchange grandeur: a colossal curved big board,
   // marble columns, gold trim, an opening-bell dais.
-  // curved big board (approximate with segmented panels)
+  // curved city-window facade behind the hall (approximate with segmented panels)
   const segs = 5
   for (let i = 0; i < segs; i++) {
     const a = (i / (segs - 1) - 0.5) * 0.9
-    const { mesh, mat } = makeScreen(3.6, 5, i === 2 ? 'ticker' : 'data', cfg.screen.hue, cfg.screen.hue2, 1.0, i * 11 + 2)
+    const { mesh, mat } = makeScreen(3.6, 5, 'windows', cfg.screen.hue, cfg.screen.hue2, 1.0, i * 11 + 2)
     mesh.position.set(Math.sin(a) * 13, 6.5, -13 + Math.cos(a) * -1.5 - 1)
     mesh.rotation.y = -a
     b.add(mesh)

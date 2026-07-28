@@ -29,9 +29,18 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor)
 
   vec3 bloom = texture2D(bloomTex, uv).rgb;
 
+  // Bright overhead stage fixtures (LED ticker-boards, pendant lamps) live in
+  // the top of the frame. Left unchecked, the dirt and the horizontal streak
+  // below smear their hot ends sideways into soft round pools that park in the
+  // top corners and read as smudges on the lens — the textbook hobby-render
+  // tell. Roll the art-directed lens *extras* off toward the top so the boards
+  // still bloom crisply (base bloom is untouched) but never streak into orbs.
+  // The action lives in the lower-centre, where the lens character is kept.
+  float topFade = 1.0 - 0.82 * smoothstep(0.66, 1.0, uv.y);
+
   // Lens dirt: grime lit by the bloom sitting behind it.
   vec3 dirt = texture2D(dirtTex, uv * dirtScale).rgb;
-  col += bloom * dirt * dirtAmount * 2.2;
+  col += bloom * dirt * dirtAmount * 2.2 * topFade;
 
   // Anamorphic horizontal streak — sample the bloom across a wide horizontal
   // kernel and accumulate. Weighted so it only shows on strong sources.
@@ -47,7 +56,7 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor)
       wsum += w;
     }
     streak /= wsum;
-    col += streak * anamorphicTint * anamorphic * 1.6;
+    col += streak * anamorphicTint * anamorphic * 1.6 * topFade;
   }
 
   // Keep bright dirt from over-firing on already-blown highlights.

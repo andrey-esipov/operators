@@ -447,12 +447,19 @@ export const STAGE_GRADES: Record<ScenarioId, StageGrade> = {
     vigDarkness: 0.44,
     vigColor: [0.05, 0.06, 0.08],
     grain: 0.035,
-    bloomIntensity: 1.15,
-    bloomThreshold: 0.6,
+    // Post restraint (was intensity 1.15 / thresh 0.6 / dirt 0.3 / ana 0.42):
+    // the bright overhead LED ticker-boards crossed the bloom threshold and the
+    // strong horizontal anamorphic streak smeared their ends sideways into soft
+    // round blobs parked in the top corners — the "smudge on the lens" tell.
+    // Raise the threshold so mid-value fixtures/fabrics stay out of bloom, and
+    // cut the anamorphic + dirt hard so the streak no longer reaches the corners.
+    // Bloom should be invisible until you turn it off, not a corner artifact.
+    bloomIntensity: 1.08,
+    bloomThreshold: 0.72,
     bloomTint: [1.0, 0.98, 0.92],
     bloomKernel: KernelSize.LARGE,
-    lensDirt: 0.3,
-    anamorphic: 0.42,
+    lensDirt: 0.12,
+    anamorphic: 0.18,
     anamorphicTint: [0.7, 0.8, 1.0],
     hazeColor: [0.62, 0.66, 0.72],
     hazeAmount: 0.16,

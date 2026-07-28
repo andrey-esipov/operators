@@ -28,7 +28,7 @@ import { step } from '../sim'
 import { HarnessSim } from '../harnessSim'
 import { getFighterDef } from '../fighters'
 import { fightAtRange, dir, inp, NEU } from './helpers'
-import { KNOCKDOWN_FRAMES, WAKEUP_FRAMES } from '../constants'
+import { KNOCKDOWN_FRAMES, WAKEUP_FRAMES, COUNTER_DAMAGE_MULT } from '../constants'
 import type { Difficulty } from '../ai'
 import type { FightState, InputFrame } from '../types'
 
@@ -56,12 +56,14 @@ function exchange(opts: { meaty: boolean; reversal: boolean }): {
   p1dmg: number
   reversedWith: string | null
   punishable: boolean
+  counterHits: number
 } {
   let s = knockdown(78)
   const p0h0 = s.fighters[0].health
   const p1h0 = s.fighters[1].health
   let reversedWith: string | null = null
   let punishable = false
+  let counterHits = 0
   for (let f = 0; f < WAKE + 40; f++) {
     let p0: InputFrame = NEU
     if (opts.meaty && f === WAKE - 3) p0 = inp(6, 'lp')
@@ -72,7 +74,9 @@ function exchange(opts: { meaty: boolean; reversal: boolean }): {
       else if (f === WAKE - 2) p1 = dir(2)
       else if (f === WAKE - 1) p1 = inp(1, 'hp')
     }
-    s = step(s, [p0, p1]).state
+    const r = step(s, [p0, p1])
+    s = r.state
+    for (const ev of r.events) if (ev.type === 'counter-hit') counterHits++
     const A = s.fighters[0]
     const B = s.fighters[1]
     if (B.stance === 'attack' && B.move && B.move.id === 'dp.P') reversedWith = 'dp.P'
@@ -87,6 +91,7 @@ function exchange(opts: { meaty: boolean; reversal: boolean }): {
     p1dmg: p1h0 - s.fighters[1].health,
     reversedWith,
     punishable,
+    counterHits,
   }
 }
 
@@ -125,14 +130,17 @@ describe('okizeme: the getup rock-paper-scissors', () => {
     expect(r.p0dmg).toBe(0)
   })
 
-  it('an invulnerable reversal beats the meaty clean', () => {
+  it('an invulnerable reversal beats the meaty clean — and PUNISH COUNTERs it', () => {
     const r = exchange({ meaty: true, reversal: true })
     // The DP's startup invuln eats the meaty: the defender takes EXACTLY zero
     // while the jab is active on them. That 0 is the invulnerability — break it
-    // and this reds. The reversal then launches the attacker for the DP's damage.
+    // and this reds. The reversal then launches the attacker, who is still stuck
+    // in the meaty jab's recovery — a textbook PUNISH COUNTER, so the DP deals
+    // its damage scaled by the counter multiplier and fires a counter-hit event.
     expect(r.reversedWith).toBe('dp.P')
     expect(r.p1dmg).toBe(0)
-    expect(r.p0dmg).toBe(DP_DMG)
+    expect(r.p0dmg).toBe(Math.round(DP_DMG * COUNTER_DAMAGE_MULT))
+    expect(r.counterHits).toBeGreaterThanOrEqual(1)
   })
 
   it('a baited reversal whiffs into a punish — it is not a free button', () => {
@@ -143,6 +151,7 @@ describe('okizeme: the getup rock-paper-scissors', () => {
     expect(r.reversedWith).toBe('dp.P')
     expect(r.p0dmg).toBe(0)
     expect(r.p1dmg).toBe(0)
+    expect(r.counterHits).toBe(0)
     expect(r.punishable).toBe(true)
   })
 

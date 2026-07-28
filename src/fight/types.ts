@@ -280,6 +280,7 @@ export interface FightState {
  */
 export type FightEvent =
   | { type: 'hit'; at: Vec2; attacker: 0 | 1; level: HitLevel; damage: number }
+  | { type: 'counter-hit'; at: Vec2; attacker: 0 | 1; level: HitLevel; damage: number }
   | { type: 'block'; at: Vec2; attacker: 0 | 1 }
   | { type: 'parry'; at: Vec2; attacker: 0 | 1 }
   | { type: 'whiff'; at: Vec2; attacker: 0 | 1 }

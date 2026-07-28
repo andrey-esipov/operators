@@ -203,6 +203,33 @@ export const MIN_DAMAGE = 5
 export const JUGGLE_ALLOWANCE = 4
 
 /**
+ * Counter-hit: a strike that lands while the victim is in a committed attacking
+ * state — its startup (a pre-emptive interrupt) or its recovery (a whiff-punish),
+ * but NOT its own active frames, which is a clean trade. It is the mechanic that
+ * pays for READING the opponent rather than mashing: a poke that beats a button
+ * should not score the same as a poke thrown at nobody.
+ *
+ * The reward is tuned to be felt without being a gimmick kill:
+ *  - DAMAGE ×1.3: a meaningful bump on the confirm, applied to the base before
+ *    combo scaling (a counter is almost always the first hit, so it lands near
+ *    full value and seeds a bigger route).
+ *  - HITSTUN +6f: enough extra advantage that a follow-up which does NOT combo on
+ *    a normal hit now links — i.e. it opens routes that don't otherwise exist,
+ *    which is the whole point of the mechanic.
+ *  - HITSTOP +4f: YES, a counter freezes harder. A counter that doesn't hit the
+ *    brakes harder than a normal hit reads as a normal hit no matter what the HUD
+ *    says; the extra freeze is the tactile half of the feedback (SF6/Tekken both
+ *    do this — the freeze is how you FEEL the counter before you read it).
+ *  - JUGGLE +1: a counter-hit LAUNCHER grants one extra juggle unit, so the extra
+ *    hitstun/height actually converts into a longer air route. Kept to +1 so it
+ *    extends a combo without opening an infinite (allowance still terminates).
+ */
+export const COUNTER_DAMAGE_MULT = 1.3
+export const COUNTER_HITSTUN_BONUS = 6
+export const COUNTER_HITSTOP_BONUS = 4
+export const COUNTER_JUGGLE_BONUS = 1
+
+/**
  * Juggle gravity scaling. Each successive airborne hit imparts less upward
  * knockback than the last, so a juggle *decays* — the victim gets visibly
  * heavier and the arcs step down rather than repeating at full height. Without

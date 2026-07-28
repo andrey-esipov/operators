@@ -20,6 +20,10 @@ import {
   BACKDASH_FRAMES,
   BACKDASH_INVULN,
   COMBO_SCALING,
+  COUNTER_DAMAGE_MULT,
+  COUNTER_HITSTOP_BONUS,
+  COUNTER_HITSTUN_BONUS,
+  COUNTER_JUGGLE_BONUS,
   JUGGLE_ALLOWANCE,
   JUGGLE_GRAVITY_FLOOR,
   JUGGLE_GRAVITY_STEP,
@@ -176,8 +180,24 @@ interface Pending {
   ai: 0 | 1
   blocked: boolean
   parried: boolean
+  counter: boolean
   hit: Hit
   at: { x: number; y: number }
+}
+
+/**
+ * Is the victim in a counter-hittable state? True when they are in a committed
+ * attack (stance 'attack' with a live move) and the hit catches them in that
+ * move's STARTUP or RECOVERY — before or after its own active window. Landing
+ * inside their active window is a clean trade, not a counter. This reads the
+ * victim's actual move progress, so it rewards beating a real commitment rather
+ * than merely "a button was pressed".
+ */
+function isCounterHittable(d: FighterState, defD: FighterDef): boolean {
+  if (d.stance !== 'attack' || !d.move) return false
+  const dm = defD.moves[d.move.id]
+  if (!dm) return false
+  return d.move.frame < dm.active[0] || d.move.frame > dm.active[1]
 }
 
 /**
@@ -242,10 +262,14 @@ export function resolveCombat(
     // never collides with a back/down-back block, but a fighter who read the hit
     // and tapped in should get the parry rather than merely blocking.
     const parried = isParrying(D, move.hit.guard, logD)
+    const blocked = !parried && isBlocking(D, move.hit, relDirs[di])
     pending.push({
       ai,
-      blocked: !parried && isBlocking(D, move.hit, relDirs[di]),
+      blocked,
       parried,
+      // A counter only applies to a clean hit — you can't counter-hit someone who
+      // blocked or parried it, even if they were mid-move.
+      counter: !parried && !blocked && isCounterHittable(D, defD),
       hit: move.hit,
       at,
     })
@@ -269,10 +293,12 @@ export function resolveCombat(
     const A = s.fighters[p.ai]
     const D = s.fighters[(1 - p.ai) as 0 | 1]
     A.attackConnected = true
-    s.hitstop = Math.max(s.hitstop, p.hit.hitstop)
+    // A counter freezes harder — the tactile half of the feedback.
+    const stop = p.hit.hitstop + (p.counter ? COUNTER_HITSTOP_BONUS : 0)
+    s.hitstop = Math.max(s.hitstop, stop)
     if (p.parried) resolveParry(s, A, D, p.at, p.ai, events)
     else if (p.blocked) applyBlock(A, D, p.hit, p.at, p.ai, events)
-    else applyHit(A, D, p.hit, p.at, p.ai, events)
+    else applyHit(A, D, p.hit, p.at, p.ai, p.counter, events)
   }
 }
 
@@ -398,9 +424,14 @@ function applyBlock(
 }
 
 function applyHit(
-  A: FighterState, D: FighterState, hit: Hit, at: Pending['at'], ai: 0 | 1, events: FightEvent[],
+  A: FighterState, D: FighterState, hit: Hit, at: Pending['at'], ai: 0 | 1,
+  counter: boolean, events: FightEvent[],
 ): void {
-  const dmg = scaleDamage(hit.damage, D.comboCount, hit.scaling)
+  // Counter reward: more damage (applied to the base, before combo scaling) and
+  // more hitstun. The launcher path below also grants an extra juggle unit.
+  const base = counter ? hit.damage * COUNTER_DAMAGE_MULT : hit.damage
+  const hitstun = hit.hitstun + (counter ? COUNTER_HITSTUN_BONUS : 0)
+  const dmg = scaleDamage(base, D.comboCount, hit.scaling)
   D.health = Math.max(0, D.health - dmg)
   D.comboCount += 1
   gainMeter(A, hit.meterGain)
@@ -414,14 +445,16 @@ function applyHit(
   if (hit.juggle) {
     if (D.grounded) {
       D.grounded = false
-      D.juggleLeft = JUGGLE_ALLOWANCE
+      // A counter-hit launcher grants extra juggle allowance so the extra height
+      // and stun convert into a longer air route.
+      D.juggleLeft = JUGGLE_ALLOWANCE + (counter ? COUNTER_JUGGLE_BONUS : 0)
       D.vel.y = hit.knockback.y
     } else {
       D.juggleLeft = Math.max(0, D.juggleLeft - 1)
       D.vel.y = hit.knockback.y * juggleScale(D.juggleLeft)
     }
     D.stance = 'juggle'
-    D.stunRemaining = hit.hitstun
+    D.stunRemaining = hitstun
     events.push({ type: 'launch', at, attacker: ai })
   } else if (hit.level === 'sweep') {
     D.stance = 'knockdown'
@@ -430,15 +463,22 @@ function applyHit(
   } else if (!D.grounded) {
     D.juggleLeft = Math.max(0, D.juggleLeft - 1)
     D.stance = 'juggle'
-    D.stunRemaining = hit.hitstun
+    D.stunRemaining = hitstun
     D.vel.y += hit.knockback.y * juggleScale(D.juggleLeft)
   } else {
     D.stance = 'hitstun'
-    D.stunRemaining = hit.hitstun
+    D.stunRemaining = hitstun
   }
 
   A.vel.x += -A.facing * hit.pushback
   events.push({ type: 'hit', at, attacker: ai, level: hit.level, damage: dmg })
+  // Announce the counter as its own event, IN ADDITION to the hit above, so
+  // existing hit consumers (spark, damage number) are untouched while the HUD and
+  // VFX can draw the "COUNTER" callout off a dedicated signal. Carries the boosted
+  // damage that actually landed.
+  if (counter) {
+    events.push({ type: 'counter-hit', at, attacker: ai, level: hit.level, damage: dmg })
+  }
 }
 
 // ── Projectiles ──────────────────────────────────────────────────────────────
@@ -520,10 +560,13 @@ export function updateProjectiles(
         const at = contactPoint([box], hurt) ?? { x: p.pos.x, y: p.pos.y }
         const A = s.fighters[p.owner]
         const logD = s.inputLog?.[di] ?? []
-        s.hitstop = Math.max(s.hitstop, p.hit.hitstop)
-        if (isParrying(D, p.hit.guard, logD)) resolveParry(s, A, D, at, p.owner, events)
-        else if (isBlocking(D, p.hit, relDirs[di])) applyBlock(A, D, p.hit, at, p.owner, events)
-        else applyHit(A, D, p.hit, at, p.owner, events)
+        const parried = isParrying(D, p.hit.guard, logD)
+        const blocked = !parried && isBlocking(D, p.hit, relDirs[di])
+        const counter = !parried && !blocked && isCounterHittable(D, defD)
+        s.hitstop = Math.max(s.hitstop, p.hit.hitstop + (counter ? COUNTER_HITSTOP_BONUS : 0))
+        if (parried) resolveParry(s, A, D, at, p.owner, events)
+        else if (blocked) applyBlock(A, D, p.hit, at, p.owner, events)
+        else applyHit(A, D, p.hit, at, p.owner, counter, events)
         consumed = true
       }
     }

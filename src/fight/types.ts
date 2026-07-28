@@ -185,6 +185,42 @@ export interface FighterState {
 }
 
 // ---------------------------------------------------------------------------
+// Projectiles
+// ---------------------------------------------------------------------------
+
+/**
+ * A live projectile — a fireball and its kin. Additive to the contract: it
+ * exists so a zoner archetype can control space at range. A renderer or asset
+ * pipeline that predates projectiles can ignore `FightState.projectiles`
+ * entirely; nothing else in the state references this type.
+ *
+ * The sim owns every projectile's motion and collision; the renderer only draws
+ * one at `pos`, flipped by `facing`, choosing art from `kind`.
+ */
+export interface Projectile {
+  /** Identity stable across frames, so the renderer can track one fireball from
+   *  spawn to despawn rather than popping a new sprite each frame. */
+  id: number
+  /** Which fighter fired it (index into `fighters`). */
+  owner: 0 | 1
+  /** World position of the projectile origin, cm. */
+  pos: Vec2
+  /** Velocity, cm/frame. */
+  vel: Vec2
+  /** Travel facing: 1 = rightward, -1 = leftward. Renderer mirrors art by this. */
+  facing: 1 | -1
+  /** Hitbox authored facing-right; the sim mirrors and places it at `pos`. */
+  hitbox: Box
+  /** What it does on contact. Reuses the normal `Hit` shape, so a projectile
+   *  blocks, chips and stuns exactly like a melee hit. */
+  hit: Hit
+  /** Frames left before it despawns on its own. */
+  life: number
+  /** Visual hint for the renderer to choose art, e.g. 'fireball', 'super-beam'. */
+  kind: string
+}
+
+// ---------------------------------------------------------------------------
 // Match state
 // ---------------------------------------------------------------------------
 
@@ -213,6 +249,12 @@ export interface FightState {
    * stays inside the pure step() with nothing to thread in from outside.
    */
   inputLog?: [number[], number[]]
+  /**
+   * Live projectiles. Optional and additive: undefined or empty for characters
+   * that never spawn one, and safely ignorable by anything built before
+   * projectiles existed. The sim spawns, integrates and despawns these.
+   */
+  projectiles?: Projectile[]
 }
 
 /**

@@ -26,7 +26,7 @@ import {
   CROUCH_PUSH,
   STAND_PUSH,
 } from './fighters/build'
-import { resolveCombat } from './combat'
+import { resolveCombat, spawnProjectiles, updateProjectiles } from './combat'
 import { clampToStage, separate } from './collision'
 import {
   detectDoubleTap,
@@ -583,7 +583,9 @@ export function step(state: FightState, inputs: [InputFrame, InputFrame]): StepR
   for (let i = 0; i < 2; i++) integrate(s.fighters[i], defs[i], events)
   resolveWallBounce(s, defs, events)
   resolveCollisions(s, defs)
+  spawnProjectiles(s, defs, events)
   resolveCombat(s, defs, relDirs, events)
+  updateProjectiles(s, defs, relDirs, events)
 
   s.timer = Math.max(0, s.timer - 1)
   checkRoundEnd(s, events)

@@ -149,6 +149,10 @@ export const PARRY_METER = 120
 // move recovery so a parry is always a genuine plus — you get your turn.
 export const PARRY_LOCK = 2
 
+/** How far past the wall a projectile travels before it despawns. A little
+ *  slack so a fireball visibly reaches the corner rather than popping at it. */
+export const PROJECTILE_MARGIN = 60
+
 /** Camera framing. The renderer derives its shot from these; the sim only
  *  reports where the action is and how tight to frame it. */
 export const CAMERA_MIN_ZOOM = 1.0

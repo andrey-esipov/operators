@@ -1,13 +1,15 @@
 import type { FighterDef } from '../def'
 import { OPERATOR } from './operator'
 import { VANGUARD } from './vanguard'
+import { WARDEN } from './warden'
 
 /** Character registry. The sim reads every character through this map, so
- *  adding an archetype is purely data. Two today: a balanced shoto and a
- *  rushdown grappler that share no moveset. */
+ *  adding an archetype is purely data. Three today: a balanced shoto, a
+ *  rushdown grappler, and a fireball zoner — no shared moveset between them. */
 export const FIGHTERS: Record<string, FighterDef> = {
   [OPERATOR.id]: OPERATOR,
   [VANGUARD.id]: VANGUARD,
+  [WARDEN.id]: WARDEN,
 }
 
 export function getFighterDef(id: string): FighterDef {
@@ -16,4 +18,4 @@ export function getFighterDef(id: string): FighterDef {
   return def
 }
 
-export { OPERATOR, VANGUARD }
+export { OPERATOR, VANGUARD, WARDEN }

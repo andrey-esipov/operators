@@ -170,17 +170,31 @@ export class FighterAI {
     }
 
     // Spacing (uses the delayed distance too, so the AI commits to approaches).
+    // A projectile character zones here instead of blindly walking in: it throws
+    // fireballs from range to control space, which is the whole point of the
+    // archetype. Melee-only characters have no `projectiles` table and fall
+    // straight through to the approach, so their behaviour is unchanged.
+    const zones = !!getFighterDef(me.id).projectiles
     if (o.dist > 165) {
+      if (zones && this.rng.next() < 0.45 + this.aggression * 0.2) {
+        this.queue = [{ rel: 3 }, { rel: 6, buttons: ['hp'] }] // fast bolt fullscreen
+        return frame(toward(2, facing))
+      }
       if (this.rng.next() < 0.02 + this.aggression * 0.04) {
         return frame(toward(9, facing)) // jump toward
       }
-      return frame(toward(fwd, facing))
+      // A zoner would rather hold ground than close the gap for free.
+      return frame(toward(zones ? 5 : fwd, facing))
     }
     if (o.dist > 95) {
+      if (zones && this.rng.next() < 0.30 + this.aggression * 0.2) {
+        this.queue = [{ rel: 3 }, { rel: 6, buttons: ['lp'] }] // slow wall bolt
+        return frame(toward(2, facing))
+      }
       if (this.rng.next() < 0.05 + this.aggression * 0.1) {
         return frame(toward(2, facing), ['mk']) // cr.MK poke
       }
-      return frame(toward(fwd, facing))
+      return frame(toward(zones ? back : fwd, facing)) // zoner backs up to reset spacing
     }
     // Point blank: press a light, throw, or convert into a special.
     const r = this.rng.next()

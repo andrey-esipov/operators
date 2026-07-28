@@ -7,7 +7,7 @@
  * applying one hit first would wipe the other's move before it was tested.
  */
 
-import type { Box, Direction, FightEvent, FightState, FighterState, Hit } from './types'
+import type { Box, Direction, FightEvent, FightState, FighterState, Hit, Projectile } from './types'
 import type { FighterDef } from './def'
 import { anyOverlap, contactPoint, placeBox } from './geometry'
 import { dirOf, hasButton, pressedOf } from './input/motion'
@@ -29,6 +29,8 @@ import {
   PARRY_LOCK,
   PARRY_METER,
   PARRY_WINDOW,
+  PROJECTILE_MARGIN,
+  STAGE_HALF_W,
   THROW_TECH_FRAMES,
   THROW_TECH_PUSH,
   THROW_TECH_WINDOW,
@@ -388,4 +390,98 @@ function applyHit(
 
   A.vel.x += -A.facing * hit.pushback
   events.push({ type: 'hit', at, attacker: ai, level: hit.level, damage: dmg })
+}
+
+// ── Projectiles ──────────────────────────────────────────────────────────────
+
+/**
+ * Spawn any projectiles whose owning move reaches its first active frame this
+ * step. Runs BEFORE `resolveCombat` and sets `attackConnected` on the caster,
+ * which both suppresses the move's (empty) melee pass and stops it re-spawning
+ * on later active frames. A fireball's own frame data carries no hitbox, so the
+ * projectile is the only thing that can hit.
+ */
+export function spawnProjectiles(
+  s: FightState,
+  defs: [FighterDef, FighterDef],
+  events: FightEvent[],
+): void {
+  void events
+  for (let ai = 0 as 0 | 1; ai <= 1; ai = (ai + 1) as 0 | 1) {
+    const A = s.fighters[ai]
+    if (A.stance !== 'attack' || !A.move || A.attackConnected) continue
+    const specs = defs[ai].projectiles
+    if (!specs) continue
+    const spec = specs[A.move.id]
+    if (!spec) continue
+    const move = defs[ai].moves[A.move.id]
+    if (!move || A.move.frame !== move.active[0]) continue
+
+    A.attackConnected = true
+    if (!s.projectiles) s.projectiles = []
+    s.projectiles.push({
+      // Deterministic, unique-per-spawn: at most one fireball per fighter per
+      // frame, so frame*2+owner never collides. The renderer tracks a fireball
+      // across frames by this id.
+      id: s.frame * 2 + ai,
+      owner: ai,
+      pos: { x: A.pos.x + A.facing * spec.originX, y: spec.originY },
+      vel: { x: A.facing * spec.speed, y: 0 },
+      facing: A.facing,
+      hitbox: spec.hitbox,
+      hit: spec.hit,
+      life: spec.life,
+      kind: spec.kind,
+    })
+  }
+}
+
+/**
+ * Advance every live projectile one frame, resolve a single contact against the
+ * opponent (block / parry / hit, reusing the melee resolution so chip, stun and
+ * meter all behave identically), and despawn anything that connected, expired,
+ * or left the stage. Projectiles ignore one another — the simplest rule that
+ * still zones — and never collide with their own owner.
+ */
+export function updateProjectiles(
+  s: FightState,
+  defs: [FighterDef, FighterDef],
+  relDirs: [Direction, Direction],
+  events: FightEvent[],
+): void {
+  const ps = s.projectiles
+  if (!ps || ps.length === 0) return
+  const survivors: Projectile[] = []
+  for (const p of ps) {
+    p.pos.x += p.vel.x
+    p.pos.y += p.vel.y
+    p.life -= 1
+
+    const di = (1 - p.owner) as 0 | 1
+    const D = s.fighters[di]
+    const defD = defs[di]
+
+    let consumed = false
+    const inv = invulnOf(D, defD)
+    const blockedByInvuln = inv === 'full' || inv === 'strike'
+    if (D.stance !== 'ko' && D.stance !== 'knockdown' && D.stance !== 'wakeup' && !blockedByInvuln) {
+      const box = placeBox(p.hitbox, p.pos, p.facing)
+      const hurt = hurtboxesOf(D, defD)
+      if (anyOverlap([box], hurt)) {
+        const at = contactPoint([box], hurt) ?? { x: p.pos.x, y: p.pos.y }
+        const A = s.fighters[p.owner]
+        const logD = s.inputLog?.[di] ?? []
+        s.hitstop = Math.max(s.hitstop, p.hit.hitstop)
+        if (isParrying(D, p.hit.guard, logD)) resolveParry(s, A, D, at, p.owner, events)
+        else if (isBlocking(D, p.hit.guard, relDirs[di])) applyBlock(A, D, p.hit, at, p.owner, events)
+        else applyHit(A, D, p.hit, at, p.owner, events)
+        consumed = true
+      }
+    }
+
+    if (consumed || p.life <= 0) continue
+    if (p.pos.x < -STAGE_HALF_W - PROJECTILE_MARGIN || p.pos.x > STAGE_HALF_W + PROJECTILE_MARGIN) continue
+    survivors.push(p)
+  }
+  s.projectiles = survivors.length > 0 ? survivors : undefined
 }

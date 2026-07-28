@@ -22,7 +22,7 @@ interface Props {
  * copy carries the fill. No box is drawn behind it: a bounding plate is exactly
  * what makes an announcement read as a web toast rather than a fighting game.
  */
-function Word({
+export function Word({
   text,
   color,
   accent,

@@ -29,6 +29,13 @@ const PlayableMatch = lazy(() =>
   import('./play/PlayableMatch').then((m) => ({ default: m.PlayableMatch })),
 )
 
+/** Character + stage select at `?select=1`. The game's front door: lets a player
+ *  pick a fighter and arena instead of hand-editing the query string. Lazy,
+ *  since a match launched with an explicit matchup never mounts it. */
+const FightSelect = lazy(() =>
+  import('./fighthud/select/FightSelect').then((m) => ({ default: m.FightSelect })),
+)
+
 function isLabRoute(): boolean {
   if (typeof window === 'undefined') return false
   return new URLSearchParams(window.location.search).get('lab') === '1'
@@ -50,11 +57,21 @@ function isCardsRoute(): boolean {
   return new URLSearchParams(window.location.search).get('cards') === '1'
 }
 
+/** Character + stage select at `?select=1`. Deliberately NOT the bare-`/`
+ *  landing: many capture tools boot `/` (often with no query at all) and wait
+ *  for a live match on `window.__PLAY__`, so gating `/` behind select would
+ *  break them mid-run. Select is the human front door; it writes an explicit
+ *  matchup query and hands off to the match. */
+function isSelectRoute(): boolean {
+  if (typeof window === 'undefined') return false
+  return new URLSearchParams(window.location.search).get('select') === '1'
+}
+
 /** The fighter is the game, so it owns `/`. The dev routes above are tested
  *  first and still win; `?play=1` keeps working for tools that hardcode it. */
 function isPlayRoute(): boolean {
   if (typeof window === 'undefined') return false
-  return !isCardsRoute()
+  return !isCardsRoute() && !isSelectRoute()
 }
 
 export function App() {
@@ -65,6 +82,7 @@ export function App() {
   const [lab] = useState(isLabRoute)
   const [fight] = useState(isFightRoute)
   const [hud] = useState(isHudRoute)
+  const [select] = useState(isSelectRoute)
   const [play] = useState(isPlayRoute)
 
   // Arcade boot gate. Shown once per page load before anything else. The
@@ -161,6 +179,14 @@ export function App() {
     return (
       <Suspense fallback={<div style={{ color: '#fff', padding: 24 }}>loading hud…</div>}>
         <HudPreview />
+      </Suspense>
+    )
+  }
+
+  if (select) {
+    return (
+      <Suspense fallback={<div style={{ color: '#fff', padding: 24 }}>loading select…</div>}>
+        <FightSelect />
       </Suspense>
     )
   }

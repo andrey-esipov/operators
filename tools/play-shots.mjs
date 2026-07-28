@@ -275,7 +275,51 @@ async function fireSuper() {
     await page.keyboard.up(FWD)
   }
 
+  // A 236236 motion issued while the fighter is in hitstun is simply eaten, and
+  // beat 08 arrives right after a poke with the CPU still swinging -- so the
+  // motion was landing on a stunned fighter and the tool reported "no super came
+  // out" when the truth was "the sim never saw the input".
+  //
+  // The first version of this check tested `f.move`, a field that does not exist
+  // on a fighter (the real fields are `stance` and `stunRemaining`), so it was
+  // never actually waiting for anything. Exactly the shape this project keeps
+  // getting caught by: a guard whose condition can never be true.
+  const actionable = async () => {
+    for (let i = 0; i < 120; i++) {
+      const ok = await page.evaluate(() => {
+        const f = window.__PLAY__.state().fighters[0]
+        return (
+          f.stunRemaining === 0 &&
+          f.grounded &&
+          !/hurt|juggle|knock|wake|block|throw/i.test(String(f.stance ?? ''))
+        )
+      })
+      if (ok) return true
+      await page.waitForTimeout(25)
+    }
+    return false
+  }
+
+  // Waiting alone isn't enough: a relentless CPU can keep p1 in hitstun
+  // indefinitely, which is what actually happened on the crisis and pre-pmf
+  // stages. So make the window instead of hoping for one -- push the opponent
+  // out to super range and stun them for it. The super itself still costs its
+  // full 1000 meter and still executes through the ordinary input path; only
+  // the opening is staged.
+  const makeRoom = async () => {
+    await page.evaluate(() => {
+      const st = window.__PLAY__.state()
+      const [me, foe] = st.fighters
+      foe.pos.x = me.pos.x + (me.facing === 1 ? 300 : -300)
+      foe.vel.x = 0
+      foe.stunRemaining = 120
+      me.stunRemaining = 0
+    })
+  }
+
   for (const button of ['KeyU', 'KeyI', 'KeyO']) {
+    await makeRoom()
+    await actionable()
     await page.evaluate(() => {
       window.__PLAY__.state().fighters[0].meter = 1400
     })
@@ -301,7 +345,9 @@ async function fireSuper() {
 
 console.log(`capturing the real game at ${URL}  (DPR 2)  build ${SHA} -> ${OUT}/`)
 
+let superMissed = false
 async function runBeats() {
+  superMissed = false
   shots.length = 0
   errors.length = 0
   rmSync(OUT, { recursive: true, force: true })
@@ -344,14 +390,20 @@ async function runBeats() {
 
   const sup = await fireSuper()
   if (!sup.fired) {
+    // The original defect was a *fake* super: beat 08 photographed a light punch
+    // under that filename for five sessions. So the one thing this must never do
+    // is produce an 08-super.png that isn't a super. It does not follow that the
+    // other nine beats should be destroyed -- that turned a staging problem into
+    // a total capture failure and blocked seven of the eight arenas.
+    //
+    // Emit no file, record the miss in shots.json, and say so loudly. A missing
+    // file cannot lie; a wrong one can.
+    superMissed = true
     console.log(
-      'FAILED: no super came out. Beat 08 has spent five sessions photographing\n' +
-        '        a normal attack under this filename; capturing another one is worse\n' +
-        '        than capturing nothing.',
+      '  WARNING: no super came out — 08-super deliberately NOT captured.\n' +
+        '           The other beats stand. shots.json records superFired:false.',
     )
-    rmSync(OUT, { recursive: true, force: true })
-    await browser.close()
-    process.exit(1)
+    return
   }
   console.log(`  super fired: ${sup.moveId} (${sup.spent} meter, ${sup.button})`)
   await shot('08-super')
@@ -360,7 +412,19 @@ async function runBeats() {
   await assertSameBuild()
 }
 
-const ATTEMPTS = 4
+// Six agents commit to this tree continuously, so a vite reload lands in the
+// middle of most runs. A reload surfaces in three different disguises: our own
+// Reloaded exception, a raw "Cannot read properties of undefined" when __PLAY__
+// is torn down mid-evaluate, and a screenshot TimeoutError while the canvas is
+// being recreated. Retrying only the first left this tool failing six runs in
+// eight, so every error is retryable now.
+//
+// That is a risk -- blanket retry is how a real bug gets laundered into a flake
+// -- so every attempt's error is printed as it happens, and all of them are
+// reprinted on final failure. A genuine defect still fails all attempts and
+// still exits 1; it just does so loudly instead of on the first blip.
+const ATTEMPTS = 6
+const failures = []
 let captured = false
 for (let attempt = 1; attempt <= ATTEMPTS && !captured; attempt++) {
   try {
@@ -368,25 +432,33 @@ for (let attempt = 1; attempt <= ATTEMPTS && !captured; attempt++) {
     await runBeats()
     captured = true
   } catch (e) {
-    if (!(e instanceof Reloaded)) throw e
-    console.log(`  restarting — ${e.message} (attempt ${attempt}/${ATTEMPTS})`)
-    if (attempt === ATTEMPTS) {
-      console.log('FAILED: could not complete a run without the build changing underneath it')
-      rmSync(OUT, { recursive: true, force: true })
-      await browser.close()
-      process.exit(1)
+    const why = e instanceof Reloaded ? e.message : `${e.name}: ${String(e.message).split('\n')[0]}`
+    failures.push(`attempt ${attempt}: ${why}`)
+    console.log(`  restarting — ${why} (attempt ${attempt}/${ATTEMPTS})`)
+    if (attempt === ATTEMPTS) break
+    // Come back from scratch. A reload can leave the page mid-boot, so reload
+    // deliberately rather than hoping the existing document recovered.
+    try {
+      await page.goto(URL, { waitUntil: 'domcontentloaded' })
+      if (!(await settle(45000))) {
+        failures.push(`attempt ${attempt}: play route never came back after a reload`)
+        continue
+      }
+      await page.mouse.click(800, 450)
+    } catch (recoveryError) {
+      failures.push(`attempt ${attempt}: recovery failed — ${recoveryError.name}`)
     }
-    await page.goto(URL, { waitUntil: 'domcontentloaded' })
-    if (!(await settle())) {
-      console.log('FAILED: play route never came back after a reload')
-      await browser.close()
-      process.exit(1)
-    }
-    await page.mouse.click(800, 450)
   }
 }
+if (!captured) {
+  console.log('FAILED: could not complete a run. Every attempt errored:')
+  for (const f of failures) console.log(`    ${f}`)
+  rmSync(OUT, { recursive: true, force: true })
+  await browser.close()
+  process.exit(1)
+}
 
-writeFileSync(`${OUT}/shots.json`, JSON.stringify({ build: SHA, shots, errors }, null, 2))
+writeFileSync(`${OUT}/shots.json`, JSON.stringify({ build: SHA, superFired: !superMissed, shots, errors }, null, 2))
 console.log(errors.length ? `\n  ${errors.length} console/page errors:` : '\n  no console errors')
 for (const e of [...new Set(errors)].slice(0, 8)) console.log(`    ${e}`)
 

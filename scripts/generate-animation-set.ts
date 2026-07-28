@@ -32,6 +32,7 @@ import { contactSheet, clipFilmstrip, previewHtml, FILMSTRIP_CLIPS, type RegMap 
 import { clipApng } from './lib/apng'
 import { morph } from './lib/inbetween'
 import { analyzeClip, type TemporalReport } from './lib/temporal'
+import { toRGBA, fromRGBA, applyKeyline, thinFeatureSurvival } from './lib/keyline'
 
 // Shared registration frame, matching the probe. A 512 canvas with the feet at
 // (256, 470) and a 380px neutral height leaves headroom above for a jump and
@@ -51,6 +52,12 @@ const TARGET_H = 380 * SCALE
 const ORIGIN = { x: 256 * SCALE, y: 470 * SCALE }
 // Foot/bottom drift is measured in pixels, so its tolerance scales with SCALE.
 const DRIFT_TOL = 2.5 * SCALE
+// Keyline: a constant-weight ink rim so the sprite reads as drawn, not cut out.
+// Band ~1.5 screen px at the authored 2x, features narrower than ~8px are "thin"
+// and protected from being inked away (the mic boom, fingers).
+const KEYLINE_BAND = 1.5 * SCALE
+const KEYLINE_DARKEN = 0.34
+const KEYLINE_THIN_RADIUS = 2 * SCALE
 const DEFAULT_HEIGHT_CM = 180
 const MAX_ATTEMPTS = 3
 const CONCURRENCY = 2
@@ -242,6 +249,33 @@ export async function generateFighter(
     }
   }
   if (tweens) log(`  synthesised ${tweens} inbetween frame(s)`)
+
+  // ── Keyline ────────────────────────────────────────────────────────────────
+  // Bake a constant-weight ink rim into every frame (keys and tweens) so the
+  // silhouette reads as drawn rather than cut out. applyKeyline only multiplies
+  // RGB, never alpha, so foot anchors and the atlas trim are unaffected. Each
+  // frame is guarded by the thin-feature probe: if inking would eat a thin
+  // feature (a mic boom, fingers) the frame keeps its un-inked pixels and the
+  // drop is reported rather than silently shipped.
+  let inkedFrames = 0
+  const keylineWarn: string[] = []
+  for (const rf of registered) {
+    const before = await toRGBA(rf.buf)
+    const after = { data: before.data.slice(), width: before.width, height: before.height }
+    applyKeyline(after, { band: KEYLINE_BAND, darken: KEYLINE_DARKEN, protectThin: true, coreDepth: KEYLINE_THIN_RADIUS })
+    const surv = thinFeatureSurvival(before, after, { thinRadius: KEYLINE_THIN_RADIUS })
+    if (!surv.ok) {
+      keylineWarn.push(`${rf.name}: thin-feature survival ${surv.survival.toFixed(2)} (bright ${surv.brightBefore}->${surv.brightAfter}) — shipped un-inked`)
+      continue
+    }
+    const inkedBuf = await fromRGBA(after)
+    rf.buf = inkedBuf
+    const rm = regMap.get(rf.name)
+    if (rm) rm.buf = inkedBuf
+    inkedFrames++
+  }
+  log(`  keyline: inked ${inkedFrames}/${registered.length} frame(s)`)
+  if (keylineWarn.length) log(`  KEYLINE (thin-feature) WARNINGS:\n    ${keylineWarn.join('\n    ')}`)
 
   // ── Temporal coherence ────────────────────────────────────────────────────
   // Per-frame validation cannot see a stutter; measure the frame-to-frame

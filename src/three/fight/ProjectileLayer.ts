@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import type { Projectile } from '../../fight/types'
 import { STAGE_HALF_W, PROJECTILE_MARGIN } from '../../fight/constants'
 import { simToWorld, cmYToWorld } from './worldScale'
-import { energyTint, makeGlowMesh } from './ProjectileFx'
+import { energyTint, flashTint, makeGlowMesh, presenceFor, type Presence } from './ProjectileFx'
 import {
   loadProjectileAtlas,
   type LoadedProjectile,
@@ -53,12 +53,10 @@ const PROJ_Z = 0.08
  *  streak at bolt speed without becoming a solid bar. */
 const TRAIL_SEG = 6
 
-/** Peak additive opacity of the freshest trail blob (older ones taper to 0). */
-const TRAIL_OPACITY = 0.6
-
-/** Additive opacity of the floor light pool while the bolt is in flight. Kept
- *  low on purpose: it is grounding spill light, not a second projectile. */
-const FLOOR_OPACITY = 0.3
+// Per-kind opacities and scales (trail, floor, aura, spawn flash, impact) live
+// in the Presence profile in ProjectileFx; the layer reads them off each Live,
+// so a super can be an order of magnitude more present than a jab with no
+// branching here and no change to the tuned ion-bolt look.
 
 /** Ticks a fizzle (life-expiry / off-stage exit) takes to dissipate. */
 const FIZZLE_TICKS = 12
@@ -102,6 +100,19 @@ interface Live {
   /** Expanding light burst, spawned only on a genuine impact. */
   flash: THREE.Mesh | null
   flashMat: THREE.MeshBasicMaterial | null
+  /** Travelling volume of light behind the sprite (super only; else null). */
+  aura: THREE.Mesh | null
+  auraMat: THREE.MeshBasicMaterial | null
+  /** Hard spawn flash: the mesh, its own clock, and the fixed birth point it
+   *  fires from while the beam races away (super only; else null). */
+  spawnFlash: THREE.Mesh | null
+  spawnFlashMat: THREE.MeshBasicMaterial | null
+  spawnClock: number
+  spawnPos: THREE.Vector3
+  /** This kind's presence profile and effective world-units-per-source-pixel
+   *  (WORLD_PER_PX × spriteScale), used everywhere the sprite is sized. */
+  presence: Presence
+  wpp: number
   /** Last-seen sim values, to infer WHY the sim dropped the bolt. */
   lastX: number
   lastVx: number
@@ -221,6 +232,11 @@ export class ProjectileLayer {
       const done = this.animateOut(l, ticks)
       if (done) this.retire(l)
     }
+
+    // Spawn flashes run on their own clock, independent of beam phase, so tick
+    // every survivor once per frame. Retired beams are already gone from the map
+    // (their flash disposed in retire), so this only touches live ones.
+    for (const l of this.live.values()) this.tickSpawnFlash(l, ticks)
   }
 
   /** Did the sim drop this bolt because it CONNECTED, versus running out of life
@@ -238,6 +254,8 @@ export class ProjectileLayer {
     const loaded = this.loaded.get(p.kind)
     if (!loaded) return null
     const tint = energyTint(p.kind)
+    const presence = presenceFor(p.kind)
+    const wpp = WORLD_PER_PX * presence.spriteScale
     const geom = new THREE.PlaneGeometry(1, 1)
     const mat = new THREE.MeshBasicMaterial({
       map: loaded.texture,
@@ -247,9 +265,10 @@ export class ProjectileLayer {
       depthTest: true,
       toneMapped: false, // pass through > 1 so the core survives to the bloom
       side: THREE.DoubleSide, // negative X scale (mirroring) flips winding
-      // A modest boost pushes the bright core over the bloom threshold without
-      // clipping the whole sprite to white.
-      color: new THREE.Color(1.35, 1.35, 1.35),
+      // A per-kind boost drives the bright core over the bloom threshold. A jab
+      // stays modest; a super pushes far harder so its core reads as a volume of
+      // light rather than a decal.
+      color: new THREE.Color(presence.coreBoost, presence.coreBoost, presence.coreBoost),
     })
     const mesh = new THREE.Mesh(geom, mat)
     mesh.frustumCulled = false
@@ -268,6 +287,32 @@ export class ProjectileLayer {
       bm.visible = false
       this.group.add(bm)
       trail.push({ mesh: bm, mat: bm.material as THREE.MeshBasicMaterial })
+    }
+
+    // Aura: a travelling body of light the sprite rides inside of. Only kinds
+    // that ask for it (the super) get one; a bolt leaves this null.
+    let aura: THREE.Mesh | null = null
+    let auraMat: THREE.MeshBasicMaterial | null = null
+    if (presence.aura > 0) {
+      aura = makeGlowMesh(tint, 16)
+      auraMat = aura.material as THREE.MeshBasicMaterial
+      auraMat.opacity = 0
+      this.group.add(aura)
+    }
+
+    // Spawn flash: a hard bright pop pinned to the birth point, announcing a
+    // super has started. It stays put while the beam races away, so it reads as
+    // the muzzle rather than a light stuck to the projectile.
+    const spawnPos = new THREE.Vector3()
+    simToWorld({ x: p.pos.x, y: p.pos.y }, spawnPos)
+    let spawnFlash: THREE.Mesh | null = null
+    let spawnFlashMat: THREE.MeshBasicMaterial | null = null
+    if (presence.spawnFlash > 0) {
+      spawnFlash = makeGlowMesh(flashTint(p.kind), 30)
+      spawnFlashMat = spawnFlash.material as THREE.MeshBasicMaterial
+      spawnFlashMat.opacity = 0
+      spawnFlash.position.set(spawnPos.x, spawnPos.y, PROJ_Z + 0.02)
+      this.group.add(spawnFlash)
     }
 
     const l: Live = {
@@ -290,6 +335,14 @@ export class ProjectileLayer {
       floorMat,
       flash: null,
       flashMat: null,
+      aura,
+      auraMat,
+      spawnFlash,
+      spawnFlashMat,
+      spawnClock: 0,
+      spawnPos,
+      presence,
+      wpp,
       lastX: p.pos.x,
       lastVx: p.vel.x,
       lastLife: p.life,
@@ -301,24 +354,35 @@ export class ProjectileLayer {
   /** Position + size the quad so the manifest anchor sits on the world point. */
   private place(l: Live) {
     const m = l.loaded.manifest
-    const worldW = m.frameW * WORLD_PER_PX
-    const worldH = m.frameH * WORLD_PER_PX
+    const worldW = m.frameW * l.wpp
+    const worldH = m.frameH * l.wpp
     // Mirror art for a left-facing owner: flip on X and mirror the anchor.
     const axEff = l.facing < 0 ? m.frameW - m.anchor.x : m.anchor.x
     l.mesh.scale.set(l.facing < 0 ? -worldW : worldW, worldH, 1)
     // Offset the (centre-pivoted) quad so `anchor` lands on lastWorld. Image y
     // grows downward, world y upward, hence the sign flip on the vertical term.
     l.mesh.position.set(
-      l.lastWorld.x + (m.frameW / 2 - axEff) * WORLD_PER_PX,
-      l.lastWorld.y + (m.anchor.y - m.frameH / 2) * WORLD_PER_PX,
+      l.lastWorld.x + (m.frameW / 2 - axEff) * l.wpp,
+      l.lastWorld.y + (m.anchor.y - m.frameH / 2) * l.wpp,
       PROJ_Z,
     )
 
-    // Floor pool tracks the bolt's x, glued to the ground: a soft, low smear of
-    // spill light so the bolt belongs to the stage rather than floating over it.
+    // Floor pool tracks the bolt's x, glued to the ground. Footprint + brightness
+    // are per-kind: a bolt lays a soft grounding smear, a super floods the floor
+    // with a wide reactive light so the stage visibly answers the shot.
+    const pr = l.presence
     l.floor.position.set(l.lastWorld.x, this.groundY + worldH * 0.05, PROJ_Z - 0.02)
-    l.floor.scale.set(worldW * 1.15, worldW * 0.36, 1)
-    l.floorMat.opacity = FLOOR_OPACITY
+    l.floor.scale.set(worldW * pr.floorScaleX, worldW * pr.floorScaleY, 1)
+    l.floorMat.opacity = pr.floorOpacity
+
+    // Aura rides the hot-point, wrapping the sprite in a soft body of light so a
+    // super reads as a glowing volume rather than a lone cutout.
+    if (l.aura && l.auraMat) {
+      const s = worldH * pr.aura
+      l.aura.position.set(l.lastWorld.x, l.lastWorld.y, PROJ_Z - 0.01)
+      l.aura.scale.set(s * 1.25, s, 1)
+      l.auraMat.opacity = pr.auraOpacity
+    }
   }
 
   /** Push the current hot-point onto the trail history and lay the blobs out
@@ -329,7 +393,8 @@ export class ProjectileLayer {
       l.history.unshift(l.lastWorld.clone())
       if (l.history.length > TRAIL_SEG + 1) l.history.pop()
     }
-    const worldH = l.loaded.manifest.frameH * WORLD_PER_PX
+    const worldH = l.loaded.manifest.frameH * l.wpp
+    const pr = l.presence
     const head = worldH * 0.62
     for (let i = 0; i < l.trail.length; i++) {
       const h = l.history[i + 1]
@@ -339,22 +404,52 @@ export class ProjectileLayer {
         continue
       }
       const f = 1 - i / TRAIL_SEG
-      const size = Math.max(0.12, head * (0.85 * f + 0.15))
+      const size = Math.max(0.12, head * (0.85 * f + 0.15)) * pr.trailSize
       b.mesh.visible = true
       b.mesh.position.set(h.x, h.y, PROJ_Z - 0.005 * (i + 1))
       // Stretched along travel so the blobs blur into a streak, not a bead chain.
       b.mesh.scale.set(size * 1.4, size * 0.82, 1)
-      b.mat.opacity = TRAIL_OPACITY * f
+      b.mat.opacity = pr.trailOpacity * f
     }
   }
 
-  /** Fade the trail + floor pool toward `k` (0..1 of full brightness). */
+  /** Fade the trail + floor pool (+ aura, if any) toward `k` (0..1 of full). */
   private dimAux(l: Live, k: number) {
+    const pr = l.presence
     for (let i = 0; i < l.trail.length; i++) {
       const f = 1 - i / TRAIL_SEG
-      l.trail[i].mat.opacity = TRAIL_OPACITY * f * k
+      l.trail[i].mat.opacity = pr.trailOpacity * f * k
     }
-    l.floorMat.opacity = FLOOR_OPACITY * k
+    l.floorMat.opacity = pr.floorOpacity * k
+    if (l.auraMat) l.auraMat.opacity = pr.auraOpacity * k
+  }
+
+  /** Drive the fixed spawn flash on its own short clock: a hard bright pop that
+   *  snaps to full almost instantly, then collapses and fades over
+   *  `spawnFlashTicks`. Runs independently of the beam's phase clock so the flash
+   *  lives and dies at the muzzle while the beam races away, then disposes itself.
+   *  A no-op for kinds without a spawn flash. */
+  private tickSpawnFlash(l: Live, ticks: number) {
+    if (!l.spawnFlash || !l.spawnFlashMat) return
+    l.spawnClock += ticks
+    const pr = l.presence
+    const dur = Math.max(1, pr.spawnFlashTicks)
+    const t = Math.min(1, l.spawnClock / dur)
+    // Fast attack over the first ~20% to full size, then bleed out while easing
+    // down — a punch, not a swell.
+    const grow = t < 0.2 ? t / 0.2 : 1
+    const worldH = l.loaded.manifest.frameH * l.wpp
+    const s = worldH * pr.spawnFlash * (0.5 + 0.5 * grow) * (1 - 0.25 * t)
+    l.spawnFlash.position.set(l.spawnPos.x, l.spawnPos.y, PROJ_Z + 0.02)
+    l.spawnFlash.scale.set(s, s, 1)
+    l.spawnFlashMat.opacity = pr.spawnFlashOpacity * Math.pow(1 - t, 1.4)
+    if (t >= 1) {
+      this.group.remove(l.spawnFlash)
+      ;(l.spawnFlash.geometry as THREE.BufferGeometry).dispose()
+      l.spawnFlashMat.dispose()
+      l.spawnFlash = null
+      l.spawnFlashMat = null
+    }
   }
 
   /** Advance the current clip by `ticks`, blit the resolved frame, and handle
@@ -391,21 +486,23 @@ export class ProjectileLayer {
         this.blit(l, idx)
       }
       const t = total > 0 ? Math.min(1, l.clock / total) : 1
-      this.dimAux(l, 1 - t) // trail + pool bleed off as the burst takes over
+      this.dimAux(l, 1 - t) // trail + pool + aura bleed off as the burst takes over
       if (l.flash && l.flashMat) {
-        const worldH = l.loaded.manifest.frameH * WORLD_PER_PX
-        const s = worldH * (0.8 + 2.2 * t)
+        const worldH = l.loaded.manifest.frameH * l.wpp
+        // impactScale makes a super's contact a visibly bigger event than a jab's;
+        // impactOpacity lets it punch to full white where a bolt stays softer.
+        const s = worldH * (0.8 + 2.2 * t) * l.presence.impactScale
         l.flash.position.set(l.lastWorld.x, l.lastWorld.y, PROJ_Z + 0.01)
         l.flash.scale.set(s, s, 1)
-        l.flashMat.opacity = Math.max(0, 1 - t) * 0.9
+        l.flashMat.opacity = Math.max(0, 1 - t) * l.presence.impactOpacity
       }
       return done
     }
     // fizzle: hold the last travel frame and dissolve it.
     const t = Math.min(1, l.clock / FIZZLE_TICKS)
     l.mat.opacity = 1 - t
-    const worldW = l.loaded.manifest.frameW * WORLD_PER_PX
-    const worldH = l.loaded.manifest.frameH * WORLD_PER_PX
+    const worldW = l.loaded.manifest.frameW * l.wpp
+    const worldH = l.loaded.manifest.frameH * l.wpp
     const grow = 1 + 0.25 * t
     l.mesh.scale.set((l.facing < 0 ? -worldW : worldW) * grow, worldH * grow, 1)
     this.dimAux(l, 1 - t)
@@ -462,6 +559,16 @@ export class ProjectileLayer {
       ;(l.flash.geometry as THREE.BufferGeometry).dispose()
       l.flashMat?.dispose()
     }
+    if (l.aura) {
+      this.group.remove(l.aura)
+      ;(l.aura.geometry as THREE.BufferGeometry).dispose()
+      l.auraMat?.dispose()
+    }
+    if (l.spawnFlash) {
+      this.group.remove(l.spawnFlash)
+      ;(l.spawnFlash.geometry as THREE.BufferGeometry).dispose()
+      l.spawnFlashMat?.dispose()
+    }
     this.live.delete(l.id)
   }
 
@@ -489,6 +596,16 @@ export class ProjectileLayer {
         this.group.remove(l.flash)
         ;(l.flash.geometry as THREE.BufferGeometry).dispose()
         l.flashMat?.dispose()
+      }
+      if (l.aura) {
+        this.group.remove(l.aura)
+        ;(l.aura.geometry as THREE.BufferGeometry).dispose()
+        l.auraMat?.dispose()
+      }
+      if (l.spawnFlash) {
+        this.group.remove(l.spawnFlash)
+        ;(l.spawnFlash.geometry as THREE.BufferGeometry).dispose()
+        l.spawnFlashMat?.dispose()
       }
     }
     this.live.clear()

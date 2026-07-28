@@ -61,6 +61,96 @@ export function energyTint(kind: string): THREE.Color {
 }
 
 /**
+ * How PRESENT a kind should read on screen. A fireball and a super beam are the
+ * same code path with wildly different budgets: an `ion-bolt` is a jab you
+ * throw ten of, a `super-beam` is the single most expensive moment in the match
+ * and has to announce itself. Rather than branch on kind all through the layer,
+ * every visual knob a kind might crank lives here, and the layer just reads the
+ * profile. The DEFAULT reproduces the tuned ion-bolt look exactly, so a kind
+ * with no entry (and ion-bolt itself) is untouched by any of this.
+ */
+export interface Presence {
+  /** Multiplier on authored sprite size (and its anchor math). */
+  spriteScale: number
+  /** Whole-sprite colour multiply; pushes the core past the bloom threshold. */
+  coreBoost: number
+  /** Peak additive opacity of the freshest trail blob. */
+  trailOpacity: number
+  /** Multiplier on trail-blob size (a super drags a fatter wake). */
+  trailSize: number
+  /** Floor light-pool footprint (× sprite width) and brightness. */
+  floorScaleX: number
+  floorScaleY: number
+  floorOpacity: number
+  /** Travelling volumetric glow behind the sprite, as a multiple of sprite
+   *  height. 0 disables it (an ion-bolt is a hard bead, not a volume). */
+  aura: number
+  auraOpacity: number
+  /** Hard spawn flash: a screen-scale burst the instant the projectile is born,
+   *  as a multiple of sprite height. 0 disables it — only a super gets one. */
+  spawnFlash: number
+  spawnFlashTicks: number
+  spawnFlashOpacity: number
+  /** Impact-burst flash size multiplier and peak opacity. */
+  impactScale: number
+  impactOpacity: number
+}
+
+/** The tuned ion-bolt numbers, verbatim — every kind starts here. */
+const DEFAULT_PRESENCE: Presence = {
+  spriteScale: 1,
+  coreBoost: 1.35,
+  trailOpacity: 0.6,
+  trailSize: 1,
+  floorScaleX: 1.15,
+  floorScaleY: 0.36,
+  floorOpacity: 0.3,
+  aura: 0,
+  auraOpacity: 0,
+  spawnFlash: 0,
+  spawnFlashTicks: 0,
+  spawnFlashOpacity: 0,
+  impactScale: 1,
+  impactOpacity: 0.9,
+}
+
+/**
+ * Per-kind overrides. `super-beam` is dialled up across the board: a wider,
+ * brighter core; a fat bright wake; a floor wash several times larger; a
+ * travelling volume of light around the lance; a hard screen-scale spawn flash
+ * that fires the frame it is born; and an impact burst far bigger than a jab's.
+ * This is the difference between "a slightly bigger fireball" and "a super".
+ */
+const PRESENCE: Record<string, Partial<Presence>> = {
+  'super-beam': {
+    spriteScale: 1.4,
+    coreBoost: 2.1,
+    trailOpacity: 0.92,
+    trailSize: 1.7,
+    floorScaleX: 3.4,
+    floorScaleY: 2.5,
+    floorOpacity: 0.6,
+    aura: 2.7,
+    auraOpacity: 0.85,
+    spawnFlash: 8.5,
+    spawnFlashTicks: 12,
+    spawnFlashOpacity: 1,
+    impactScale: 2.7,
+    impactOpacity: 1,
+  },
+}
+
+export function presenceFor(kind: string): Presence {
+  return { ...DEFAULT_PRESENCE, ...(PRESENCE[kind] ?? {}) }
+}
+
+/** A near-white flash colour (a super's spawn burst is hot light, not just a
+ *  bigger tinted glow), nudged slightly toward the kind's energy hue. */
+export function flashTint(kind: string): THREE.Color {
+  return energyTint(kind).lerp(new THREE.Color(1.6, 1.6, 1.75), 0.6)
+}
+
+/**
  * A unit-quad additive glow mesh wearing the shared soft-glow texture. The
  * caller owns scale, position and per-frame opacity; this only fixes the bits
  * that make it behave as light: additive blend, no depth write, no tone-map.

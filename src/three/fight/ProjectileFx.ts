@@ -83,15 +83,29 @@ export function hotCoreTexture(): THREE.Texture {
 let beamTex: THREE.Texture | null = null
 
 /**
+ * The beam column texture's darkest body (coreV=0) and hottest spine (coreV=1)
+ * colours, 0..255. Exported so the accumulation gate (beamClip.test.ts) can
+ * composite the shaft from the SAME numbers the texture bakes rather than a copy
+ * that can silently drift, and `beamColumnTexture()` derives its per-row ramp
+ * from them so the two can never disagree. B is pinned at 255 for both — the
+ * shaft never washes cyan; the coreV ramp only lifts R and G toward the spine.
+ */
+export const BEAM_BODY_RGB: readonly [number, number, number] = [40, 92, 255]
+export const BEAM_SPINE_RGB: readonly [number, number, number] = [135, 188, 255]
+
+/**
  * A horizontal BEAM-COLUMN gradient: a long electric-blue shaft with a thin
  * blue-white hot filament down its spine, a softer blue body around it, feathered
  * at the tail (the muzzle end melts into the caster's hand) and tapering to a
  * bright leading edge (the head). Stretched between the muzzle and the beam head
  * it draws the caster→target lance the marquee super was missing — the critic's
- * "no beam geometry at all". Colour is baked BLUE-DOMINANT (body ~[60,120,255],
- * spine ~[190,230,255]) rather than left white, so even summed additively the
- * shaft holds its ion hue instead of clipping to a neutral smear; the material
- * wears a white tint so the baked colour passes straight through.
+ * "no beam geometry at all". Colour is baked BLUE-DOMINANT (body [40,92,255],
+ * spine [135,188,255]) rather than left white, so even summed additively the
+ * shaft holds its ion hue instead of clipping to a neutral smear. The texture is
+ * only half the story: the material tint (see `beamTint`) actively SUPPRESSES red
+ * on top of this, because at runtime the shaft is one of several additive layers
+ * stacked at the same screen position (aura + core + trail + bloom) and a white
+ * pass-through tint let every layer's red sum past 255 → white (see beamClip).
  */
 export function beamColumnTexture(): THREE.Texture {
   if (beamTex) return beamTex
@@ -116,9 +130,12 @@ export function beamColumnTexture(): THREE.Texture {
       const uEnv = smooth(0, 0.12, u) * (1 - 0.3 * smooth(0.92, 1, u))
       const a = Math.max(0, Math.min(1, vprof * uEnv))
       const i = (y * W + x) * 4
-      img.data[i] = 40 + coreV * 95       // R: very blue body, blue-white spine
-      img.data[i + 1] = 92 + coreV * 96   // G: kept below B even at the spine so
-      img.data[i + 2] = 255               // B: pinned — the shaft never washes cyan
+      // R and G ramp from the body colour up to the blue-white spine as coreV→1;
+      // B is pinned (body B === spine B === 255). Derived from the exported
+      // BEAM_*_RGB so the shaft the gate composites is the shaft that ships.
+      img.data[i] = BEAM_BODY_RGB[0] + coreV * (BEAM_SPINE_RGB[0] - BEAM_BODY_RGB[0])
+      img.data[i + 1] = BEAM_BODY_RGB[1] + coreV * (BEAM_SPINE_RGB[1] - BEAM_BODY_RGB[1])
+      img.data[i + 2] = BEAM_BODY_RGB[2] + coreV * (BEAM_SPINE_RGB[2] - BEAM_BODY_RGB[2])
       img.data[i + 3] = Math.round(a * 255)
     }
   }
@@ -131,6 +148,35 @@ export function beamColumnTexture(): THREE.Texture {
   tex.needsUpdate = true
   beamTex = tex
   return tex
+}
+
+/**
+ * The additive TINT worn by the beam-column material. NOT white.
+ *
+ * The shaft is one of several additive, un-tone-mapped layers stacked at the
+ * same screen position during a super: the travelling aura underneath, the
+ * blue-hot core on top, the trail blobs along the shaft, then the bloom pass over
+ * all of it. Every one of those contributes red. The column texture already bakes
+ * a genuinely blue-dominant shaft (spine [135,188,255]); a white (1,1,1) tint
+ * passed that 135 of red through at full strength, and once the aura's, core's,
+ * trail's and bloom's red piled on top the SUM crossed 255 on every channel and
+ * the spine pinned to white — the "38–61% of bright pixels blown out" the critic
+ * measured. Fixing only the core (commit 12c4d0b) did not help, because the
+ * clipping is an ACCUMULATION across layers, not any single layer.
+ *
+ * So this tint does what the core's (0.42,0.74,1.95) fix did, at the layer that
+ * spans the whole spine: it actively SUPPRESSES red (0.46) and pushes blue past 1
+ * (1.12), so the beam's own contribution to the stack stays blue-dominant. Under
+ * heavy additive stacking the summed spine then holds R well below B/G (measured:
+ * head-adjacent R 240→173, B−R 15→82) instead of racing them to white, while B
+ * and G still saturate so the shaft reads HOT (a searing blue-white lance), not a
+ * dull blue bar. Green is kept moderate (0.80) — enough luminance that the shaft
+ * still blooms bright, not so much that it greys back toward white. Gated by
+ * beamClip.test.ts (a deterministic composite of the real per-layer constants);
+ * tuned against that additive-accumulation model, not by eye.
+ */
+export function beamTint(): THREE.Color {
+  return new THREE.Color(0.46, 0.8, 1.12)
 }
 
 /**
@@ -374,6 +420,33 @@ export function flashTint(kind: string): THREE.Color {
 export function hotTint(kind: string): THREE.Color {
   if (kind === 'super-beam') return new THREE.Color(0.42, 0.74, 1.95)
   return flashTint(kind)
+}
+
+/**
+ * Colour multiply for the MAIN sprite quad — the atlas art itself. Historically a
+ * neutral grey (`coreBoost` on all three channels) so the boost lifts the art over
+ * the bloom threshold WITHOUT shifting its authored hue. That is right for a bolt,
+ * whose art is dim and cool. But it was the LAST achromatic layer left in the super
+ * stack once the core (12c4d0b), the energy tints and the beam tint were all
+ * red-suppressed — and the super's atlas art carries a deliberately bright tip
+ * (`SB_CORE ≈ [220,238,255]` in scripts/generate-projectiles.ts). Grey × coreBoost
+ * 1.42 drives that tip to (312,338,362): every channel clips, and summed additively
+ * over the already-hot core/aura/beam the head's SHOULDER (the ring just off the
+ * dead centre, where AgX still preserves hue) pinned to NEUTRAL white — the residual
+ * blow-out the critic measured after the core-only fix. The very centre is a
+ * different animal: fully overdriven, AgX desaturates it to a white pinpoint no
+ * per-layer tint can recolour, and the art deliberately keeps that a radius-6 point.
+ * So the super gets the same channel-weighted treatment as every other layer, aimed
+ * at the SHOULDER: red pulled DOWN (0.64) so the summed ring keeps R below the
+ * all-channel clip and reads electric-blue, green and blue kept high (0.90 / 1.0) so
+ * the tip still saturates to a searing blue-white. Now EVERY additive layer in the
+ * super stack is blue-dominant, so the accumulation cannot race red to white however
+ * the layers pile up (the mechanism, not a symptom tint). Non-super kinds keep the
+ * exact neutral boost — byte-identical, bolts untouched.
+ */
+export function coreQuadTint(kind: string, coreBoost: number): THREE.Color {
+  if (kind === 'super-beam') return new THREE.Color(coreBoost * 0.64, coreBoost * 0.9, coreBoost)
+  return new THREE.Color(coreBoost, coreBoost, coreBoost)
 }
 
 /**

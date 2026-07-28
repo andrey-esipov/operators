@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import type { Projectile } from '../../fight/types'
 import { STAGE_HALF_W, PROJECTILE_MARGIN, SUPER_FREEZE_FRAMES } from '../../fight/constants'
 import { simToWorld, cmYToWorld } from './worldScale'
-import { energyTint, flashTint, hotTint, makeGlowMesh, hotCoreTexture, beamColumnTexture, presenceFor, clashing, type Presence } from './ProjectileFx'
+import { energyTint, flashTint, hotTint, makeGlowMesh, hotCoreTexture, beamColumnTexture, beamTint, coreQuadTint, presenceFor, clashing, type Presence } from './ProjectileFx'
 import {
   loadProjectileAtlas,
   type LoadedProjectile,
@@ -613,8 +613,11 @@ export class ProjectileLayer {
       side: THREE.DoubleSide, // negative X scale (mirroring) flips winding
       // A per-kind boost drives the bright core over the bloom threshold. A jab
       // stays modest; a super pushes far harder so its core reads as a volume of
-      // light rather than a decal.
-      color: new THREE.Color(presence.coreBoost, presence.coreBoost, presence.coreBoost),
+      // light rather than a decal. For most kinds this is a NEUTRAL grey multiply
+      // (hue-preserving); the super red-suppresses it (see coreQuadTint) because
+      // the atlas' bright tip × a grey boost was the last achromatic layer driving
+      // the head's shoulder to neutral white under additive stacking.
+      color: coreQuadTint(p.kind, presence.coreBoost),
     })
     const mesh = new THREE.Mesh(geom, mat)
     mesh.frustumCulled = false
@@ -680,13 +683,16 @@ export class ProjectileLayer {
 
     // Beam column: the stretched electric shaft drawn from the muzzle to the head
     // each frame — the caster→target lance. Wears the baked blue-white column
-    // texture (its own colour), a white tint so that colour passes through, and
-    // sits over the aura but under the sprite bead + hot core. Only a kind that
-    // opts in (the super) builds one.
+    // texture (its own colour) under a RED-SUPPRESSED tint (see beamTint): the
+    // shaft is one of several additive layers stacked here (aura, core, trail,
+    // bloom), so a white pass-through tint let their reds sum to a blown-out white
+    // spine. The tint pulls the beam's red down and its blue past 1 so the stack
+    // stays blue-dominant. Sits over the aura but under the sprite bead + hot
+    // core. Only a kind that opts in (the super) builds one.
     let beam: THREE.Mesh | null = null
     let beamMat: THREE.MeshBasicMaterial | null = null
     if (presence.beam > 0) {
-      beam = makeGlowMesh(new THREE.Color(1, 1, 1), 17, beamColumnTexture())
+      beam = makeGlowMesh(beamTint(), 17, beamColumnTexture())
       beamMat = beam.material as THREE.MeshBasicMaterial
       beamMat.opacity = 0
       this.group.add(beam)

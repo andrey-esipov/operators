@@ -31,6 +31,11 @@
 
 import { describe, expect, it } from 'vitest'
 import { HarnessSim } from '../harnessSim'
+import { makeAI, type Difficulty } from '../ai'
+import { createFight, step } from '../sim'
+import { getFighterDef } from '../fighters'
+import { inp, NEU } from './helpers'
+import type { FightState } from '../types'
 
 interface ParryHit {
   frame: number
@@ -64,23 +69,97 @@ function parries(seed: number, p1: string, p2: string, frames = 2400): ParryHit[
 }
 
 describe('AI parries', () => {
-  it('reads and parries committed melee attacks in a live fight', () => {
-    // operator vs vanguard: neither has a projectile, so this isolates the
-    // melee (attackGuard) parry read with a stable rng stream.
+  // Freeze the frame where a committed high attack is still in its STARTUP:
+  // fighter 0 mid-`st.MP` (a high), fighter 1 idle and facing it at strike
+  // range. Stepping the real sim to reach it guarantees a state the engine can
+  // actually produce, rather than a hand-forged one that could drift from it.
+  function committedHighStartup(gap: number): FightState | null {
+    let s = createFight('operator', 'operator')
+    s.phase = 'fight'
+    s.phaseTimer = 0
+    s.fighters[0].pos.x = -gap / 2
+    s.fighters[1].pos.x = gap / 2
+    s.fighters[0].facing = 1
+    s.fighters[1].facing = -1
+    for (let k = 0; k < 10; k++) {
+      const a = s.fighters[0]
+      const mv = a.move ? getFighterDef(a.id).moves[a.move.id] : null
+      // Startup frames only: the attack is committed and observable, but has not
+      // reached its active frames — so nothing has connected, there is no
+      // hitstop, and the defender is free to react. (Snapshotting during the
+      // *active* frames instead catches the hit landing, which freezes the AI in
+      // hitstop and it can do nothing at all.)
+      if (a.stance === 'attack' && mv && a.move &&
+          a.move.frame >= 2 && a.move.frame < mv.active[0]) {
+        return s
+      }
+      s = step(s, [inp(5, 'mp'), NEU]).state
+    }
+    return null
+  }
+
+  // How many of `samples` decisions on that frozen read are the deliberate
+  // parry — a bare relative-forward tap *into* the attack. The defender is
+  // stationary here, so a forward tap has exactly one source: the parry read.
+  // (Proven by the floor below: zeroing parryChance drops this to a clean 0.)
+  function parryReads(diff: Difficulty, seed: number, gap = 70, samples = 50): number {
+    const base = committedHighStartup(gap)
+    if (!base) throw new Error('could not stage a committed-high startup')
+    const ai = makeAI({ difficulty: diff, seed })
+    const fwd = base.fighters[1].facing === 1 ? 6 : 4
+    let reads = 0
+    // Warm the reaction ring first: the AI reacts to what it saw reactionFrames
+    // ago, so the earliest samples predate its awareness of the attack.
+    for (let k = 0; k < 30 + samples; k++) {
+      const d = ai.decide(base, 1)
+      if (k >= 30 && d.pressed.size === 0 && d.dir === fwd) reads++
+    }
+    return reads
+  }
+
+  it('reads a committed high attack and parries it, scaling with tier', () => {
+    // WHY THIS IS A FROZEN READ AND NOT A LIVE FIGHT (and why it USED to be a
+    // live fight): a fighter walking forward in neutral *incidentally* arms a
+    // parry — a forward tap parries whether or not the AI meant it. In a full
+    // AI-vs-AI fight those incidental parries dominate and swing with the
+    // matchup, so a live parry count cannot isolate the deliberate read.
+    // Measured over 8 seeds, operator-vs-vanguard, parryChance-on vs
+    // parryChance-zero come out statistically indistinguishable (≈7 vs ≈9 — the
+    // floor is actually HIGHER, pure noise).
     //
-    // Teeth without brittleness: a fighter walking forward in neutral will
-    // *incidentally* parry — a forward tap arms a parry whether or not the AI
-    // meant it — so a bare `>= 1` is vacuous (it survives disabling the parry
-    // AI entirely). Measured on this exact seed: parry AI on -> 4 parries, parry
-    // AI off (parryChance 0, incidental only) -> 1. So `>= 3` sits in the gap:
-    // it proves the deliberate parry read contributes, reds when parryChance is
-    // zeroed, and does not re-break every time a balance pass shifts the count
-    // by one the way the old exact `=== 4` did.
-    const a = parries(0x51ac, 'operator', 'vanguard')
-    expect(a.length).toBeGreaterThanOrEqual(3)
-    // Teeth against a false fireball-parry claim: no projectiles exist in this
-    // matchup, so none of these parries may be flagged as consuming a bolt.
-    expect(a.every((p) => !p.fireball)).toBe(true)
+    // The old version of this test asserted a live `>= 3` on a single seed. It
+    // was green when written (that seed happened to read 4 vs an incidental 1),
+    // but the combo router — which lands hit-confirmed BnBs off whiff punishes —
+    // compressed the neutral where deliberate parries happen, and on that seed
+    // the read fell to 2 against an incidental floor of 2. A test whose pass
+    // depended on one seed's noise, satisfiable with the parry AI disabled: the
+    // exact lying-test shape this repo keeps producing.
+    //
+    // So we ISOLATE the read: freeze the frame where the opponent has committed
+    // to a high and the AI is stationary facing it. The only forward tap the AI
+    // can make now is the parry read. Measured, aggregated over the 8 seeds
+    // below (50 samples each, 400 total per tier):
+    //   parryChance on ->  hard 228 / medium 110 / easy 17  (≈ each tier's rate)
+    //   parryChance 0  ->  hard   0 / medium   0 / easy  0  (the mutation floor)
+    // A clean zero floor means every parry counted here is deliberate.
+    const seeds = [1, 2, 3, 4, 5, 6, 7, 8]
+    const sum = (d: Difficulty) => seeds.reduce((a, s) => a + parryReads(d, s), 0)
+    const hard = sum('hard')
+    const medium = sum('medium')
+    const easy = sum('easy')
+    // The read scales with tier. This is impossible to satisfy incidentally —
+    // the floor for every tier is zero — so zeroing parryChance makes all three
+    // 0 and breaks both orderings at once. (Mutation-proved: I set every tier's
+    // parryChance to 0 and both `toBeGreaterThan` below went red.)
+    expect(hard).toBeGreaterThan(medium)
+    expect(medium).toBeGreaterThan(easy)
+    // Even the weakest tier reads *some* parry — the branch is live for all of
+    // them, not just the hard AI.
+    expect(easy).toBeGreaterThan(0)
+    // ...and the aggressive tier parries a read high more often than not, so a
+    // deliberate parry is its dominant answer to a committed strike, not a rare
+    // flicker. (Measured 228/400; the 0.4 bar leaves headroom for tuning.)
+    expect(hard).toBeGreaterThan(seeds.length * 50 * 0.4)
   })
 
   it('is deterministic: the same seed parries on the same frames every run', () => {

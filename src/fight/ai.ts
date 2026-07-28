@@ -19,11 +19,32 @@
 import type { Button, Direction, FightState, InputFrame } from './types'
 import { getFighterDef } from './fighters'
 import { makeRng, type Rng } from './rng'
-import { REACH_BONUS, PARRY_WINDOW } from './constants'
+import { REACH_BONUS, PARRY_WINDOW, CANCEL_WINDOW } from './constants'
 
 interface Step {
   rel: Direction
   buttons?: Button[]
+}
+
+/** One link in a hit-confirmed combo route. `rel` is the facing-relative stick
+ *  direction the button is pressed with; `motion` (if present) is the special's
+ *  facing-relative numpad motion, buffered digit-by-digit during the previous
+ *  move so the cancel is already charged when its window opens. */
+interface ComboStep {
+  id: string
+  rel: Direction
+  btn?: Button
+  motion?: string
+}
+
+/** An in-flight combo route: the plan, how far along it is, and how many frames
+ *  of the current link's motion have been fed. `age` is a watchdog so a dropped
+ *  or whiffed route can never spin forever. */
+interface ComboRun {
+  plan: ComboStep[]
+  idx: number
+  mp: number
+  age: number
 }
 
 function frame(dir: Direction, buttons?: Button[]): InputFrame {
@@ -104,6 +125,7 @@ export interface AIOptions {
 
 export class FighterAI {
   private queue: Step[] = []
+  private combo: ComboRun | null = null
   private readonly rng: Rng
   private readonly tier: Tier
   private readonly aggression: number
@@ -141,6 +163,94 @@ export class FighterAI {
       idx === rest.length - 1 ? { rel: d, buttons: ['hp'] as Button[] } : { rel: d },
     )
     return frame(toward(digits[0], facing))
+  }
+
+  /** Advance an in-flight combo route by one frame. Returns the input to play,
+   *  or null when the route is finished, dropped, or hit-confirms as blocked (so
+   *  the caller falls back to normal decision-making rather than feeding a super
+   *  into a guarding opponent). Only ever called outside hitstop. */
+  private stepCombo(state: FightState, i: 0 | 1): InputFrame | null {
+    const c = this.combo!
+    const me = state.fighters[i]
+    const opp = state.fighters[1 - i]
+    const facing = me.facing
+    c.age++
+    if (c.age > 90) return null // watchdog: a route can never spin forever
+    const next = c.plan[c.idx]
+    if (!next) return null // route complete
+    const prev = c.plan[c.idx - 1]
+
+    // Knocked out of our own string (reversal, trade, throw) -> abandon it.
+    if (me.stance === 'hitstun' || me.stance === 'juggle' ||
+        me.stance === 'knockdown' || me.stance === 'blockstun') {
+      return null
+    }
+
+    const mv = me.move ? getFighterDef(me.id).moves[me.move.id] : null
+    const connected = me.stance === 'attack' && me.attackConnected &&
+      !!me.move && me.move.id === prev.id
+    const inWindow = !!mv && !!me.move &&
+      me.move.frame >= mv.active[0] &&
+      me.move.frame < mv.active[1] + 1 + CANCEL_WINDOW
+    // Hit-confirm: the victim must be in a *hit* reaction, not blockstun. This is
+    // what stops the AI committing a metered super into a blocked string.
+    const victimHit = opp.stance === 'hitstun' || opp.stance === 'juggle'
+
+    if (connected && inWindow) {
+      if (!victimHit) return null // blocked (or traded) -> confirm says stop
+      c.idx++
+      c.mp = 0
+      return frame(toward(next.rel, facing), next.btn ? [next.btn] : undefined)
+    }
+
+    // Our move ended and we're neutral again with nothing pending -> the previous
+    // link whiffed; there is nothing left to cancel, so the route is over.
+    if (c.age > 2 && !me.move &&
+        (me.stance === 'idle' || me.stance === 'crouch' ||
+         me.stance === 'walk-fwd' || me.stance === 'walk-back')) {
+      return null
+    }
+
+    // Pre-charge the next link's motion, one digit per frame, clamped at the last
+    // digit so a quarter-circle never over-spells into the super motion (236 held
+    // stays 236, it never becomes 236236). By the time the cancel window opens the
+    // motion is already buffered and the button press fires the special cleanly.
+    if (next.motion) {
+      const dg = next.motion.split('').map((ch) => Number(ch) as Direction)
+      const d = dg[Math.min(c.mp, dg.length - 1)]
+      c.mp++
+      return frame(toward(d, facing))
+    }
+
+    // Plain chained normal: wait in crouch for the previous move's cancel window.
+    return frame(toward(2, facing))
+  }
+
+  /** Build the operator hit-confirm BnB and fire its opener. The route is
+   *  cr.LK > cr.LP > cr.LK > cr.MK > Surge Palm (a meterless 5-hit that lights the
+   *  HUD's combo tier on its own), extended with the super when meter is up for a
+   *  6-hit finish that actually spends the bar. Returns the opener input, or null
+   *  if this character lacks the route's moves (only the operator has it for now,
+   *  so other archetypes fall through to their normal offense). */
+  private startCombo(state: FightState, i: 0 | 1, haveSuper: boolean): InputFrame | null {
+    const me = state.fighters[i]
+    const moves = getFighterDef(me.id).moves
+    const need = ['cr.LK', 'cr.LP', 'cr.MK', 'qcf.P']
+    if (!need.every((id) => moves[id])) return null
+
+    const plan: ComboStep[] = [
+      { id: 'cr.LK', rel: 2, btn: 'lk' },
+      { id: 'cr.LP', rel: 2, btn: 'lp' },
+      { id: 'cr.LK', rel: 2, btn: 'lk' },
+      { id: 'cr.MK', rel: 2, btn: 'mk' },
+      { id: 'qcf.P', rel: 6, btn: 'lp', motion: '236' },
+    ]
+    if (haveSuper) {
+      const sup = Object.values(moves).find((m) => m.tag === 'super' && !!m.motion)
+      if (sup && sup.motion) plan.push({ id: sup.id, rel: 6, btn: 'hp', motion: sup.motion })
+    }
+    this.combo = { plan, idx: 1, mp: 0, age: 0 }
+    return frame(toward(plan[0].rel, me.facing), plan[0].btn ? [plan[0].btn] : undefined)
   }
 
   /** Snapshot the opponent this frame and return the read from reactionFrames
@@ -195,6 +305,22 @@ export class FighterAI {
     // Always advance the observation ring, even when replaying a queued motion,
     // so reaction timing stays honest.
     const o = this.observe(state, i)
+
+    // Freeze during hitstop. The whole sim is frozen on these frames, so any
+    // input is discarded — but the harness still polls decide() every frame, so
+    // without this guard a queued motion or combo link would drain into the void
+    // and desync the route from the move it is trying to cancel. Observation
+    // already ran above, so reaction timing is unaffected.
+    if (state.hitstop > 0) return frame(5)
+
+    // Continue a hit-confirmed combo route before anything else: cancelling a
+    // move mid-attack is the one thing the generic canAct gate below forbids, so
+    // the router owns those frames until the route lands, drops, or is blocked.
+    if (this.combo) {
+      const step = this.stepCombo(state, i)
+      if (step) return step
+      this.combo = null
+    }
 
     // Play out a queued motion (a special takes several frames to input).
     if (this.queue.length > 0) {
@@ -267,7 +393,17 @@ export class FighterAI {
     // React to a committed close attack.
     if (o.attacking && o.dist < 150 + R) {
       if (o.inRecovery && o.dist < 120 + R && this.rng.next() < this.tier.punishChance) {
-        // Whiff punish: quarter-circle Surge Palm for a real reward.
+        // Whiff punish. The opponent is committed to recovery and cannot block or
+        // tech, so at light range we cash the caught whiff into the full
+        // hit-confirmed BnB — the reliable way the AI lands a long route. It only
+        // fires on a *read* whiff (opponent in recovery), so it never starts a
+        // speculative string in a defensive scramble the way a raw point-blank
+        // commit would, which is what keeps the tech/parry game intact.
+        if (o.dist < 95 + R) {
+          const opener = this.startCombo(state, i, haveSuper)
+          if (opener) return opener
+        }
+        // Out of light range, or an archetype without the route: a single Surge.
         this.queue = [{ rel: 3 }, { rel: 6, buttons: ['hp'] }]
         return frame(toward(2, facing))
       }
@@ -310,14 +446,15 @@ export class FighterAI {
       }
       return frame(toward(zones ? back : fwd, facing)) // zoner backs up to reset spacing
     }
-    // Point blank: press a light, throw, or convert into a special.
+    // Point blank: throw, poke, or hold defense. Combos are NOT started
+    // speculatively here — a raw point-blank string whiffs in a defensive
+    // scramble and eats throws (it can't tech mid-string), which flattens the
+    // tier's defensive read. The AI's long routes come from the whiff-punish
+    // read above, where the opponent is committed and the string is guaranteed
+    // to connect.
     const r = this.rng.next()
     if (r < 0.08 + this.aggression * 0.12) {
       return frame(toward(5, facing), ['lp', 'lk']) // go for a throw in the scramble
-    }
-    if (r < 0.22 + this.aggression * 0.25) {
-      this.queue = [{ rel: 3 }, { rel: 6, buttons: ['lp'] }] // stagger into a special
-      return frame(toward(2, facing), ['lk'])
     }
     if (r < 0.55) return frame(toward(2, facing), ['lp'])
     return frame(toward(downBack, facing)) // hold defense

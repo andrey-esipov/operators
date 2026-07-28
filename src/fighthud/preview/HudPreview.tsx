@@ -4,6 +4,7 @@ import type { FightState } from '../../fight/types'
 import { getFighter } from '../../data/fighters'
 import { FightHud } from '../FightHud'
 import type { FightHudHandle, FighterDisplay } from '../types'
+import { ComboGallery } from './ComboGallery'
 
 /**
  * Standalone HUD preview at `?fighthud=1`.
@@ -39,7 +40,7 @@ function useQuery() {
   return useMemo(() => new URLSearchParams(window.location.search), [])
 }
 
-export function HudPreview() {
+function LiveHudPreview() {
   const q = useQuery()
   const aId = q.get('a') || 'chesky'
   const bId = q.get('b') || 'lenny'
@@ -56,8 +57,8 @@ export function HudPreview() {
     const a = getFighter(aId)
     const b = getFighter(bId)
     return [
-      { name: a?.name ?? aId.toUpperCase(), accent: a?.accent ?? '#E63946' },
-      { name: b?.name ?? bId.toUpperCase(), accent: b?.accent ?? '#00B4D8' },
+      { name: a?.name ?? aId.toUpperCase(), accent: a?.accent ?? '#E63946', rosterId: aId },
+      { name: b?.name ?? bId.toUpperCase(), accent: b?.accent ?? '#00B4D8', rosterId: bId },
     ]
   }, [aId, bId])
 
@@ -188,3 +189,13 @@ export function HudPreview() {
 }
 
 export default HudPreview
+
+/**
+ * Route entry. Dispatches between the live sim preview and static tuning
+ * galleries by `?view=`, so no hooks run conditionally.
+ */
+export function HudPreview() {
+  const view = new URLSearchParams(window.location.search).get('view')
+  if (view === 'combos') return <ComboGallery />
+  return <LiveHudPreview />
+}

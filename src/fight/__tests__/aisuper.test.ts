@@ -18,7 +18,10 @@ import type { FightEvent } from '../types'
  * (deterministic) frame the first super lands on.
  */
 describe('AI supers', () => {
-  const WINDOW = 1800
+  // A full best-of-three match. Rounds now KO faster (bigger post-knockback-tune
+  // combo damage), so the AI's first super often lands in round two or three —
+  // still reliably within a whole match, which is what a spectator watches.
+  const WINDOW = 2400
 
   function fight(seed: number, p1: string, p2: string) {
     const h = new HarnessSim({ seed, p1, p2 })
@@ -63,7 +66,7 @@ describe('AI supers', () => {
     // Deterministic: same seed, same first super, every run — the property the
     // screenshot tool relies on to capture the same moment each time.
     expect(a.supers[0].frame).toBe(b.supers[0].frame)
-    expect(a.supers[0].frame).toBe(1333)
+    expect(a.supers[0].frame).toBe(1126)
   })
 
   it('every archetype the AI pilots can and does reach its super', () => {

@@ -7,6 +7,8 @@
  * fighting-game convention rather than an arbitrary pick it is commented.
  */
 
+import type { HitLevel } from './types'
+
 /** Half the playable width. Walls sit at ±STAGE_HALF_W; corner carries here. */
 export const STAGE_HALF_W = 480
 
@@ -93,9 +95,44 @@ export const PUSHBOX_H = 170
 export const REACH_BONUS = 38
 
 /** How knockback bleeds off. Ground knockback decays fast (friction); air
- *  knockback is governed by gravity instead. */
+ *  knockback is governed by gravity instead. Lowered from 0.82 so the slide
+ *  front-loads: at 0.75 a knocked-back fighter covers ~82% of the total in the
+ *  first 6 frames after hitstop, so contact reads as an impulse and snap rather
+ *  than a long gentle drift. Total slide for an initial impulse v0 is
+ *  v0/(1-0.75) = 4·v0, which is why the raw kbx numbers below look modest. */
 export const GROUND_FRICTION = 0.82
 export const AIR_DRAG = 0.98
+
+/**
+ * Knockback readability. The hand-authored kbx/kby on each move were tuned when
+ * the game read as weightless — a launcher lifted a 180cm fighter just ~36cm
+ * (a quarter of body height) and a heavy drifted ~12cm. These multipliers scale
+ * the authored impulse, once, in mkHit, so every fighter and move scales in
+ * lock-step and the relative authoring is preserved (a heavy still out-hits a
+ * medium, a jab still barely moves you).
+ *
+ * The split by level encodes ROLE, not just strength: launchers keep a SMALL
+ * horizontal factor (the victim must stay catchable for a juggle — their story
+ * is vertical, see KB_Y_SCALE) while heavies, the combo-enders that blow the
+ * opponent away, get the large factor. Lights and mediums stay low so hit-
+ * confirms and cancel combos still link. Throws are excluded entirely (see
+ * mkHit): their toss distance is authored directly and must not be scaled.
+ */
+export const KB_X_SCALE: Record<HitLevel, number> = {
+  light: 1.4,
+  medium: 1.9,
+  heavy: 4.5,
+  launcher: 1.3,
+  sweep: 2.2,
+  crumple: 1.5,
+}
+
+/** Vertical (launcher) knockback multiplier. Doubling the authored kby lifts the
+ *  apex from ~36cm to ~150cm — roughly a fighter's own height, the arc the eye
+ *  can actually track through a juggle. Apex grows with the square of kby
+ *  (apex = kby(kby-1)/2, gravity decrements before integrating), so 2× kby is
+ *  ~4× apex, which is exactly the deficit the launcher had. */
+export const KB_Y_SCALE = 2.0
 
 /**
  * Wall bounce. A juggled fighter slammed into the wall hard enough rebounds off

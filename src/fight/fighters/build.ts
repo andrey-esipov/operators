@@ -8,7 +8,7 @@
  */
 
 import type { Box, Hit, HitLevel, Guard, Move, MoveFrame, MoveTag, Vec2 } from '../types'
-import { PUSHBOX_H, PUSHBOX_W, REACH_BONUS } from '../constants'
+import { PUSHBOX_H, PUSHBOX_W, REACH_BONUS, KB_X_SCALE, KB_Y_SCALE } from '../constants'
 
 // Standard body boxes, authored facing right with the origin at the feet.
 export const STAND_HURT: Box = { x: -24, y: 0, w: 48, h: 168 }
@@ -40,6 +40,11 @@ export interface HitSpec {
 }
 
 export function mkHit(s: HitSpec): Hit {
+  // Scale the authored impulse into values that read as contact. Throws are
+  // excluded: their toss distance is authored directly (see KB_X_SCALE doc).
+  const isThrow = s.guard === 'throw'
+  const kx = (s.kbx ?? 0) * (isThrow ? 1 : KB_X_SCALE[s.level])
+  const ky = (s.kby ?? 0) * (isThrow ? 1 : KB_Y_SCALE)
   return {
     damage: s.damage,
     hitstun: s.hitstun,
@@ -47,7 +52,7 @@ export function mkHit(s: HitSpec): Hit {
     chip: s.chip ?? 0,
     guard: s.guard,
     level: s.level,
-    knockback: { x: s.kbx ?? 0, y: s.kby ?? 0 },
+    knockback: { x: kx, y: ky },
     pushback: s.pushback ?? 0,
     hitstop: s.hitstop,
     meterGain: s.meterGain ?? 0,

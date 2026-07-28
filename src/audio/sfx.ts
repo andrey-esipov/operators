@@ -8,11 +8,11 @@ import { type Ctx, noiseBuffer, bufferVoice, clamp } from './dsp'
 import type { ImpactRouting } from './impacts'
 
 /** A swishing air whiff — a mono-dominant bandpass sweep with a light stereo shimmer. */
-export function renderWhiff(ctx: Ctx, r: ImpactRouting, when: number, opts: { power?: number; pan?: number; seed?: number } = {}): number {
+export function renderWhiff(ctx: Ctx, r: ImpactRouting, when: number, opts: { power?: number; pan?: number; seed?: number; gain?: number } = {}): number {
   const p = clamp(opts.power ?? 0.6, 0, 1)
   const dur = 0.14 + p * 0.1
   const basePan = opts.pan ?? 0
-  const bus = ctx.createGain(); bus.gain.value = 1; bus.connect(r.out)
+  const bus = ctx.createGain(); bus.gain.value = clamp(opts.gain ?? 1, 0, 4); bus.connect(r.out)
   // no reverb send: the decorrelated IR tail would dominate this short quiet sound's stereo image.
   // main swish — a single centred voice so the image stays anchored (~mono).
   {

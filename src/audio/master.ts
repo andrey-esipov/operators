@@ -13,15 +13,16 @@
  *                 preMaster ──┼── mid  ─► compM ──┼─► sumBus
  *                             └── high ─► compH ──┘
  *                                                   │
- *                              sumBus ─► limiter ─► softClip ─► masterGain ─► dest
+ *                              sumBus ─► limiter ─► softClip ─► masterGain ─► ceiling ─► dest
  *
  * The multiband stage keeps the low-end punchy without the highs pumping; the
- * limiter + tanh soft-clip guarantees the bus never hard-clips while staying
- * loud. Building the identical chain offline is what makes the audiolab's
- * measurements trustworthy.
+ * limiter + tanh soft-clip keeps the bus loud without pumping, and a final
+ * linear `ceiling` clamp guarantees true-peak safety (the 4x soft-clip can ring
+ * a hair over ±1). Building the identical chain offline is what makes the
+ * audiolab's measurements trustworthy.
  */
 
-import { type Ctx, softClipCurve } from './dsp'
+import { type Ctx, softClipCurve, hardClipCurve } from './dsp'
 
 export interface MasterGraph {
   sfxBus: GainNode
@@ -36,13 +37,32 @@ export interface MasterGraph {
   masterGain: GainNode
 }
 
-function band(ctx: Ctx, kind: 'low' | 'mid' | 'high'): { input: AudioNode; output: AudioNode } {
+function band(ctx: Ctx, kind: 'low' | 'mid' | 'high', legacy = false): { input: AudioNode; output: AudioNode } {
   const comp = ctx.createDynamicsCompressor()
-  comp.attack.value = kind === 'low' ? 0.01 : 0.004
-  comp.release.value = kind === 'low' ? 0.18 : 0.12
-  comp.threshold.value = kind === 'low' ? -20 : -22
-  comp.ratio.value = kind === 'low' ? 3.5 : 3
-  comp.knee.value = 6
+  if (legacy) {
+    // The PRE-FIX profile: a fast, low-threshold, high-ratio multiband that
+    // levelled every hit into a ~4 dB band (a jab and a KO 3 dB apart). Retained
+    // ONLY so the measurement harness can regress-prove the fix (mutate=
+    // crush-master): even the wide per-tier reactor gains collapse to a flat mix
+    // under it. Deliberately brickwall — a low threshold with a steep ratio and a
+    // near-instant attack pulls every loud tier down onto the quiet ones.
+    comp.attack.value = kind === 'low' ? 0.003 : 0.001
+    comp.release.value = kind === 'low' ? 0.25 : 0.18
+    comp.threshold.value = kind === 'low' ? -30 : -32
+    comp.ratio.value = kind === 'low' ? 10 : 12
+    comp.knee.value = 4
+  } else {
+    // SHIP: gentle multiband GLUE, not a leveller. High thresholds let the quiet
+    // tiers (whiff/light) pass uncompressed; low ratios let the loud tiers keep
+    // their level so the ladder survives; slow attacks (8–12 ms) let the first
+    // ~20 ms transient crack — where fighting-game "punch" lives — through
+    // before any gain reduction engages; a wide knee keeps the onset soft.
+    comp.attack.value = kind === 'low' ? 0.012 : 0.008
+    comp.release.value = kind === 'low' ? 0.2 : 0.14
+    comp.threshold.value = kind === 'low' ? -12 : -14
+    comp.ratio.value = kind === 'low' ? 2 : 1.8
+    comp.knee.value = 10
+  }
 
   if (kind === 'low') {
     const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 130; lp.Q.value = 0.7
@@ -63,9 +83,18 @@ function band(ctx: Ctx, kind: 'low' | 'mid' | 'high'): { input: AudioNode; outpu
 
 /**
  * Build the full mixing + mastering graph into `dest`. Returns the bus handles.
- * `masterLevel` sets the final output trim.
+ * `masterLevel` sets the final output trim. `opts.dynamics` selects the
+ * mastering profile: 'ship' (default) is the wide-dynamic-range master that lets
+ * the loudness hierarchy through; 'legacy' rebuilds the pre-fix crushed profile
+ * and exists solely so the offline harness can prove the fix by regression.
  */
-export function buildMasterGraph(ctx: Ctx, dest: AudioNode, masterLevel = 0.9): MasterGraph {
+export function buildMasterGraph(
+  ctx: Ctx,
+  dest: AudioNode,
+  masterLevel = 0.9,
+  opts: { dynamics?: 'ship' | 'legacy' } = {},
+): MasterGraph {
+  const legacy = opts.dynamics === 'legacy'
   const sfxBus = ctx.createGain(); sfxBus.gain.value = 1.0
   const voiceBus = ctx.createGain(); voiceBus.gain.value = 1.0
   const musicBus = ctx.createGain(); musicBus.gain.value = 1.0
@@ -88,30 +117,46 @@ export function buildMasterGraph(ctx: Ctx, dest: AudioNode, masterLevel = 0.9): 
   // multiband
   const sumBus = ctx.createGain(); sumBus.gain.value = 1.0
   for (const kind of ['low', 'mid', 'high'] as const) {
-    const b = band(ctx, kind)
+    const b = band(ctx, kind, legacy)
     preMaster.connect(b.input)
     b.output.connect(sumBus)
   }
 
-  // brickwall-ish limiter
+  // Peak catcher. Legacy used a 0.8 ms attack that ate exactly the first-20 ms
+  // transient (the classic "the hit has no punch" cause). Ship slows the attack
+  // to 5 ms so the transient crest rings through; the tanh soft-clip below is the
+  // true, inaudible ceiling (a WaveShaper hard-clamps its input to ±1 regardless
+  // of drive), so nothing downstream can exceed full scale even with the slower
+  // limiter.
   const limiter = ctx.createDynamicsCompressor()
   limiter.threshold.value = -1.5
   limiter.knee.value = 0
   limiter.ratio.value = 20
-  limiter.attack.value = 0.0008
+  limiter.attack.value = legacy ? 0.0008 : 0.005
   limiter.release.value = 0.06
   sumBus.connect(limiter)
 
-  // tanh soft-clip safety ceiling
+  // tanh soft-clip safety ceiling. Lower drive under ship = more linear through
+  // the mid-levels (preserves crest/dynamics) while the ±1 clamp still guarantees
+  // no hard clip.
   const softClip = ctx.createWaveShaper()
-  softClip.curve = softClipCurve(1.5)
+  softClip.curve = softClipCurve(legacy ? 1.5 : 1.2)
   softClip.oversample = '4x'
   limiter.connect(softClip)
 
   const masterGain = ctx.createGain()
   masterGain.gain.value = masterLevel
   softClip.connect(masterGain)
-  masterGain.connect(dest)
+
+  // True-peak safety clamp (see hardClipCurve): the 4x soft-clip can overshoot
+  // ±1 on the hottest transients, and masterVolume can be driven to 1.0, so the
+  // musical ceiling alone doesn't guarantee no DAC clip. This final linear clamp
+  // (no oversample → no ring of its own) does, inaudibly.
+  const ceiling = ctx.createWaveShaper()
+  ceiling.curve = hardClipCurve(0.985)
+  ceiling.oversample = 'none'
+  masterGain.connect(ceiling)
+  ceiling.connect(dest)
 
   return {
     sfxBus, voiceBus, musicBus, reverbBus, reverbReturn, convolver,

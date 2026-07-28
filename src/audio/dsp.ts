@@ -115,6 +115,26 @@ export function softClipCurve(drive = 1.4, samples = 4096): Float32Array<ArrayBu
 }
 
 /**
+ * True-peak safety clamp: a plain linear hard-limit at ±`ceil`, applied with
+ * WaveShaper `oversample = 'none'` so it introduces no ring of its own.
+ *
+ * The tanh soft-clip above normalises to exactly ±1 at the rails, but running it
+ * at `4x` oversample makes its band-limited reconstruction *overshoot* ±1 by
+ * ~15–20% on the hottest transients (a counter-hit is two impacts summing at one
+ * instant). ±1.07 at the destination hard-clips at the DAC — an audible click on
+ * exactly our showcase mechanic. This inaudible final clamp catches only that
+ * sub-millisecond overshoot so nothing reaches full scale even at masterVolume 1.
+ */
+export function hardClipCurve(ceil = 0.985, samples = 1024): Float32Array<ArrayBuffer> {
+  const curve = new Float32Array(samples)
+  for (let i = 0; i < samples; i++) {
+    const x = (i * 2) / samples - 1
+    curve[i] = Math.max(-ceil, Math.min(ceil, x))
+  }
+  return curve
+}
+
+/**
  * Procedural convolution impulse response for a room/hall.
  * Exponentially-decaying stereo noise with a short early-reflection cluster
  * and per-channel decorrelation for width. `bright` tilts the tail toward HF.

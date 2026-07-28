@@ -130,6 +130,38 @@ function clamp01(x: number): number {
   return x < 0 ? 0 : x > 1 ? 1 : x
 }
 
+/**
+ * LOUDNESS HIERARCHY — the deliberate per-tier output trim (`ImpactOpts.gain`)
+ * that makes weight read as LEVEL, not just spectrum. In SF6/Tekken 8/Strive a
+ * jab is a tick and a super/KO takes over the room; the pre-fix mix crushed
+ * every hit into a ~3 dB band (a counter-hit landed QUIETER than a medium hit).
+ * These trims, tuned against tools/measure-fight-audio.mjs, seat the tiers on a
+ * ~2.5–3 dB-per-step ladder — whiff < light < medium < heavy < counter < KO,
+ * KO unmistakably loudest — while the synths themselves stay untouched. They
+ * only bite once the master (master.ts) was relaxed to stop levelling them; the
+ * two halves are proved together by the `flatten` + `crush-master` mutations.
+ */
+const HIT_GAIN: Record<HitLevel, number> = {
+  light: 0.85,
+  medium: 0.82,
+  heavy: 1.3,
+  launcher: 1.45,
+  sweep: 1.05,
+  crumple: 1.7,
+}
+/** Counter-hit: a bright crit crack the read-reward is built on, plus a modest
+ *  heavy body for weight. Crit-DOMINANT so the counter is louder than a clean
+ *  heavy AND spectrally brighter than a medium hit (both measured) — the body is
+ *  kept low so it adds sub-weight without dulling the crack. */
+const COUNTER_CRIT_GAIN = 3.4
+const COUNTER_BODY_GAIN = 0.3
+/** The KO — the single loudest moment in a round, alone at the ceiling. */
+const KO_GAIN = 2.7
+/** The whiff feel-sound — floor of the ladder, a swing you barely register. */
+const WHIFF_GAIN = 1.0
+/** A blocked hit sits below even a light clean hit: a dull guarded thud. */
+const BLOCK_GAIN = 0.7
+
 export class FightAudioReactor {
   private readonly sink: FightAudioSink
 
@@ -161,7 +193,7 @@ export class FightAudioReactor {
       case 'counter-hit': return this.hit(e.level, e.damage, e.at, true)
       case 'block': return this.block(e.at)
       case 'parry': return this.parry(e.at)
-      case 'whiff': return void this.sink.whiff({ pan: panOf(e.at), power: 0.7 })
+      case 'whiff': return void this.sink.whiff({ pan: panOf(e.at), power: 0.7, gain: WHIFF_GAIN })
       case 'throw': return this.throwFx(e.at)
       case 'launch': return this.launch(e.at)
       case 'knockdown': return this.knockdown(e.at)
@@ -184,13 +216,14 @@ export class FightAudioReactor {
       // *sound* like a bigger deal than the same button on a neutral hit:
       // a sharp `crit` transient layered over a heavy body thump gives it more
       // level AND more sub-200Hz weight than a normal hit of the same level,
-      // and it ducks the music harder for punch. Both layers are measurable —
-      // see tools/measure-fight-audio.mjs (`counter is meatier than hit`).
-      this.sink.impact('crit', { power: p < 0.85 ? 0.85 : p, damage, pan })
-      this.sink.impact('heavy', { power: 0.82, damage, pan })
+      // and it ducks the music harder for punch. Both the loudness (it sits a
+      // tier above a clean heavy) and the brightness are measurable — see
+      // tools/measure-fight-audio.mjs (`counter > medium/heavy` + the crit crack).
+      this.sink.impact('crit', { power: p < 0.95 ? 0.95 : p, damage, pan, gain: COUNTER_CRIT_GAIN })
+      this.sink.impact('heavy', { power: 0.82, damage, pan, gain: COUNTER_BODY_GAIN })
       this.sink.duckMusic(0.85)
     } else {
-      this.sink.impact(flavor, { power: p, damage, pan })
+      this.sink.impact(flavor, { power: p, damage, pan, gain: HIT_GAIN[level] })
       // Heavier connects punch the mix a little.
       if (p > 0.8) this.sink.duckMusic(0.5)
     }
@@ -200,7 +233,7 @@ export class FightAudioReactor {
    *  thud, not a crack. Deliberately softer than even a `light` hit. */
   private block(at: Vec2): void {
     const pan = panOf(at)
-    this.sink.impact('light', { power: 0.32, pan })
+    this.sink.impact('light', { power: 0.32, pan, gain: BLOCK_GAIN })
     this.sink.cloth({ pan, power: 0.6 })
   }
 
@@ -246,7 +279,7 @@ export class FightAudioReactor {
   /** A knockout. `who` is the fighter who got KO'd. */
   private koEvent(who: 0 | 1): void {
     this.koThisRound = true
-    this.sink.ko({ power: 1 })
+    this.sink.ko({ power: 1, gain: KO_GAIN })
     this.sink.duckMusic(1)
     this.sink.announce('ko')
     this.sink.voice(who, 'ko', '...')

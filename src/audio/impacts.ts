@@ -47,6 +47,15 @@ export interface ImpactOpts {
   damage?: number // raw damage, lightly scales size
   pan?: number // -1..1
   seed?: number // deterministic noise (offline)
+  /**
+   * Linear OUTPUT trim (default 1), applied to the WHOLE rendered impact — every
+   * layer (crack, body, sub, texture, ring…) and its reverb send route through
+   * it. This is the fighter's loudness-hierarchy lever: the reactor sets it per
+   * tier so a jab sits well below a KO and weight is carried by LEVEL + dynamic
+   * range, not spectrum alone. Left at 1 for every other caller (card game,
+   * screens, `Sfx`), so their mix stays byte-identical. Clamped 0..4.
+   */
+  gain?: number
 }
 
 type NoiseColor = 'white' | 'pink' | 'brown' | 'blue'
@@ -436,7 +445,7 @@ const IMPACT_END_PAD = 0.05
  */
 export function renderImpact(
   ctx: Ctx,
-  routing: ImpactRouting,
+  routing0: ImpactRouting,
   when: number,
   flavor: Flavor,
   opts: ImpactOpts = {},
@@ -445,6 +454,12 @@ export function renderImpact(
   const pan = opts.pan ?? 0
   const seed = opts.seed ?? ((Math.random() * 1e6) | 0)
   const dmgK = 1 + clamp((opts.damage ?? 0) / 400, 0, 0.35)
+  // Loudness-hierarchy trim. Every layer below routes to `routing.out`/
+  // `routing.reverb`, so wrapping the routing in one gain scales the entire
+  // impact uniformly — composite flavours (combo/counter/ko) included. Default
+  // 1 short-circuits to the original nodes: zero added graph for existing callers.
+  const g = clamp(opts.gain ?? 1, 0, 4)
+  const routing = g === 1 ? routing0 : wrapImpactGain(ctx, routing0, g)
 
   switch (flavor) {
     case 'light':
@@ -703,6 +718,17 @@ export function renderImpact(
   }
   // fallthrough (should be exhaustive)
   return oneHit(ctx, routing, when, lightSpec(p), pan, seed) + IMPACT_END_PAD
+}
+
+/** Wrap a routing so an impact's whole output — every layer AND its reverb
+ *  send — is scaled by a single linear trim. This is how each hit tier is placed
+ *  on the loudness ladder without editing any synth: the reactor passes
+ *  `opts.gain`, `renderImpact` wraps once, and composite flavours scale too. */
+function wrapImpactGain(ctx: Ctx, routing: ImpactRouting, g: number): ImpactRouting {
+  const out = ctx.createGain(); out.gain.value = g; out.connect(routing.out)
+  let reverb: AudioNode | null | undefined = routing.reverb
+  if (reverb) { const rg = ctx.createGain(); rg.gain.value = g; rg.connect(reverb); reverb = rg }
+  return { out, reverb, onImpact: routing.onImpact }
 }
 
 /** tiny local PRNG for jitter without importing state */

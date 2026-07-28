@@ -455,6 +455,16 @@ export const CLIPS: Record<string, ClipSpec> = {
   'qcb.K': HK, // Tornado Kick
   'charge.P': FIREBALL, // Cannon
   'super.P': SUPER, // Palm Barrage
+
+  // ── Warden (zoner) move-ids ──────────────────────────────────────────────
+  // Ids from src/fight/fighters/warden.ts. AnimationDriver resolves a fireball
+  // as [moveId, 'attack', 'idle'], so these MUST be the exact move ids or the
+  // bolt silently plays the generic `attack` frame instead of a throw. Both
+  // bolt speeds share the throw pose; the super gets the fuller cast.
+  'qcf.slow': FIREBALL, // Ion Bolt
+  'qcf.fast': FIREBALL, // Ion Bolt (Charged)
+  'super.storm': SUPER, // Ion Storm
+  'throw.f': HP, // Repel Toss — no dedicated grab pose; the heavy lunge reads closest
 }
 
 /**

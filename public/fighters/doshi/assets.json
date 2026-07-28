@@ -1079,6 +1079,58 @@
         8
       ],
       "loop": false
+    },
+    "qcf.slow": {
+      "frames": [
+        26,
+        27,
+        0
+      ],
+      "durations": [
+        8,
+        6,
+        8
+      ],
+      "loop": false
+    },
+    "qcf.fast": {
+      "frames": [
+        26,
+        27,
+        0
+      ],
+      "durations": [
+        8,
+        6,
+        8
+      ],
+      "loop": false
+    },
+    "super.storm": {
+      "frames": [
+        26,
+        28,
+        27
+      ],
+      "durations": [
+        6,
+        8,
+        8
+      ],
+      "loop": false
+    },
+    "throw.f": {
+      "frames": [
+        20,
+        21,
+        20
+      ],
+      "durations": [
+        5,
+        5,
+        8
+      ],
+      "loop": false
     }
   },
   "heightCm": 180

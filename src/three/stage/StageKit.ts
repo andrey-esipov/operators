@@ -21,6 +21,17 @@ type Updater = (t: number, dt: number) => void
 
 export class StageBuild {
   readonly root = new THREE.Group()
+  /**
+   * Foreground framing occluders (pylons, rails, corner mass). These were
+   * *authored* as a screen-space framing device — "the true frame edges" — but
+   * a fixed-x world box only frames correctly from the one camera pose it was
+   * drawn against. Ours dollies and zooms, so world-space occluders swing
+   * across and bury the fighter on a punch-in. They therefore live in their own
+   * group, which the stage subsystem pins rigidly to the camera (see
+   * `StageSubsystem`), so they behave as the framing device they were designed
+   * to be regardless of where the shot goes.
+   */
+  readonly foreground = new THREE.Group()
   readonly animated: Updater[] = []
   readonly disposables: { dispose(): void }[] = []
   /** Meshes that should be hidden while the reflection pass renders (cheap). */
@@ -32,9 +43,21 @@ export class StageBuild {
    */
   celebrate = false
 
+  /** >0 while `foreground()` authoring is running, so `add()` routes into the
+   *  camera-pinned frame group instead of the world-space set. */
+  private fgDepth = 0
+
   add(o: THREE.Object3D) {
-    this.root.add(o)
+    ;(this.fgDepth > 0 ? this.foreground : this.root).add(o)
     return o
+  }
+  /** Route subsequent `add()`s into the camera-pinned foreground frame group.
+   *  Paired with `endForeground()`; nestable so authoring stays untouched. */
+  beginForeground() {
+    this.fgDepth++
+  }
+  endForeground() {
+    if (this.fgDepth > 0) this.fgDepth--
   }
   onUpdate(fn: Updater) {
     this.animated.push(fn)
@@ -49,14 +72,18 @@ export class StageBuild {
 
   dispose() {
     for (const d of this.disposables) d.dispose()
-    this.root.traverse((o) => {
-      const m = o as THREE.Mesh
-      m.geometry?.dispose?.()
-      const mat = m.material as THREE.Material | THREE.Material[] | undefined
-      if (Array.isArray(mat)) mat.forEach((x) => x.dispose())
-      else mat?.dispose()
-    })
+    const disposeTree = (o: THREE.Object3D) =>
+      o.traverse((n) => {
+        const m = n as THREE.Mesh
+        m.geometry?.dispose?.()
+        const mat = m.material as THREE.Material | THREE.Material[] | undefined
+        if (Array.isArray(mat)) mat.forEach((x) => x.dispose())
+        else mat?.dispose()
+      })
+    disposeTree(this.root)
+    disposeTree(this.foreground)
     this.root.parent?.remove(this.root)
+    this.foreground.parent?.remove(this.foreground)
   }
 }
 

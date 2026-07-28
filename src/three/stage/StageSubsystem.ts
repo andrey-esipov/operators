@@ -25,7 +25,22 @@ declare global {
      * without leaning on sparse confetti pixels or the win-screen UI overlay
      * (whose cyan "ENTER TO CONTINUE" prompt otherwise pollutes a pixel probe).
      */
-    __STAGE__?: { celebrate: () => boolean }
+    __STAGE__?: {
+      celebrate: () => boolean
+      /** Dev/QA: hide the foreground framing occluders (used by the occluder
+       *  probe to difference a frame with and without them). */
+      setForegroundVisible: (v: boolean) => void
+      /** Dev/QA: toggle camera-pinning of the foreground frame. `false` restores
+       *  the original world-space behaviour — i.e. injects Defect 1 — so a probe
+       *  can watch the occlusion spike with every other variable held constant. */
+      setFramePinned: (v: boolean) => void
+      framePinned: () => boolean
+      /** Dev/QA: project a world point through the LIVE play camera to NDC
+       *  ([-1,1], +y up). Lets the occluder probe build a tight screen box around
+       *  the downed fighter — instead of the loose two-fighter coverage union —
+       *  so it measures occlusion of the fighter's silhouette, not the framing. */
+      project: (x: number, y: number, z: number) => [number, number]
+    }
   }
 }
 
@@ -53,6 +68,20 @@ export class StageSubsystem implements Subsystem {
 
   private ctx!: EngineContext
   private root = new THREE.Group()
+  /**
+   * Camera-pinned frame for the foreground occluders. Its world matrix is
+   * re-derived every frame as `C_live · V0`, where `C_live` is the live camera
+   * world matrix and `V0` the *neutral* view matrix the occluders were authored
+   * against. That makes an occluder authored at world M render at
+   * `P · V_live · (C_live · V0) · M = P · V0 · M` — its exact neutral-pose
+   * screen position — no matter where the shot dollies. In short: the framing
+   * is rigidly attached to the camera, as it was always designed to be.
+   */
+  private frame = new THREE.Group()
+  private neutralView = new THREE.Matrix4()
+  /** When false, the frame collapses to identity and occluders revert to their
+   *  authored world positions (the original Defect-1 behaviour). Dev toggle. */
+  private framePinned = true
   private backdrop!: THREE.Mesh
   private backdropMat!: THREE.ShaderMaterial
   private floor!: ReflectiveFloor
@@ -77,14 +106,61 @@ export class StageSubsystem implements Subsystem {
     this.quality = ctx.quality
     ctx.scene.add(this.root)
 
+    // The camera-pinned frame for foreground occluders. Driven manually every
+    // frame (the camera is not in the scene graph), so its local matrix IS its
+    // world transform — hence matrixAutoUpdate off and a per-frame world flush.
+    this.frame.matrixAutoUpdate = false
+    this.root.add(this.frame)
+    this.computeNeutralView()
+
     this.buildBackdrop()
     this.buildFloor()
     this.buildAtmosphere()
 
     // Populate the planar reflection strictly before the post composer runs.
+    // Pin the frame first (camera is now posed for this frame), then hide the
+    // foreground framing from the reflection — a frame edge should not appear
+    // mirrored in the floor.
     this.disposeLateUpdate = ctx.onLateUpdate(() => {
-      this.floor?.updateReflection(ctx.renderer, ctx.scene, ctx.camera, [])
+      this.updateFrame()
+      this.floor?.updateReflection(
+        ctx.renderer,
+        ctx.scene,
+        ctx.camera,
+        this.build?.foreground ? [this.build.foreground] : [],
+      )
     })
+  }
+
+  /** Neutral view matrix V0 = C0⁻¹ from the canonical framing the occluders
+   *  were composed against. Computed once; the frame math re-anchors to it. */
+  private computeNeutralView() {
+    const c0 = new THREE.PerspectiveCamera(
+      WORLD.CAMERA.fov,
+      1,
+      WORLD.CAMERA.near,
+      WORLD.CAMERA.far,
+    )
+    c0.position.set(...WORLD.CAMERA.position)
+    c0.up.set(0, 1, 0)
+    c0.lookAt(new THREE.Vector3(...WORLD.CAMERA.target))
+    c0.updateMatrixWorld(true)
+    this.neutralView.copy(c0.matrixWorldInverse)
+  }
+
+  /** Re-anchor the foreground frame to the live camera (or collapse to the
+   *  authored world positions when unpinned). Runs in late-update, after the
+   *  camera director has posed the camera for this frame. */
+  private updateFrame() {
+    const cam = this.ctx.camera
+    if (this.framePinned) {
+      cam.updateMatrixWorld()
+      this.frame.matrix.multiplyMatrices(cam.matrixWorld, this.neutralView)
+    } else {
+      this.frame.matrix.identity()
+    }
+    // matrixAutoUpdate is off, so nothing else marks this dirty for us.
+    this.frame.matrixWorldNeedsUpdate = true
   }
 
   // -- far backdrop cyclorama ------------------------------------------------
@@ -238,6 +314,8 @@ export class StageSubsystem implements Subsystem {
     this.clearBuild()
     this.build = buildStageScene(id, cfg, flags)
     this.root.add(this.build.root)
+    // Foreground occluders ride the camera-pinned frame, not the world set.
+    this.frame.add(this.build.foreground)
 
     // Practical point lights motivated by the set.
     const maxPracticals = flags.shadows ? cfg.practicals.length : Math.min(1, cfg.practicals.length)
@@ -298,7 +376,23 @@ export class StageSubsystem implements Subsystem {
       // Expose the live gate so the confetti probe can assert the celebration
       // plumbing is wired to the real phase — not a pixel heuristic a static
       // win-screen prompt could satisfy.
-      if (import.meta.env.DEV) window.__STAGE__ = { celebrate: () => this.build?.celebrate ?? false }
+      if (import.meta.env.DEV)
+        window.__STAGE__ = {
+          celebrate: () => this.build?.celebrate ?? false,
+          setForegroundVisible: (v: boolean) => {
+            if (this.build) this.build.foreground.visible = v
+          },
+          setFramePinned: (v: boolean) => {
+            this.framePinned = v
+          },
+          framePinned: () => this.framePinned,
+          project: (x: number, y: number, z: number) => {
+            const cam = this.ctx.camera
+            cam.updateMatrixWorld()
+            const v = new THREE.Vector3(x, y, z).project(cam)
+            return [v.x, v.y]
+          },
+        }
     }
 
     // Practical flicker for "crisis"/warm bulbs realism.

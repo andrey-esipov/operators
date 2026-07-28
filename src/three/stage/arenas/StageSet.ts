@@ -193,6 +193,11 @@ export function screenWall(
  *  bottom corners (z≈6.3, heavy DOF bokeh), themed per stage, dark but rim-lit
  *  with a thin emissive accent so they frame without covering the fighters. */
 export function foreground(b: StageBuild, style: OverheadStyle, cfg: StageConfig) {
+  // Route every occluder built below into the camera-pinned frame group. The
+  // authoring is left exactly as drawn against the neutral pose; the stage
+  // subsystem re-anchors the whole group to the live camera each frame.
+  b.beginForeground()
+  try {
   const dark = new THREE.Color(cfg.structure).multiplyScalar(0.72).getHex()
   const darker = new THREE.Color(cfg.structure).multiplyScalar(0.52).getHex()
   const Z = 4.8   // edge-pylon depth (in-frame, moderate bokeh)
@@ -306,6 +311,9 @@ export function foreground(b: StageBuild, style: OverheadStyle, cfg: StageConfig
       box(1.7, 1.0, 1.3, 2.7, 0.3, ZC, dark, 0.03)
       break
     }
+  }
+  } finally {
+    b.endForeground()
   }
 }
 

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { HarnessSim } from '../../fight'
-import type { FightState } from '../../fight/types'
+import type { FightState, FightEvent } from '../../fight/types'
 import { getFighter } from '../../data/fighters'
 import { FightHud } from '../FightHud'
 import type { FightHudHandle, FighterDisplay } from '../types'
@@ -29,6 +29,13 @@ declare global {
       resume: () => void
       /** Advance the sim exactly n frames, pushing each into the HUD. */
       step: (n?: number) => void
+      /**
+       * Push synthetic events through the exact per-frame HUD path (no sim
+       * mutation), so a probe can drive a discrete edge — e.g. a `counter-hit`
+       * — deterministically. The sim's real emission is proven separately in
+       * the sim tests; this proves the HUD's reaction to the event.
+       */
+      inject: (events: FightEvent[]) => void
       frame: () => number
       phase: () => string
       state: () => FightState
@@ -91,6 +98,9 @@ function LiveHudPreview() {
       },
       step: (n = 1) => {
         for (let i = 0; i < n; i++) advance()
+      },
+      inject: (events: FightEvent[]) => {
+        hudRef.current?.push(latest, events)
       },
       frame: () => sim.frame,
       phase: () => sim.phase,

@@ -15,6 +15,7 @@ import { SuperGauge } from './SuperGauge'
 import { RoundTimer } from './RoundTimer'
 import { RoundPips } from './RoundPips'
 import { ComboCounter, type ComboState } from './ComboCounter'
+import { CounterCallout, isPunish, type CounterState } from './CounterCallout'
 import { Announcements, type AnnounceState } from './Announcements'
 import { FlashChip, type FlashState } from './FlashChip'
 import { ScreenFx, type KoFxState, type WipeState, type ImpactState } from './ScreenFx'
@@ -70,6 +71,7 @@ export const FightHud = forwardRef<FightHudHandle, FightHudProps>(function Fight
   // ── Discrete UI state (only these ever re-render) ──────────────────────
   const [wins, setWins] = useState<[number, number]>([0, 0])
   const [combo, setCombo] = useState<ComboState | null>(null)
+  const [counter, setCounter] = useState<CounterState | null>(null)
   const [announce, setAnnounce] = useState<AnnounceState | null>(null)
   const [flash, setFlash] = useState<FlashState | null>(null)
   const [koFx, setKoFx] = useState<KoFxState | null>(null)
@@ -86,6 +88,7 @@ export const FightHud = forwardRef<FightHudHandle, FightHudProps>(function Fight
   const dispRef = useRef<[FighterDisplay, FighterDisplay]>(FALLBACK)
   const comboAccum = useRef<{ defender: 0 | 1; damage: number }>({ defender: 0, damage: 0 })
   const comboTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const counterTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const announceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const koFxTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -134,6 +137,14 @@ export const FightHud = forwardRef<FightHudHandle, FightHudProps>(function Fight
               if (impactTimer.current) clearTimeout(impactTimer.current)
               impactTimer.current = setTimeout(() => setImpact(null), 300)
             }
+            break
+          }
+          case 'counter-hit': {
+            // Dedicated signal (fired alongside `hit`) so the read gets named
+            // without disturbing the combo/impact consumers above.
+            setCounter({ side: e.attacker, punish: isPunish(e.level), key: ++keySeq.current })
+            if (counterTimer.current) clearTimeout(counterTimer.current)
+            counterTimer.current = setTimeout(() => setCounter(null), 1000)
             break
           }
           case 'parry': {
@@ -245,6 +256,7 @@ export const FightHud = forwardRef<FightHudHandle, FightHudProps>(function Fight
   useEffect(
     () => () => {
       if (comboTimer.current) clearTimeout(comboTimer.current)
+      if (counterTimer.current) clearTimeout(counterTimer.current)
       if (announceTimer.current) clearTimeout(announceTimer.current)
       if (flashTimer.current) clearTimeout(flashTimer.current)
       if (koFxTimer.current) clearTimeout(koFxTimer.current)
@@ -284,6 +296,7 @@ export const FightHud = forwardRef<FightHudHandle, FightHudProps>(function Fight
         <SuperGauge index={1} />
 
         <ComboCounter combo={combo} />
+        <CounterCallout counter={counter} />
         <FlashChip flash={flash} />
         <Announcements announce={announce} />
       </div>

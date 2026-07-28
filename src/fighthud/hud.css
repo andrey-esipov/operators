@@ -686,6 +686,61 @@
   font-size: clamp(120px, 21vw, 300px);
 }
 
+/* ── Counter-hit callout ────────────────────────────────────────────── */
+/* Upper band so it clears the corner combo count and the centred KO word.
+   No plate: the letterform is the graphic, same as the announcements. */
+.fhud-counter {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 13%;
+  overflow: hidden;
+  pointer-events: none;
+}
+/* Radial danger tint blooming behind the word. */
+.fhud-counter-bloom {
+  position: absolute;
+  inset: 0;
+  mix-blend-mode: screen;
+}
+/* Diagonal slash whipping across behind the lettering. */
+.fhud-counter-slash {
+  position: absolute;
+  top: 8%;
+  left: -30%;
+  width: 160%;
+  height: 26%;
+  transform: skewX(-24deg) skewY(-6deg);
+  mix-blend-mode: screen;
+  filter: blur(1px);
+}
+.fhud-counter-stack {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  transform: skewX(-9deg);
+  will-change: transform;
+}
+.fhud-counter-main {
+  font-size: clamp(84px, 14.5vw, 196px);
+  letter-spacing: 0.02em;
+}
+.fhud-counter-kicker {
+  font-size: clamp(30px, 5.2vw, 66px);
+  letter-spacing: 0.26em;
+}
+/* Punish counter is the loud read — push the fill glow harder. */
+.fhud-counter[data-kind='punish'] .fhud-word-fill {
+  filter: drop-shadow(0 0 22px rgba(255, 123, 229, 0.7));
+}
+.fhud-counter[data-kind='counter'] .fhud-word-fill {
+  filter: drop-shadow(0 0 16px rgba(140, 230, 255, 0.6));
+}
+
 /* ── Screen FX (KO flash / round wipe / heavy-hit impact) ────────────── */
 .fhud-fx-ko {
   position: absolute;

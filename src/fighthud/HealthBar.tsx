@@ -16,6 +16,15 @@ const TAU_TRAIL = 260
 const TRAIL_HOLD_MS = 150
 const CRIT_PCT = 0.25
 
+// Health fill per tier (good / warn / crit). A bright highlight at the top
+// easing to a rich, dark base gives the bar a cylindrical, lit read like SF6 or
+// Strive — the flat near-solid green it replaced looked like a debug meter.
+const TIER_FILL = [
+  'linear-gradient(180deg,#9bffdb 0%,#1fe8a4 22%,#06c489 60%,#037a52 100%)',
+  'linear-gradient(180deg,#fff1a8 0%,#ffdb3b 22%,#ecab0e 60%,#8f6300 100%)',
+  'linear-gradient(180deg,#ffc6c6 0%,#ff5c5c 22%,#df1c35 60%,#6f0817 100%)',
+]
+
 /** Smoothing factor for a given time constant and frame delta. */
 function alpha(dtMs: number, tau: number): number {
   return 1 - Math.exp(-dtMs / tau)
@@ -32,13 +41,12 @@ export function HealthBar({ index, display }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const mainRef = useRef<HTMLDivElement>(null)
   const trailRef = useRef<HTMLDivElement>(null)
-  const numRef = useRef<HTMLSpanElement>(null)
 
   const mainDisp = useRef(1)
   const trailDisp = useRef(1)
   const holdMs = useRef(0)
   const lastCrit = useRef<boolean | null>(null)
-  const lastNum = useRef(-1)
+  const lastTier = useRef<number>(-1)
 
   useHudTick((frame, dt) => {
     const f = frame.state.fighters[index]
@@ -66,27 +74,19 @@ export function HealthBar({ index, display }: Props) {
     if (mainRef.current) mainRef.current.style.width = `${mainDisp.current * 100}%`
     if (trailRef.current) trailRef.current.style.width = `${trailDisp.current * 100}%`
 
-    // Front-bar colour shifts good → warn → crit as a coarse read.
-    if (mainRef.current) {
-      const g =
-        target > 0.6
-          ? 'linear-gradient(180deg,#12e39a 0%,#06d6a0 55%,#05b083 100%)'
-          : target > 0.3
-            ? 'linear-gradient(180deg,#ffe066 0%,#ffd60a 55%,#e6b800 100%)'
-            : 'linear-gradient(180deg,#ff6b6b 0%,#ef233c 55%,#c1121f 100%)'
-      mainRef.current.style.background = g
+    // Front-bar colour shifts good → warn → crit as a coarse read. Each tier is
+    // a bright-top → deep-base vertical ramp so the fill reads as a shaded tube
+    // (SF6/Strive) rather than flat debug paint. Only rewritten on tier change.
+    const tier = target > 0.6 ? 0 : target > 0.3 ? 1 : 2
+    if (tier !== lastTier.current && mainRef.current) {
+      lastTier.current = tier
+      mainRef.current.style.background = TIER_FILL[tier]
     }
 
     const crit = target > 0 && target <= CRIT_PCT
     if (crit !== lastCrit.current) {
       lastCrit.current = crit
       wrapRef.current?.classList.toggle('crit', crit)
-    }
-
-    const shown = Math.ceil(f.health)
-    if (shown !== lastNum.current && numRef.current) {
-      lastNum.current = shown
-      numRef.current.textContent = String(shown)
     }
   })
 
@@ -98,10 +98,6 @@ export function HealthBar({ index, display }: Props) {
         <Portrait side={side} rosterId={display.rosterId} name={display.name} accent={display.accent} initial={initial} />
         <span className="fhud-name" style={{ color: display.accent }}>
           {display.name}
-        </span>
-        <span style={{ flex: 1 }} />
-        <span ref={numRef} className="fhud-hpnum" data-testid={`fhud-hpnum-${side}`}>
-          1000
         </span>
       </div>
       <div className="fhud-hptrack" data-testid={`fhud-hptrack-${side}`}>

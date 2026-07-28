@@ -122,12 +122,13 @@
   right: 0;
 }
 .fhud-hptrail {
-  background: #f7f7f7;
-  opacity: 0.85;
+  background: linear-gradient(180deg, #ffffff 0%, #ffe0e0 55%, #ffb3b3 100%);
+  opacity: 0.9;
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.55);
 }
 .fhud-hpfill {
-  background: linear-gradient(180deg, #12e39a 0%, #06d6a0 55%, #05b083 100%);
-  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.35), inset 0 -3px 0 rgba(0, 0, 0, 0.3);
+  background: linear-gradient(180deg, #9bffdb 0%, #1fe8a4 22%, #06c489 60%, #037a52 100%);
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.5), inset 0 -3px 0 rgba(0, 0, 0, 0.4);
 }
 /* Notch overlay — keeps the segmented arcade read on a smooth-draining bar. */
 .fhud-hpnotches {
@@ -142,8 +143,8 @@
 }
 .fhud-hpgloss {
   position: absolute;
-  inset: 0 0 55% 0;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.28), transparent);
+  inset: 0 0 58% 0;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.06) 72%, transparent);
   pointer-events: none;
 }
 
@@ -154,17 +155,6 @@
   0%, 100% { box-shadow: inset 0 0 0 2px rgba(255,255,255,0.06), 4px 4px 0 rgba(0,0,0,0.55), 0 0 0 0 rgba(239,35,60,0); }
   50%      { box-shadow: inset 0 0 0 2px rgba(255,80,80,0.35), 4px 4px 0 rgba(0,0,0,0.55), 0 0 18px 3px rgba(239,35,60,0.75); }
 }
-
-.fhud-hpnum {
-  font-family: var(--font-num);
-  font-size: 22px;
-  line-height: 1;
-  color: #fff;
-  text-shadow: 2px 2px 0 #000;
-  min-width: 40px;
-  text-align: right;
-}
-.fhud-hpwrap.b .fhud-hpnum { text-align: left; }
 
 /* ── Super gauge ────────────────────────────────────────────────────── */
 .fhud-superrow {

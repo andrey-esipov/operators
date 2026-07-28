@@ -56,6 +56,21 @@ export const DEFAULT_KEYMAP: KeyMap = {
 
 export class KeyboardSource implements InputSource {
   private held = new Set<string>()
+  /**
+   * Key codes that saw a `keydown` since the last poll, whether or not they are
+   * still down now.
+   *
+   * Without this, `pressed` is derived purely by diffing the held-set between
+   * consecutive polls — so a tap that begins *and ends* inside one 16.7ms frame
+   * is never observed as held, and the press is silently dropped. That is not
+   * hypothetical: it reproduces every time in the playability harness, and it
+   * is worse for real players than for the test, because a dropped input during
+   * a stutter is indistinguishable from a missed combo.
+   *
+   * Latching keydown at event time instead means a press is never lost,
+   * regardless of how short it was or how late the poll arrived.
+   */
+  private tapped = new Set<string>()
   private prevButtons = new Set<Button>()
   private readonly map: KeyMap
   private readonly onDown: (e: KeyboardEvent) => void
@@ -63,7 +78,12 @@ export class KeyboardSource implements InputSource {
 
   constructor(map: KeyMap = DEFAULT_KEYMAP) {
     this.map = map
-    this.onDown = (e) => this.held.add(e.code)
+    this.onDown = (e) => {
+      // Auto-repeat must not re-latch: holding a button would otherwise look
+      // like a fresh press on every OS repeat tick and re-trigger the move.
+      if (!e.repeat) this.tapped.add(e.code)
+      this.held.add(e.code)
+    }
     this.onUp = (e) => this.held.delete(e.code)
     if (typeof window !== 'undefined') {
       window.addEventListener('keydown', this.onDown)
@@ -75,6 +95,10 @@ export class KeyboardSource implements InputSource {
     return codes.some((c) => this.held.has(c))
   }
 
+  private anyDownSincePoll(codes: string[]): boolean {
+    return codes.some((c) => this.held.has(c) || this.tapped.has(c))
+  }
+
   poll(): InputFrame {
     const dir = toNumpad(
       this.any(this.map.left), this.any(this.map.right),
@@ -82,10 +106,14 @@ export class KeyboardSource implements InputSource {
     )
     const now = new Set<Button>()
     for (const b of Object.keys(this.map.buttons) as Button[]) {
-      if (this.any(this.map.buttons[b])) now.add(b)
+      // A button tapped between polls counts as held for this one frame, so the
+      // move it triggers sees a consistent frame rather than a press with no
+      // corresponding hold.
+      if (this.anyDownSincePoll(this.map.buttons[b])) now.add(b)
     }
     const pressed = pressedFrom(this.prevButtons, now)
     this.prevButtons = now
+    this.tapped.clear()
     return { dir, held: now, pressed }
   }
 

@@ -145,10 +145,11 @@ describe('AI combo routes', () => {
     const maxHealth = 1000
     // Expressive: worth more than any single normal (the heaviest is ~100).
     expect(best.dmg).toBeGreaterThan(120)
-    // Not degenerate: a full route takes well under a third of the life bar, so a
-    // round is at least ~4 clean openings, never two. If scaling were removed the
-    // raw route sums far higher and this reds.
-    expect(best.dmg).toBeLessThan(maxHealth * 0.33)
+    // Not degenerate: a full route takes about a quarter of the life bar, so a
+    // round is at least ~4 clean openings, never two. The ceiling is set with
+    // teeth: the scaled 7-hit deals 211, but with COMBO_SCALING removed the same
+    // route sums to 304, so this bound reds if scaling stops taxing the tail.
+    expect(best.dmg).toBeLessThan(maxHealth * 0.26)
   })
 
   it('is deterministic: the same seed yields the same longest combo', () => {

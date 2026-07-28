@@ -21,6 +21,8 @@ declare global {
       pause: () => void
       resume: () => void
       paused: () => boolean
+      step: (n?: number) => void
+      stepsPending: () => number
     }
   }
 }
@@ -129,8 +131,15 @@ export function PlayableMatch() {
         // and its label describing different moments. Freezing the step is the
         // only way the label can be trusted.
         let frozen = false
+        // A capture that wants *consecutive* frames cannot use wall-clock sleeps:
+        // a screenshot takes long enough for the sim to advance ten frames or
+        // more, so "sample every 100ms" measures the screenshot's cost, not the
+        // animation's smoothness. `stepBudget` lets a frozen sim advance an exact
+        // number of frames, so a filmstrip is genuinely frame-by-frame.
+        let stepBudget = 0
         renderer.setStep(() => {
-          if (frozen) return { state: sim.current, events: [] }
+          if (frozen && stepBudget <= 0) return { state: sim.current, events: [] }
+          if (frozen) stepBudget--
           const res = sim.step()
           hudRef.current?.push(res.state, res.events)
           // The only React state this loop is allowed to touch, and only on
@@ -170,6 +179,12 @@ export function PlayableMatch() {
               frozen = false
             },
             paused: () => frozen,
+            /** Advance a frozen sim by exactly n frames, for frame-by-frame capture. */
+            step: (n = 1) => {
+              stepBudget += n
+            },
+            /** Frames the frozen sim still owes, so a caller can wait for them. */
+            stepsPending: () => stepBudget,
           }
         }
 

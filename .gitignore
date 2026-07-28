@@ -68,3 +68,6 @@ diag/
 
 # Visual critic working artifacts — local only
 critique/
+ceremony-shots/
+projectile-shots/
+motion-strips/

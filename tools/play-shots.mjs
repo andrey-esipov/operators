@@ -247,6 +247,58 @@ const key = async (k, ms = 60) => {
   await page.keyboard.up(k)
 }
 
+/**
+ * Fire a real super, and refuse to continue if one didn't come out.
+ *
+ * `08-super` used to press `u` and screenshot 140ms later. `u` is light punch —
+ * there is no super button in this game, supers are `236236` motions — and the
+ * player had ~150 meter against a cost of 1000. So the beat could not fire a
+ * super by construction, and for five capture sessions it photographed a normal
+ * attack under a filename that said "super". The most expensive thing in a
+ * fighting game, and nobody had ever seen ours.
+ *
+ * Meter is granted, because a scripted poke sequence can't earn 1000 in the
+ * capture window. Nothing else is faked: the motion is real, the move is chosen,
+ * spent and executed through the ordinary path, and we assert it actually
+ * happened by watching 1000 meter leave the bar.
+ */
+async function fireSuper() {
+  const facing = await page.evaluate(() => window.__PLAY__.state().fighters[0].facing)
+  const FWD = facing === 1 ? 'ArrowRight' : 'ArrowLeft'
+  const qcf = async (step) => {
+    await page.keyboard.down('ArrowDown')
+    await page.waitForTimeout(step)
+    await page.keyboard.down(FWD)
+    await page.waitForTimeout(step)
+    await page.keyboard.up('ArrowDown')
+    await page.waitForTimeout(step)
+    await page.keyboard.up(FWD)
+  }
+
+  for (const button of ['KeyU', 'KeyI', 'KeyO']) {
+    await page.evaluate(() => {
+      window.__PLAY__.state().fighters[0].meter = 1400
+    })
+    const before = 1400
+    await qcf(40)
+    await qcf(20)
+    await page.keyboard.press(button)
+    for (let i = 0; i < 60; i++) {
+      const s = await page.evaluate(() => {
+        const f = window.__PLAY__.state().fighters[0]
+        return { m: f.meter, move: f.move?.id ?? null }
+      })
+      // Only a super costs 1000. A meter drop that large is unambiguous, and it
+      // doesn't depend on knowing each archetype's move ids.
+      if ((s.move && /super/i.test(s.move)) || before - s.m >= 500) {
+        return { fired: true, moveId: s.move, spent: before - s.m, button }
+      }
+      await page.waitForTimeout(25)
+    }
+  }
+  return { fired: false }
+}
+
 console.log(`capturing the real game at ${URL}  (DPR 2)  build ${SHA} -> ${OUT}/`)
 
 async function runBeats() {
@@ -288,6 +340,20 @@ async function runBeats() {
 
   await key('u', 40)
   await page.waitForTimeout(140)
+  await shot('07b-poke')
+
+  const sup = await fireSuper()
+  if (!sup.fired) {
+    console.log(
+      'FAILED: no super came out. Beat 08 has spent five sessions photographing\n' +
+        '        a normal attack under this filename; capturing another one is worse\n' +
+        '        than capturing nothing.',
+    )
+    rmSync(OUT, { recursive: true, force: true })
+    await browser.close()
+    process.exit(1)
+  }
+  console.log(`  super fired: ${sup.moveId} (${sup.spent} meter, ${sup.button})`)
   await shot('08-super')
 
   // The last shot is as vulnerable as the first.

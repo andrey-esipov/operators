@@ -14,8 +14,10 @@ import type { FightEvent } from '../types'
  *  - Regress the meter economy    -> meter never reaches cost -> red (and, with
  *    no meter, the AI can't fire either, so the super assertion also reds).
  * A vacuous "some event fired" check could not tell these apart, so we pin the
- * super's move tag, prove meter actually crossed the cost, and pin the exact
- * (deterministic) frame the first super lands on.
+ * super's move tag and prove meter actually crossed the cost. Determinism is
+ * asserted as a property — the same seed lands the first super on the same
+ * frame every run — rather than by pinning a literal frame number that drifts
+ * on every balance pass.
  */
 describe('AI supers', () => {
   // A full best-of-three match. Rounds now KO faster (bigger post-knockback-tune
@@ -60,24 +62,39 @@ describe('AI supers', () => {
     expect(supers[0].moveId.startsWith('super')).toBe(true)
   })
 
-  it('the first super lands on an exact, deterministic frame', () => {
+  it('the first super lands on a stable, deterministic frame within the match', () => {
     const a = fight(0x51ac, 'operator', 'vanguard')
     const b = fight(0x51ac, 'operator', 'vanguard')
-    // Deterministic: same seed, same first super, every run — the property the
-    // screenshot tool relies on to capture the same moment each time.
+    // Determinism is the property the screenshot tool relies on — the same seed
+    // must land the first super on the same frame every run. We assert that
+    // equality (which has real teeth: any rng/AI/physics drift breaks it)
+    // instead of pinning a literal frame number, because the literal re-breaks
+    // on every legitimate balance pass and trains readers to ignore red. The
+    // exact-frame *value* is not a property worth protecting; its stability is.
+    expect(a.supers.length).toBeGreaterThanOrEqual(1)
     expect(a.supers[0].frame).toBe(b.supers[0].frame)
-    expect(a.supers[0].frame).toBe(1167)
+    // And it lands inside the match, not in some pathological late tail.
+    expect(a.supers[0].frame).toBeGreaterThan(0)
+    expect(a.supers[0].frame).toBeLessThan(WINDOW)
   })
 
   it('every archetype the AI pilots can and does reach its super', () => {
     // Not just the operator: the grappler-super and the zoner-super are reachable
-    // by the same fighter-agnostic AI too, so none is a dead feature.
-    for (const [p1, p2] of [
-      ['warden', 'operator'],
-      ['vanguard', 'warden'],
-    ] as const) {
-      const { supers } = fight(0x51ac, p1, p2)
-      expect(supers.length).toBeGreaterThanOrEqual(1)
+    // by the same fighter-agnostic AI too, so none is a dead feature. Checked
+    // across several seeds each — a super that fires on one lucky seed but not
+    // others is the marginal-green failure this repo keeps producing, so the
+    // property is "fires reliably", not "fires once if the rng cooperates".
+    const seeds = [0x51ac, 0x7777, 0xabcdef, 0x123456]
+    for (const p1 of ['operator', 'vanguard', 'warden'] as const) {
+      const p2 = p1 === 'operator' ? 'vanguard' : 'operator'
+      for (const seed of seeds) {
+        const { supers } = fight(seed, p1, p2)
+        expect(
+          supers.length,
+          `${p1} never fired a super on seed 0x${seed.toString(16)}`,
+        ).toBeGreaterThanOrEqual(1)
+        expect(supers[0].moveId.startsWith('super')).toBe(true)
+      }
     }
   })
 })

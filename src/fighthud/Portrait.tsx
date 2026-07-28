@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { loadPortrait, type PortraitInfo } from './portraits'
+import { loadPortrait, rosterIdForName, type PortraitInfo } from './portraits'
 
 interface Props {
   side: 'a' | 'b'
   rosterId?: string
+  /** Fighter display name — used to resolve a roster atlas id when `rosterId` is absent. */
+  name?: string
   accent: string
   /** Fallback single-letter badge when no portrait is available. */
   initial: string
@@ -22,22 +24,24 @@ const BOX_H = 40 // px
  * accent initial badge while loading or if the atlas is unavailable — so it is
  * always safe to render.
  */
-export function Portrait({ side, rosterId, accent, initial }: Props) {
+export function Portrait({ side, rosterId, name, accent, initial }: Props) {
   const [info, setInfo] = useState<PortraitInfo | null>(null)
   const alive = useRef(true)
+
+  const id = rosterId ?? rosterIdForName(name)
 
   useEffect(() => {
     alive.current = true
     setInfo(null)
-    if (rosterId) {
-      loadPortrait(rosterId).then((p) => {
+    if (id) {
+      loadPortrait(id).then((p) => {
         if (alive.current) setInfo(p)
       })
     }
     return () => {
       alive.current = false
     }
-  }, [rosterId])
+  }, [id])
 
   if (!info) {
     return (

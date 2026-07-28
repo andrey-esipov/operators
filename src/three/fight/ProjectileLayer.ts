@@ -61,6 +61,18 @@ const TRAIL_SEG = 6
 /** Ticks a fizzle (life-expiry / off-stage exit) takes to dissipate. */
 const FIZZLE_TICKS = 12
 
+/** Hard cap on how far the clip clocks (spawn flash, travel, impact death) may
+ *  advance in a single render call. At a locked 60fps a frame is ~1 tick, so
+ *  this never bites in real play; but a GC hitch, a hidden tab, or a paused
+ *  frame-step can hand `update` a multi-hundred-ms dt, and without a clamp that
+ *  one call would blow straight through a short one-shot clip — the ~12-tick
+ *  IMPACT burst would appear and retire between two rendered frames and never be
+ *  seen. Clamping to a ~15fps-floor's worth of ticks guarantees every death
+ *  animation plays across several frames no matter how badly the loop stalls.
+ *  This is the standard frame-time clamp a fixed-step game loop uses; it only
+ *  ever slows a runaway dt, never speeds one up. */
+const MAX_TICKS = 4
+
 /** Past this |x| (cm) the sim retires a bolt for leaving the stage; matches the
  *  sim's own off-stage test so the renderer infers that death, not a hit. */
 const OFFSTAGE_CM = STAGE_HALF_W + PROJECTILE_MARGIN
@@ -131,6 +143,23 @@ export class ProjectileLayer {
 
   constructor() {
     this.group.name = 'projectiles'
+    // Dev-only introspection: capture tooling needs to see WHAT each live bolt is
+    // doing (phase, clip clock, impact-flash opacity) to prove the death beats
+    // actually play, not merely that some pixels lit. Measuring the animation
+    // directly is the only way to catch a burst that a screenshot's timing missed.
+    if (import.meta.env.DEV) {
+      ;(globalThis as Record<string, unknown>).__PROJDBG__ = () =>
+        [...this.live.values()].map((l) => ({
+          id: l.id,
+          kind: l.kind,
+          phase: l.phase,
+          clock: Math.round(l.clock * 100) / 100,
+          detached: l.detached,
+          flashOpacity: l.flashMat ? Math.round(l.flashMat.opacity * 100) / 100 : null,
+          spawnFlashOpacity: l.spawnFlashMat ? Math.round(l.spawnFlashMat.opacity * 100) / 100 : null,
+          curFrame: l.curFrame,
+        }))
+    }
   }
 
   /** Warm the atlases for kinds we expect, so the first bolt draws on the frame
@@ -178,7 +207,7 @@ export class ProjectileLayer {
     alpha: number,
     dt: number,
   ) {
-    const ticks = dt * 60
+    const ticks = Math.min(dt * 60, MAX_TICKS)
     const prevById = new Map<number, Projectile>()
     if (prev) for (const p of prev) prevById.set(p.id, p)
     const seen = new Set<number>()

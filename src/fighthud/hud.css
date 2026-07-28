@@ -677,13 +677,20 @@
   font-size: clamp(150px, 27vw, 380px);
 }
 .fhud-announce[data-kind='time-over'] .fhud-word-main {
-  font-size: clamp(76px, 13vw, 188px);
+  font-size: clamp(76px, 13vw, 174px);
 }
 .fhud-announce[data-kind='fight'] .fhud-word-main {
   font-size: clamp(96px, 17vw, 248px);
 }
 .fhud-announce[data-kind='win'] .fhud-word-main {
   font-size: clamp(120px, 21vw, 300px);
+}
+/* Winner names run long ("Aparna Chennapragada", 20ch). The base kicker size
+   fits "ROUND" but slam-peaks (scale 1.14) a long name straight into the
+   overflow:hidden clip, so the win kicker reins in — measured, not eyeballed. */
+.fhud-announce[data-kind='win'] .fhud-word-kicker {
+  font-size: clamp(28px, 4.2vw, 62px);
+  letter-spacing: 0.16em;
 }
 
 /* ── Counter-hit callout ────────────────────────────────────────────── */

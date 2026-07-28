@@ -12,12 +12,24 @@ import { mkdirSync, rmSync, writeFileSync } from 'fs'
 import { execSync } from 'child_process'
 import sharp from 'sharp'
 
-const SHA = execSync('git rev-parse --short HEAD').toString().trim()
+// `--build` labels a capture driven against a *different* checkout (a baseline
+// worktree on another port), where this repo's HEAD would be a lie.
+const SHA =
+  (process.argv.includes('--build')
+    ? process.argv[process.argv.indexOf('--build') + 1]
+    : null) ?? execSync('git rev-parse --short HEAD').toString().trim()
 
 const PORT = process.argv.includes('--port')
   ? process.argv[process.argv.indexOf('--port') + 1]
   : '5399'
-const OUT = 'play-shots'
+const arg = (name, dflt) =>
+  process.argv.includes(name) ? process.argv[process.argv.indexOf(name) + 1] : dflt
+// `--query` pins the matchup and CPU tier. A blind A/B across builds needs both
+// sides driven identically, and it needs a matchup the critic hasn't spent five
+// sessions memorising.
+const QUERY = arg('--query', '')
+const OUT = arg('--out', 'play-shots')
+const URL = `http://localhost:${PORT}/${QUERY ? '?' + QUERY.replace(/^\?/, '') : ''}`
 rmSync(OUT, { recursive: true, force: true })
 mkdirSync(OUT, { recursive: true })
 
@@ -39,7 +51,7 @@ page.on('console', (m) => {
   if (m.type() === 'error') errors.push(m.text().slice(0, 200))
 })
 
-await page.goto(`http://localhost:${PORT}/`, { waitUntil: 'domcontentloaded' })
+await page.goto(URL, { waitUntil: 'domcontentloaded' })
 
 // Vite's compile-error overlay covers the canvas while the app keeps running
 // underneath, so every readiness probe still reports healthy and the shots are
@@ -235,7 +247,7 @@ const key = async (k, ms = 60) => {
   await page.keyboard.up(k)
 }
 
-console.log(`capturing the real game at http://localhost:${PORT}/  (DPR 2)  build ${SHA}`)
+console.log(`capturing the real game at ${URL}  (DPR 2)  build ${SHA} -> ${OUT}/`)
 
 async function runBeats() {
   shots.length = 0
@@ -298,7 +310,7 @@ for (let attempt = 1; attempt <= ATTEMPTS && !captured; attempt++) {
       await browser.close()
       process.exit(1)
     }
-    await page.goto(`http://localhost:${PORT}/`, { waitUntil: 'domcontentloaded' })
+    await page.goto(URL, { waitUntil: 'domcontentloaded' })
     if (!(await settle())) {
       console.log('FAILED: play route never came back after a reload')
       await browser.close()

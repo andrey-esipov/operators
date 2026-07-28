@@ -241,20 +241,28 @@ export const JUGGLE_ALLOWANCE = 4
  *  - HITSTUN +6f: enough extra advantage that a follow-up which does NOT combo on
  *    a normal hit now links — i.e. it opens routes that don't otherwise exist,
  *    which is the whole point of the mechanic.
- *  - HITSTOP +8f: YES, a counter freezes distinctly harder — it must read as a
+ *  - HITSTOP +6f: YES, a counter freezes distinctly harder — it must read as a
  *    bigger EVENT, not a barely-perceptible tick. A counter that doesn't hit the
  *    brakes harder than a normal hit reads as a normal hit no matter what the HUD
  *    says; the extra freeze is the tactile half of the feedback (SF6/Tekken/GGST
  *    all do this — the freeze is how you FEEL the counter before you read it).
- *    Sized to GGST's mid counter-hit emphasis (+8f), double the old +4 that sat
- *    inside a normal hit's noise floor and could not be felt.
+ *    Sized to the TOP of SF6's punish-counter band (+3-6f), not GGST's mid CH
+ *    (+8f). Both were on the table and the anchor decides it: this game's
+ *    aesthetic is the Street Fighter lineage, and Strive is deliberately more
+ *    exaggerated than SF is — borrowing its emphasis number while claiming an SF
+ *    read is how a house style drifts one "just a bit punchier" at a time. +6
+ *    is still double the old +4 that sat inside a normal hit's noise floor, and
+ *    it keeps a heavy counter at 21f rather than 23f (383ms), which overshot the
+ *    band it was supposedly calibrated to. The felt-floor guard in
+ *    hitstop.coherence.test.ts pins >=6, so this sits exactly on that floor:
+ *    tuning it down any further is RED, not a judgement call.
  *  - JUGGLE +1: a counter-hit LAUNCHER grants one extra juggle unit, so the extra
  *    hitstun/height actually converts into a longer air route. Kept to +1 so it
  *    extends a combo without opening an infinite (allowance still terminates).
  */
 export const COUNTER_DAMAGE_MULT = 1.3
 export const COUNTER_HITSTUN_BONUS = 6
-export const COUNTER_HITSTOP_BONUS = 8
+export const COUNTER_HITSTOP_BONUS = 6
 export const COUNTER_JUGGLE_BONUS = 1
 
 /**

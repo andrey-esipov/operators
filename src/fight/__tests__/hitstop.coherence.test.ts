@@ -17,13 +17,17 @@
  *   - GGST (published, heavier): L1 12 / L2 14 / L3 16 / L4 19 / L5 21.
  *   - Counter emphasis: GGST mid CH +8f / large CH +16f; SF6 punish counter +3-6f.
  * The ladder was RAISED into the SF6 band (operator/warden 10 / 12 / 14, and the
- * grappler vanguard heavier at 10 / 13 / 15) with a +8 counter bonus — the
+ * grappler vanguard heavier at 10 / 13 / 15) with a +6 counter bonus — the
  * "original Street Fighter lineage, snappier than GGST" read the project is going
- * for: in-band with SF6, deliberately short of GGST's exaggeration. The previous
- * 8 / 9 / 11 with a +4 counter sat BELOW both bands (under SF6's own light and
- * heavy floors) and read as systematically weightless. These asserts pin the
- * raised calibration, so a drift back toward flat/cheap OR up into GGST-wide is
- * caught.
+ * for: in-band with SF6, deliberately short of GGST's exaggeration. The counter
+ * bonus landed at +8 first, which is GGST's mid-CH number, not SF6's: it put a
+ * heavy counter at 23f (383ms) against an SF6 punish-counter band of +3-6f. Held
+ * to +6 — the top of that band — because the anchor decides ties, and quietly
+ * importing Strive's emphasis while calling it an SF read is how a house style
+ * drifts. The previous 8 / 9 / 11 with a +4 counter sat BELOW both bands (under
+ * SF6's own light and heavy floors) and read as systematically weightless. These
+ * asserts pin the raised calibration, so a drift back toward flat/cheap OR up
+ * into GGST-wide is caught.
  *
  * METHOD (identical primitive to impact.test.ts): press the move point-blank
  * through the real sim, read `s.hitstop` on the frame the `hit` event fires.
@@ -36,10 +40,13 @@
  *     the vanguard exact-ladder + the "grappler hits heaviest" anchor go red, and
  *     operator-only impact.test.ts stays green — exactly the blind spot this file
  *     closes.
- *   - COUNTER_HITSTOP_BONUS 8 -> 0: every counter assertion reds across all three
+ *   - COUNTER_HITSTOP_BONUS 6 -> 0: every counter assertion reds across all three
  *     archetypes, and the felt-floor guard reds too.
- *   - COUNTER_HITSTOP_BONUS 8 -> 4: the felt-floor guard reds (proving the raised
- *     floor forbids the old "barely perceptible" value a >=3 floor would pass).
+ *   - COUNTER_HITSTOP_BONUS 6 -> 5: the felt-floor guard reds. The floor sits
+ *     exactly ON the shipped value, so the constant cannot be tuned down at all
+ *     without going red — "barely perceptible" is now unreachable by drift, and
+ *     any future reduction has to argue with a failing test rather than slip
+ *     through as a one-character edit.
  *   - warden fireball projectile hitstop 13 -> 11 (below its medium normal 12):
  *     the projectile-weight assertion reds (the zoner's spacing tool goes light).
  */

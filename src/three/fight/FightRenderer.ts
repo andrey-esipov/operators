@@ -119,6 +119,7 @@ export class FightRenderer {
     engine.setRenderDriver(this.post)
     engine.scene.add(this.fighters[0].group, this.fighters[1].group)
     engine.scene.add(this.projectiles.group)
+    this.projectiles.setCamera(engine.camera)
     // Warm the two shipped projectile atlases so the first bolt draws on the
     // frame it spawns, not a few frames late. Unknown kinds still lazy-load.
     void this.projectiles.preload(['ion-bolt', 'super-beam'])

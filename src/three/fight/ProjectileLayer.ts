@@ -115,6 +115,10 @@ interface Live {
   /** Travelling volume of light behind the sprite (super only; else null). */
   aura: THREE.Mesh | null
   auraMat: THREE.MeshBasicMaterial | null
+  /** Tight, near-white hot core laid over the aura for core contrast (super
+   *  only; else null). */
+  core: THREE.Mesh | null
+  coreMat: THREE.MeshBasicMaterial | null
   /** Hard spawn flash: the mesh, its own clock, and the fixed birth point it
    *  fires from while the beam races away (super only; else null). */
   spawnFlash: THREE.Mesh | null
@@ -141,6 +145,34 @@ export class ProjectileLayer {
   private tmpWorld = new THREE.Vector3()
   private groundY = cmYToWorld(0)
 
+  /** The live scene camera, needed to bill-board the full-screen super quads in
+   *  front of it each frame. Set once by FightRenderer; null in headless tests
+   *  and the coverage probe, where the super atmosphere simply never draws. */
+  private camera: THREE.PerspectiveCamera | null = null
+
+  // --- Full-screen super atmosphere (world-dim + activation flash) -----------
+  // ONE pair of camera-space quads shared by the whole layer, not per bolt: a
+  // super drops the world back behind the fighters and punches a screen flash; a
+  // jab does neither. Built lazily the first time a super needs them, so an
+  // all-ion-bolt match never allocates or draws any of this.
+  private worldDimMesh: THREE.Mesh | null = null
+  private worldDimMat: THREE.MeshBasicMaterial | null = null
+  private superFlashMesh: THREE.Mesh | null = null
+  private superFlashMat: THREE.MeshBasicMaterial | null = null
+  /** Eased 0..peak opacities. `dimCur` tracks a STATE-derived target so it holds
+   *  through a freeze; `flashCur` is a transient that punches on spawn and decays. */
+  private dimCur = 0
+  private flashCur = 0
+  /** Render-frames left to hold the flash at its punched peak before it decays,
+   *  so activation lands as a ~12-frame BEAT instead of a 5-frame blip nobody
+   *  reads. Ticks down on render time, so a freeze still clears it to the pose. */
+  private flashHold = 0
+  /** Sim ids of flash-carrying (super) bolts seen last frame, so the activation
+   *  flash fires exactly once when a genuinely new one is born. */
+  private superSeen = new Set<number>()
+  private flashColor = new THREE.Color(1.4, 1.5, 1.8)
+  private tmpFwd = new THREE.Vector3()
+
   constructor() {
     this.group.name = 'projectiles'
     // Dev-only introspection: capture tooling needs to see WHAT each live bolt is
@@ -159,7 +191,23 @@ export class ProjectileLayer {
           spawnFlashOpacity: l.spawnFlashMat ? Math.round(l.spawnFlashMat.opacity * 100) / 100 : null,
           curFrame: l.curFrame,
         }))
+      // Screen-wide super atmosphere state, so a native-res capture can assert
+      // the world-dim and activation flash directly instead of inferring them
+      // from a lit-pixel count that a mistimed screenshot could satisfy either way.
+      ;(globalThis as Record<string, unknown>).__PROJATMO__ = () => ({
+        dim: Math.round(this.dimCur * 1000) / 1000,
+        flash: Math.round(this.flashCur * 1000) / 1000,
+        dimVisible: !!this.worldDimMesh?.visible,
+        flashVisible: !!this.superFlashMesh?.visible,
+      })
     }
+  }
+
+  /** Hand the layer the live scene camera so it can bill-board its full-screen
+   *  super quads in front of it. Called once by FightRenderer; without it the
+   *  super atmosphere never draws (headless tests, the coverage probe). */
+  setCamera(cam: THREE.PerspectiveCamera) {
+    this.camera = cam
   }
 
   /** Warm the atlases for kinds we expect, so the first bolt draws on the frame
@@ -266,6 +314,11 @@ export class ProjectileLayer {
     // every survivor once per frame. Retired beams are already gone from the map
     // (their flash disposed in retire), so this only touches live ones.
     for (const l of this.live.values()) this.tickSpawnFlash(l, ticks)
+
+    // Full-screen super atmosphere: dim the world behind the fighters and punch
+    // an activation flash. Reads live sim state each frame, so it stays correct
+    // on any frame — including a frozen one (see updateSuperAtmosphere).
+    this.updateSuperAtmosphere(cur, ticks)
   }
 
   /** Did the sim drop this bolt because it CONNECTED, versus running out of life
@@ -329,6 +382,19 @@ export class ProjectileLayer {
       this.group.add(aura)
     }
 
+    // Core: a small, near-white hot center laid over the aura. Additive blending
+    // is order-independent, so this simply sums a bright peak into the middle of
+    // the volume — the core-contrast the broad aura lacks on a lit stage. A hot
+    // near-white tint (flashTint), not the energy hue, so it reads as white-hot.
+    let core: THREE.Mesh | null = null
+    let coreMat: THREE.MeshBasicMaterial | null = null
+    if (presence.coreGlow > 0) {
+      core = makeGlowMesh(flashTint(p.kind), 18)
+      coreMat = core.material as THREE.MeshBasicMaterial
+      coreMat.opacity = 0
+      this.group.add(core)
+    }
+
     // Spawn flash: a hard bright pop pinned to the birth point, announcing a
     // super has started. It stays put while the beam races away, so it reads as
     // the muzzle rather than a light stuck to the projectile.
@@ -366,6 +432,8 @@ export class ProjectileLayer {
       flashMat: null,
       aura,
       auraMat,
+      core,
+      coreMat,
       spawnFlash,
       spawnFlashMat,
       spawnClock: 0,
@@ -412,6 +480,16 @@ export class ProjectileLayer {
       l.aura.scale.set(s * 1.25, s, 1)
       l.auraMat.opacity = pr.auraOpacity
     }
+
+    // Core rides the same hot-point, scaled small and wide so it reads as a
+    // searing lance center rather than a round dot. Drawn just in front of the
+    // aura (order among additive layers is irrelevant to the summed colour).
+    if (l.core && l.coreMat) {
+      const c = worldH * pr.coreGlow
+      l.core.position.set(l.lastWorld.x, l.lastWorld.y, PROJ_Z - 0.005)
+      l.core.scale.set(c * 1.5, c * 0.72, 1)
+      l.coreMat.opacity = pr.coreGlowOpacity
+    }
   }
 
   /** Push the current hot-point onto the trail history and lay the blobs out
@@ -451,6 +529,7 @@ export class ProjectileLayer {
     }
     l.floorMat.opacity = pr.floorOpacity * k
     if (l.auraMat) l.auraMat.opacity = pr.auraOpacity * k
+    if (l.coreMat) l.coreMat.opacity = pr.coreGlowOpacity * k
   }
 
   /** Drive the fixed spawn flash on its own short clock: a hard bright pop that
@@ -478,6 +557,147 @@ export class ProjectileLayer {
       l.spawnFlashMat.dispose()
       l.spawnFlash = null
       l.spawnFlashMat = null
+    }
+  }
+
+  /** Lazily build the two camera-space quads the super atmosphere needs: a cool
+   *  normal-blended dim slid behind the fighters (renderOrder 8, between the
+   *  stage's top at 5 and the fighters at 10) and a hard additive flash over
+   *  everything (renderOrder 30). Both bill-board to fill the frustum each frame. */
+  private ensureSuperQuads() {
+    if (this.worldDimMesh) return
+    // World-dim: a flat, cool near-neutral. Normal-blended (NOT additive) so it
+    // pulls every background hue toward this grey-blue — darken AND desaturate in
+    // one op, which is what a lot of 2D fighters do instead of a true HSV pass.
+    // depthTest off + renderOrder 8 wash the whole stage yet sit UNDER the
+    // fighters (10) and the beam/trail/pool (12+), so only the world recedes.
+    const dimGeo = new THREE.PlaneGeometry(1, 1)
+    const dimMat = new THREE.MeshBasicMaterial({
+      color: new THREE.Color(0x151824),
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+      depthTest: false,
+      toneMapped: false,
+    })
+    const dim = new THREE.Mesh(dimGeo, dimMat)
+    dim.frustumCulled = false
+    dim.renderOrder = 8
+    dim.visible = false
+    this.group.add(dim)
+    this.worldDimMesh = dim
+    this.worldDimMat = dimMat
+
+    // Activation flash: the shared soft-glow disc blown up past the frustum so
+    // the screen samples its bright interior — a hard, bloom-fed burst of light
+    // rather than a flat filter. Additive + un-tone-mapped so it whites out hot.
+    const flash = makeGlowMesh(this.flashColor, 30)
+    flash.visible = false
+    this.group.add(flash)
+    this.superFlashMesh = flash
+    this.superFlashMat = flash.material as THREE.MeshBasicMaterial
+  }
+
+  /** Place a bill-boarded full-screen quad a fixed distance in front of the
+   *  camera, sized to cover the frustum times `cover`. Recomputed each frame so
+   *  it survives the camera's dolly-zoom and any fov change on resize. */
+  private fillFrustum(mesh: THREE.Mesh, cover: number) {
+    const cam = this.camera!
+    const D = Math.min(cam.far * 0.5, Math.max(cam.near * 2 + 0.05, 4))
+    const h = 2 * Math.tan(THREE.MathUtils.degToRad(cam.fov) / 2) * D
+    const w = h * cam.aspect
+    this.tmpFwd.set(0, 0, -1).applyQuaternion(cam.quaternion)
+    mesh.position.copy(cam.position).addScaledVector(this.tmpFwd, D)
+    mesh.quaternion.copy(cam.quaternion)
+    mesh.scale.set(w * cover, h * cover, 1)
+  }
+
+  /**
+   * The super's screen-wide beats, done entirely inside this additive layer: a
+   * world-dim that drops the stage back and a hard activation flash.
+   *
+   * Freeze-safety is by construction. The dim eases toward a target READ FROM
+   * LIVE STATE every frame (the strongest `presence.worldDim` among sim-owned
+   * bolts), never a self-firing countdown — so when the sim is frozen for the
+   * super (today a long hitstop; soon a dedicated FightState field) the target
+   * holds and the dim simply STAYS across the frozen frames. A self-timed ramp
+   * would tick to completion mid-freeze and drop the world back in exactly the
+   * beat that wants it held. When that field lands, point `dimTarget` at it
+   * instead of at projectile presence — one line, no rewrite. The flash is
+   * deliberately the opposite: a transient that decays on render time, so a
+   * freeze-at-spawn clears the white to reveal the pose rather than holding a
+   * full-screen white-out.
+   */
+  private updateSuperAtmosphere(cur: Projectile[] | undefined, ticks: number) {
+    if (!this.camera) return
+
+    // Target read from state: the strongest worldDim among sim-owned bolts, and
+    // a one-shot flash the frame a new flash-carrying (super) bolt is born.
+    let dimTarget = 0
+    let flashPunch = 0
+    const superIds = new Set<number>()
+    if (cur) {
+      for (const p of cur) {
+        const l = this.live.get(p.id)
+        const pr = l ? l.presence : presenceFor(p.kind)
+        if (pr.worldDim > dimTarget) dimTarget = pr.worldDim
+        if (pr.screenFlash > 0) {
+          superIds.add(p.id)
+          if (!this.superSeen.has(p.id)) {
+            if (pr.screenFlash > flashPunch) flashPunch = pr.screenFlash
+            this.flashColor.copy(flashTint(p.kind))
+          }
+        }
+      }
+    }
+    this.superSeen = superIds
+
+    // Nothing showing, nothing fading out, and never built: bail before touching
+    // anything so an all-ion-bolt match pays exactly zero cost.
+    if (
+      dimTarget === 0 &&
+      flashPunch === 0 &&
+      this.dimCur < 0.002 &&
+      this.flashCur < 0.002 &&
+      !this.worldDimMesh
+    ) {
+      return
+    }
+    this.ensureSuperQuads()
+
+    // Ease the dim: fast in (~a handful of frames), slow out, so the world drops
+    // back hard on activation and returns gently as the impact resolves.
+    const rate = dimTarget > this.dimCur ? 0.32 : 0.11
+    this.dimCur += (dimTarget - this.dimCur) * Math.min(1, rate * ticks)
+
+    // Flash: punch to a newly-born super's peak, hold a few render frames so it
+    // lands as a beat, then decay on render time (a freeze clears it to the pose).
+    if (flashPunch > this.flashCur) {
+      this.flashCur = flashPunch
+      this.flashHold = 3
+    } else if (this.flashHold > 0) {
+      this.flashHold = Math.max(0, this.flashHold - ticks)
+    } else {
+      this.flashCur = Math.max(0, this.flashCur - 0.09 * ticks)
+    }
+
+    const dm = this.worldDimMesh!
+    if (this.dimCur > 0.002) {
+      this.fillFrustum(dm, 1.2)
+      this.worldDimMat!.opacity = this.dimCur
+      dm.visible = true
+    } else {
+      dm.visible = false
+    }
+
+    const fm = this.superFlashMesh!
+    if (this.flashCur > 0.002) {
+      this.fillFrustum(fm, 3.1) // blown up so the screen sits in the hot interior
+      this.superFlashMat!.color.copy(this.flashColor)
+      this.superFlashMat!.opacity = this.flashCur
+      fm.visible = true
+    } else {
+      fm.visible = false
     }
   }
 
@@ -593,6 +813,11 @@ export class ProjectileLayer {
       ;(l.aura.geometry as THREE.BufferGeometry).dispose()
       l.auraMat?.dispose()
     }
+    if (l.core) {
+      this.group.remove(l.core)
+      ;(l.core.geometry as THREE.BufferGeometry).dispose()
+      l.coreMat?.dispose()
+    }
     if (l.spawnFlash) {
       this.group.remove(l.spawnFlash)
       ;(l.spawnFlash.geometry as THREE.BufferGeometry).dispose()
@@ -631,6 +856,11 @@ export class ProjectileLayer {
         ;(l.aura.geometry as THREE.BufferGeometry).dispose()
         l.auraMat?.dispose()
       }
+      if (l.core) {
+        this.group.remove(l.core)
+        ;(l.core.geometry as THREE.BufferGeometry).dispose()
+        l.coreMat?.dispose()
+      }
       if (l.spawnFlash) {
         this.group.remove(l.spawnFlash)
         ;(l.spawnFlash.geometry as THREE.BufferGeometry).dispose()
@@ -638,8 +868,27 @@ export class ProjectileLayer {
       }
     }
     this.live.clear()
+    this.disposeSuperQuads()
     for (const res of this.loaded.values()) res.texture.dispose()
     this.loaded.clear()
+  }
+
+  /** Tear down the shared super-atmosphere quads (if they were ever built). */
+  private disposeSuperQuads() {
+    if (this.worldDimMesh) {
+      this.group.remove(this.worldDimMesh)
+      ;(this.worldDimMesh.geometry as THREE.BufferGeometry).dispose()
+      this.worldDimMat?.dispose()
+      this.worldDimMesh = null
+      this.worldDimMat = null
+    }
+    if (this.superFlashMesh) {
+      this.group.remove(this.superFlashMesh)
+      ;(this.superFlashMesh.geometry as THREE.BufferGeometry).dispose()
+      this.superFlashMat?.dispose()
+      this.superFlashMesh = null
+      this.superFlashMat = null
+    }
   }
 }
 

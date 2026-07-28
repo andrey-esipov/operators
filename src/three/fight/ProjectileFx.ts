@@ -86,6 +86,14 @@ export interface Presence {
    *  height. 0 disables it (an ion-bolt is a hard bead, not a volume). */
   aura: number
   auraOpacity: number
+  /** A small, intense, near-white hot core laid OVER the broad aura (additive
+   *  blending is order-independent, so it simply sums a bright peak into the
+   *  center). Size is × sprite height; 0 disables it. This is the CORE-CONTRAST
+   *  lever: on a bright stage the aura alone washes to a flat pale haze, and the
+   *  fix the genre uses is a searing hot center with a sharp falloff, not more
+   *  overall brightness. Scaled slightly wide so it reads as a lance, not a dot. */
+  coreGlow: number
+  coreGlowOpacity: number
   /** Hard spawn flash: a screen-scale burst the instant the projectile is born,
    *  as a multiple of sprite height. 0 disables it — only a super gets one. */
   spawnFlash: number
@@ -94,6 +102,17 @@ export interface Presence {
   /** Impact-burst flash size multiplier and peak opacity. */
   impactScale: number
   impactOpacity: number
+  /** Full-screen super atmosphere, both 0 for a jab. `worldDim` is the peak
+   *  opacity of a cool, near-neutral quad slid BEHIND the fighters (renderOrder
+   *  8, between the stage's top at 5 and the fighters at 10): normal-blended, it
+   *  drops the whole world back and pulls its hues toward grey-blue, so the
+   *  characters and the beam pop out of a receded stage — darken-plus-desaturate
+   *  in one pass, the way most 2D fighters fake it rather than a true HSV grade.
+   *  `screenFlash` is the peak opacity of a hard additive full-screen burst the
+   *  instant the shot is born. Only a super darkens the stage or flashes the
+   *  screen; an ion-bolt leaves both at 0 and nothing here runs. */
+  worldDim: number
+  screenFlash: number
 }
 
 /** The tuned ion-bolt numbers, verbatim — every kind starts here. */
@@ -107,11 +126,15 @@ const DEFAULT_PRESENCE: Presence = {
   floorOpacity: 0.3,
   aura: 0,
   auraOpacity: 0,
+  coreGlow: 0,
+  coreGlowOpacity: 0,
   spawnFlash: 0,
   spawnFlashTicks: 0,
   spawnFlashOpacity: 0,
   impactScale: 1,
   impactOpacity: 0.9,
+  worldDim: 0,
+  screenFlash: 0,
 }
 
 /**
@@ -124,19 +147,23 @@ const DEFAULT_PRESENCE: Presence = {
 const PRESENCE: Record<string, Partial<Presence>> = {
   'super-beam': {
     spriteScale: 1.4,
-    coreBoost: 2.1,
+    coreBoost: 2.4,
     trailOpacity: 0.92,
     trailSize: 1.7,
     floorScaleX: 3.4,
     floorScaleY: 2.5,
     floorOpacity: 0.6,
     aura: 2.7,
-    auraOpacity: 0.85,
+    auraOpacity: 0.55,
+    coreGlow: 0.95,
+    coreGlowOpacity: 1,
     spawnFlash: 8.5,
     spawnFlashTicks: 12,
     spawnFlashOpacity: 1,
     impactScale: 2.7,
     impactOpacity: 1,
+    worldDim: 0.6,
+    screenFlash: 0.9,
   },
 }
 

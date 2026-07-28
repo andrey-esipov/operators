@@ -132,7 +132,7 @@ export class FightVfx {
       case 'counter-hit': return this.counterHit(e.at, e.attacker, e.level)
       case 'block': return this.block(e.at, e.attacker, e.chip ?? 0)
       case 'parry': return this.parry(e.at)
-      case 'throw': return this.throwFx(e.at)
+      case 'throw': return this.throwFx(e.at, e.attacker, e.level, e.damage)
       case 'launch': return this.launch(e.at)
       case 'knockdown': return this.knockdown(e.at)
       case 'wall-bounce': return this.wallBounce(e.at)
@@ -350,11 +350,54 @@ export class FightVfx {
     this.d.camera.addShake(0.12)
   }
 
-  private throwFx(at: Vec2) {
+  /**
+   * A throw is the grappler's whole payoff and the answer to a turtling
+   * opponent — in SF6 a command grab is one of the loudest non-super beats in a
+   * round. It is NOT a strike, so it deliberately skips the sharp spark star and
+   * the hit-spark impact mark: its beat is a grab, a lift and a SLAM.
+   *
+   * Weight is derived from the SAME HIT[level] ladder every strike uses, so the
+   * authored `level: 'heavy'` (warden/operator/vanguard) is genuinely CONSUMED —
+   * a designer retuning a throw's level now actually moves the feel — and
+   * `damage` (120 basic … 360 super-throw) pushes the biggest grabs further. The
+   * throw then reads at heavy-or-ABOVE: a hard catch-freeze, a low ground shock
+   * ring and dust plume in place of the spark star, a chunky ember debris burst,
+   * and a big camera slam directed DOWNWARD (the body into the floor) — a
+   * distinct signature from a strike's horizontal shove. The old path shook the
+   * camera 0.10 (the weakest jab), emitted zero particles and dropped `level`.
+   */
+  private throwFx(at: Vec2, attacker: 0 | 1, level: HitLevel, damage: number) {
+    const t = HIT[level] ?? HIT.heavy
+    const power = Math.min(1, damage / 160) // 120→0.75 basic … 360→1 super-throw
     const pos = this.world(at)
-    this.dust(at, 0.6)
-    this.d.shockwave.spawn('shock', pos, 0.5, 0.3, new THREE.Color(0xffd9a0), new THREE.Color(0xff8a3c), 0.8)
-    this.d.camera.addShake(0.1)
+    const warm = new THREE.Color(0xffd9a0)
+    const deep = new THREE.Color(0xff8a3c)
+
+    // The catch: a hard freeze — the throw's version of hitstop, a touch longer
+    // than the same-level strike because the grab is a definitive commitment.
+    this.d.requestHitstop(t.hitstopMs * 1.1, t.hitstopScale)
+
+    // The slam kicks up the floor: a big dust cloud plus a burst of chunky
+    // embers that arc and fall — weight-scaled debris, NOT fine strike sparks.
+    this.dust(at, 1.1 + power * 0.7)
+    this.d.additive.emit({
+      position: pos, count: Math.round(t.count * 0.6), speed: t.speed * 0.7, speedVariance: 0.7,
+      color: deep, color2: warm, size: t.size * 1.5, life: 0.5, lifeVariance: 0.5,
+      gravity: -16, drag: 1.8, shape: 'ember', intensity: 1.2, spawnRadius: 0.3, bounce: true,
+    })
+
+    // The throw's bold graphic: a low, wide ground shock ring in place of the
+    // strike's spark star, scaled by weight.
+    this.d.shockwave.spawn('shock', pos, 0.7 + t.core * 0.4, 0.34, warm, deep, 1.0 + power * 0.6, 1.7)
+
+    // Feel: a big camera slam heavier than the same-level strike (t.shake * 1.35
+    // + a damage kicker) and directed mostly DOWNWARD, tilted slightly the way
+    // the throw travels, plus a dolly punch. A 140-dmg command grab lands ~0.45
+    // here vs the old 0.10 — above a heavy strike (0.26), just shy of a KO (0.5).
+    const slam = this.blowDir(attacker, 0.2) // horizontal sign of the throw…
+    slam.set(slam.x * 0.35, -1, 0) //          …re-aimed mostly DOWNWARD (the slam)
+    this.d.camera.addShake(t.shake * 1.35 + power * 0.12, slam)
+    this.d.camera.punchIn(t.push * 0.9 + 0.12)
   }
 
   private launch(at: Vec2) {

@@ -97,7 +97,7 @@ describe('FightAudioReactor.handle — one sound per event', () => {
       { type: 'block', at: AT, attacker: 0 },
       { type: 'parry', at: AT, attacker: 0 },
       { type: 'whiff', at: AT, attacker: 0 },
-      { type: 'throw', at: AT, attacker: 0 },
+      { type: 'throw', at: AT, attacker: 0, level: 'heavy', damage: 120 },
       { type: 'launch', at: AT, attacker: 0 },
       { type: 'knockdown', at: AT, who: 1 },
       { type: 'wall-bounce', at: AT, who: 1 },
@@ -216,6 +216,39 @@ describe('counter-hit is meatier than a normal hit of the same level', () => {
     expect(counter.s.of('impact').length).toBeGreaterThan(normal.s.of('impact').length)
     // And it punches the mix harder.
     expect(counter.s.of('duckMusic')[0].a[0]).toBeGreaterThan(0.8)
+  })
+})
+
+describe('a throw consumes its authored level+damage and reads at heavy-or-above', () => {
+  const throwImpact = (level: HitLevel, damage: number) => {
+    const { r, s } = make()
+    r.handle({ type: 'throw', at: AT, attacker: 0, level, damage })
+    return { s, grab: s.of('cloth'), body: s.of('impact') }
+  }
+
+  it('plays the grab (cloth) + a weighted heavy body SLAM, not the old fixed underweight thud', () => {
+    const { grab, body } = throwImpact('heavy', 140)
+    // The grab catch is present.
+    expect(grab.length).toBe(1)
+    // The slam is a heavy body at the HEAVY loudness tier (HIT_GAIN.heavy = 1.3),
+    // not the old hard-coded default-gain `power: 0.42` that dropped the throw's
+    // authored weight.
+    expect(body.length).toBe(1)
+    expect(body[0].a[0]).toBe('heavy')
+    const opts = body[0].a[1] as ImpactOpts
+    expect(opts.gain ?? 0).toBeGreaterThanOrEqual(1.3)
+    expect(opts.power ?? 0).toBeGreaterThan(0.8)
+  })
+
+  it('scales with the authored level — a heavy throw is louder than a light one (level consumed)', () => {
+    const light = throwImpact('light', 120).body[0].a[1] as ImpactOpts
+    const heavy = throwImpact('heavy', 120).body[0].a[1] as ImpactOpts
+    // If `level` were dropped again, both would carry the same fixed gain.
+    expect(heavy.gain ?? 0).toBeGreaterThan(light.gain ?? 0)
+  })
+
+  it('a heavy throw ducks the music like any other heavy connect (the old throw never did)', () => {
+    expect(throwImpact('heavy', 140).s.of('duckMusic').length).toBeGreaterThan(0)
   })
 })
 

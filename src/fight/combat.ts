@@ -402,7 +402,7 @@ function resolveThrow(
   D.stance = 'knockdown'
   D.stunRemaining = KNOCKDOWN_FRAMES
   D.lastHitAt = at
-  events.push({ type: 'throw', at, attacker: ai })
+  events.push({ type: 'throw', at, attacker: ai, level: hit.level, damage: hit.damage })
   events.push({ type: 'knockdown', at, who: di })
 }
 

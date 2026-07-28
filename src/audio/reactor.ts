@@ -194,7 +194,7 @@ export class FightAudioReactor {
       case 'block': return this.block(e.at)
       case 'parry': return this.parry(e.at)
       case 'whiff': return void this.sink.whiff({ pan: panOf(e.at), power: 0.7, gain: WHIFF_GAIN })
-      case 'throw': return this.throwFx(e.at)
+      case 'throw': return this.throwFx(e.at, e.level, e.damage)
       case 'launch': return this.launch(e.at)
       case 'knockdown': return this.knockdown(e.at)
       case 'wall-bounce': return this.wallBounce(e.at)
@@ -243,11 +243,20 @@ export class FightAudioReactor {
     this.sink.impact('ex', { power: 0.62, pan: panOf(at) })
   }
 
-  /** A throw: cloth grab + a grounded body thump. */
-  private throwFx(at: Vec2): void {
+  /** A throw: a cloth grab (the catch) + a heavy body SLAM weighted by the
+   *  throw's authored `level`/`damage` — the same ladder a strike uses. The body
+   *  is always the low `heavy` thud (a throw is a slam, never a sharp crack even
+   *  at the top tier), but its power AND gain now scale with the level, so a
+   *  140-dmg command grab lands a full heavy slam (power→1, gain 1.3) and ducks
+   *  the music, instead of the old fixed, underweight 0.42 that dropped `level`.
+   *  A sub-heavy floor keeps even a basic throw a real slam. */
+  private throwFx(at: Vec2, level: HitLevel, damage: number): void {
     const pan = panOf(at)
+    const { power } = flavorForHit(level)
+    const slamPower = Math.max(0.6, powerWithDamage(power, damage))
     this.sink.cloth({ pan, power: 0.9 })
-    this.sink.impact('heavy', { power: 0.42, pan })
+    this.sink.impact('heavy', { power: slamPower, damage, pan, gain: HIT_GAIN[level] })
+    if (slamPower > 0.8) this.sink.duckMusic(0.6)
   }
 
   /** A launch: heavy connect plus an upward whoosh as the body leaves the floor. */

@@ -288,7 +288,11 @@ export type FightEvent =
   | { type: 'block'; at: Vec2; attacker: 0 | 1; chip?: number }
   | { type: 'parry'; at: Vec2; attacker: 0 | 1 }
   | { type: 'whiff'; at: Vec2; attacker: 0 | 1 }
-  | { type: 'throw'; at: Vec2; attacker: 0 | 1 }
+  // A throw carries the SAME authored `level`/`damage` as a strike so the
+  // renderer and audio can weight the grab/slam to it. Throws are authored
+  // `level: 'heavy'` (see warden/operator/vanguard); that field used to be
+  // dropped here, so a 140-dmg command grab presented like the weakest jab.
+  | { type: 'throw'; at: Vec2; attacker: 0 | 1; level: HitLevel; damage: number }
   | { type: 'launch'; at: Vec2; attacker: 0 | 1 }
   | { type: 'knockdown'; at: Vec2; who: 0 | 1 }
   | { type: 'wall-bounce'; at: Vec2; who: 0 | 1 }

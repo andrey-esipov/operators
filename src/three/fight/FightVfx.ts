@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import type { FightEvent, HitLevel, Vec2 } from '../../fight/types'
 import type { ParticlePool } from '../vfx/ParticlePool'
 import type { Shockwave } from '../vfx/Shockwave'
+import type { ImpactFlash } from '../vfx/ImpactFlash'
 import type { Fighter } from './Fighter'
 import type { FightCamera } from './FightCamera'
 import { CM_TO_WORLD, simToWorld } from './worldScale'
@@ -44,10 +45,69 @@ const HIT: Record<HitLevel, HitTuning> = {
   crumple: { count: 84, speed: 14, size: 0.24, hitstopMs: 170, hitstopScale: 0.03, shake: 0.36, push: 0.7,  core: 2.0, flash: 1.0,  hot: new THREE.Color(0xffffff), cool: new THREE.Color(0xff5a3c) },
 }
 
+/**
+ * The bold impact-frame mark, per weight — the one deliberate drawn graphic that
+ * lands on top of the particle burst. See ImpactFlash for the "why".
+ *
+ * `mark` indexes public/impact/sparks (0 star4, 1 burst6, 2 impact8, 3 slash,
+ * 4 shatter). `size` is the quad's world width; FIGHTER_HEIGHT is 3.4 world
+ * units, so light 0.95 ≈ 28% of a body and crumple 2.15 ≈ 63% — deliberately an
+ * order of magnitude larger than a single spark particle (~0.13–0.24), which is
+ * the whole point: a jab and a heavy must not stamp the same mark.
+ *
+ * `tint` is CHANNEL-WEIGHTED and may exceed 1 on one axis while another is
+ * suppressed — the Ion Storm lesson (commit 12c4d0b). The sheet is white, so the
+ * tint owns the hue: hits push RED past 1 and pin BLUE low, so additive+bloom
+ * saturate them oranger; the launcher pushes BLUE past 1 and suppresses RED so
+ * it saturates bluer. Neither drives all three channels past 1, which is what
+ * made the old super read as an identity-less white orb.
+ *
+ * `life` is short — 0.07–0.12s, ~4–7 frames — and it runs on the scaled sim
+ * delta, so it is HELD through hitstop and released just after. `spin` is a base
+ * in-plane tilt (the slash sits diagonal, like a cut).
+ */
+interface ImpactTuning {
+  mark: number
+  size: number
+  life: number
+  tint: THREE.Color
+  intensity: number
+  spin: number
+}
+
+/** Build a tint with channels assigned straight to r/g/b so deliberate >1
+ *  values survive (the numeric path skips the sRGB→linear conversion that the
+ *  hex constructor applies, which would otherwise clamp our HDR channels). */
+function mkTint(r: number, g: number, b: number): THREE.Color {
+  const c = new THREE.Color()
+  c.r = r
+  c.g = g
+  c.b = b
+  return c
+}
+
+/** Deterministic hash of a contact point → [-1, 1). Used to jitter the impact
+ *  mark's rotation so repeated hits vary WITHOUT introducing Math.random (which
+ *  would break the seeded, reload-stable renders the screenshot diffs rely on). */
+function hash2(x: number, y: number): number {
+  const s = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453
+  return (s - Math.floor(s)) * 2 - 1
+}
+
+const IMPACT: Record<HitLevel, ImpactTuning> = {
+  light:    { mark: 0, size: 0.95, life: 0.07, tint: mkTint(1.55, 0.92, 0.40), intensity: 1.5, spin: 0.0 },
+  medium:   { mark: 1, size: 1.25, life: 0.08, tint: mkTint(1.70, 0.80, 0.34), intensity: 1.7, spin: 0.0 },
+  heavy:    { mark: 2, size: 1.85, life: 0.10, tint: mkTint(1.90, 0.66, 0.26), intensity: 2.0, spin: 0.0 },
+  launcher: { mark: 4, size: 2.05, life: 0.11, tint: mkTint(0.50, 0.95, 1.90), intensity: 2.1, spin: 0.0 },
+  sweep:    { mark: 3, size: 1.55, life: 0.09, tint: mkTint(1.80, 0.72, 0.30), intensity: 1.8, spin: -0.5 },
+  crumple:  { mark: 2, size: 2.15, life: 0.12, tint: mkTint(2.10, 0.52, 0.22), intensity: 2.2, spin: 0.0 },
+}
+
 export interface FightVfxDeps {
   additive: ParticlePool
   alpha: ParticlePool
   shockwave: Shockwave
+  impact: ImpactFlash
   fighters: [Fighter, Fighter]
   camera: FightCamera
   /** Bridge to the engine's impact freeze. */
@@ -144,11 +204,24 @@ export class FightVfx {
     this.d.shockwave.spawn('star', pos, 0.5 + t.core * 0.4, 0.26, t.hot, t.cool, 1.3 + power)
     this.d.shockwave.spawn('shock', pos, 0.4 + t.core * 0.3, 0.26, t.hot, t.cool, 1.15, 1.4)
 
+    // The bold impact-frame mark: one large, short-lived additive graphic laid
+    // ON TOP of the fine particle spray. This is the deliberate drawn beat the
+    // particles alone can't give (each particle is ~0.13–0.24 world units; this
+    // mark is 0.95–2.15 — 28–63% of a body). Oriented to the blow so a left- and
+    // a right-facing hit don't stamp the same mark, with a small deterministic
+    // jitter (hashed from the contact point, so screenshot diffs stay stable) so
+    // repeated hits vary. It runs on the scaled sim delta → held through hitstop,
+    // then released a few frames later.
+    const im = IMPACT[level] ?? IMPACT.medium
+    const bd = this.blowDir(attacker, 0.16)
+    const angle = Math.atan2(bd.y, bd.x) + im.spin + hash2(at.x, at.y) * 0.35
+    this.d.impact.spawn(pos, im.mark, im.size, angle, im.tint, im.intensity, im.life)
+
     // Feel: freeze, shake, dolly punch, and flash the defender. The shake is a
     // directional shove along the blow, weight-scaled via t.shake (light 0.10 →
     // crumple 0.36) so a jab ticks the frame and a launcher rocks it.
     this.d.requestHitstop(t.hitstopMs, t.hitstopScale)
-    this.d.camera.addShake(t.shake, this.blowDir(attacker, 0.16))
+    this.d.camera.addShake(t.shake, bd)
     this.d.camera.punchIn(t.push)
     this.d.fighters[target]?.triggerHitFlash(t.flash)
     this.d.emitEngine?.(attacker, target, level, power, 'hit')

@@ -64,6 +64,7 @@ fighthud-shots/
 # Generated animation review artifacts (previews/contact sheets) — regenerate from cache
 public/fighters/*/review/
 public/projectiles/*/review/
+public/impact/*/review/
 diag/
 
 # Visual critic working artifacts — local only

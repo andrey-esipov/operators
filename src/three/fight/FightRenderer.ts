@@ -18,6 +18,8 @@ import { stageConfig } from '../stage/StageRegistry'
 import { PostPipeline } from '../post/PostPipeline'
 import { ParticlePool, createPools, budgetFor } from '../vfx/ParticlePool'
 import { Shockwave } from '../vfx/Shockwave'
+import { ImpactFlash } from '../vfx/ImpactFlash'
+import { loadImpactSheet } from './loadImpactSheet'
 import { clamp } from '../camera/CameraMath'
 import { Fighter, type FighterView } from './Fighter'
 import { buildAtlasTextures, type AtlasSource } from './AtlasTextures'
@@ -59,6 +61,7 @@ export class FightRenderer {
   private additive!: ParticlePool
   private alpha!: ParticlePool
   private shockwave!: Shockwave
+  private impact!: ImpactFlash
   private vfx!: FightVfx
   private camera!: FightCamera
   private world!: FightWorld
@@ -110,12 +113,14 @@ export class FightRenderer {
     this.additive = pools.additive
     this.alpha = pools.alpha
     this.shockwave = new Shockwave(this.ctx())
+    this.impact = new ImpactFlash(this.ctx())
 
     this.camera = new FightCamera(engine.camera, this.bounds)
     this.vfx = new FightVfx({
       additive: this.additive,
       alpha: this.alpha,
       shockwave: this.shockwave,
+      impact: this.impact,
       fighters: this.fighters,
       camera: this.camera,
       requestHitstop: (ms, scale) => engine.requestHitstop(ms, scale),
@@ -132,6 +137,20 @@ export class FightRenderer {
     // Warm the two shipped projectile atlases so the first bolt draws on the
     // frame it spawns, not a few frames late. Unknown kinds still lazy-load.
     void this.projectiles.preload(['ion-bolt', 'super-beam'])
+    // Warm the impact-frame spark sheet so the first hit stamps its bold mark on
+    // contact, not a few frames late. One shared white sheet; the hue is applied
+    // per-hit at runtime. Mirrors the projectile preload's dispose-race guard.
+    void loadImpactSheet()
+      .then((sheet) => {
+        if (this.disposed) {
+          sheet.texture.dispose()
+          return
+        }
+        this.impact.setSheet(sheet)
+      })
+      .catch((err) => {
+        console.warn(`[impact] no spark sheet: ${err instanceof Error ? err.message : err}`)
+      })
     this.lightRig.setPreset(stageConfig(this.scenario).lighting, true)
     this.renderStateObj = this.renderState()
     engine.setState(this.renderStateObj)
@@ -223,6 +242,11 @@ export class FightRenderer {
     this.fighters[0].dispose()
     this.fighters[1].dispose()
     this.projectiles.dispose()
+    // ImpactFlash owns a loaded atlas texture + placeholder that live only in
+    // shader uniforms (not the scene graph), so engine.dispose()'s scene walk
+    // won't reclaim them — free them explicitly. Optional-chained because init()
+    // is async and dispose() can race ahead of construction.
+    this.impact?.dispose()
     this.engine.dispose()
   }
 
@@ -418,6 +442,7 @@ export class FightRenderer {
     this.additive.update(scaledDt)
     this.alpha.update(scaledDt)
     this.shockwave.update(scaledDt)
+    this.impact.update(scaledDt)
   }
 
   /** Reconcile the projectile sprites against the two most recent sim snapshots.

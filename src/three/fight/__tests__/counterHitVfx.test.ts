@@ -39,6 +39,7 @@ function makeDeps(): { deps: FightVfxDeps; rec: Rec } {
     shockwave: { spawn: (mode: string, _p: unknown, size: number, _d: number,
       color: THREE.Color, color2: THREE.Color, intensity = 1) =>
       rec.shockwaves.push({ mode, size, color, color2, intensity }) },
+    impact: { spawn: () => {} },
     fighters: [fighter, fighter],
     camera: { addShake: () => {}, punchIn: () => {} },
     requestHitstop: (ms: number) => rec.hitstops.push(ms),

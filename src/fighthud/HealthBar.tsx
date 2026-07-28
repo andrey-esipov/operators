@@ -2,18 +2,13 @@ import { useRef, type CSSProperties } from 'react'
 import { useHudTick } from './hudContext'
 import { Portrait } from './Portrait'
 import type { FighterDisplay } from './types'
+import { stepHealthBar, type BarState } from './healthBarModel'
 
 interface Props {
   index: 0 | 1
   display: FighterDisplay
 }
 
-// Exponential-smoothing time constants (ms). The front bar snaps down with a
-// little weight; the trail holds, then drains slowly behind it — the readable
-// "you just lost this much" chunk every modern fighter shows.
-const TAU_MAIN = 55
-const TAU_TRAIL = 260
-const TRAIL_HOLD_MS = 150
 const CRIT_PCT = 0.25
 
 // Front-bar colour tier (good / warn / crit) is toggled as a class so the CSS
@@ -21,11 +16,6 @@ const CRIT_PCT = 0.25
 // mirrored on the right fighter). A flat single hue reads as a UI control; a
 // yellow→amber→orange ramp across the bar reads as a gauge (SF6 / Tekken).
 const TIER_CLASS = ['tier-good', 'tier-warn', 'tier-crit']
-
-/** Smoothing factor for a given time constant and frame delta. */
-function alpha(dtMs: number, tau: number): number {
-  return 1 - Math.exp(-dtMs / tau)
-}
 
 /**
  * Two-layer health bar. The colored `main` fill is the live value; the pale
@@ -39,9 +29,7 @@ export function HealthBar({ index, display }: Props) {
   const mainRef = useRef<HTMLDivElement>(null)
   const trailRef = useRef<HTMLDivElement>(null)
 
-  const mainDisp = useRef(1)
-  const trailDisp = useRef(1)
-  const holdMs = useRef(0)
+  const bar = useRef<BarState>({ main: 1, trail: 1, holdMs: 0 })
   const lastCrit = useRef<boolean | null>(null)
   const lastTier = useRef<number>(-1)
 
@@ -49,27 +37,10 @@ export function HealthBar({ index, display }: Props) {
     const f = frame.state.fighters[index]
     const target = Math.max(0, Math.min(1, f.health / f.maxHealth))
 
-    // Round reset (or any heal): snap up so the bar refills instantly.
-    if (target > mainDisp.current + 0.02) {
-      mainDisp.current = target
-      trailDisp.current = target
-      holdMs.current = 0
-    } else {
-      // Front bar eases down with weight.
-      mainDisp.current += (target - mainDisp.current) * alpha(dt, TAU_MAIN)
-      // Trail holds after a hit, then drains slowly behind the front bar.
-      if (target < trailDisp.current) {
-        if (holdMs.current < TRAIL_HOLD_MS) holdMs.current += dt
-        else trailDisp.current += (target - trailDisp.current) * alpha(dt, TAU_TRAIL)
-      } else {
-        trailDisp.current = target
-      }
-    }
-    // Trail can never sit in front of the main fill.
-    if (trailDisp.current < mainDisp.current) trailDisp.current = mainDisp.current
+    stepHealthBar(bar.current, target, dt)
 
-    if (mainRef.current) mainRef.current.style.width = `${mainDisp.current * 100}%`
-    if (trailRef.current) trailRef.current.style.width = `${trailDisp.current * 100}%`
+    if (mainRef.current) mainRef.current.style.width = `${bar.current.main * 100}%`
+    if (trailRef.current) trailRef.current.style.width = `${bar.current.trail * 100}%`
 
     // Front-bar colour shifts good → warn → crit as a coarse read. Toggled as a
     // class (not an inline background) so the CSS owns the horizontal hue ramp

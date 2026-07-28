@@ -44,15 +44,22 @@ const ROSTER: Array<[string, FighterAssets]> = (
  *     but the SUSTAINED cadence must be reduced: the typical (median) key holds
  *     at least MIN_MEDIAN_HOLD sim frames.
  *
- * Measured at authoring time across the whole roster (1650 holds): 0% on-ones,
+ * Measured at authoring time across the whole roster (1652 holds): ~0.3% on-ones,
  * median hold 6 (~10 fps effective) — already firmly on threes-or-slower. (The
- * count rose from 1620 to 1650 when the kick contact-cel fix gave each of the 30
+ * count rose 1620 -> 1650 when the kick contact-cel fix gave each of the 30
  * LK/MK clips across the six playable skins one active-window key: those clips
  * went from a 2-key [active, idle] reel to a 3-key [idle, active, idle] reel so
- * the contact pose lands on the move's active frame. That adds 30 held keys; it
- * does not add a single on-ones key, and the median is unmoved.) The floors below
- * sit under that with margin so real art has room to breathe while a regression
- * toward 60 fps smoothness reddens.
+ * the contact pose lands on the move's active frame. It then rose 1650 -> 1652
+ * when that derivation was generalized from kicks to EVERY strike so the contact
+ * cel spans the WHOLE active window, not just its first frame: the five complete
+ * playable skins only had durations re-timed (key COUNT unchanged, so no delta),
+ * but madhavan is a partial skin missing its hp tween cels, so its derived 4-cel
+ * HP layout [startup, wind, active, rec] substitutes idle-1 for the two absent
+ * tweens rather than dropping the whole clip to a generic fallback — that is +1
+ * key each on madhavan st.HP and j.HP. Both added keys are HELD (durations
+ * [5,5,3,17] and [5,4,4,10]); neither is on-ones, and the median is unmoved.) The
+ * floors below sit under that with margin so real art has room to breathe while a
+ * regression toward 60 fps smoothness reddens.
  */
 export const SIM_FPS = 60
 /** At most this fraction of all holds may be single-frame smear accents. */

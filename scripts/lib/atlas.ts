@@ -187,7 +187,7 @@ export function buildClips(
   const clips: FighterAssets['clips'] = {}
   for (const clipName of Object.keys(CLIPS)) {
     const timing = attackTiming?.get(clipName)
-    const derived = timing ? deriveAttackClip(clipName, timing) : null
+    const derived = timing ? deriveAttackClip(clipName, timing, (n) => nameToMeta.has(n)) : null
     const built = resolveClip(derived ?? CLIPS[clipName], nameToMeta) ??
       resolveClip(FALLBACK_CLIPS[clipName], nameToMeta)
     if (built) clips[clipName] = built

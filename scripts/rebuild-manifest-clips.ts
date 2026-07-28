@@ -1,12 +1,12 @@
 /**
  * Manifest-only clip rebuild.
  *
- * Re-derives every fighter's `clips` from the current frame-spec (crucially the
- * timing-derived kick ladder, see frame-spec `deriveAttackClip`) and rewrites
- * ONLY the `clips` field of each playable skin's assets.json. It never reads or
- * writes atlas.png and never re-runs sprite generation, so the packed atlas
- * image is byte-for-byte untouched — the fix is a pure timing/data change over
- * cels that already exist in the atlas.
+ * Re-derives every fighter's derived-attack `clips` from the current frame-spec
+ * (the timing-derived attack ladder — every dedicated-clip strike, see frame-spec
+ * `deriveAttackClip`) and rewrites ONLY those keys in each playable skin's
+ * assets.json. It never reads or writes atlas.png and never re-runs sprite
+ * generation, so the packed atlas image is byte-for-byte untouched — the fix is a
+ * pure timing/data change over cels that already exist in the atlas.
  *
  * This is the reviewable regeneration path for the fix: the full pipeline
  * (generate-animation-set) would re-run the non-deterministic AI art step and
@@ -49,18 +49,21 @@ for (const skin of skins) {
   }
   const nameToIdx = new Map(assets.frames.map((f, i) => [f.name, i]))
 
-  // SURGICAL: only the derived kick move-ids are recomputed and overwritten in
-  // place. Every other clip (idle, walks, punches, specials, reactions) is left
-  // exactly as shipped — partial fighters carry clips built by older pipelines
-  // that a full rebuild would wrongly drop or alter. Key order is preserved
-  // because existing values are replaced, none added or removed.
+  // SURGICAL: only the derived attack move-ids are recomputed and overwritten in
+  // place. Every other clip (idle, walks, reactions, and any orphan clip a
+  // partial fighter carries from an older pipeline) is left exactly as shipped —
+  // a full rebuild would wrongly drop or alter those. Key order is preserved
+  // because existing values are replaced, none added or removed. A skin that
+  // never generated a move's contact cel is left on its existing clip (the derive
+  // call bails), and missing startup/recovery tweens degrade to the neutral pose
+  // rather than dropping the clip.
   const diffs: string[] = []
   for (const moveId of Object.keys(DERIVED_ATTACKS)) {
     const existing = assets.clips[moveId]
     if (!existing) continue // this fighter has no clip for that move
     const t = timing.get(moveId)
     if (!t) continue // move-id not in this archetype's set
-    const spec = deriveAttackClip(moveId, t)
+    const spec = deriveAttackClip(moveId, t, (n) => nameToIdx.has(n))
     if (!spec) continue
     const resolved = resolveClip(spec, nameToIdx)
     if (!resolved) {
@@ -77,11 +80,11 @@ for (const skin of skins) {
   }
 
   if (diffs.length === 0) {
-    console.log(`  ${skin}: kick clips already aligned`)
+    console.log(`  ${skin}: attack clips already aligned`)
     continue
   }
   drift++
-  console.log(`  ${skin}: ${diffs.length} kick clip(s) change`)
+  console.log(`  ${skin}: ${diffs.length} attack clip(s) change`)
   for (const d of diffs) console.log(d)
 
   if (!check) {

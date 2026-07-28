@@ -649,17 +649,23 @@ export function resolveClip(
 
 // Per-move clips a MoveFrame / attack stance can index into. Defined as named
 // consts so the sim's move ids (st.LP, cr.HP, qcf.P …) can alias straight onto
-// them below without re-specifying frames and durations.
+// them below without re-specifying frames and durations. For a PLAYABLE fighter
+// every one of these that a move maps to is re-laid-out per move from that move's
+// own startup/active/recovery (see `deriveAttackClip`/`ATTACK_SHAPES`); the fixed
+// durations here are the fallback for skins with NO moveset (the unplayable card
+// art) and the seed of each family's cel ORDER, which `shapeFrom` reads to learn
+// which cel is startup, which is contact, which is recovery.
 const LP = clip(false, ['lp-startup', 3], ['lp-active', 4], ['tw-lp-rec', 4])
 const MP = clip(false, ['idle-1', 3], ['mp-active', 5], ['tw-mp-rec', 5])
 const HP = clip(false, ['hp-startup', 5], ['tw-hp-wind', 3], ['hp-active', 5], ['tw-hp-rec', 6])
-// Kick STATIC fallbacks. These fixed durations cannot align to a real active
-// window — the `*-active` cel is spent during startup and has snapped back to
+// Kick statics specifically CANNOT align to a real active window with fixed
+// durations — the `*-active` cel is spent during startup and has snapped back to
 // idle by the frame the kick connects (LK/MK reserve NO startup cel; HK's 6f
 // startup only happens to cover operator's 10f-startup active window and misses
-// vanguard/warden's 12f). They are used ONLY for skins with no moveset (the
-// unplayable card art); every playable fighter's kicks are laid out per-move
-// from that move's own startup/active/recovery via `deriveAttackClip` below.
+// vanguard/warden's 12f). That is what forced the derived layout; the punches and
+// specials below have the same failure at the END of the window (mp-active
+// covers 3-7 but vanguard st.MP is active 6-8; the fireball release expires at 13
+// but qcf.P is active 11-14), so they are derived too.
 const LK = clip(false, ['lk-active', 4], ['idle-1', 5])
 const MK = clip(false, ['mk-active', 5], ['idle-1', 7])
 const HK = clip(false, ['hk-startup', 6], ['hk-active', 6], ['idle-1', 10])
@@ -727,56 +733,117 @@ function tilePhase(
 }
 
 /**
- * Lay an AttackShape out against a move's timing. The active cel spans EXACTLY
- * the active window and is emitted as its own key (never merged into a
- * neighbouring idle hold), so `frameAt(clip, startup)` — the cel the attacker
- * freezes on at point-blank, since sim.ts freezes move.frame during hitstop and
- * combat latches the hit on the first active-window overlap — is the contact
- * cel for any startup, on any archetype.
+ * Lay an AttackShape out against a move's timing. The active cel is emitted as
+ * its own key with duration EXACTLY `t.active`, placed right after a startup
+ * phase of EXACTLY `t.startup` frames, so it spans the whole active window
+ * [t.startup, t.startup + t.active) = [active[0], active[active.length-1]] — not
+ * merely its first frame. That is the fix's core invariant: aligning only the
+ * START of the active cel (as a hand-tuned duration accidentally can) leaves the
+ * cel free to expire one frame early and drop the LAST active frame back onto the
+ * recovery/idle pose. Because contact can latch on any active frame (a defender
+ * who walks into a later active frame freezes THAT frame), every frame in the
+ * window must be the contact cel, so the active cel's duration is bound to the
+ * window length by construction — never a second number that can drift.
+ *
+ * `has`, when given, is the skin's available-cel predicate: a startup/recovery
+ * cel the skin never generated (a partial fighter missing a `tw-*` inbetween) is
+ * substituted with `neutral` rather than left dangling, so `resolveClip` — which
+ * is all-or-nothing — does not drop the entire clip over one missing tween. The
+ * active cel is never substituted; a skin lacking it bails in `deriveAttackClip`
+ * to the static/fallback path instead.
  */
-export function layoutAttack(shape: AttackShape, t: MoveTiming): ClipSpec {
+export function layoutAttack(shape: AttackShape, t: MoveTiming, has?: (cel: string) => boolean): ClipSpec {
+  const avail = (cels: string[]): string[] =>
+    has ? cels.map((c) => (has(c) ? c : shape.neutral)) : cels
   const frames: string[] = []
   const durations: number[] = []
-  tilePhase(shape.startup, t.startup, shape.neutral, frames, durations)
+  tilePhase(avail(shape.startup), t.startup, shape.neutral, frames, durations)
   frames.push(shape.active)
   durations.push(Math.max(1, t.active))
-  tilePhase(shape.recovery, t.recovery, shape.neutral, frames, durations)
+  tilePhase(avail(shape.recovery), t.recovery, shape.neutral, frames, durations)
   return { frames, durations, loop: false }
 }
 
 /**
- * The kick ladder's per-button shapes. LK/MK have no windup drawing (hold the
- * neutral idle pose through startup, extend at contact); HK has a windup cel.
- * Punches already reserve a startup cel so their static clips place `*-active`
- * at the move's startup frame — they pass the contact-cel gate unchanged and are
- * deliberately left on their hand-tuned, visually-reviewed clips; the roster-wide
- * gate still enforces the invariant for them.
+ * Derive an AttackShape from a static clip spec by naming its contact cel: the
+ * cels before it are the startup/windup, the cels after it the recovery. This
+ * keeps ONE source of truth for each attack's poses — the very static const the
+ * no-moveset card art still falls back to — and adds only the single fact the
+ * layout needs that a bare frame list cannot carry: WHICH cel is the contact
+ * pose. The authored durations are discarded and re-derived per move from timing.
  */
-const KICK_SHAPES: Record<'lk' | 'mk' | 'hk', AttackShape> = {
-  lk: { startup: [], active: 'lk-active', recovery: [], neutral: 'idle-1' },
-  mk: { startup: [], active: 'mk-active', recovery: [], neutral: 'idle-1' },
-  hk: { startup: ['hk-startup'], active: 'hk-active', recovery: [], neutral: 'idle-1' },
+function shapeFrom(spec: ClipSpec, active: string, neutral: string = STANCE_FRAME): AttackShape {
+  const i = spec.frames.indexOf(active)
+  if (i < 0) throw new Error(`shapeFrom: '${active}' not in [${spec.frames.join(', ')}]`)
+  return { startup: spec.frames.slice(0, i), active, recovery: spec.frames.slice(i + 1), neutral }
 }
 
 /**
- * Sim move-ids whose clip is DERIVED from the move's timing (the normal kick
- * ladder — ground, crouch, jump and the operator's f.HK command kick). Specials
- * that reuse a kick clip (qcb.K) stay on the static clip and are covered by the
- * gate. Everything not listed here uses the static CLIPS entry.
+ * Every attacking clip family, keyed to its contact cel and laid out per move
+ * from that move's own startup/active/recovery. LK/MK keep NO windup drawing —
+ * a two-cel kick holds the neutral pose through startup and extends only at
+ * contact (extended-at-contact beats telegraphing startup); everything else
+ * keeps its authored startup/windup and recovery cels. Only the DURATIONS are
+ * derived, so the contact cel spans exactly the active window for any archetype
+ * — one shared clip with hand-tuned durations cannot, which is how the kick
+ * ladder shipped freezing on idle AND how the punches/specials shipped dropping
+ * the LAST active frame back onto idle (st.MP active[6..8] but mp-active only
+ * covered 3-7; qcf.P active[11..14] but the release cel expired at 13).
  */
-export const DERIVED_ATTACKS: Record<string, 'lk' | 'mk' | 'hk'> = {
+const ATTACK_SHAPES = {
+  lp: shapeFrom(LP, 'lp-active'),
+  mp: shapeFrom(MP, 'mp-active'),
+  hp: shapeFrom(HP, 'hp-active'),
+  lk: { startup: [], active: 'lk-active', recovery: [], neutral: STANCE_FRAME },
+  mk: { startup: [], active: 'mk-active', recovery: [], neutral: STANCE_FRAME },
+  hk: shapeFrom(HK, 'hk-active'),
+  fireball: shapeFrom(FIREBALL, 'special-fireball-release'),
+  uppercut: shapeFrom(UPPERCUT, 'special-uppercut'),
+  super: shapeFrom(SUPER, 'special-uppercut'),
+} satisfies Record<string, AttackShape>
+
+type AttackShapeKey = keyof typeof ATTACK_SHAPES
+
+/**
+ * Sim move-ids whose clip is DERIVED from the move's own timing rather than
+ * taken from a fixed CLIPS entry — EVERY attacking move with a dedicated clip,
+ * not just the kick ladder. A CPU-landing census put cr.MK at 22.7% of all
+ * connecting hits and the strike-specials (qcf.P/charge.P/qcb.K) among the
+ * highest-hitstop, most-deliberately-landed moves; a fixed duration table cannot
+ * hold every one of them on its contact cel across three archetypes' differing
+ * startups AND active lengths, so the layout is derived for all of them. Move-ids
+ * not listed here (the generic per-button clips, and vanguard's command specials
+ * that have no dedicated clip — art-deficit #7) use the static CLIPS entry.
+ */
+export const DERIVED_ATTACKS: Record<string, AttackShapeKey> = {
+  'st.LP': 'lp', 'cr.LP': 'lp', 'j.LP': 'lp',
+  'st.MP': 'mp', 'cr.MP': 'mp', 'f.MP': 'mp',
+  'st.HP': 'hp', 'j.HP': 'hp', 'throw.f': 'hp',
+  'cr.HP': 'uppercut', 'dp.P': 'uppercut',
   'st.LK': 'lk', 'cr.LK': 'lk',
   'st.MK': 'mk', 'cr.MK': 'mk', 'j.MK': 'mk',
-  'st.HK': 'hk', 'cr.HK': 'hk', 'j.HK': 'hk', 'f.HK': 'hk',
+  'st.HK': 'hk', 'cr.HK': 'hk', 'j.HK': 'hk', 'f.HK': 'hk', 'qcb.K': 'hk',
+  'qcf.P': 'fireball', 'charge.P': 'fireball', 'qcf.slow': 'fireball', 'qcf.fast': 'fireball',
+  'super.P': 'super', 'super.storm': 'super',
 }
 
 /**
- * The timing-derived clip for a move-id, or null when the move-id is not part of
- * the derived kick ladder (the caller then falls back to the static CLIPS entry).
+ * The timing-derived clip for a move-id, or null when the move-id is not a
+ * derived attack (the caller then falls back to the static CLIPS entry). `has`,
+ * when given, is the skin's available-cel predicate: if the skin never generated
+ * the contact cel itself, bail to the static/fallback path; missing
+ * startup/recovery cels degrade to `neutral` inside `layoutAttack`.
  */
-export function deriveAttackClip(moveId: string, t: MoveTiming): ClipSpec | null {
-  const shape = DERIVED_ATTACKS[moveId]
-  return shape ? layoutAttack(KICK_SHAPES[shape], t) : null
+export function deriveAttackClip(
+  moveId: string,
+  t: MoveTiming,
+  has?: (cel: string) => boolean,
+): ClipSpec | null {
+  const key = DERIVED_ATTACKS[moveId]
+  if (!key) return null
+  const shape = ATTACK_SHAPES[key]
+  if (has && !has(shape.active)) return null
+  return layoutAttack(shape, t, has)
 }
 
 export const CLIPS: Record<string, ClipSpec> = {

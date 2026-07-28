@@ -99,9 +99,14 @@ export class FightVfx {
       color: t.cool, color2: t.hot, size: t.size * 1.4, life: 0.55, lifeVariance: 0.5,
       gravity: -14, drag: 1.6, shape: 'ember', intensity: 1.2, spawnRadius: 0.22, bounce: true,
     })
-    // Contact flare + a thin ring travelling across the silhouette.
+    // Contact flare + a thin ring travelling across the silhouette. The 'shock'
+    // ring's colour is owned by its *second* colour arg, so it must be the warm
+    // flavour, not t.hot — passing white here made the ring a desaturated
+    // white/grey donut whose chromatic split read as lens dirt trailing the
+    // recoiling fist. The 'star' below already owns the white-hot core; the ring
+    // is the shaped warm shock front, kept short so it doesn't linger as a smear.
     this.d.shockwave.spawn('star', pos, 0.5 + t.core * 0.4, 0.26, t.hot, t.cool, 1.3 + power)
-    this.d.shockwave.spawn('shock', pos, 0.4 + t.core * 0.3, 0.34, t.cool, t.hot, 1.0, 1.4)
+    this.d.shockwave.spawn('shock', pos, 0.4 + t.core * 0.3, 0.26, t.hot, t.cool, 1.15, 1.4)
 
     // Feel: freeze, shake, dolly punch, and flash the defender.
     this.d.requestHitstop(t.hitstopMs, t.hitstopScale)

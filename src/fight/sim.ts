@@ -145,6 +145,13 @@ function pushWidth(f: FighterState, def: FighterDef): number {
 
 function logInputs(s: FightState, inputs: [InputFrame, InputFrame]): void {
   if (!s.inputLog) s.inputLog = [[], []]
+  // Hitstop is a global time-freeze: neither fighter advances, so the input ring
+  // must freeze too. If it kept recording the held direction, a buffered motion
+  // (say the 236 you're cancelling a jab into) would be pushed out of MOTION_WINDOW
+  // by the ~8 frames of impact freeze before the move's cancellable frames even
+  // resume — making normal→special cancels physically unbufferable. Freezing here
+  // is what lets a hit-confirm survive its own hitstop.
+  if (s.hitstop > 0) return
   for (let i = 0; i < 2; i++) {
     const f = s.fighters[i]
     const rel = toRelative(inputs[i].dir, f.facing)

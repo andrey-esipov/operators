@@ -179,6 +179,7 @@ const surgePalm = mkMove({
   id: 'qcf.P', name: 'Surge Palm', tag: 'special', motion: '236', sprite: nextSprite(),
   startup: 11, active: 4, recovery: 22, forward: 60, // busy 26
   hitbox: [{ x: 30, y: 80, w: 78, h: 46 }],
+  cancels: ['super'],
   hit: { damage: 80, blockstun: 18 /* -8 */, hitstun: 24, guard: 'high', level: 'medium',
     kbx: 3.2, pushback: 1.0, hitstop: 12, meterGain: 24, meterGainOnBlock: 10, scaling: 0.9 },
 })
@@ -197,6 +198,7 @@ const tornadoKick = mkMove({
   id: 'qcb.K', name: 'Tornado Kick', tag: 'special', motion: '214', sprite: nextSprite(),
   startup: 10, active: 3, recovery: 20, forward: 30, // busy 23
   hitbox: [{ x: 34, y: 60, w: 72, h: 60 }],
+  cancels: ['super'],
   hit: { damage: 75, blockstun: 17 /* -6 */, hitstun: 22, guard: 'high', level: 'medium',
     kbx: 2.6, pushback: 0.6, hitstop: 11, meterGain: 22, meterGainOnBlock: 9, scaling: 0.9 },
 })
@@ -205,6 +207,7 @@ const cannon = mkMove({
   id: 'charge.P', name: 'Cannon', tag: 'special', motion: '[4]6', sprite: nextSprite(),
   startup: 13, active: 4, recovery: 19, forward: 70, // busy 23
   hitbox: [{ x: 32, y: 70, w: 80, h: 48 }],
+  cancels: ['super'],
   hit: { damage: 85, blockstun: 20 /* -3 */, hitstun: 24, guard: 'high', level: 'heavy',
     kbx: 3.4, pushback: 0.8, hitstop: 12, meterGain: 22, meterGainOnBlock: 10, scaling: 0.9 },
 })

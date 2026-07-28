@@ -181,6 +181,31 @@ export const MIN_DAMAGE = 5
 export const JUGGLE_ALLOWANCE = 4
 
 /**
+ * ─── The combo system, in one place ─────────────────────────────────────────
+ *
+ * A combo is a string of hits with no neutral gap — the victim never leaves
+ * hitstun/juggle between links. Three mechanisms build one:
+ *
+ *   1. CHAINS/LINKS — a normal's `cancels` list says what tags it may cancel
+ *      into. Lights cancel into ['normal','special','super'] (so light→light→
+ *      medium chains); mediums/heavies into ['special','super']. Specials
+ *      cancel into ['super']. That is the whole cancel graph:
+ *          light → medium/heavy → special → super
+ *   2. LAUNCH + JUGGLE — a launcher (cr.HP, DP) pops the victim airborne with
+ *      JUGGLE_ALLOWANCE hits of air time; each follow-up spends one and adds a
+ *      little upward knockback, and gravity + the allowance guarantee it ends.
+ *   3. SCALING — COMBO_SCALING taxes each successive hit so a 10-hit route beats
+ *      a 3-hit route without tripling it. MIN_SCALE / MIN_DAMAGE keep the tail
+ *      from reaching zero.
+ *
+ * A cancel is only allowed once a move has *connected* (attackConnected) and
+ * only within its cancel window: the active frames plus CANCEL_WINDOW frames of
+ * early recovery. That early-recovery slack is what makes a hit-confirm humanly
+ * (and AI-ly) bufferable rather than a one-frame link — see build.ts.
+ */
+export const CANCEL_WINDOW = 6
+
+/**
  * Throws. A throw is unblockable but has short range and can be *teched*: if the
  * victim attempts their own throw within THROW_TECH_WINDOW frames of being
  * grabbed, both fighters break apart instead. That window is the whole game of

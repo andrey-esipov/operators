@@ -8,7 +8,7 @@
  */
 
 import type { Box, Hit, HitLevel, Guard, Move, MoveFrame, MoveTag, Vec2 } from '../types'
-import { PUSHBOX_H, PUSHBOX_W, REACH_BONUS, KB_X_SCALE, KB_Y_SCALE } from '../constants'
+import { PUSHBOX_H, PUSHBOX_W, REACH_BONUS, KB_X_SCALE, KB_Y_SCALE, CANCEL_WINDOW } from '../constants'
 
 // Standard body boxes, authored facing right with the origin at the feet.
 export const STAND_HURT: Box = { x: -24, y: 0, w: 48, h: 168 }
@@ -111,6 +111,12 @@ export function mkMove(spec: MoveSpec): Move {
     const isStartup = f < spec.startup
     const isActive = f >= spec.startup && f < spec.startup + spec.active
     const phase = isStartup ? 0 : isActive ? 1 : 2
+    // Cancels are live across the active frames AND the first CANCEL_WINDOW
+    // frames of recovery. Restricting them to the active frames alone (as this
+    // used to) left a real cancel window of ~1 frame once impact hitstop is
+    // accounted for, which no human or AI can hit on reaction — the early-
+    // recovery slack is what turns a hit-confirm into an actual combo route.
+    const canCancel = f >= spec.startup && f < spec.startup + spec.active + CANCEL_WINDOW
 
     let motion: Vec2 | undefined
     if (isActive && perActiveForward) motion = { x: perActiveForward, y: 0 }
@@ -129,7 +135,7 @@ export function mkMove(spec: MoveSpec): Move {
       pushbox: push,
       motion,
       invuln,
-      cancels: isActive ? spec.cancels : undefined,
+      cancels: canCancel ? spec.cancels : undefined,
     })
   }
 

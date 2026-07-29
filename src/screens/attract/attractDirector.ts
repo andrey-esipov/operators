@@ -113,10 +113,11 @@ export const ESTABLISH_HOLD_FRAMES = 36
  * exists to catch (memoryless starvation) produces gaps of 6–12, far outside
  * this bound, so the behavioural gate still reddens hard on any real regression.
  *
- * The opener (bout 1) is exempt: it stays under the first-load cost ceiling
- * (which deliberately keeps the heaviest atlas — our hero art — *out* of the
- * very first bout), and coverage then *pulls that hero skin back in* within this
- * bound rather than leaving it to chance. Cost constrains bout 1; coverage owns
+ * The opener (bout 1) is exempt: it stays within the first-bout download budget
+ * (see `isAllowedFirstBout`), which on a constrained connection keeps the
+ * heaviest atlas — our hero art — *off* the very first bout; coverage then
+ * *guarantees that hero skin appears* within this bound rather than leaving it to
+ * chance. The opener budget constrains bout 1; coverage owns
  * bouts 2+; the two never contend because they act on disjoint bouts. Asserted
  * behaviourally over full reels across many seeds and stages in the gate.
  */
@@ -151,8 +152,9 @@ export class AttractDirector {
 
   constructor(opts: AttractDirectorOptions = {}) {
     this.rng = makeRng((opts.seed ?? (Date.now() & 0xffffffff)) >>> 0)
-    // The opener is cost-constrained so a cold first visit never waits on the
-    // heaviest atlas pairing; every subsequent bout is unconstrained.
+    // The opener is held within the first-bout download budget (see
+    // `isAllowedFirstBout`) so a cold first visit on a constrained link isn't
+    // served the heaviest atlas pairing; every subsequent bout is unconstrained.
     this._matchup = this.pickMatchup(true)
     this.sim = this.buildSim(this._matchup)
     this.prerollToAction(this.establishHoldFor(this._matchesShown))
@@ -173,18 +175,19 @@ export class AttractDirector {
   }
 
   /**
-   * The opener (bout 1). Cost-constrained rejection sample, unchanged from the
-   * pre-coverage picker so the first-load ceiling and the opener distribution are
-   * preserved exactly: draw a distinct-skin, distinct-archetype pair and re-roll
-   * it (never the stage/seed) until the pair is within the first-bout download
-   * ceiling (see {@link isAllowedFirstBout}), so the shop window's very first load
-   * stays off the ~10.9 MB worst-case pairing. The archetype guard applies here
-   * too. A hard attempt cap guarantees termination — the cost re-roll is a soft
-   * preference we knowingly relax so a cold visit never hangs — and with ~4 of 5
-   * pairings eligible is effectively never reached. Coverage does not steer the
-   * opener: nothing has been shown yet, so there is no debt to service, which is
-   * exactly why the cost ceiling (bout 1 only) and coverage (bouts 2+) never
-   * contend.
+   * The opener (bout 1). Budget-aware rejection sample, unchanged from the
+   * pre-coverage picker so the first-bout download budget and the opener
+   * distribution are preserved exactly: draw a distinct-skin, distinct-archetype
+   * pair and re-roll it (never the stage/seed) until the pair fits the viewer's
+   * first-bout download budget (see {@link isAllowedFirstBout}) — on a fast or
+   * unknown connection, including node/SSR with no `navigator`, that budget is
+   * effectively uncapped and any pairing may headline; a constrained link keeps
+   * the shop window's very first load off the heaviest pairing. The archetype
+   * guard applies here too. A hard attempt cap guarantees termination — the
+   * budget re-roll is a soft preference we knowingly relax so a cold visit never
+   * hangs. Coverage does not steer the opener: nothing has been shown yet, so
+   * there is no debt to service, which is exactly why the opener budget (bout 1
+   * only) and coverage (bouts 2+) never contend.
    */
   private pickOpenerPair(): [RosterEntry, RosterEntry] {
     const MAX_ATTEMPTS = 40
@@ -215,8 +218,8 @@ export class AttractDirector {
    * most-overdue coverable skins. Ties (common early, when several skins are
    * equally unseen) break on the rng, which is what keeps the reel varied rather
    * than a fixed rotation; the stage and seed are drawn by the caller as before.
-   * No cost check — the ceiling is a first-load concern and applies to bout 1
-   * only.
+   * No budget check — the first-bout download budget is a cold-load concern and
+   * applies to bout 1 only.
    */
   private pickCoveragePair(): [RosterEntry, RosterEntry] {
     const a = this.stalest(ROSTER)
@@ -257,7 +260,7 @@ export class AttractDirector {
    * (0 = cut straight to action). The opener and every third bout thereafter
    * (1-in-3) establish; the rest enter on the first exchange. Keyed off the bout
    * counter, NOT the rng, so introducing the beat leaves the matchup draw — and
-   * therefore the archetype distribution and the cost-constrained opener — byte-
+   * therefore the archetype distribution and the budget-constrained opener — byte-
    * identical to a reel without it.
    */
   private establishHoldFor(bout: number): number {

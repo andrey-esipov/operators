@@ -155,7 +155,8 @@ describe('attract director — the title-screen demo fight', () => {
 
 /**
  * Sample the *actual* matchup draw distribution the director produces: the
- * opener (the cost-constrained bout-1 draw) across many seeds, plus several
+ * opener (the budget-constrained bout-1 draw — uncapped in node, which has no
+ * `navigator`) across many seeds, plus several
  * rotations per seed (the unconstrained bout-2+ draw). Returns every matchup
  * seen, so the gate below asserts over the real distribution rather than a
  * re-implementation of the picker.
@@ -171,7 +172,7 @@ function sampleDraws(seedCount: number, rotationsPerSeed: number) {
         aArch: dir.matchup.a.archetype,
         bArch: dir.matchup.b.archetype,
       })
-    record() // opener — the firstBout (cost-constrained) path
+    record() // opener — the firstBout (budget-constrained) path
     for (let r = 0; r < rotationsPerSeed; r++) {
       dir.rotate() // bouts 2+ — the unconstrained path
       record()

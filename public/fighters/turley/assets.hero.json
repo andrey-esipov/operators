@@ -1509,7 +1509,7 @@
         11
       ],
       "durations": [
-        8
+        24
       ],
       "loop": true
     },
@@ -1518,7 +1518,7 @@
         31
       ],
       "durations": [
-        6
+        14
       ],
       "loop": true
     },
@@ -1527,7 +1527,7 @@
         15
       ],
       "durations": [
-        10
+        13
       ],
       "loop": false
     },
@@ -1536,7 +1536,7 @@
         16
       ],
       "durations": [
-        10
+        13
       ],
       "loop": false
     },
@@ -1546,17 +1546,19 @@
         13
       ],
       "durations": [
-        6,
+        10,
         8
       ],
       "loop": false
     },
     "jump-fall": {
       "frames": [
+        13,
         14
       ],
       "durations": [
-        8
+        6,
+        10
       ],
       "loop": false
     }

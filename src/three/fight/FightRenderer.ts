@@ -224,7 +224,15 @@ export class FightRenderer {
     return { freeze, who, ownerPos: anchor, facing }
   }
 
-  async setFighterAssets(side: 0 | 1, assets: FighterAssets, atlas: AtlasSource, accent: string, reval?: readonly [number, number, number]) {
+  // `reval` is required-but-nullable (NOT optional) by design. Passing the body
+  // re-value is what lifts dark-neutral fighters (chesky/madhavan) off warm
+  // stages and un-collides their palette. It was silently dropped on the attract
+  // route because an earlier `reval?:` let a call site omit it with no type error
+  // (P0: ~30% of attract bouts rendered the unfixed failure). Forcing every caller
+  // to pass something — even `undefined` — makes "forgot to thread reval" a compile
+  // error instead of an invisible visual regression on the shop-window reel. Do not
+  // reintroduce the `?`: keep the bad state unrepresentable.
+  async setFighterAssets(side: 0 | 1, assets: FighterAssets, atlas: AtlasSource, accent: string, reval: readonly [number, number, number] | undefined) {
     const tex = buildAtlasTextures(atlas, 8)
     this.fighters[side].setAssets(assets, tex, accent, reval)
   }

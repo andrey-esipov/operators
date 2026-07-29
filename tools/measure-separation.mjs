@@ -140,6 +140,31 @@ const PAIRS = (arg('pairs', 'chesky:lenny,doshi:turley,madhavan:spiegel')).split
 // resurfaces here as a below-floor |contrast|. Every raw number is printed with
 // its floor and a count-below, and the carried-by breakdown prints whether we
 // pass or fail — no boolean hides where a read sits.
+//
+// WHY edgeContrast IS NOT A FLOOR (and must not become one). v12 measured our
+// edge contrast at mean 17.4% / max 24.8%, below the AAA reference band of 25–40%
+// (~64–102/255). It is tempting to floor it there to "reach AAA." Don't:
+// edgeContrast is a MECHANISM PROXY for "the fighter reads," not the read itself,
+// and the ONLY lever that raises it is keyline intensity — the exact dial whose
+// over-use produces the "stickered-on" white outline this whole task exists to
+// avoid. Flooring edgeContrast would optimise the INSTRUMENT (shove the number
+// into the band) while degrading the IMAGE (a harder, faker rim). We gate the
+// OUTCOME ("fighter separates from local background," Path A OR Path B) and leave
+// edgeContrast reported-only so a future reader can SEE it without being tempted
+// to chase it. To move it HONESTLY, add body/background VALUE separation (Path B),
+// not rim brightness.
+//
+// REJECTED — warm-stage backdrop exposure (measured, removed; do not re-attempt).
+// The obvious fix for warm stages going negative-contrast is "expose the stage
+// backdrop down so the wall behind the fighter darkens." Measured: moving the far
+// cyclorama exposure shifted localBgLum by ≤1.1/255 — because the far cyclorama is
+// NOT what sits behind the silhouette. The ring we sample (localBg, 10px just
+// outside the mask) is dominated by FLOOR, mid-ground props, reflections and
+// god-rays at the fighter's feet/torso depth, not the distant backdrop. The knob
+// is nearly orthogonal to this metric; turning it would dim 8 stages' identity for
+// ~1 unit of contrast. The fix that works is fighter-side (self-fill + additive
+// shadow-lift + per-fighter reval), which lifts the BODY value regardless of what
+// the local background does.
 const FLOORS = {
   // Path A — the KEYLINE carries the read (keyline-specific metrics)
   rimPeakDelta: Number(arg('minPeak', '60')), // keyline brightness over body interior, /255

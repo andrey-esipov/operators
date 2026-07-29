@@ -5,7 +5,9 @@ import { stepHealthBar, TRAIL_HOLD_MS, TAU_TRAIL, type BarState } from '../healt
  * The recoverable-damage trail is the "you just lost this much" chunk. Its read
  * is governed by TRAIL_HOLD_MS (how long the pale trail stays pinned after a
  * hit) and TAU_TRAIL (how slowly it then drains). These were 150ms/260ms — the
- * chunk barely flickered; reference fighters hold it ~1s. This test measures the
+ * chunk barely flickered. Our target is a ~1s hold — our own number, not a cited
+ * one: AAA fighters look to linger about that long, but we found no published
+ * spec for it. This test measures the
  * actual hold in ms and the two combo-critical invariants, so shrinking the hold
  * back toward the old value turns a claim red.
  *

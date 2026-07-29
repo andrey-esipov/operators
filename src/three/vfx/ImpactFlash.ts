@@ -7,14 +7,16 @@ import type { LoadedImpactSheet, MarkUV } from '../fight/loadImpactSheet'
  * lands at the contact point on a hit, on TOP of the fine particle burst.
  *
  * WHY THIS EXISTS. The particle burst is a spray of *fine* elements (each ~4–7%
- * of character height). Reference fighters (SF6 / Tekken 8 / GGST) add a single
- * deliberate DRAWN mark at contact — a vector star, slash or shatter — that
- * reads as "something got HIT", not "particles happened". This class draws that
+ * of character height). AAA fighters (SF6 / Tekken 8 / GGST) appear to add a
+ * single deliberate DRAWN mark at contact — a vector star, slash or shatter —
+ * that reads as "something got HIT", not "particles happened" (our own read of
+ * the genre; no published spec grounds it). This class draws that
  * mark from the procedural spark sheet (public/impact/sparks, authored by
  * scripts/generate-impact-sparks.ts).
  *
  * THREE DESIGN RULES, each learned the hard way here:
- *   1. Short-lived. Reference impact frames last ~2–8 frames. The mark runs on
+ *   1. Short-lived. Our target life is ~2–8 frames — our own number, from
+ *      watching the genre, with no published spec to cite. The mark runs on
  *      the SCALED sim delta (like the shockwaves), so it is HELD through hitstop
  *      and then ages out in a handful of frames — the "held impact frame that
  *      releases" beat — instead of lingering as clutter.

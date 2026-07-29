@@ -376,7 +376,7 @@ export class FightVfx {
 
   /**
    * A throw is the grappler's whole payoff and the answer to a turtling
-   * opponent — in SF6 a command grab is one of the loudest non-super beats in a
+   * opponent — we treat a command grab as one of the loudest non-super beats in a
    * round. It is NOT a strike, so it deliberately skips the sharp spark star and
    * the hit-spark impact mark: its beat is a grab, a lift and a SLAM.
    *

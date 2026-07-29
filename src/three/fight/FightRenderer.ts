@@ -340,7 +340,7 @@ export class FightRenderer {
       // Hitstop is the impact emphasis: the sim frame counter keeps moving but
       // the fight is deliberately frozen. The reaction must freeze with it, or
       // the victim animates straight through the one moment the freeze exists
-      // to sell. The genre read is snap to the impact pose, hold it for the
+      // to sell. Our design call (our own, not a cited genre spec) is snap to the impact pose, hold it for the
       // duration of the stop, then play the recovery out.
       if (cur.hitstop > 0) continue
       this._reaction[i] += 1

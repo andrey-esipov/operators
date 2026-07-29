@@ -226,6 +226,12 @@ describe('first-bout download — real bytes & non-triviality (vacuity)', () => 
     // so only the four madhavan pairs fit and spiegel never opened. Pricing the
     // opener on the HERO atlas makes EVERY real pairing fit the 33 s slow-4G
     // target — nothing is excluded, which is the point: cost no longer tracks art.
+    // PROVENANCE: what carries this is the MARGIN, not the exact bytes. Admission
+    // is priced on the HERO atlases (read from disk here); the heaviest hero pair
+    // is ~2.65 MiB against the 6.6 MB budget, so no plausible working-tree state of
+    // the FULL atlases — which are irrelevant to slow admission and may be mid-
+    // rebake for any fighter — can close that gap. The full bytes only set the FAST
+    // headroom bounds, never who is admitted on slow.
     const overBudget = heroPairs.filter((p) => p.bytes > SLOW_FIRST_BOUT_BUDGET_BYTES)
     expect(
       overBudget.length,

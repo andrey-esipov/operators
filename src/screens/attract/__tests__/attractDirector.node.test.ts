@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { AttractDirector } from '../attractDirector'
 import { ROSTER } from '../../../fighthud/select/roster'
+import { INTRO_FRAMES } from '../../../fight/constants'
 
 /**
  * Gate for the title-screen attract reel (`AttractMode.tsx`).
@@ -75,12 +76,17 @@ describe('attract director — the title-screen demo fight', () => {
     const dir = new AttractDirector({ seed: SEED })
 
     // Advance into the FIGHT phase so the request lands mid-bout — exactly where
-    // a phase-gated (buggy) dismiss would defer until the next KO boundary.
+    // a phase-gated (buggy) dismiss would defer until the next KO boundary. The
+    // reel now pre-rolls past the intro walk-in, so a fresh director is already
+    // in FIGHT at frame 0; step a floor of *director* frames (it stops before any
+    // KO) so the vacuity guard below proves the director advanced the sim —
+    // preroll steps the sim directly and is deliberately not counted.
     let guard = 0
     while (dir.current.phase !== 'fight' && guard < 1200) {
       dir.step()
       guard++
     }
+    for (let i = 0; i < 30 && dir.current.phase === 'fight'; i++) dir.step()
 
     // Vacuity: we really are mid-fight with a sim that has been stepping, so the
     // test can't be satisfied by requesting exit on an idle or ended director.
@@ -209,6 +215,65 @@ describe('attract director — never a moveset (archetype) mirror', () => {
     // pickMatchup turns ~1 in 5 of these draws into a mirror — the mutation proof.
     const mirrors = draws.filter((d) => d.aArch === d.bArch)
     expect(mirrors.map((m) => `${m.a}/${m.b}:${m.aArch}`)).toEqual([])
+    // 1400 live directors, each now pre-rolling ~120 sim frames to the first
+    // exchange (see the trailer-cut gate below): a heavy distributional draw, so
+    // it gets headroom past vitest's 5s default on a saturated box.
+  }, 30_000)
+})
+
+describe('attract director — enters each bout on action, not the intro walk-in', () => {
+  // Every bout's sim opens with a fixed ~90-frame intro walk-in (`INTRO_FRAMES`:
+  // both fighters pose and close distance — pure dead air on a marquee) then a
+  // footsie stall before the first blow. `visual-critic`'s money-shot census
+  // measured the cost: median time-to-first-marquee 2.8s with a tail to 6.5s and
+  // 10% dead-air NEUTRAL, nearly all of it front-loaded. The director now
+  // pre-rolls the sim past that — before the renderer reads a frame — so the
+  // reel's first painted frame is the first joined exchange. Re-measured after
+  // the cut: time-to-first-marquee median 1.2s, NEUTRAL 1.7%. This gates the cut.
+  it('the first painted frame is a live exchange past the intro, on every seed', () => {
+    const SEEDS = 240
+    let engagedAtEntry = 0
+    const entryPhases = new Set<string>()
+    for (let s = 0; s < SEEDS; s++) {
+      const dir = new AttractDirector({ seed: (0x1234 + s * 0x9e3779b1) >>> 0 })
+      // The frame the shell seeds its first paint from (`renderer.setInitialState`
+      // reads exactly this): both `initialState` and `current` return the live
+      // post-preroll state, so this is genuinely what a viewer sees first.
+      const entry = dir.initialState
+      entryPhases.add(entry.phase)
+
+      // Claim 1 — the walk-in is skipped: the first painted frame is never the
+      // intro. Removing `prerollToAction()` leaves this at frame-0 'intro' and
+      // reddens here — the mutation proof for the cut.
+      expect(entry.phase).not.toBe('intro')
+
+      // Claim 2 — the sim genuinely advanced past the WHOLE intro, not merely
+      // relabeled its phase: the entry frame is at least a full intro deep.
+      expect(entry.frame).toBeGreaterThanOrEqual(INTRO_FRAMES)
+
+      // Claim 3 — we enter ON action: some fighter is mid-strike, in stun, or
+      // juggling on the very first frame (measured 100% across seeds — the
+      // preroll's exit condition guarantees it).
+      const engaged = entry.fighters.some(
+        (f) =>
+          f.stance === 'attack' ||
+          f.stance === 'hitstun' ||
+          f.stance === 'blockstun' ||
+          f.stance === 'juggle',
+      )
+      if (engaged) engagedAtEntry++
+      dir.dispose()
+    }
+
+    // Every seed, not merely most: a weaker bound would let a silent regression
+    // to "enter in neutral" (e.g. a preroll that only skipped the intro but not
+    // the footsie stall) slip through green.
+    expect(engagedAtEntry).toBe(SEEDS)
+
+    // Vacuity — the sample really did span live fights whose entry frame is the
+    // FIGHT phase and only that, so "not intro" isn't passing because bouts
+    // instantly ended (a 'ko'/'round-end' entry) or never started.
+    expect([...entryPhases]).toEqual(['fight'])
   })
 })
 

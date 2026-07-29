@@ -59,6 +59,14 @@ export const MAX_SEGMENT_FRAMES = 60 * 40
 /** Both fighters enter each bout with a full gauge so supers fire early. */
 const SUPER_PRIME = MAX_METER
 
+/**
+ * Hard ceiling on how many frames a bout may be pre-rolled before it is shown
+ * (see `prerollToAction`). Against `hard` AI with primed meter the first strike
+ * lands in well under a second, so this ~3s cap is effectively never reached; it
+ * exists only to guarantee termination on a freak all-footsie opening.
+ */
+const PREROLL_CAP_FRAMES = 60 * 3
+
 export interface AttractDirectorOptions {
   /** Omit for a fresh random reel each load; pass a seed to make it replayable
    *  (the gate does). */
@@ -85,6 +93,7 @@ export class AttractDirector {
     // heaviest atlas pairing; every subsequent bout is unconstrained.
     this._matchup = this.pickMatchup(true)
     this.sim = this.buildSim(this._matchup)
+    this.prerollToAction()
   }
 
   // ── matchup selection ──────────────────────────────────────────────────────
@@ -141,6 +150,55 @@ export class AttractDirector {
     sim.current.fighters[0].meter = SUPER_PRIME
     sim.current.fighters[1].meter = SUPER_PRIME
     return sim
+  }
+
+  /**
+   * Fast-forward a freshly built bout past its intro walk-in and opening footsie,
+   * straight to the first joined exchange, before the renderer ever reads a frame.
+   *
+   * WHY: every bout's sim opens with a fixed ~90-frame intro (`INTRO_FRAMES`) —
+   * both fighters strike a pose and close distance, pure dead air on a marquee —
+   * then a variable stall before the first blow. `visual-critic`'s money-shot
+   * census measured the cost: median time-to-first-marquee 2.8s with a slow tail
+   * to 6.5s, all of it front-loaded walk-in and footsie. A trailer cuts past that
+   * to the action; a match broadcast plays it. This makes the reel a trailer.
+   *
+   * HOW IT STAYS HONEST: it advances the *sim* directly, never `step()`, so the
+   * skipped frames are simulated but never shown and never counted by the vacuity
+   * meters the gate reads (`stepsTaken`, `kos`, `segmentFrames`). `initialState`
+   * and `current` both return the live sim state, so the renderer seeds its first
+   * paint from the post-preroll frame with no flash. Bounded by
+   * `PREROLL_CAP_FRAMES` so a pathological all-footsie opening can never
+   * fast-forward a whole bout, and it stops at a round boundary so it can never
+   * roll into the next round's dead air.
+   */
+  private prerollToAction(): void {
+    for (let f = 0; f < PREROLL_CAP_FRAMES; f++) {
+      const { state, events } = this.sim.step()
+      // Never cross a round boundary (a freak instant KO): entering on the next
+      // round's intro would reintroduce the very dead air we are skipping.
+      if (state.phase === 'ko' || state.phase === 'round-end' || state.phase === 'match-end') break
+      if (state.phase === 'intro') continue
+      // The exchange is joined the moment a strike is out (attack stance) or one
+      // has connected — landed, blocked, thrown, or a super flash. That is the
+      // first frame a scroller would stop on; enter here.
+      const striking = state.fighters.some(
+        (fr) => fr.stance === 'attack' || fr.stance === 'hitstun' || fr.stance === 'blockstun',
+      )
+      const contact = events.some(
+        (e) =>
+          e.type === 'hit' ||
+          e.type === 'counter-hit' ||
+          e.type === 'block' ||
+          e.type === 'throw' ||
+          e.type === 'parry' ||
+          e.type === 'super-flash',
+      )
+      if (striking || contact) break
+    }
+    // Keep KO detection honest: `step()` compares the next rendered phase against
+    // this, and preroll has advanced us out of 'intro' into the live exchange.
+    this._prevPhase = this.sim.current.phase
   }
 
   // ── accessors the shell renders from ───────────────────────────────────────
@@ -237,6 +295,7 @@ export class AttractDirector {
     this._koHold = 0
     this._wantsRotate = false
     this._prevPhase = 'intro'
+    this.prerollToAction()
     return this._matchup
   }
 

@@ -39,7 +39,9 @@
  * reddens the "heavy art can headline" assertion AND the new per-fighter coverage
  * guard (the ratchet returning, now caught per fighter — the exact "an atlas grew"
  * commit that used to re-roll silently); dropping the SLOW budget below the
- * lightest pairing reddens the admit-≥1 guard.
+ * lightest pairing reddens the admit-≥1 guard; and eroding the SLOW runway below
+ * two admitted openers (an atlas growing until the cold-start pair can no longer
+ * rotate) reddens the slow-runway floor — the combat-feel guard.
  */
 
 import { describe, it, expect, vi, afterEach } from 'vitest'
@@ -151,6 +153,47 @@ describe('first-bout download — real bytes & non-triviality (vacuity)', () => 
         SLOW_FIRST_BOUT_TARGET_SEC,
       )
     }
+  })
+
+  it('the SLOW opener set keeps a runway above the single-pair floor (the combat-feel guard)', () => {
+    // WHY THIS EXISTS. The `admitted > 0` check above only proves the slow path
+    // isn't dead; it is exactly the "the budget constrains something" gate that
+    // canNOT see that every admitted opener shares ONE fighter (today all four are
+    // madhavan pairs). This asserts the runway a rising art budget actually erodes.
+    //
+    // The roster is byte-bimodal (madhavan 0.66 MB; the other five 3.2–5.5 MB), so
+    // every affordable opener contains madhavan and the slow cold-start partner can
+    // only be one of madhavan's distinct-archetype partners. As `combat-feel` adds
+    // bespoke supers the heavier partners cross the budget one by one:
+    //   • below TWO admitted pairs the partner can no longer rotate — every slow
+    //     visit opens on the exact same frame (a monotone first impression), and
+    //   • at one more crossing the set is empty and EVERY slow visitor falls
+    //     through MAX_ATTEMPTS to a heavy cold start — the silent failure on the
+    //     one route (a slow link) nobody instruments.
+    // Floor = 2 reddens while there is still headroom to react, not after the
+    // failure. Today = 4 (two crossings of slack). NOTE the reach of a super on
+    // madhavan itself: it is in 100% of admitted pairs, so it erodes every
+    // headroom at once — ~4× a super on any single partner.
+    //
+    // This is the achievable half of the shop-window ask: it gates opener
+    // ROTATION + non-emptiness on slow. It does NOT gate per-fighter opener
+    // coverage (spiegel's lightest opener is 9.08 MB ≈ 45 s — unreachable under a
+    // fast-cold-start budget); full-roster variety on slow is delivered by the
+    // coverage picker within COVERAGE_BOUND bouts and gated in attractDirector.
+    const SLOW_OPENER_FLOOR = 2
+    const pairs = realOpenerPairs()
+    expect(pairs.length).toBeGreaterThanOrEqual(10) // vacuity: real openers exist
+    const admitted = pairs.filter((p) => p.bytes <= SLOW_FIRST_BOUT_BUDGET_BYTES)
+    const smallestHeadroom = Math.min(
+      ...admitted.map((p) => SLOW_FIRST_BOUT_BUDGET_BYTES - p.bytes),
+    )
+    expect(
+      admitted.length,
+      `SLOW admitted openers = ${admitted.length} (need ≥ ${SLOW_OPENER_FLOOR}). ` +
+        `An atlas grew until too few light pairings remain: below ${SLOW_OPENER_FLOOR} the ` +
+        `cold-start pair can no longer rotate and the slow path is one crossing from heavy ` +
+        `fallthrough. Smallest surviving headroom: ${smallestHeadroom.toLocaleString()} B.`,
+    ).toBeGreaterThanOrEqual(SLOW_OPENER_FLOOR)
   })
 
   it('prices this gate against the SHIPPED budget constants (no drift)', () => {

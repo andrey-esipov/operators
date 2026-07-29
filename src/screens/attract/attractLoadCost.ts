@@ -116,6 +116,34 @@ export const FAST_FIRST_BOUT_BUDGET_BYTES = Number.POSITIVE_INFINITY
  * route (a slow link) nobody instruments. Admitting all four madhavan pairings
  * (~8 draws in 30) drops that tail below 1e-5: a reliable ~32 s ceiling beats a
  * ~20 s one that betrays 1 in 16 of the very users it exists to protect.
+ *
+ * SHOP-WINDOW CONSEQUENCE — deliberate, and decided here rather than left to the
+ * budget to decide by accident. The roster is byte-BIMODAL: madhavan is 0.66 MB,
+ * the other five are 3.2–5.5 MB. So EVERY pairing under a fast-cold-start budget
+ * necessarily contains madhavan — on a reported-slow link madhavan is the
+ * cold-start face in 100% of openers, and spiegel (whose lightest opener,
+ * spiegel+turley, is 9.08 MB ≈ 45 s at slow-4G) never opens. That concentration
+ * is CHOSEN for the opener, and it is the right call there because:
+ *   • The opener is bout 1 ONLY. The coverage picker (bouts 2+, unbudgeted) shows
+ *     every skin within COVERAGE_BOUND bouts on ANY connection — spiegel and the
+ *     heavy hero art included — streamed during bout 1's playback (gated
+ *     behaviourally in attractDirector.node.test.ts). A slow visitor gets the
+ *     whole roster; they just meet the lightest art FIRST.
+ *   • Both alternatives are worse or unavailable in this lane. (a) Raising the
+ *     budget to admit a spiegel opener means ≥45 s at slow-4G / ~3 min on 2g —
+ *     recreating the wait this budget exists to kill. (b) A low-res / progressive
+ *     hero atlas would decouple cold-start cost from fidelity exactly as
+ *     `Infinity` does on FAST — the principled fix — but it needs the
+ *     sprite-frame-scale change plus visual validation, so it is DEFERRED here,
+ *     named rather than pretended-done.
+ * Two consequences that land on OTHER lanes, recorded so they aren't lost:
+ * madhavan is the slow cold-start face by construction, so its atlas quality has
+ * outsized leverage and its half of the chesky/madhavan palette collision is the
+ * cheapest real first-impression win (art / combat-feel); and because madhavan is
+ * in 100% of admitted openers, a bespoke super on MADHAVAN erodes the slow runway
+ * ~4× as fast as one on any other fighter — it subtracts from all four headrooms
+ * at once. The runway itself (how many admitted openers survive before every slow
+ * visitor falls through to a heavy cold start) is gated in firstBoutBudget.
  */
 export const SLOW_FIRST_BOUT_TARGET_SEC = 33
 export const SLOW_FIRST_BOUT_BUDGET_BYTES = Math.round(SLOW_FIRST_BOUT_TARGET_SEC * SLOW_4G_BYTES_PER_SEC)

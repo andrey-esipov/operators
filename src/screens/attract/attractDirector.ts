@@ -24,7 +24,7 @@
 
 import { MatchSim } from '../../play/MatchSim'
 import { makeRng, type Rng } from '../../fight/rng'
-import { MAX_METER } from '../../fight/constants'
+import { MAX_METER, INTRO_FRAMES } from '../../fight/constants'
 import { ROSTER, type RosterEntry } from '../../fighthud/select/roster'
 import { STAGE_ORDER } from '../../three/stage/StageRegistry'
 import { isAllowedFirstBout } from './attractLoadCost'
@@ -67,6 +67,22 @@ const SUPER_PRIME = MAX_METER
  */
 const PREROLL_CAP_FRAMES = 60 * 3
 
+/**
+ * Frames of the opening stand-off to hold on an *establishing* bout before the
+ * fight is joined. The intro is a static, full-body, max-separation idle stand-
+ * off (both fighters unoccluded, facing off) — the one moment in the whole reel
+ * where a scroller can read *who* the two fighters are from silhouette alone,
+ * which a pure-action reel never offers and is a named weakness on a six-
+ * character roster. `prerollToAction` cuts straight past the whole ~90-frame
+ * (`INTRO_FRAMES`) intro on most bouts; on establishing bouts it instead leaves
+ * this many intro frames visible — ~0.6s, a deliberate character beat, well
+ * under the full 1.5s intro that read as dead air when shown on *every* bout.
+ * Held on a minority (opener + every third bout) so the reel varies establish-
+ * then-action against straight-to-action rather than entering every bout the
+ * same way — "material 7, edit 3" wants variation, not one uniform faster cut.
+ */
+export const ESTABLISH_HOLD_FRAMES = 36
+
 export interface AttractDirectorOptions {
   /** Omit for a fresh random reel each load; pass a seed to make it replayable
    *  (the gate does). */
@@ -93,7 +109,7 @@ export class AttractDirector {
     // heaviest atlas pairing; every subsequent bout is unconstrained.
     this._matchup = this.pickMatchup(true)
     this.sim = this.buildSim(this._matchup)
-    this.prerollToAction()
+    this.prerollToAction(this.establishHoldFor(this._matchesShown))
   }
 
   // ── matchup selection ──────────────────────────────────────────────────────
@@ -153,26 +169,66 @@ export class AttractDirector {
   }
 
   /**
-   * Fast-forward a freshly built bout past its intro walk-in and opening footsie,
-   * straight to the first joined exchange, before the renderer ever reads a frame.
+   * How many intro frames to hold as an establishing stand-off for a given bout
+   * (0 = cut straight to action). The opener and every third bout thereafter
+   * (1-in-3) establish; the rest enter on the first exchange. Keyed off the bout
+   * counter, NOT the rng, so introducing the beat leaves the matchup draw — and
+   * therefore the archetype distribution and the cost-constrained opener — byte-
+   * identical to a reel without it.
+   */
+  private establishHoldFor(bout: number): number {
+    return (bout - 1) % 3 === 0 ? ESTABLISH_HOLD_FRAMES : 0
+  }
+
+  /**
+   * Position a freshly built bout at the frame the renderer should first paint —
+   * before it ever reads one — in one of two modes:
    *
-   * WHY: every bout's sim opens with a fixed ~90-frame intro (`INTRO_FRAMES`) —
-   * both fighters strike a pose and close distance, pure dead air on a marquee —
-   * then a variable stall before the first blow. `visual-critic`'s money-shot
-   * census measured the cost: median time-to-first-marquee 2.8s with a slow tail
-   * to 6.5s, all of it front-loaded walk-in and footsie. A trailer cuts past that
-   * to the action; a match broadcast plays it. This makes the reel a trailer.
+   *  • Straight-to-action (default, `establishHold === 0`): fast-forward past the
+   *    entire intro and the opening footsie to the first joined exchange. Every
+   *    bout's sim opens with a fixed ~90-frame intro (`INTRO_FRAMES`) — both
+   *    fighters stand idle at full separation, a static stand-off — then a
+   *    variable stall before the first blow. `visual-critic`'s money-shot census
+   *    measured the cost: median time-to-first-marquee 2.8s with a slow tail,
+   *    nearly all of it that front-loaded stand-off and footsie. A trailer cuts
+   *    past it to the action; a match broadcast plays it. This makes the reel a
+   *    trailer.
+   *
+   *  • Establishing (`establishHold > 0`): KEEP a short slice of that stand-off.
+   *    The intro is the one moment in the reel where a scroller gets a clean,
+   *    full-body, non-overlapping read of *who* the two fighters are — silhouette
+   *    legibility a pure-action reel never offers, and a named weakness on a six-
+   *    character roster. The whole 1.5s intro on every bout was dead air; a ~0.6s
+   *    stand-off on a minority of bouts (see `establishHoldFor`) is a deliberate
+   *    character beat instead. Because the intro is static (idle, max separation,
+   *    every frame identical), skipping all but the last `establishHold` frames
+   *    shows a clean stand-off of exactly that length, then lets the sim flow
+   *    naturally intro→fight→first exchange (the AI closes and strikes within a
+   *    few frames of the intro ending).
    *
    * HOW IT STAYS HONEST: it advances the *sim* directly, never `step()`, so the
    * skipped frames are simulated but never shown and never counted by the vacuity
    * meters the gate reads (`stepsTaken`, `kos`, `segmentFrames`). `initialState`
    * and `current` both return the live sim state, so the renderer seeds its first
-   * paint from the post-preroll frame with no flash. Bounded by
-   * `PREROLL_CAP_FRAMES` so a pathological all-footsie opening can never
-   * fast-forward a whole bout, and it stops at a round boundary so it can never
-   * roll into the next round's dead air.
+   * paint from the resulting frame with no flash. The straight-to-action path is
+   * bounded by `PREROLL_CAP_FRAMES` and stops at a round boundary so a
+   * pathological all-footsie opening can never fast-forward a whole bout or roll
+   * into the next round's dead air.
    */
-  private prerollToAction(): void {
+  private prerollToAction(establishHold = 0): void {
+    if (establishHold > 0) {
+      // Hold the opening stand-off: skip all but the last `establishHold` intro
+      // frames, then return so the renderer paints them and the sim flows on into
+      // the fight on its own. The round-start event fires on frame 0 and is
+      // consumed here with the skipped frames, exactly as the straight-to-action
+      // path below consumes it.
+      const target = Math.max(0, INTRO_FRAMES - establishHold)
+      for (let f = 0; f < target && this.sim.current.phase === 'intro'; f++) {
+        this.sim.step()
+      }
+      this._prevPhase = this.sim.current.phase
+      return
+    }
     for (let f = 0; f < PREROLL_CAP_FRAMES; f++) {
       const { state, events } = this.sim.step()
       // Never cross a round boundary (a freak instant KO): entering on the next
@@ -295,7 +351,7 @@ export class AttractDirector {
     this._koHold = 0
     this._wantsRotate = false
     this._prevPhase = 'intro'
-    this.prerollToAction()
+    this.prerollToAction(this.establishHoldFor(this._matchesShown))
     return this._matchup
   }
 

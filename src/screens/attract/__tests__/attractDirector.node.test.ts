@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { AttractDirector } from '../attractDirector'
+import { AttractDirector, ESTABLISH_HOLD_FRAMES } from '../attractDirector'
 import { ROSTER } from '../../../fighthud/select/roster'
 import { INTRO_FRAMES } from '../../../fight/constants'
 
@@ -77,10 +77,10 @@ describe('attract director — the title-screen demo fight', () => {
 
     // Advance into the FIGHT phase so the request lands mid-bout — exactly where
     // a phase-gated (buggy) dismiss would defer until the next KO boundary. The
-    // reel now pre-rolls past the intro walk-in, so a fresh director is already
-    // in FIGHT at frame 0; step a floor of *director* frames (it stops before any
-    // KO) so the vacuity guard below proves the director advanced the sim —
-    // preroll steps the sim directly and is deliberately not counted.
+    // opener is an *establishing* bout, so a fresh director opens on the short
+    // intro stand-off; step *director* frames until it flows into FIGHT (it stops
+    // before any KO) so the vacuity guard below proves the director advanced the
+    // sim — the preroll steps the sim directly and is deliberately not counted.
     let guard = 0
     while (dir.current.phase !== 'fight' && guard < 1200) {
       dir.step()
@@ -215,66 +215,134 @@ describe('attract director — never a moveset (archetype) mirror', () => {
     // pickMatchup turns ~1 in 5 of these draws into a mirror — the mutation proof.
     const mirrors = draws.filter((d) => d.aArch === d.bArch)
     expect(mirrors.map((m) => `${m.a}/${m.b}:${m.aArch}`)).toEqual([])
-    // 1400 live directors, each now pre-rolling ~120 sim frames to the first
-    // exchange (see the trailer-cut gate below): a heavy distributional draw, so
-    // it gets headroom past vitest's 5s default on a saturated box.
+    // 1400 live directors, each pre-rolling ~55–120 sim frames (establishing
+    // bouts hold a short intro stand-off; the rest fast-forward to the first
+    // exchange — see the entry gate below): a heavy distributional draw, so it
+    // gets headroom past vitest's 5s default on a saturated box.
   }, 30_000)
 })
 
-describe('attract director — enters each bout on action, not the intro walk-in', () => {
-  // Every bout's sim opens with a fixed ~90-frame intro walk-in (`INTRO_FRAMES`:
-  // both fighters pose and close distance — pure dead air on a marquee) then a
-  // footsie stall before the first blow. `visual-critic`'s money-shot census
-  // measured the cost: median time-to-first-marquee 2.8s with a tail to 6.5s and
-  // 10% dead-air NEUTRAL, nearly all of it front-loaded. The director now
-  // pre-rolls the sim past that — before the renderer reads a frame — so the
-  // reel's first painted frame is the first joined exchange. Re-measured after
-  // the cut: time-to-first-marquee median 1.2s, NEUTRAL 1.7%. This gates the cut.
-  it('the first painted frame is a live exchange past the intro, on every seed', () => {
-    const SEEDS = 240
-    let engagedAtEntry = 0
-    const entryPhases = new Set<string>()
-    for (let s = 0; s < SEEDS; s++) {
-      const dir = new AttractDirector({ seed: (0x1234 + s * 0x9e3779b1) >>> 0 })
-      // The frame the shell seeds its first paint from (`renderer.setInitialState`
-      // reads exactly this): both `initialState` and `current` return the live
-      // post-preroll state, so this is genuinely what a viewer sees first.
-      const entry = dir.initialState
-      entryPhases.add(entry.phase)
+/**
+ * Drive one director through several bouts the way the shell does — advance the
+ * live sim, cut to a fresh matchup when it asks — capturing the *entry* frame of
+ * each bout (what `renderer.setInitialState(dir.initialState)` seeds the first
+ * paint from) before that bout is stepped. Scalars only, so later stepping can't
+ * mutate a captured record.
+ */
+function boutEntries(seed: number, bouts: number) {
+  const dir = new AttractDirector({ seed })
+  const out: { bout: number; phase: string; frame: number; stances: string[]; sep: number }[] = []
+  const capture = (bout: number) => {
+    const s = dir.initialState
+    const [a, b] = s.fighters
+    out.push({
+      bout,
+      phase: s.phase,
+      frame: s.frame,
+      stances: [a.stance, b.stance],
+      sep: Math.abs(a.pos.x - b.pos.x),
+    })
+  }
+  capture(1)
+  for (let bout = 2; bout <= bouts; bout++) {
+    let guard = 0
+    while (!dir.wantsRotate && guard < 60 * 60) {
+      dir.step()
+      guard++
+    }
+    dir.rotate()
+    capture(bout)
+  }
+  dir.dispose()
+  return out
+}
 
-      // Claim 1 — the walk-in is skipped: the first painted frame is never the
-      // intro. Removing `prerollToAction()` leaves this at frame-0 'intro' and
-      // reddens here — the mutation proof for the cut.
-      expect(entry.phase).not.toBe('intro')
+describe('attract director — varies entry: establishing stand-off vs. straight-to-action', () => {
+  // The reel used to open EVERY bout identically — first a fixed ~90-frame intro
+  // then a footsie stall (median time-to-first-marquee 2.8s), later the trailer
+  // cut that skipped straight to the first exchange on every bout. Faster, but
+  // still uniform, and it deleted the reel's one clean roster-legibility beat: the
+  // intro is a *static* idle stand-off at max separation (both fighters full-body,
+  // unoccluded, facing off — measured x=±150, sep 300, idle for all 90 frames),
+  // the one moment a scroller can read *who* the fighters are. A trailer's power
+  // is variation — establish, then action — so the director now HOLDS a short
+  // establishing stand-off on a minority of bouts (opener + every third) and cuts
+  // straight to action on the rest.
+  //
+  // `visual-critic`'s census scores a clean stand-off as NEUTRAL/dead-air, so it
+  // will under-report these deliberate frames until it grows an ESTABLISH category
+  // (spec handed off). That is exactly why the beat is gated *here*, at the
+  // director, where it is load-bearing regardless of what the census can see.
+  it('opener + every third bout open on a short readable stand-off; the rest enter on action', () => {
+    // Several seeds → several matchups AND stages (framing is stage-dependent, so
+    // a one-stage gate is presumed blind).
+    const SEEDS = [
+      0xa77ac7, 0x1234, 0xbeef, 0x55aa, 0x9999, 0xc0ffee, 0x011235, 0xfeed, 0x0a0a, 0x7f7f,
+    ]
+    const BOUTS = 7 // → establishing at 1,4,7; straight-to-action at 2,3,5,6
 
-      // Claim 2 — the sim genuinely advanced past the WHOLE intro, not merely
-      // relabeled its phase: the entry frame is at least a full intro deep.
-      expect(entry.frame).toBeGreaterThanOrEqual(INTRO_FRAMES)
+    // The beat is short by construction: well under half the intro that read as
+    // dead air on every bout. A regression that widened it back toward the full
+    // intro would trip this.
+    expect(ESTABLISH_HOLD_FRAMES).toBeLessThan(INTRO_FRAMES / 2)
 
-      // Claim 3 — we enter ON action: some fighter is mid-strike, in stun, or
-      // juggling on the very first frame (measured 100% across seeds — the
-      // preroll's exit condition guarantees it).
-      const engaged = entry.fighters.some(
-        (f) =>
-          f.stance === 'attack' ||
-          f.stance === 'hitstun' ||
-          f.stance === 'blockstun' ||
-          f.stance === 'juggle',
-      )
-      if (engaged) engagedAtEntry++
-      dir.dispose()
+    let establishSeen = 0
+    let defaultSeen = 0
+    let defaultEngaged = 0
+    const establishPhases = new Set<string>()
+    const defaultPhases = new Set<string>()
+
+    for (const seed of SEEDS) {
+      const entries = boutEntries(seed, BOUTS)
+      // Vacuity: the reel really rotated through every bout, so the per-bout
+      // assertions below aren't passing on a truncated sample.
+      expect(entries.map((e) => e.bout)).toEqual([1, 2, 3, 4, 5, 6, 7])
+
+      for (const e of entries) {
+        const isEstablishing = (e.bout - 1) % 3 === 0
+        if (isEstablishing) {
+          establishSeen++
+          establishPhases.add(e.phase)
+          // Enters ON the intro stand-off — the clean roster read. Neutering
+          // `establishHoldFor` to 0 makes these bouts cut straight to action,
+          // reddening every assertion in this branch (mutation proof, direction 1).
+          expect(e.phase).toBe('intro')
+          // Both fighters idle and full-body separated: readable, non-overlapping
+          // silhouettes, not mid-punch and not overlapping.
+          expect(e.stances).toEqual(['idle', 'idle'])
+          expect(e.sep).toBeGreaterThanOrEqual(250)
+          // Exactly ESTABLISH_HOLD_FRAMES of intro remain to be shown — a bounded,
+          // deliberate beat, not the whole 1.5s intro back again.
+          expect(INTRO_FRAMES - e.frame).toBe(ESTABLISH_HOLD_FRAMES)
+        } else {
+          defaultSeen++
+          defaultPhases.add(e.phase)
+          // Straight to action: past the WHOLE intro, on a live exchange. No-oping
+          // the straight-to-action preroll leaves these at frame-0 'intro' and
+          // reddens here (mutation proof, direction 2).
+          expect(e.phase).not.toBe('intro')
+          expect(e.frame).toBeGreaterThanOrEqual(INTRO_FRAMES)
+          const engaged = e.stances.some(
+            (st) => st === 'attack' || st === 'hitstun' || st === 'blockstun' || st === 'juggle',
+          )
+          if (engaged) defaultEngaged++
+        }
+      }
     }
 
-    // Every seed, not merely most: a weaker bound would let a silent regression
-    // to "enter in neutral" (e.g. a preroll that only skipped the intro but not
-    // the footsie stall) slip through green.
-    expect(engagedAtEntry).toBe(SEEDS)
+    // Vacuity: we really sampled both kinds of bout across the seeds.
+    expect(establishSeen).toBe(SEEDS.length * 3) // bouts 1,4,7
+    expect(defaultSeen).toBe(SEEDS.length * 4) // bouts 2,3,5,6
 
-    // Vacuity — the sample really did span live fights whose entry frame is the
-    // FIGHT phase and only that, so "not intro" isn't passing because bouts
-    // instantly ended (a 'ko'/'round-end' entry) or never started.
-    expect([...entryPhases]).toEqual(['fight'])
-  })
+    // Every establishing bout entered on the intro and ONLY the intro (not a bout
+    // that instantly ended); every default bout entered on FIGHT and ONLY FIGHT.
+    expect([...establishPhases]).toEqual(['intro'])
+    expect([...defaultPhases]).toEqual(['fight'])
+
+    // Every default bout entered mid-action, not merely past the intro in neutral
+    // (a preroll that skipped the intro but not the footsie stall would drop this).
+    expect(defaultEngaged).toBe(defaultSeen)
+  }, 30_000)
 })
 
 /** Run a fn, failing the test with its error rather than letting it throw out of

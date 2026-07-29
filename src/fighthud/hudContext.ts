@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useRef } from 'react'
 import type { MutableRefObject } from 'react'
 import type { FightHudFrame } from './types'
+import type { BarState } from './healthBarModel'
 
 /**
  * A single rAF loop, shared by every continuous HUD element.
@@ -17,6 +18,14 @@ export type HudTickFn = (frame: FightHudFrame, dtMs: number) => void
 export interface HudTickContextValue {
   frameRef: MutableRefObject<FightHudFrame | null>
   register: (fn: HudTickFn) => () => void
+  /**
+   * The two health bars' display state, owned by the HUD root and mutated on
+   * the synchronous event path (so hit weight is applied losslessly), then
+   * eased + written to the DOM by each HealthBar on the shared rAF. Lives here,
+   * not inside HealthBar, so a bar has no private state that could diverge from
+   * the hits the root actually processed.
+   */
+  bars: MutableRefObject<[BarState, BarState]>
 }
 
 export const HudTickContext = createContext<HudTickContextValue | null>(null)

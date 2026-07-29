@@ -134,6 +134,14 @@
       "app": "shipped-audio",
       "note": "SHIPPED fighter audio instrument (no card route/handle)."
     },
+    "measure-hud-weight": {
+      "app": "shipped-ui",
+      "note": "SHIPPED fighter HUD (src/fighthud). Drives the PURE health-bar model (applyHit + stepHealthBar — the exact functions HealthBar runs) frame-for-frame in node — no browser, no renderer, no route — and fingerprints each weight class's realized bar trajectory (recoil peak, main-drain half-life, ghost hold, trail bleed) to prove the six HitLevels move the bar as DISTINCT behaviours, not one drain scaled by damage. Output is a magnitude-invariant shape identity paired with a size/weight positive control, so it is load-invariant and not fps. Card-clean: imports only the shipped HUD model + fight types. Run with `npx tsx`; `--assert` is the gate, `--json` machine-readable."
+    },
+    "measure-hud-power": {
+      "app": "shipped-ui",
+      "note": "SHIPPED fighter HUD (src/fighthud). Drives the PURE meter-power model (affordableSupers + powerTier — the exact functions SuperGauge runs) across the whole meter range in node — no browser, no renderer, no route — and asserts the graded POWER read (charging / ready / max) is boundary-exact against the sim's own spend gate (cost 1000, cap 2000 ⇒ two supers affordable), monotone, and non-vacuous (>=3 distinct tiers, empty!=maxed). Also checks the FORWARD EX cost-band spec (250..500, below one super) for internal consistency — flagged as unwired, no shipped caller yet. Output is load-invariant (a pure function of meter), not fps. Card-clean: imports only the shipped meter model + fight constants. Run with `npx tsx`; `--assert` is the gate, `--json` machine-readable."
+    },
     "_black": {
       "app": "analysis",
       "note": "Offline / route-agnostic: reads PNGs, atlases or JSON, or measures on a blank page. Not tied to either game."

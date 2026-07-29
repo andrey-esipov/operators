@@ -1,5 +1,6 @@
 import { useRef } from 'react'
 import { useHudTick } from './hudContext'
+import { powerTier } from './meterModel'
 
 interface Props {
   index: 0 | 1
@@ -17,7 +18,7 @@ export function SuperGauge({ index }: Props) {
   const fillRefs = useRef<(HTMLDivElement | null)[]>([])
   const barRefs = useRef<(HTMLDivElement | null)[]>([])
   const lastFull = useRef<number[]>([-1, -1])
-  const lastCharged = useRef(-1)
+  const lastTier = useRef('')
 
   useHudTick((frame) => {
     const meter = frame.state.fighters[index].meter
@@ -31,11 +32,17 @@ export function SuperGauge({ index }: Props) {
         barRefs.current[i]?.classList.toggle('full', full === 1)
       }
     }
-    // Row-level "a super is spendable right now" state — drives the label.
-    const charged = meter >= BAR_UNIT ? 1 : 0
-    if (charged !== lastCharged.current) {
-      lastCharged.current = charged
-      rowRef.current?.classList.toggle('charged', charged === 1)
+    // Row-level POWER read — graded affordability, not a binary "charged" light.
+    // 'ready' = one super in pocket; 'max' = the meter can pay for two. This is
+    // the affordability counterpart to the health bar's danger read (finding #4).
+    const tier = powerTier(meter)
+    if (tier !== lastTier.current) {
+      lastTier.current = tier
+      const row = rowRef.current
+      if (row) {
+        row.classList.toggle('charged', tier !== 'charging')
+        row.classList.toggle('maxed', tier === 'max')
+      }
     }
   })
 
@@ -44,6 +51,7 @@ export function SuperGauge({ index }: Props) {
       <span className="fhud-superlabel">
         <span className="fhud-superlabel-txt">SUPER</span>
         <span className="fhud-superlabel-rdy">READY</span>
+        <span className="fhud-superlabel-max">MAX</span>
       </span>
       <div className="fhud-superbars">
         {Array.from({ length: BARS }).map((_, i) => (

@@ -1,8 +1,8 @@
-import { useRef, type CSSProperties } from 'react'
-import { useHudTick } from './hudContext'
+import { useContext, useRef, type CSSProperties } from 'react'
+import { HudTickContext, useHudTick } from './hudContext'
 import { Portrait } from './Portrait'
 import type { FighterDisplay } from './types'
-import { stepHealthBar, type BarState } from './healthBarModel'
+import { stepHealthBar } from './healthBarModel'
 
 interface Props {
   index: 0 | 1
@@ -25,22 +25,42 @@ const TIER_CLASS = ['tier-good', 'tier-warn', 'tier-crit']
  */
 export function HealthBar({ index, display }: Props) {
   const side = index === 0 ? 'a' : 'b'
+  const hud = useContext(HudTickContext)
   const wrapRef = useRef<HTMLDivElement>(null)
   const mainRef = useRef<HTMLDivElement>(null)
   const trailRef = useRef<HTMLDivElement>(null)
+  const trackRef = useRef<HTMLDivElement>(null)
 
-  const bar = useRef<BarState>({ main: 1, trail: 1, holdMs: 0 })
   const lastCrit = useRef<boolean | null>(null)
   const lastTier = useRef<number>(-1)
 
   useHudTick((frame, dt) => {
+    // The bar's state is owned by the HUD root and mutated on the event path;
+    // this component only eases it and writes the DOM. No private BarState, so
+    // what draws is exactly what the root's hit processing produced.
+    const bar = hud?.bars.current[index]
+    if (!bar) return
     const f = frame.state.fighters[index]
     const target = Math.max(0, Math.min(1, f.health / f.maxHealth))
 
-    stepHealthBar(bar.current, target, dt)
+    stepHealthBar(bar, target, dt)
 
-    if (mainRef.current) mainRef.current.style.width = `${bar.current.main * 100}%`
-    if (trailRef.current) trailRef.current.style.width = `${bar.current.trail * 100}%`
+    const recoil = bar.recoil ?? 0
+    if (mainRef.current) {
+      mainRef.current.style.width = `${bar.main * 100}%`
+      // Contact flare, scaled by weight — a crumple flashes the fill far harder
+      // than a jab. Pure filter, no layout, no atlas. Cleared as recoil decays.
+      mainRef.current.style.filter =
+        recoil > 1e-3 ? `brightness(${(1 + recoil * 0.6).toFixed(3)}) saturate(${(1 + recoil * 0.3).toFixed(3)})` : ''
+    }
+    if (trailRef.current) trailRef.current.style.width = `${bar.trail * 100}%`
+    // Recoil kick: jolt the trough outward (away from centre), heavier hits
+    // kick further. translateX only — the track has no base transform, so this
+    // never fights the housing's skew or the crit animation. Zero atlas bytes.
+    if (trackRef.current) {
+      const dir = index === 0 ? -1 : 1
+      trackRef.current.style.transform = recoil > 1e-3 ? `translateX(${(dir * recoil * 5).toFixed(2)}px)` : ''
+    }
 
     // Front-bar colour shifts good → warn → crit as a coarse read. Toggled as a
     // class (not an inline background) so the CSS owns the horizontal hue ramp
@@ -74,7 +94,7 @@ export function HealthBar({ index, display }: Props) {
           </span>
         </div>
         <div className="fhud-hphousing">
-          <div className="fhud-hptrack" data-testid={`fhud-hptrack-${side}`}>
+          <div ref={trackRef} className="fhud-hptrack" data-testid={`fhud-hptrack-${side}`}>
             <div ref={trailRef} className="fhud-hptrail" data-testid={`fhud-hptrail-${side}`} />
             <div ref={mainRef} className="fhud-hpfill" data-testid={`fhud-hpfill-${side}`}>
               <div className="fhud-hphazard" />

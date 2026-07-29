@@ -351,6 +351,24 @@
   animation: fhudReadyBlink 0.7s steps(2) infinite;
 }
 @keyframes fhudReadyBlink { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+/* "MAX" is stacked over "READY"/"SUPER" and revealed only when the meter can pay
+   for TWO supers (powerTier === 'max') — the graded power read finding #4 asked
+   for. Must follow the .charged rules so equal-specificity source order lets it
+   win over the READY reveal above. */
+.fhud-superlabel-max {
+  position: absolute;
+  left: 0;
+  top: 0;
+  color: #fff3c0;
+  text-shadow: 0 0 10px rgba(255, 224, 130, 1), 0 0 4px rgba(255, 255, 255, 0.9), 1px 1px 0 #000;
+  opacity: 0;
+}
+.fhud-superrow.maxed .fhud-superlabel-rdy { opacity: 0; animation: none; }
+.fhud-superrow.maxed .fhud-superlabel-max {
+  opacity: 1;
+  animation: fhudMaxPulse 0.5s steps(2) infinite;
+}
+@keyframes fhudMaxPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
 
 .fhud-superbars {
   display: flex;

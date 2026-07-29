@@ -10,6 +10,7 @@ import {
 import type { FightState, FightEvent, Stance } from '../fight/types'
 import type { FightHudFrame, FightHudHandle, FightHudProps, FighterDisplay } from './types'
 import { HudTickContext, type HudTickFn } from './hudContext'
+import { applyHitEvents, freshBar, type BarState } from './healthBarModel'
 import { HealthBar } from './HealthBar'
 import { SuperGauge } from './SuperGauge'
 import { RoundTimer } from './RoundTimer'
@@ -67,6 +68,10 @@ export const FightHud = forwardRef<FightHudHandle, FightHudProps>(function Fight
 ) {
   const frameRef = useRef<FightHudFrame | null>(null)
   const ticks = useRef(new Set<HudTickFn>())
+  // The two health bars' state lives here (not inside HealthBar) so hits can be
+  // applied on the synchronous event path below — losslessly, before any rAF —
+  // and a bar can never diverge from the hits the root actually saw.
+  const barsRef = useRef<[BarState, BarState]>([freshBar(), freshBar()])
 
   // ── Discrete UI state (only these ever re-render) ──────────────────────
   const [wins, setWins] = useState<[number, number]>([0, 0])
@@ -107,6 +112,12 @@ export const FightHud = forwardRef<FightHudHandle, FightHudProps>(function Fight
   const applyFrame = useCallback(
     (s: FightState, evs: FightEvent[]) => {
       frameRef.current = { state: s, events: evs }
+
+      // Health-bar weight: latch each hit's easing/jolt profile onto the bars
+      // here, on the synchronous event path, so a fast string lands every hit's
+      // weight even when several arrive inside one animation frame. The bars are
+      // then eased and written to the DOM by each HealthBar on the shared rAF.
+      applyHitEvents(barsRef.current, evs)
 
       // Win pips — cheap compare, set only on change.
       setWins((prev) => (prev[0] === s.wins[0] && prev[1] === s.wins[1] ? prev : [s.wins[0], s.wins[1]]))
@@ -273,7 +284,7 @@ export const FightHud = forwardRef<FightHudHandle, FightHudProps>(function Fight
     }
   }, [])
 
-  const ctx = useMemo(() => ({ frameRef, register }), [register])
+  const ctx = useMemo(() => ({ frameRef, register, bars: barsRef }), [register])
   const disp = fighters ?? FALLBACK
   dispRef.current = disp
 

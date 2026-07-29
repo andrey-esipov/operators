@@ -47,6 +47,66 @@ const knownMissing = new Set<TrackId>()
 // the request here and replay it on the first click/keydown.
 let pendingMp3Track: TrackId | null = null
 
+// ─── Cross-fade ───────────────────────────────────────────────────────
+// A hard cut at a track boundary re-announces the seam the persistent shell
+// exists to hide, so switching MP3 tracks (menu -> fight when a match starts)
+// cross-fades: the incoming track ramps up while the outgoing ramps down and
+// stops. Same-track navigation never reaches here (play() is idempotent), so
+// title -> attract -> select stays perfectly continuous with no fade at all.
+const FADE_MS = 700
+// The element being faded out during a cross-fade — tracked so stop() can end
+// it too (it is not `currentAudio`, which is already the incoming track).
+let previousAudio: HTMLAudioElement | null = null
+// In-flight fade interval timers, cancelled on stop() so a fade can never
+// resurrect volume on an element we just killed.
+const activeFades = new Set<ReturnType<typeof setInterval>>()
+
+/** Music sits behind SFX/voice — its baseline is a touch above `userVolume`. */
+function mp3TargetVolume(): number {
+  return Math.min(1, userVolume * 1.6)
+}
+
+/**
+ * Pure linear volume ramp: the sequence of volumes to step an element through
+ * to move `from` -> `to` over `ms`, sampled every `stepMs`. Each value is
+ * clamped to [0,1]. The last element is always exactly `to`. Exported so the
+ * ramp math is unit-tested without a real AudioContext or wall-clock.
+ */
+export function fadeRamp(from: number, to: number, ms: number, stepMs = 40): number[] {
+  const steps = Math.max(1, Math.round(ms / stepMs))
+  const ramp: number[] = []
+  for (let i = 1; i <= steps; i++) {
+    const v = i === steps ? to : from + (to - from) * (i / steps)
+    ramp.push(Math.max(0, Math.min(1, v)))
+  }
+  return ramp
+}
+
+/** Walk `el.volume` across `fadeRamp(...)` and invoke `onDone` at the end. */
+function applyFade(el: HTMLAudioElement, to: number, ms: number, onDone?: () => void) {
+  const ramp = fadeRamp(el.volume, to, ms)
+  let i = 0
+  const timer = setInterval(() => {
+    const v = ramp[i]
+    if (v !== undefined) {
+      try { el.volume = v } catch { /* detached element */ }
+    }
+    i++
+    if (i >= ramp.length) {
+      clearInterval(timer)
+      activeFades.delete(timer)
+      onDone?.()
+    }
+  }, Math.max(1, ms / ramp.length))
+  activeFades.add(timer)
+}
+
+/** Cancel every in-flight fade (called on a hard stop). */
+function clearFades() {
+  for (const t of activeFades) clearInterval(t)
+  activeFades.clear()
+}
+
 // Only tracks with shipped pre-rendered MP3s belong here — everything else
 // falls through to the procedural chiptune scheduler below. Listing missing
 // files (boss/victory/defeat) here would log a 404 per attempted play, which
@@ -65,14 +125,17 @@ function playMp3(track: TrackId): boolean {
   // Cross-fade out current MP3 if same source would be requested
   if (currentMp3Track === track && currentAudio && !currentAudio.paused) return true
 
-  // Stop current MP3
-  stopMp3()
+  const target = mp3TargetVolume()
+  // If a track is actually audible right now we cross-fade against it; if not
+  // (first play, or still autoplay-suspended) there is nothing to fade, so the
+  // incoming track just starts at full target.
+  const previous = currentAudio
+  const previousPlaying = !!previous && !previous.paused
 
   const a = new Audio(url)
   // victory/defeat are one-shots; everything else loops
   a.loop = !(track === 'victory' || track === 'defeat')
-  // Music sits behind SFX/voice — lower its baseline a touch
-  a.volume = Math.min(1, userVolume * 1.6)
+  a.volume = previousPlaying ? 0 : target
   a.addEventListener('error', () => {
     knownMissing.add(track)
     // If MP3 fails to load, fall back to procedural
@@ -83,7 +146,20 @@ function playMp3(track: TrackId): boolean {
       Music.play(track)
     }
   })
-  a.play().catch((err: DOMException | Error) => {
+  a.play().then(() => {
+    if (previousPlaying && previous) {
+      // Bring the incoming track up and the outgoing one down, then stop it.
+      previousAudio = previous
+      applyFade(a, target, FADE_MS)
+      applyFade(previous, 0, FADE_MS, () => {
+        try { previous.pause(); previous.currentTime = 0 } catch { /* ignore */ }
+        if (previousAudio === previous) previousAudio = null
+      })
+    } else {
+      // No overlap to fade against — ensure we land at target volume.
+      try { a.volume = target } catch { /* ignore */ }
+    }
+  }).catch((err: DOMException | Error) => {
     // NotAllowedError = autoplay policy block (no user gesture yet). The
     // file is fine, the browser just won't start it. Park the request and
     // replay on first gesture. Any other rejection = real failure → fall
@@ -109,16 +185,20 @@ function playMp3(track: TrackId): boolean {
 }
 
 function stopMp3() {
-  if (currentAudio) {
-    try {
-      currentAudio.pause()
-      currentAudio.currentTime = 0
-    } catch {
-      // ignore
+  clearFades()
+  for (const el of [currentAudio, previousAudio]) {
+    if (el) {
+      try {
+        el.pause()
+        el.currentTime = 0
+      } catch {
+        // ignore
+      }
     }
-    currentAudio = null
-    currentMp3Track = null
   }
+  currentAudio = null
+  previousAudio = null
+  currentMp3Track = null
 }
 
 function stopProcedural() {
@@ -526,7 +606,7 @@ export const Music = {
   setVolume(v: number) {
     userVolume = Math.max(0, Math.min(1, v))
     if (masterGain) masterGain.gain.value = userVolume
-    if (currentAudio) currentAudio.volume = Math.min(1, userVolume * 1.6)
+    if (currentAudio) currentAudio.volume = mp3TargetVolume()
   },
   getVolume() {
     return userVolume

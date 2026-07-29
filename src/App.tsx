@@ -9,6 +9,7 @@ import { BootCard } from './screens/boot/BootCard'
 import { StoryCutscene } from './components/StoryCutscene'
 import { attachQuoteBankSync, loadQuoteBank } from './lib/persist'
 import { decideRoute, SELECT_SEARCH } from './appRoute'
+import { musicIntentFor } from './musicDirector'
 
 /** Renderer sandbox at `?lab=1`. Lazy so it never ships in the main chunk. */
 const ThreeLab = lazy(() =>
@@ -119,32 +120,26 @@ export function App() {
     return () => unsubscribe()
   }, [])
 
-  // Music: switch tracks based on phase. Lenny gets the boss theme.
+  // Soundtrack director. The persistent shell (2cec5fb) keeps one AudioContext
+  // alive across every screen, so BGM can finally be continuous instead of dying
+  // on each hop. WHAT plays is decided by `musicIntentFor` (pure, node-tested):
+  // it keys on `route` for the real-time fighter — so a title -> attract ->
+  // select transition holds the same 'menu' intent and never restarts the track
+  // — and defers to the legacy `phase` machine only for the `cards` route. The
+  // idempotent `Music.play` makes re-runs cheap; only crossing into a match
+  // actually changes the track (Music cross-fades that boundary).
   useEffect(() => {
-    if (!musicEnabled) {
+    const intent = musicIntentFor(route, phase, selectedB, musicEnabled)
+    if (intent.kind === 'stop') {
       Music.stop()
       return
     }
-    if (phase === 'menu' || phase === 'character-select' || phase === 'stage-select' || phase === 'quote-bank' || phase === 'how-to-play' || phase === 'credits') {
-      Music.play('menu')
-    } else if (phase === 'pre-fight' || phase === 'fight') {
-      if (selectedB === 'lenny') {
-        Music.play('boss')
-      } else {
-        // Rotate fight / fight-b each match for variety
-        Music.playFight()
-      }
-    } else if (phase === 'round-end') {
-      // hold current track
-    } else if (phase === 'match-end') {
-      Music.play('victory')
-    } else if (phase === 'arcade-victory' || phase === 'story-ending') {
-      Music.play('victory')
-    } else if (phase === 'story-cutscene') {
-      // Hold the menu track during cutscenes — fades into fight on handoff.
-      Music.play('menu')
-    }
-  }, [phase, selectedB, musicEnabled])
+    if (intent.kind === 'hold') return
+    // 'fight' is played via playFight() so consecutive matches rotate
+    // fight/fight-b; every other track plays directly.
+    if (intent.track === 'fight') Music.playFight()
+    else Music.play(intent.track)
+  }, [route, phase, selectedB, musicEnabled])
 
   // Anticipatory prefetch: when the user lands on a phase, warm the chunks
   // they're most likely to navigate to next. Cached imports are cheap, so

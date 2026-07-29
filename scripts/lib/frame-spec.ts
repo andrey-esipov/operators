@@ -403,6 +403,41 @@ export const FRAMES: FrameSpec[] = [
       'the sides as the last of the energy disperses, weight settling forward onto the bent front leg, torso ' +
       'rising back up out of the deep lunge toward a neutral guard, winding down from the super.',
   },
+  {
+    name: 'super-charge-peak',
+    heightRatio: 1.0,
+    aspect: [0.45, 1.05],
+    pose:
+      'the fully-charged PEAK of a super wind-up — the coiled instant before release, the pose HELD on screen through ' +
+      'the long super freeze so it must carry the shot on its own. The whole body is loaded to maximum: both arms ' +
+      'wrapped around a compressed, straining core of gathered energy crushed against the chest, torso torqued and ' +
+      'coiled to its limit over a deeply braced back leg, knees bent and weight fully loaded to explode forward, head ' +
+      'lowered and eyes locked up on the target. It reads INSTANTLY as a fighter about to unleash everything through ' +
+      'pure body language and SILHOUETTE — arms, coiled chest and braced legs — even with the glow entirely removed, ' +
+      'because in engine the energy aura is drawn BEHIND the fighter and occluded. A limbed, straining human ' +
+      'silhouette at maximum tension, NEVER a soft glowing disc or ball of light in front that swallows the figure.',
+  },
+  {
+    name: 'super-release-2',
+    heightRatio: 0.95,
+    aspect: [0.85, 1.75],
+    pose:
+      'the super fully unleashed — both arms driven to their absolute full forward extension having just hurled the ' +
+      'torrent of energy ahead, the body stretched to maximum forward reach off the exploded back leg, the blast ' +
+      'leaving the hands. The hurled energy has bold INTERNAL STRUCTURE — a bright hard-edged core wrapped in ' +
+      'crackling darker striations and layered concentric edges, high internal contrast rather than a smooth soft ' +
+      'gradient, so it stays legible under heavy bloom instead of washing to a featureless glow; the fighter\u2019s ' +
+      'fully-extended lunging body stays clearly readable through and beside the blast, never dissolved into it.',
+  },
+  {
+    name: 'super-recovery-2',
+    heightRatio: 0.99,
+    aspect: [0.38, 0.9],
+    pose:
+      'the final settle after a super — the lunge fully spent, the fighter straightening back up out of the deep ' +
+      'forward commitment toward an upright neutral guard, both arms drawing back in to a ready stance, weight ' +
+      'rebalancing evenly onto both feet as the last wisps of energy fade — one beat before returning to idle.',
+  },
 
   // ── Hit reactions ────────────────────────────────────────────────────────
   {
@@ -981,7 +1016,7 @@ const ATTACK_SHAPES = {
   // Until that shape+cels land, vanguard skins have no `super-release` cel and
   // stay on the recycled fallback, so nothing ships wrong in the meantime.
   super: {
-    startup: ['super-charge'], active: 'super-release', recovery: ['super-recovery'], neutral: STANCE_FRAME,
+    startup: ['super-charge', 'super-charge-peak'], active: 'super-release', recovery: ['super-release-2', 'super-recovery', 'super-recovery-2'], neutral: STANCE_FRAME,
     // Un-generated skins derive the OLD recycled arc (fireball-charge → uppercut
     // → fireball-release) at the SAME per-move timing, so committing this bespoke
     // shape is byte-identical for every skin that has not generated `super-release`

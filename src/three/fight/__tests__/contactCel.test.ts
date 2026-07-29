@@ -273,14 +273,23 @@ describe('every playable skin ships a breathing idle clip (art-deficit #9 tripwi
 // visual-critic v12 named the super "the single worst thing on screen": the ONE
 // attack with zero drawings of its own. The old `shapeFrom(SUPER, …)` built it
 // from special-fireball-charge + special-uppercut + special-fireball-release, so
-// it "read as a fireball with a colour grade". Tier C gives it three bespoke keys
-// (super-charge → super-release → super-recovery); operator's Palm Barrage
-// (super.P) and warden's Ion Storm (super.storm) share them because both are
-// energy-projection supers redrawn from each skin's own stance. (The vanguard
-// grappler's Backbreaker is also id super.P but is a GRAB, not a projectile — it
-// must route to its own grab/slam cels before any vanguard skin is generated, so
-// vanguard stays on the recycled fallback here until then, which this gate treats
-// as the legitimate not-yet-rolled-over state.)
+// it "read as a fireball with a colour grade". Tier C gives it six bespoke keys
+// (super-charge → super-charge-peak → super-release → super-release-2 →
+// super-recovery → super-recovery-2) — the first attack in the game to clear the
+// SF3:3S unique-frame floor of 6 (roster mean was ~2.8). The second STARTUP cel,
+// super-charge-peak, is load-bearing rather than decoration: the 60-frame super
+// freeze walks the startup cels then HOLDS the last one for the ~54-frame
+// remainder (sim.advanceSuperOwner caps move.frame at active[0]-1), so whatever
+// sits last in startup is the dominant thing on screen for the whole freeze — the
+// single longest, most-watched phase of the most-watched move. A lone super-charge
+// held an empty wind-up there; super-charge-peak is the authored "gathering power"
+// pose that now fills it. operator's Palm Barrage (super.P) and warden's Ion Storm
+// (super.storm) share the arc because both are energy-projection supers redrawn
+// from each skin's own stance. (The vanguard grappler's Backbreaker is also id
+// super.P but is a GRAB, not a projectile — it must route to its own grab/slam
+// cels before any vanguard skin is generated, so vanguard stays on the recycled
+// fallback here until then, which this gate treats as the legitimate
+// not-yet-rolled-over state.)
 //
 // Two layers, because a manifest-only gate is a lying harness by construction: a
 // revert of the frame-spec shape that skipped a manifest rebuild would leave the
@@ -294,7 +303,7 @@ describe('every playable skin ships a breathing idle clip (art-deficit #9 tripwi
 //                fix is absent). Checks the set, not one member.
 describe('the super is bespoke art, not recycled fireball/uppercut cels (visual-critic v12)', () => {
   const RECYCLED = ['special-fireball-charge', 'special-uppercut', 'special-fireball-release']
-  const BESPOKE = ['super-charge', 'super-release', 'super-recovery']
+  const BESPOKE = ['super-charge', 'super-charge-peak', 'super-release', 'super-release-2', 'super-recovery', 'super-recovery-2']
   const BESPOKE_ACTIVE = 'super-release'
 
   // (1) SOURCE lock — both energy supers derive the bespoke arc from their own
@@ -304,6 +313,13 @@ describe('the super is bespoke art, not recycled fireball/uppercut cels (visual-
     const storm = deriveAttackClip('super.storm', { startup: 8, active: 3, recovery: 34 }, () => true)
     expect(palm?.frames).toEqual(BESPOKE)
     expect(storm?.frames).toEqual(BESPOKE)
+    // Density floor, held to the same metric the roster is scored by
+    // (new Set(clips[].frames).size): the super is the first attack to reach the
+    // SF3:3S unique-frame floor of 6. Asserted alongside the exact-list lock so a
+    // revert to a thinner arc fails HERE too — the reason 6 matters is
+    // self-documenting, not implicit in a frame-name list.
+    expect(new Set(palm?.frames).size).toBeGreaterThanOrEqual(6)
+    expect(new Set(storm?.frames).size).toBeGreaterThanOrEqual(6)
     for (const r of RECYCLED) {
       expect(palm?.frames ?? []).not.toContain(r)
       expect(storm?.frames ?? []).not.toContain(r)

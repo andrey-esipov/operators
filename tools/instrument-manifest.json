@@ -278,6 +278,10 @@
       "app": "shipped-fight",
       "note": "SHIPPED fighter via ?fight=1 / __FIGHT__ (deterministic FightHarness → FightRenderer + FightVfx / ProjectileLayer)."
     },
+    "measure-stage-identity": {
+      "app": "shipped-play",
+      "note": "SHIPPED fighter via ?play=1 / matchup params / __PLAY__ (live PlayableMatch → FightRenderer + FightVfx / ProjectileLayer)."
+    },
     "measure-shadow": {
       "app": "shipped-fight",
       "note": "SHIPPED fighter via ?fight=1 / __FIGHT__ (deterministic FightHarness → FightRenderer + FightVfx / ProjectileLayer)."

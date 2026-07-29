@@ -12,6 +12,7 @@ import {
 } from '../types'
 import { AssetCache } from './AssetCache'
 import { detectQuality } from './QualityManager'
+import { QualityAdaptor, affordablePixelRatio } from './QualityAdaptor'
 import type { Side } from '../../types'
 
 /**
@@ -79,9 +80,8 @@ export class Engine {
   private pendingEvents: FightEvent[] = []
   private eventListeners = new Set<(e: FightEvent) => void>()
 
-  // Adaptive-quality sampling
-  private frameTimes: number[] = []
-  private lastAdapt = 0
+  // Adaptive-quality controller — pure policy, unit-tested without a GPU.
+  private adaptor = new QualityAdaptor()
   private adaptEnabled = true
 
   readonly anchors: AnchorRegistry
@@ -108,7 +108,7 @@ export class Engine {
       depth: true,
       preserveDrawingBuffer: true, // screenshot capture for the critic loop
     })
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, this.maxPixelRatio))
+    this.renderer.setPixelRatio(this.effectivePixelRatio())
     this.renderer.outputColorSpace = THREE.SRGBColorSpace
     // ACES gives the filmic highlight rolloff modern fighters use. The post
     // pipeline may override this with its own tonemap pass.
@@ -251,10 +251,13 @@ export class Engine {
     if (q === this._quality) return
     this._quality = q
     this.maxPixelRatio = pixelRatioFor(q)
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, this.maxPixelRatio))
+    this.renderer.setPixelRatio(this.effectivePixelRatio())
     this.renderer.shadowMap.enabled = qualityRank(q) >= 1
     for (const s of this.subsystems) s.setQuality?.(q)
     this.resize(this.width, this.height)
+    // Fresh window for the new tier so a burst of stale slow frames from the
+    // tier we just left can't immediately trigger another demotion.
+    this.adaptor.reset()
   }
 
   /** Disable runtime downgrades (used while capturing reference screenshots). */
@@ -262,10 +265,29 @@ export class Engine {
     this.adaptEnabled = on
   }
 
+  /**
+   * The pixel ratio we actually hand three.js: the tier's nominal cap, further
+   * clamped to a fill BUDGET for the current CSS viewport. This is where the
+   * 1080p/dpr2 catastrophe (pixelRatio 2.0 => 8.3M px => ~5fps) is defused —
+   * `affordablePixelRatio` holds the rendered pixel count near the measured
+   * ~30fps knee regardless of how large the device DPR claims to be.
+   */
+  private effectivePixelRatio(cssW = this.width, cssH = this.height): number {
+    const hasWin = typeof window !== 'undefined'
+    const dpr = hasWin ? window.devicePixelRatio || 1 : 1
+    const w = cssW && cssW > 0 ? cssW : (hasWin && window.innerWidth) || 1920
+    const h = cssH && cssH > 0 ? cssH : (hasWin && window.innerHeight) || 1080
+    return affordablePixelRatio(w, h, dpr, this.maxPixelRatio)
+  }
+
   resize(width: number, height: number) {
     if (width < 1 || height < 1) return
     this.width = width
     this.height = height
+    // Re-evaluate the fill-aware pixel-ratio cap for the new CSS size before
+    // sizing the drawing buffer — a wider viewport is more fill, so the
+    // affordable ratio drops.
+    this.renderer.setPixelRatio(this.effectivePixelRatio(width, height))
     this.renderer.setSize(width, height, false)
     this.camera.aspect = width / height
     // Keep the vertical framing constant when the window gets narrower than
@@ -432,31 +454,22 @@ export class Engine {
 
     this.frameCount++
     this.avgFrameMs += (frameMs - this.avgFrameMs) * 0.05
-    this.frameTimes.push(rawDt * 1000)
-    if (this.frameTimes.length > 90) this.frameTimes.shift()
-    this.maybeAdapt(now)
+    this.runAdapt(now, rawDt * 1000)
   }
 
   /**
-   * Adaptive quality. If we sustain <45fps for 1.5s, drop a tier. We never
-   * auto-upgrade — oscillating between tiers is more distracting than a
-   * slightly conservative setting.
+   * Adaptive quality. Delegates the decision to the pure QualityAdaptor: if
+   * frame time stays above the 45fps line for ~windowMs we drop a tier, and a
+   * catastrophic reading (p90 above the 20fps line) drops STRAIGHT to the floor
+   * in one step. The controller's window is wall-clock, so — unlike the previous
+   * 90-frame warmup — reaction time no longer degrades as the frame rate falls.
+   * `rawDt` is already clamped upstream (tab-restore guard), so one pathological
+   * frame can't dominate the windowed p90.
    */
-  private maybeAdapt(now: number) {
+  private runAdapt(now: number, frameMs: number) {
     if (!this.adaptEnabled) return
-    if (this.frameTimes.length < 90) return
-    if (now - this.lastAdapt < 1500) return
-    const sorted = [...this.frameTimes].sort((a, b) => a - b)
-    const p90 = sorted[Math.floor(sorted.length * 0.9)]
-    if (p90 > 22.2) {
-      const rank = qualityRank(this._quality)
-      if (rank > 0) {
-        const next = (['low', 'medium', 'high', 'ultra'] as QualityTier[])[rank - 1]
-        this.setQuality(next)
-        this.lastAdapt = now
-        this.frameTimes.length = 0
-      }
-    }
+    const action = this.adaptor.sample(now, frameMs, this._quality)
+    if (action.kind === 'demote') this.setQuality(action.to)
   }
 
   /** Force N frames synchronously — used by the screenshot harness. */
@@ -495,12 +508,18 @@ export class Engine {
   }
 }
 
+// Nominal per-tier pixel-ratio CAPS. These are ceilings, not targets:
+// `Engine.effectivePixelRatio` clamps them further to a fill budget for the
+// current viewport (see QualityAdaptor.affordablePixelRatio). ultra/high top out
+// at 1.5 — 2.0 is never right for a fill-bound renderer, where doubling the
+// ratio quadruples the pixel count (measured 4x frame-time swing at 1080p). Most
+// shipped WebGL titles clamp here and spend the pixels on post instead.
 function pixelRatioFor(q: QualityTier): number {
   switch (q) {
     case 'low': return 1
     case 'medium': return 1.35
-    case 'high': return 1.75
-    case 'ultra': return 2
+    case 'high': return 1.5
+    case 'ultra': return 1.5
   }
 }
 

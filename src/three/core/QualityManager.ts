@@ -16,7 +16,6 @@ export function detectQuality(): QualityTier {
   if (forced) return forced
 
   const cores = navigator.hardwareConcurrency ?? 4
-  const mem = (navigator as { deviceMemory?: number }).deviceMemory ?? 8
   const mobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
   const gpu = detectGpuString().toLowerCase()
 
@@ -29,11 +28,34 @@ export function detectQuality(): QualityTier {
     return /iphone|ipad/i.test(navigator.userAgent) ? 'high' : 'medium'
   }
 
-  if (cores >= 8 && mem >= 8) return 'ultra'
-  if (cores >= 6 && mem >= 8) return 'high'
-  if (cores >= 4) return 'medium'
-  return 'low'
+  // Core count is the only CPU proxy we have. (navigator.deviceMemory is capped
+  // at 8 by Chrome and undefined in Safari, so the old `mem >= 8` gate was true
+  // on essentially every desktop — it measured nothing and is gone.) But CPU
+  // says nothing about FILL rate, which is this renderer's actual bottleneck, so
+  // core count alone must never buy the top tier.
+  let tier: QualityTier =
+    cores >= 8 ? 'ultra' : cores >= 6 ? 'high' : cores >= 4 ? 'medium' : 'low'
+
+  // Fill-aware haircut. A high-DPI or oversized viewport pushes several times the
+  // pixels of a 1080p/dpr1 panel through the same screen-space post stack, so the
+  // ultra particle/crowd budget isn't affordable there whatever the core count.
+  // Boot one tier down when the render budget is heavy; the runtime adaptor drops
+  // further if needed, and pixelRatio is independently fill-capped in the Engine.
+  if (tier === 'ultra' && bootFillBudgetPx() > HEAVY_FILL_PX) tier = 'high'
+  return tier
 }
+
+/** Boot-time native render budget: CSS viewport area × devicePixelRatio². */
+function bootFillBudgetPx(): number {
+  if (typeof window === 'undefined') return 0
+  const dpr = window.devicePixelRatio || 1
+  const w = window.innerWidth || 1920
+  const h = window.innerHeight || 1080
+  return w * h * dpr * dpr
+}
+
+/** ~1080p/dpr1 is 2.07M px; 1080p Retina is 8.3M. 4M splits standard from heavy. */
+const HEAVY_FILL_PX = 4_000_000
 
 function readForcedQuality(): QualityTier | null {
   try {

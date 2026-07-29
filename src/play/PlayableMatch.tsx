@@ -14,7 +14,7 @@ import { createLiveSink } from '../audio/liveSink'
 import type { LiveFightAudioSink, LiveSinkStats } from '../audio/liveSink'
 import { FightAudioReactor } from '../audio/reactor'
 import { useGame } from '../state/game'
-import { applyCaptureQuality } from './captureQuality'
+import { openCaptureSession } from './captureQuality'
 import type { QualityTier } from '../three/types'
 
 declare global {
@@ -146,8 +146,10 @@ export function PlayableMatch() {
 
         // A capture that pins ?quality= is measuring THAT tier — hold it so the
         // adaptive loop can't demote pixelRatio/DOF/bloom mid-measurement. No
-        // ?quality= (a real player) stays adaptive. See captureQuality.ts.
-        applyCaptureQuality(renderer.engine, window.location.search)
+        // ?quality= (a real player) stays adaptive. The same call yields the
+        // freezeQuality/quality probes below, so the freeze can't rot without
+        // also breaking captures. See captureQuality.ts.
+        const capture = openCaptureSession(renderer.engine, window.location.search)
 
         setPhase('loading')
         const [atlasA, atlasB] = await Promise.all([loadFighterAtlas(aId), loadFighterAtlas(bId)])
@@ -243,8 +245,7 @@ export function PlayableMatch() {
                 calls: 0, impacts: 0, footsteps: 0, announces: 0,
                 voices: 0, contextRunning: false, musicStarted: false,
               },
-            freezeQuality: (frozen = true) => renderer!.engine.setAdaptiveQuality(!frozen),
-            quality: () => renderer!.engine.quality,
+            ...capture,
           }
         }
 

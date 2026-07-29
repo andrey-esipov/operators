@@ -32,12 +32,14 @@ export function forcedQuality(search: string): QualityTier | null {
 }
 
 /**
- * The slice of `Engine` this needs. Narrowed to one method so the decision can
- * be unit-tested with a spy — constructing a real `Engine` needs a WebGL
- * context, which the node test lane does not have.
+ * The slice of `Engine` a capture session touches. Narrowed so the whole thing
+ * can be exercised with a spy — constructing a real `Engine` needs a WebGL
+ * context the node test lane does not have. `setAdaptiveQuality` mirrors the
+ * setter that flips `Engine.adaptEnabled`; `quality` mirrors `Engine.quality`.
  */
 export interface AdaptiveEngine {
   setAdaptiveQuality(on: boolean): void
+  readonly quality: QualityTier
 }
 
 /**
@@ -51,4 +53,37 @@ export function applyCaptureQuality(engine: AdaptiveEngine, search: string): Qua
   const pinned = forcedQuality(search)
   if (pinned) engine.setAdaptiveQuality(false)
   return pinned
+}
+
+/** The two capture-only probes a run installs on `window.__PLAY__`. */
+export interface CaptureHooks {
+  /** Hold the tier still, or — with false — opt this one run back into the
+   *  adaptive loop. The safe state (frozen) is the default; deviating from it
+   *  is the thing you must ask for. */
+  freezeQuality: (frozen?: boolean) => void
+  /** The live tier, read straight off the engine, so a capture can assert it
+   *  did not move underfoot between window start and end. */
+  quality: () => QualityTier
+}
+
+/**
+ * Enter a capture session: auto-freeze the tier iff the URL pins a valid one,
+ * and return the probes a capture reads to prove the freeze held.
+ *
+ * The freeze and the probes are produced by the SAME call on purpose. The
+ * freeze is the easy thing to forget — that is its entire history, a knob 99
+ * tools skipped. The probes are the thing a capture cannot run without. Fusing
+ * them means the auto-freeze cannot silently rot while captures keep working:
+ * deleting this call also deletes `__PLAY__.freezeQuality`/`quality`, so the
+ * failure is loud, not a slow drift back to an uncontrolled tier. Reachability
+ * by coupling, not by a source grep. `openCaptureSession(spy, …)` is exactly
+ * what the node gate exercises, so "capture mode ⇒ adaptEnabled === false" is
+ * asserted on the real wiring the route runs, without a GPU.
+ */
+export function openCaptureSession(engine: AdaptiveEngine, search: string): CaptureHooks {
+  applyCaptureQuality(engine, search)
+  return {
+    freezeQuality: (frozen = true) => engine.setAdaptiveQuality(!frozen),
+    quality: () => engine.quality,
+  }
 }

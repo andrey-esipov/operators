@@ -13,9 +13,13 @@ import { STAGE_HALF_W, START_X } from '../../../fight/constants'
  * Spacing → on-screen size (charFrac) distribution, and the launcher/sweep/
  * crumple camera-kick curve.
  *
- * The neutral frame was measured genre-perfect (~59% char height) but at MAX
- * separation a standing fighter shrinks to ~31.5% against a genre norm of
- * 40-50%. Geometry proves that ~31.5% is a hard ceiling for the current stage
+ * Our neutral frame measures ~59% char height. At MAX separation a standing
+ * fighter shrinks to ~31.5%. That ~31.5% was once dispatched as a deficit against
+ * a "40-50% genre norm" — but that anchor is UNSOURCED 🔴: files/_reference-research.md:229
+ * labels it verbatim "No published dev spec found", it is the 3S-specific NEUTRAL
+ * figure (smallest of three games), and it was compared against our MAX-range
+ * number (a category error). Treat 40-50% as an unanchored estimate, not a genre
+ * spec. Geometry proves that ~31.5% is a hard ceiling for the current stage
  * width — but geometry alone can't say whether it MATTERS. That depends on how
  * much of a real fight is actually spent near max separation. This measures it,
  * with no GPU and no screenshots: it drives the REAL FightCamera (the class
@@ -722,8 +726,9 @@ describe('spacing → charFrac distribution + launcher/sweep/crumple kick', () =
 
     // (8) The capture path HOLDS the push (kickDt=0 in the freeze), so a captured
     //     money-shot is strictly LARGER than the live one, and the hold does real
-    //     work where it matters most (the low-marquee warden mirror it lifts to the
-    //     ~35% genre max-range floor, and a shoto money shot it punches to ~67%).
+    //     work where it matters most (the low-marquee warden mirror it lifts to
+    //     ~35% — the low end of an unanchored 🔴 max-range estimate, NOT a genre
+    //     spec; see _reference-research.md:229 — and a shoto money shot to ~67%).
     //     STRICT (> live + margin), not >=, so a held mode that silently stopped
     //     holding — collapsing held back to live — reddens here instead of passing.
     expect(wm.n).toBeGreaterThan(20)

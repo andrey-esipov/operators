@@ -352,6 +352,58 @@ export const FRAMES: FrameSpec[] = [
       'rising up onto the toes of the front foot, other arm trailing down, exploding upward off the ground.',
   },
 
+  // ── Super ─────────────────────────────────────────────────────────────────
+  // Bespoke keys for the showcase move — the ONE attack that previously shipped
+  // with zero art of its own (the old SUPER const stitched fireball-charge +
+  // uppercut + fireball-release into a formless recycle). These three read as a
+  // single coherent super arc: gather a huge charge, unleash it in a deep
+  // committed lunge, wind down. Shared by BOTH energy-projection supers —
+  // operator's Palm Barrage (super.P) and warden's Ion Storm (super.storm) —
+  // because each is redrawn from its own skin's stance, so the same "channel and
+  // blast" pose reads as that character's own super. The vanguard grappler's
+  // Backbreaker is NOT a projectile and must NOT borrow these; it needs its own
+  // grab/slam keys + archetype routing before any vanguard skin is generated
+  // (see the note on ATTACK_SHAPES.super below). The release is drawn
+  // deliberately distinct from special-fireball-release (deeper lunge, arms
+  // angled up, whole-body commitment) so the super cannot read as a bigger
+  // fireball — accept-poses enforces that divergence mechanically.
+  {
+    name: 'super-charge',
+    heightRatio: 1.0,
+    aspect: [0.45, 1.05],
+    pose:
+      'the wind-up of a super attack — both arms sweeping back and outward to gather a massive surge of energy, ' +
+      'chest thrown open and the whole torso torqued and coiled back over a deeply braced back leg, weight loaded ' +
+      'low and ready to explode forward, a huge dramatic gathering far bigger and wider than a normal fireball ' +
+      'wind-up, clearly summoning a super not a small projectile. The FIGHTER\u2019S BODY is the dominant, instantly ' +
+      'readable shape — a bold silhouette of arms, open chest and braced legs that reads on its own even with the ' +
+      'glow removed, because in engine the energy aura is drawn BEHIND the fighter and hidden; the gathered energy ' +
+      'hugs and is framed by the body, never a free-floating disc or orb in front that swallows the figure.',
+  },
+  {
+    name: 'super-release',
+    heightRatio: 0.96,
+    aspect: [0.8, 1.65],
+    pose:
+      'the release of a super attack — driving into a deep committed forward lunge off the back leg, BOTH arms ' +
+      'thrust fully forward and angled slightly upward hurling a torrent of energy ahead, hands open and blasting, ' +
+      'the torso driven low and far forward behind the blast, a huge full-body commitment far larger, deeper and ' +
+      'lower than a normal two-palm chest-height fireball push — the unmistakable money-shot pose of a super, not ' +
+      'a bigger fireball. The hurled energy has bold INTERNAL STRUCTURE — a bright hard-edged core wrapped in ' +
+      'crackling darker striations and layered concentric edges, high internal contrast rather than a smooth soft ' +
+      'gradient, so it stays legible under heavy bloom instead of washing to a featureless glow; the fighter\u2019s ' +
+      'lunging body stays clearly readable through and beside the blast, never dissolved into it.',
+  },
+  {
+    name: 'super-recovery',
+    heightRatio: 0.98,
+    aspect: [0.4, 0.95],
+    pose:
+      'the recovery of a super attack — the huge forward commitment now spent, both arms sweeping down and out to ' +
+      'the sides as the last of the energy disperses, weight settling forward onto the bent front leg, torso ' +
+      'rising back up out of the deep lunge toward a neutral guard, winding down from the super.',
+  },
+
   // ── Hit reactions ────────────────────────────────────────────────────────
   {
     name: 'hit-high',
@@ -754,6 +806,12 @@ const MK = clip(false, ['mk-active', 5], ['idle-1', 7])
 const HK = clip(false, ['hk-startup', 6], ['hk-active', 6], ['idle-1', 10])
 const FIREBALL = clip(false, ['special-fireball-charge', 8], ['special-fireball-release', 6], ['idle-1', 8])
 const UPPERCUT = clip(false, ['crouch', 4], ['special-uppercut', 6], ['jump-fall', 6])
+// Recycled-cel FALLBACK ONLY. A playable skin that has generated the bespoke
+// super cels derives its super from the `super` ATTACK_SHAPE (super-charge ->
+// super-release -> super-recovery); this stitched-together recycle is what a
+// skin WITHOUT those cels falls back to (unplayable card art, and any playable
+// skin whose super cels have not been generated yet). Do not point a generated
+// skin at this — it is the "formless super" the bespoke arc replaces.
 const SUPER = clip(false, ['special-fireball-charge', 6], ['special-uppercut', 8], ['special-fireball-release', 8])
 
 // ── Timing-derived attack layout ────────────────────────────────────────────
@@ -778,6 +836,19 @@ export interface AttackShape {
   recovery: string[]
   /** Filler pose for a phase with no dedicated cel. */
   neutral: string
+  /**
+   * Optional recycled shape to derive from when a skin has NOT generated this
+   * shape's bespoke `active` cel. Lets a bespoke arc roll over PER-SKIN while
+   * keeping every un-generated skin byte-identical to its pre-bespoke manifest
+   * (same recycled cels, same per-move timing) instead of dropping to a
+   * differently-timed static clip. Used by `super`: its bespoke shape is authored
+   * AFTER the roster's manifests were built from the old recycled derivation, so
+   * without this a commit of the bespoke shape would silently retime every
+   * not-yet-generated skin's super (recovery 30→8). The fallback's own `active`
+   * cel is itself gated by `has`, so unplayable card art (which lacks even that)
+   * still bails to the static CLIPS entry.
+   */
+  fallback?: AttackShape
 }
 
 export interface MoveTiming {
@@ -893,7 +964,35 @@ const ATTACK_SHAPES = {
   jmk: { startup: ['jmk-chamber'], active: 'jmk-active', recovery: [], neutral: 'jump-fall' },
   fireball: shapeFrom(FIREBALL, 'special-fireball-release'),
   uppercut: shapeFrom(UPPERCUT, 'special-uppercut'),
-  super: shapeFrom(SUPER, 'special-uppercut'),
+  // Bespoke super arc — charge -> release -> recovery, none recycled (the old
+  // shapeFrom(SUPER, 'special-uppercut') stitched fireball/uppercut cels into
+  // a formless super; visual-critic v12 named it the single worst thing on
+  // screen). A skin that has not generated `super-release` bails in
+  // deriveAttackClip to the static CLIPS.super (still the recycled SUPER), so
+  // the roster rolls over per-skin as each atlas gains the bespoke cels — the
+  // same rollover the crouch/air kicks use.
+  //
+  // CORRECT FOR the two energy-projection supers only: operator's Palm Barrage
+  // (super.P) and warden's Ion Storm (super.storm) both DERIVED_ATTACKS-map to
+  // `super`. The vanguard grappler's Backbreaker is ALSO id `super.P` but is a
+  // command grab, not a projectile — it must route to a separate grab/slam
+  // shape (archetype-keyed) with its own cels BEFORE any vanguard skin is
+  // generated, or a full-roster gen would draw a grappler blasting a fireball.
+  // Until that shape+cels land, vanguard skins have no `super-release` cel and
+  // stay on the recycled fallback, so nothing ships wrong in the meantime.
+  super: {
+    startup: ['super-charge'], active: 'super-release', recovery: ['super-recovery'], neutral: STANCE_FRAME,
+    // Un-generated skins derive the OLD recycled arc (fireball-charge → uppercut
+    // → fireball-release) at the SAME per-move timing, so committing this bespoke
+    // shape is byte-identical for every skin that has not generated `super-release`
+    // yet — the roster rolls over one atlas at a time with no silent retiming.
+    // (The crouch/air kick families bail to their static CLIPS entry instead;
+    // they can, because those manifests were rebuilt WITH the bespoke shape
+    // already committed. The super's is authored here, after the WebP repack, and
+    // only chesky is regenerated in this batch, so it must reproduce the recycled
+    // clip exactly for the other five.)
+    fallback: shapeFrom(SUPER, 'special-uppercut'),
+  },
 } satisfies Record<string, AttackShape>
 
 type AttackShapeKey = keyof typeof ATTACK_SHAPES
@@ -935,8 +1034,18 @@ export function deriveAttackClip(
 ): ClipSpec | null {
   const key = DERIVED_ATTACKS[moveId]
   if (!key) return null
-  const shape = ATTACK_SHAPES[key]
-  if (has && !has(shape.active)) return null
+  const shape: AttackShape = ATTACK_SHAPES[key]
+  if (has && !has(shape.active)) {
+    // Skin never generated this shape's bespoke contact cel. If the shape
+    // declares a recycled fallback whose OWN contact cel this skin DOES have,
+    // derive from it with the same timing — the pre-bespoke clip, unchanged — so
+    // the roster rolls over per-skin without retiming un-generated skins. Only
+    // when the fallback's contact cel is also absent (unplayable card art) do we
+    // bail to the static CLIPS entry.
+    const fb = shape.fallback
+    if (fb && has(fb.active)) return layoutAttack(fb, t, has)
+    return null
+  }
   return layoutAttack(shape, t, has)
 }
 

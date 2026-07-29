@@ -37,7 +37,7 @@ const MB = 1024 * 1024
 export const ATLAS_COST_BYTES: Readonly<Record<string, number>> = {
   madhavan: 662420,
   turley: 3373706,
-  chesky: 4758398,
+  chesky: 5116350,
   doshi: 4935818,
   spiegel: 5710006,
   lenny: 5755142,

@@ -3,6 +3,11 @@ import type { FighterAssets } from '../../../fight/types'
 import { FIGHTERS } from '../../../fight/fighters'
 import { ROSTER } from '../../../fighthud/select/roster'
 import { resolveFrame } from '../AnimationDriver'
+// Source-of-truth for the super arc (same module the pipeline derives every
+// skin's super clip from). Imported so the super gate below can assert the SHAPE
+// is bespoke independently of any shipped manifest — a revert to the recycled
+// super reddens here even before a manifest rebuild.
+import { deriveAttackClip, CLIPS } from '../../../../scripts/lib/frame-spec'
 
 // Whole PLAYABLE roster, imported statically (same discipline as reactionCoverage /
 // animationCadence: a single-fighter or single-archetype audit is structurally
@@ -255,6 +260,138 @@ describe('every playable skin ships a breathing idle clip (art-deficit #9 tripwi
   it('audited every choosable fighter against a real manifest (not a vacuous subset)', () => {
     expect(ROSTER.length).toBeGreaterThan(0)
     const audited = idleRows.filter((r) => r.present).map((r) => r.skin)
+    const missing = ROSTER.filter((e) => !audited.includes(e.skin)).map((e) => e.skin)
+    expect(missing, `choosable skins with no imported manifest (unaudited): ${missing.join(', ')}`).toEqual([])
+    expect(audited.length).toBe(ROSTER.length)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sibling gate: the SUPER is bespoke art, not the recycled fireball/uppercut
+// stitch.
+//
+// visual-critic v12 named the super "the single worst thing on screen": the ONE
+// attack with zero drawings of its own. The old `shapeFrom(SUPER, …)` built it
+// from special-fireball-charge + special-uppercut + special-fireball-release, so
+// it "read as a fireball with a colour grade". Tier C gives it three bespoke keys
+// (super-charge → super-release → super-recovery); operator's Palm Barrage
+// (super.P) and warden's Ion Storm (super.storm) share them because both are
+// energy-projection supers redrawn from each skin's own stance. (The vanguard
+// grappler's Backbreaker is also id super.P but is a GRAB, not a projectile — it
+// must route to its own grab/slam cels before any vanguard skin is generated, so
+// vanguard stays on the recycled fallback here until then, which this gate treats
+// as the legitimate not-yet-rolled-over state.)
+//
+// Two layers, because a manifest-only gate is a lying harness by construction: a
+// revert of the frame-spec shape that skipped a manifest rebuild would leave the
+// shipped manifest stale-bespoke and the gate green over reverted source. So:
+//  (1) SOURCE  — deriveAttackClip (the one place every super clip is built) must
+//                yield the bespoke arc and BAIL to the recycled fallback when the
+//                contact cel is absent. Manifest-independent.
+//  (2) SHIPPED — every playable skin is coherently EITHER bespoke-wired OR on the
+//                recycled fallback, audited across the WHOLE roster, with a
+//                progress guard that at least one skin has rolled over (else the
+//                fix is absent). Checks the set, not one member.
+describe('the super is bespoke art, not recycled fireball/uppercut cels (visual-critic v12)', () => {
+  const RECYCLED = ['special-fireball-charge', 'special-uppercut', 'special-fireball-release']
+  const BESPOKE = ['super-charge', 'super-release', 'super-recovery']
+  const BESPOKE_ACTIVE = 'super-release'
+
+  // (1) SOURCE lock — both energy supers derive the bespoke arc from their own
+  //     timing, and neither carries any recycled cel through.
+  it('deriveAttackClip builds the bespoke super arc from timing (Palm Barrage + Ion Storm)', () => {
+    const palm = deriveAttackClip('super.P', { startup: 6, active: 8, recovery: 30 }, () => true)
+    const storm = deriveAttackClip('super.storm', { startup: 8, active: 3, recovery: 34 }, () => true)
+    expect(palm?.frames).toEqual(BESPOKE)
+    expect(storm?.frames).toEqual(BESPOKE)
+    for (const r of RECYCLED) {
+      expect(palm?.frames ?? []).not.toContain(r)
+      expect(storm?.frames ?? []).not.toContain(r)
+    }
+  })
+
+  // (1b) Rollover: a playable skin whose atlas lacks the bespoke contact cel
+  //      derives the RECYCLED arc at the same timing (byte-identical to the
+  //      pre-bespoke manifest), so committing the bespoke shape never silently
+  //      retimes an un-generated skin's super. It must NOT drop to null (clip
+  //      dropped) nor leak a bespoke cel.
+  it('a playable skin missing the bespoke contact cel rolls over to the recycled arc, same timing', () => {
+    const bail = deriveAttackClip('super.P', { startup: 6, active: 8, recovery: 30 }, (c) => c !== BESPOKE_ACTIVE)
+    expect(bail?.frames).toEqual(RECYCLED)
+    expect(bail?.durations).toEqual([6, 8, 30])
+    for (const b of BESPOKE) expect(bail?.frames ?? []).not.toContain(b)
+    // warden's Ion Storm rolls over at its OWN timing, not the palm's.
+    const storm = deriveAttackClip('super.storm', { startup: 8, active: 3, recovery: 34 }, (c) => c !== BESPOKE_ACTIVE)
+    expect(storm?.frames).toEqual(RECYCLED)
+    expect(storm?.durations).toEqual([8, 3, 34])
+  })
+
+  // (1c) Unplayable card art lacks even the recycled contact cel (special-uppercut),
+  //      so it bails ALL the way to the static CLIPS.super const — the last-ditch
+  //      recycled clip — rather than dropping the super entirely.
+  it('card art lacking even the recycled contact cel bails to the static CLIPS.super', () => {
+    const cardHas = (c: string) => c !== BESPOKE_ACTIVE && c !== 'special-uppercut'
+    expect(deriveAttackClip('super.P', { startup: 6, active: 8, recovery: 30 }, cardHas)).toBeNull()
+    expect(CLIPS.super.frames).toEqual(RECYCLED)
+  })
+
+  // (2) SHIPPED-REALITY rollover invariant across the whole playable roster.
+  const superIdFor = (archetype: string): string => {
+    const def = FIGHTERS[archetype]
+    const sup = def ? Object.values(def.moves).find((m) => m.tag === 'super') : undefined
+    return sup?.id ?? 'super.P'
+  }
+  interface SuperRow {
+    skin: string
+    archetype: string
+    superId: string
+    hasCel: boolean
+    isBespoke: boolean
+    celNames: string[]
+    present: boolean
+  }
+  const superRows: SuperRow[] = ROSTER.map((entry) => {
+    const A = SKINS[entry.skin]
+    if (!A) return { skin: entry.skin, archetype: entry.archetype, superId: '', hasCel: false, isBespoke: false, celNames: [], present: false }
+    const superId = superIdFor(entry.archetype)
+    const clips = A.clips as unknown as Record<string, { frames: number[] } | undefined>
+    const celNames = (clips[superId]?.frames ?? []).map((i) => A.frames[i]?.name ?? `#${i}`)
+    const hasCel = A.frames.some((f) => f.name === BESPOKE_ACTIVE)
+    const isBespoke = celNames.includes(BESPOKE_ACTIVE)
+    return { skin: entry.skin, archetype: entry.archetype, superId, hasCel, isBespoke, celNames, present: true }
+  })
+
+  it('SUPER-WIRING TABLE', () => {
+    const lines = superRows.map(
+      (r) => `  ${r.skin.padEnd(9)} ${r.archetype.padEnd(9)} ${r.superId.padEnd(11)} ${(r.isBespoke ? 'BESPOKE' : 'recycled').padEnd(9)} [${r.celNames.join(', ')}]`,
+    )
+    // eslint-disable-next-line no-console
+    console.log(`\nsuper-wiring map (shipped manifests):\n${lines.join('\n')}`)
+    expect(superRows.length).toBe(ROSTER.length)
+  })
+
+  it('every skin is coherently EITHER bespoke-wired OR on the recycled fallback (no broken rollover)', () => {
+    const broken = superRows.filter((r) => r.present && r.hasCel !== r.isBespoke)
+    const detail = broken.map((r) =>
+      r.hasCel
+        ? `${r.skin}: atlas has ${BESPOKE_ACTIVE} but super clip is still recycled [${r.celNames.join(', ')}]`
+        : `${r.skin}: super clip references ${BESPOKE_ACTIVE} but the atlas lacks that cel`,
+    )
+    expect(broken.map((r) => r.skin), `broken super rollover:\n  ${detail.join('\n  ')}`).toEqual([])
+  })
+
+  // Progress + vacuity guard. At least one skin must have rolled over to the
+  // bespoke super, else every skin is recycled — either the art was never wired
+  // or a revert flipped them all back, the exact silent regression this gate
+  // exists to catch. As later stages generate skins this climbs toward
+  // ROSTER.length; it must never fall to 0.
+  it('at least one playable skin ships the bespoke super (not a vacuous all-recycled pass)', () => {
+    const bespoke = superRows.filter((r) => r.isBespoke).map((r) => r.skin)
+    expect(bespoke.length, `bespoke-super skins: ${bespoke.join(', ') || '(none — super fix absent!)'}`).toBeGreaterThan(0)
+  })
+
+  it('audited every choosable fighter against a real manifest (not a vacuous subset)', () => {
+    const audited = superRows.filter((r) => r.present).map((r) => r.skin)
     const missing = ROSTER.filter((e) => !audited.includes(e.skin)).map((e) => e.skin)
     expect(missing, `choosable skins with no imported manifest (unaudited): ${missing.join(', ')}`).toEqual([])
     expect(audited.length).toBe(ROSTER.length)

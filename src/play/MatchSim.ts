@@ -19,6 +19,7 @@
 import type { FightState, InputFrame, StepResult } from '../fight/types'
 import { createFight, step } from '../fight/sim'
 import { makeAI, type Difficulty, type FighterAI } from '../fight/ai'
+import { resolveSimFighter, type FighterPick } from '../fight/fighters'
 import type { InputSource } from '../fight/input/sources'
 import { neutralInput } from '../fight/input/sources'
 
@@ -60,8 +61,11 @@ function makeDriver(c: Controller, fallbackSeed: number): Driver {
 }
 
 export interface MatchSimOptions {
-  p1: string
-  p2: string
+  /** Player-one pick: face + archetype. A bare archetype no longer type-checks
+   *  — the skin must be named, which is the collapse-proofing this whole seam
+   *  exists for (see `resolveSimFighter`). */
+  p1: FighterPick
+  p2: FighterPick
   controllers: [Controller, Controller]
   seed?: number
 }
@@ -75,7 +79,7 @@ export class MatchSim {
   constructor(opts: MatchSimOptions) {
     this.opts = opts
     const seed = opts.seed ?? 0x51ac
-    this.state = createFight(opts.p1, opts.p2)
+    this.state = createFight(resolveSimFighter(opts.p1), resolveSimFighter(opts.p2))
     this.drivers = [
       makeDriver(opts.controllers[0], seed),
       makeDriver(opts.controllers[1], (seed ^ 0x9e3779b9) >>> 0),
@@ -107,7 +111,7 @@ export class MatchSim {
    * of the new match.
    */
   restart(): void {
-    this.state = createFight(this.opts.p1, this.opts.p2)
+    this.state = createFight(resolveSimFighter(this.opts.p1), resolveSimFighter(this.opts.p2))
     this.frame = 0
   }
 

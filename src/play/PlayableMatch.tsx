@@ -126,8 +126,8 @@ export function PlayableMatch() {
 
     const keyboard = new KeyboardSource(DEFAULT_KEYMAP)
     const sim = new MatchSim({
-      p1,
-      p2,
+      p1: { skin: aId, base: p1 },
+      p2: { skin: bId, base: p2 },
       controllers: [
         { kind: 'human', source: keyboard },
         training ? { kind: 'dummy' } : { kind: 'cpu', difficulty },

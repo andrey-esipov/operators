@@ -240,8 +240,8 @@ export class AttractDirector {
 
   private buildSim(m: AttractMatchup): MatchSim {
     const sim = new MatchSim({
-      p1: m.a.archetype,
-      p2: m.b.archetype,
+      p1: { skin: m.a.skin, base: m.a.archetype },
+      p2: { skin: m.b.skin, base: m.b.archetype },
       controllers: [
         { kind: 'cpu', difficulty: 'hard', seed: m.seed },
         { kind: 'cpu', difficulty: 'hard', seed: (m.seed ^ 0x9e3779b9) >>> 0 },

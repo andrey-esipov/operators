@@ -80,7 +80,7 @@
 // also writes hero-<level>.png files for a reviewer to consume; this tool never
 // reads those bytes back.
 import { chromium } from 'playwright-core'
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, writeFileSync, readFileSync } from 'node:fs'
 import { execSync } from 'node:child_process'
 
 const arg = (n, d) => (process.argv.includes(`--${n}`) ? process.argv[process.argv.indexOf(`--${n}`) + 1] : d)
@@ -126,6 +126,37 @@ const MOVE_LEVEL = {
   'super.P': 'crumple', 'throw.f': 'heavy',
 }
 const PEAK_OFFSET = Number(arg('peak', '3')) // frames past contact to the deform apex
+
+// ── Body-reaction reachability guard ─────────────────────────────────────────
+// The level-verify (measureRung) proves the SIM landed each rung's level — stance
+// is authoritative. It CANNOT see what the victim's BODY actually renders, and the
+// two are different claims. Only juggle (launcher) and knockdown (sweep) are
+// body-distinct reactions; light/medium/heavy/crumple all share the one `hurt` reel
+// (traced through combat.ts applyHit -> AnimationDriver; crumple = super.P, which is
+// level:'crumple' with NO juggle flag + grounded victim, so it is 'hitstun'/'hurt'
+// too). AND the juggle clip is authored on only a subset of skins — census on disk:
+// chesky/lenny/spiegel carry it, the other eight fall back to `hurt`. So a launcher
+// capture on a juggle-less victim is a hurt reel wearing a launcher label: exactly
+// the silent-mislabel this project keeps finding. This binds the atlas to the
+// capture — it reads the VICTIM skin's authored clips (source of truth on disk, per
+// run, NOT a hardcoded list) and refuses to hand off a fallback body as a distinct
+// pose. knockdown is on all 11 skins so sweep never falls back today, but the guard
+// checks it rather than assume. Default victim (b=lenny) HAS juggle -> no change.
+const VICTIM = new URLSearchParams(QUERY).get('b') || ''
+const BODY_CLIP = { launcher: 'juggle', sweep: 'knockdown' } // others share the 'hurt' reel
+function victimClipSet(skin) {
+  try { return new Set(Object.keys(JSON.parse(readFileSync(`public/fighters/${skin}/assets.json`, 'utf8')).clips || {})) }
+  catch { return null }
+}
+const VICTIM_CLIPS = victimClipSet(VICTIM)
+// -> { needs, kind: 'shared' (expected hurt reel) | 'distinct' (real pose present)
+//      | 'fallback' (should be distinct but the skin renders hurt) | 'unknown' }
+function bodyStatusFor(target) {
+  const needs = BODY_CLIP[target]
+  if (!needs) return { needs: 'hurt', kind: 'shared' }
+  if (!VICTIM_CLIPS) return { needs, kind: 'unknown' }
+  return { needs, kind: VICTIM_CLIPS.has(needs) ? 'distinct' : 'fallback' }
+}
 
 const browser = await chromium.launch({
   headless: false,
@@ -435,7 +466,15 @@ async function captureHero(rung, gap) {
   }, PEAK_OFFSET)
   await sleep(160)
   let file = ''
-  if (got) { file = `${OUT}/hero-${rung.label}.png`; await page.screenshot({ path: file }) }
+  if (got) {
+    // Encode a body-fallback INTO the filename so a hero handed off without the
+    // JSON still can't be misread as a distinct pose it doesn't show.
+    const bs = bodyStatusFor(rung.target)
+    const tag = bs.kind === 'fallback' ? '-HURTFALLBACK' : bs.kind === 'unknown' ? '-BODYUNVERIFIED' : ''
+    if (tag) console.log(`  ⚠️  ${rung.label}: victim '${VICTIM}' ${bs.kind === 'fallback' ? `has no '${bs.needs}' clip — this body is the shared HURT reel, NOT a ${rung.target} pose` : `atlas unreadable — body pose UNVERIFIED`}. Writing '${tag.slice(1)}' into the name so the label can't lie.`)
+    file = `${OUT}/hero-${rung.label}${tag}.png`
+    await page.screenshot({ path: file })
+  }
   await page.evaluate(() => { window.__WATCH__ = false; window.__PLAY__.resume() })
   return file
 }
@@ -444,6 +483,7 @@ async function captureHero(rung, gap) {
 const results = []
 for (const rung of rungs) {
   const r = await measureRung(rung)
+  r.body = bodyStatusFor(rung.target)
   if (CAPTURE && r.verified) r.heroFrame = await captureHero(rung, r.gapUsed)
   results.push(r)
   await sleep(300)
@@ -527,7 +567,7 @@ const crumpleVerified = !!(crumple && crumple.verified)
 const pass = fullRun ? (coreVerified && kickMutOk && levelGateOk && crumpleGateOk) : !!(results[0] && results[0].verified)
 
 const out = {
-  build: SHA, viewport: { w: VW, h: VH }, query: QUERY, peakOffset: PEAK_OFFSET, only: ONLY || null,
+  build: SHA, viewport: { w: VW, h: VH }, query: QUERY, victim: VICTIM, peakOffset: PEAK_OFFSET, only: ONLY || null,
   rungs: results, mutatedHeavy: mutated, levelGate, crumpleGate, maxMag,
   checks: { coreVerified, crumpleVerified, kickMutOk, levelGateOk, crumpleGateOk },
   verdict: pass
@@ -547,6 +587,7 @@ for (const r of results) {
     `  ${r.label.padEnd(8)} ${String(!!r.landed).padEnd(6)} ${String(!!r.verified).padEnd(8)} ` +
     `${String(r.amId || '—').padEnd(9)} ${lvl.padEnd(16)} ${String(r.reactionLevel || '—').padEnd(12)} ` +
     `${String(r.maxHitstop).padStart(6)}  ${String(r.gapUsed).padStart(4)}  ${String(r.peakPx).padStart(6)}  ${String(r.peakPctScreenWidth).padStart(5)}` +
+    (r.body ? `  body=${r.body.kind === 'shared' ? 'hurt·shared' : r.body.kind === 'distinct' ? r.body.needs : r.body.kind === 'fallback' ? `HURT-FALLBACK(no-${r.body.needs})` : 'UNVERIFIED'}` : '') +
     (r.heroFrame ? `  hero=${r.heroFrame}` : ''),
   )
 }

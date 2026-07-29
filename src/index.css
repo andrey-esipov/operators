@@ -416,7 +416,12 @@ button {
   font-family: "Anton";
   font-style: normal;
   font-weight: 400;
-  font-display: swap;
+  /* optional, NOT swap: Anton is BootCard's first-paint "OPERATORS" wordmark and
+     is preloaded in index.html, so it renders with zero layout shift. swap would
+     paint fallback Arial Narrow first, then reflow ~17% when Anton arrived; on the
+     rare cold+slow load where the preload loses the race, optional keeps the
+     fallback for that one view WITHOUT a late reflow. The other faces stay swap. */
+  font-display: optional;
   src: url("/fonts/Anton-400-latin.woff2") format("woff2");
 }
 @font-face {

@@ -29,6 +29,17 @@ import { describe, expect, it } from 'vitest'
  * deliberately NOT shipped; the gate asserts they stay unshipped so nobody
  * "fixes" a future miss by re-adding dead typography.
  *
+ * FIRST PAINT — removing the render-blocking Google stylesheet also removed the
+ * side effect that made Anton discover-early. Anton renders the "OPERATORS"
+ * wordmark on BootCard (the LCP of frame one); a self-hosted @font-face defers
+ * its discovery to when app CSS first needs it, so the mark painted in fallback
+ * Arial Narrow and reflowed ~17% on arrival. The fix is a same-origin
+ * <link rel=preload> for Anton ONLY, plus font-display:optional so it never
+ * reflows. This gate locks that half in: Anton is preloaded (as=font, crossorigin,
+ * type=font/woff2, a real on-disk file that matches an @font-face src), ONLY Anton
+ * is (over-preloading re-creates the bandwidth contention self-hosting removed),
+ * and a preloaded face uses a no-reflow display while every other face stays swap.
+ *
  * WHY THIS CAN'T LIE:
  *   - Reads the REAL files from disk (index.html, src/index.css, the screen +
  *     public CSS/HTML, the shipped .woff2, the coverage manifest) and re-hashes
@@ -80,6 +91,13 @@ const SECONDARY_FAMILIES = ['Anton', 'Chakra Petch', 'Oswald', 'Saira', 'Barlow 
 const ALL_FAMILIES = [...BRAND_FAMILIES, ...SECONDARY_FAMILIES]
 // Declared in the old @imports but render zero pixels — must NOT be re-hosted.
 const DROPPED_FAMILIES = ['Bebas Neue', 'Saira Condensed']
+
+// First-paint faces that MUST be preloaded so they are in flight before the LCP
+// frame paints. Anton is BootCard's "OPERATORS" wordmark; preloading only it
+// avoids re-contending the entry chunk's bandwidth. A preloaded face renders with
+// a no-reflow font-display; every other face stays swap (correct for body/UI text).
+const PRELOADED_FACES = ['Anton']
+const NO_REFLOW_DISPLAY = new Set(['optional', 'block'])
 
 // Every distinct self-hosted face, as "family|weight|style". This is the exact
 // set the app renders (audited across index.css, menu/select/ceremony.css and
@@ -161,6 +179,29 @@ function parseFontFaces(css: string): FaceDecl[] {
   return out
 }
 
+interface FontPreload {
+  href: string
+  type: string
+  crossorigin: boolean
+}
+// Parse <link rel="preload" as="font" ...> tags out of the entry document,
+// attribute-order-independent, so the gate reasons about what the browser is
+// actually told to fetch early.
+function parseFontPreloads(html: string): FontPreload[] {
+  const out: FontPreload[] = []
+  for (const m of html.matchAll(/<link\b[^>]*>/gi)) {
+    const tag = m[0]
+    if (!/\brel\s*=\s*["']preload["']/i.test(tag)) continue
+    if (!/\bas\s*=\s*["']font["']/i.test(tag)) continue
+    out.push({
+      href: tag.match(/\bhref\s*=\s*["']([^"']+)["']/i)?.[1] ?? '',
+      type: tag.match(/\btype\s*=\s*["']([^"']+)["']/i)?.[1] ?? '',
+      crossorigin: /\bcrossorigin\b/i.test(tag),
+    })
+  }
+  return out
+}
+
 describe('app font delivery budget', () => {
   it('the origin scanner actually works (positive control)', () => {
     // A scanner that never matches would pass every origin assertion blind.
@@ -204,9 +245,18 @@ describe('app font delivery budget', () => {
     for (const f of faces) {
       if (!ALL_FAMILIES.includes(f.family)) continue
       expect(f.url, `@font-face for "${f.family}" ${f.weight} has no local /fonts/*.woff2 src`).toBeTruthy()
-      expect(f.display, `@font-face for "${f.family}" ${f.weight} must set font-display: swap`).toBe(
-        'swap',
-      )
+      if (PRELOADED_FACES.includes(f.family)) {
+        // A preloaded first-paint face must not FOUT-reflow — swap is the bug.
+        expect(
+          NO_REFLOW_DISPLAY.has(f.display),
+          `preloaded first-paint face "${f.family}" ${f.weight} must use font-display: optional|block (not "${f.display}") — swap reflows the wordmark`,
+        ).toBe(true)
+      } else {
+        expect(
+          f.display,
+          `@font-face for "${f.family}" ${f.weight} must set font-display: swap`,
+        ).toBe('swap')
+      }
       expect(
         existsSync(resolve(REPO, 'public' + f.url)),
         `${f.url} declared in @font-face but missing on disk`,
@@ -216,6 +266,43 @@ describe('app font delivery budget', () => {
     // Vacuity: exactly the nine expected faces are self-hosted — not zero,
     // not a subset, not a stray extra family.
     expect([...found].sort()).toEqual(EXPECTED_FACES)
+  })
+
+  it('preloads exactly the first-paint faces — correctly, same-origin, and no more', () => {
+    const urlToFamily = new Map(parseFontFaces(indexCss).map((f) => [f.url, f.family]))
+    const preloads = parseFontPreloads(indexHtml)
+
+    // Vacuity + anti-over-preload: there is at least one first-paint face to
+    // protect, and index.html preloads EXACTLY that many fonts — not zero (the
+    // wordmark FOUT returns) and not "everything" (which re-creates the
+    // render-blocking bandwidth contention self-hosting removed).
+    expect(PRELOADED_FACES.length).toBeGreaterThan(0)
+    expect(
+      preloads.length,
+      `expected ${PRELOADED_FACES.length} <link rel=preload as=font>, found ${preloads.length}`,
+    ).toBe(PRELOADED_FACES.length)
+
+    const preloadedFamilies: string[] = []
+    for (const p of preloads) {
+      expect(p.href, 'a font preload has no href').toBeTruthy()
+      // Never smuggle a third-party origin back in through a preload.
+      expect(ORIGIN_RE.test(p.href), `font preload uses a third-party origin: ${p.href}`).toBe(false)
+      expect(p.href.startsWith('/fonts/'), `font preload href not under /fonts/: ${p.href}`).toBe(true)
+      expect(p.type, `font preload ${p.href} must set type="font/woff2"`).toBe('font/woff2')
+      // crossorigin is MANDATORY for font preloads — without it the browser
+      // fetches the file twice (preload cache miss), worse than not preloading.
+      expect(p.crossorigin, `font preload ${p.href} must be crossorigin`).toBe(true)
+      expect(
+        existsSync(resolve(REPO, 'public' + p.href)),
+        `preloaded font ${p.href} does not exist on disk`,
+      ).toBe(true)
+      // The preloaded file must be a real @font-face src: a preload matching no
+      // face is wasted bytes; a first-paint face with no preload is the bug.
+      const family = urlToFamily.get(p.href)
+      expect(family, `preloaded ${p.href} matches no @font-face src in src/index.css`).toBeTruthy()
+      preloadedFamilies.push(family!)
+    }
+    expect(preloadedFamilies.sort()).toEqual([...PRELOADED_FACES].sort())
   })
 
   it('does NOT re-host the two dead families (consolidation guard)', () => {

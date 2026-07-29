@@ -25,10 +25,22 @@
          brand faces (Press Start 2P, VT323) plus the front-door / select /
          ceremony UI faces (Anton, Chakra Petch, Oswald, Saira, Barlow Condensed).
          @font-face lives in the bundled stylesheet (src/index.css), so there is
-         no third-party font origin on any route. Deliberately NOT preloaded:
-         each face fetches same-origin at first use, and a preload here would
-         steal critical bandwidth from the entry chunk. The gate that keeps this
-         true is src/screens/__tests__/fontDeliveryBudget.node.test.ts. -->
+         no third-party font origin on any route.
+
+         Exactly ONE face is preloaded: Anton renders the "OPERATORS" wordmark on
+         BootCard — the LCP of the very first frame — so it must be in flight
+         before that card paints. Paired with font-display:optional on its
+         @font-face it renders with zero layout shift; without the preload the
+         browser only discovers Anton when app CSS first needs it, and the mark
+         painted in fallback Arial Narrow then reflowed ~17% when Anton arrived.
+         crossorigin is mandatory — a font preload without it is fetched twice.
+         The other eight faces are deliberately NOT preloaded (font-display:swap,
+         fetched same-origin at first use): preloading them would re-contend the
+         entry chunk's bandwidth, the exact cost that dropping the render-blocking
+         Google stylesheet paid down. The gate that keeps all of this true (no
+         third-party origins, Anton preloaded and ONLY Anton, the optional-vs-swap
+         policy) is src/screens/__tests__/fontDeliveryBudget.node.test.ts. -->
+    <link rel="preload" href="/fonts/Anton-400-latin.woff2" as="font" type="font/woff2" crossorigin />
   </head>
   <body>
     <div id="root"></div>

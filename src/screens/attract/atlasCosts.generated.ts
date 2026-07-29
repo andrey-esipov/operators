@@ -23,7 +23,7 @@ export const ATLAS_COST_BYTES: Readonly<Record<string, number>> = Object.freeze(
 export const HERO_ATLAS_COST_BYTES: Readonly<Record<string, number>> = Object.freeze({
   "chesky": 1209068,
   "doshi": 1459316,
-  "lenny": 1326452,
+  "lenny": 1405922,
   "madhavan": 211394,
   "spiegel": 1454122,
   "turley": 1147674,

@@ -519,6 +519,89 @@ export const FRAMES: FrameSpec[] = [
       'knocked out cold on the ground — collapsed flat on the back, limbs splayed limp and motionless, head ' +
       'lolled to one side, completely unconscious and horizontal against the bottom of the frame, defeated.',
   },
+
+  // ── Crouch/air kick keys (Tier C, art-deficit: too few unique poses + wrong
+  //    stance) ─────────────────────────────────────────────────────────────
+  // cr.LK/cr.MK are the #5/#2 most-landed attacks in a 108-fight census yet drew
+  // a SINGLE standing cel; cr.HK is a SWEEP drawn upright; j.MK a grounded cel
+  // mid-air. Each family gets a stance-correct chamber (anticipation) + contact
+  // (follow-through settles to the existing `crouch`/`jump-fall` cel — a fifth
+  // KEY, not a tween). heightRatio sits in the measured crouch band (0.62–0.72)
+  // / jump band (0.85–0.88); the accept-poses gate rejects any that come back
+  // standing (silhouette height) or grounded (foot gap).
+  {
+    name: 'crlk-chamber',
+    heightRatio: 0.7,
+    aspect: [0.5, 1.0],
+    pose:
+      'the chamber of a crouching light kick — staying low in a deep crouch with knees bent and hips dropped near ' +
+      'the ground, the lead leg drawn back and cocked low at ankle height ready to flick out, forearms up guarding ' +
+      'the face, body kept compact and close to the floor, clearly crouched not standing.',
+  },
+  {
+    name: 'crlk-active',
+    heightRatio: 0.68,
+    aspect: [0.6, 1.15],
+    pose:
+      'the contact frame of a crouching light kick — still crouched low with hips sunk and the supporting knee ' +
+      'deeply bent, the lead leg snapping straight out forward at ankle-to-shin height low along the ground, foot ' +
+      'pointed at the target, a short fast low poke, forearms kept up, torso staying low, clearly a crouching kick.',
+  },
+  {
+    name: 'crmk-chamber',
+    heightRatio: 0.72,
+    aspect: [0.45, 0.95],
+    pose:
+      'the chamber of a crouching medium kick — held low in a deep crouch, hips dropped and thighs near horizontal, ' +
+      'the lead knee lifted and cocked across in front of the body loading the kick, supporting leg folded beneath, ' +
+      'arms wound in to guard, staying low to the ground about to extend, clearly crouched not standing.',
+  },
+  {
+    name: 'crmk-active',
+    heightRatio: 0.7,
+    aspect: [0.65, 1.25],
+    pose:
+      'the contact frame of a crouching medium kick — crouched low with hips sunk and the supporting leg deeply ' +
+      'bent, the lead leg driving straight forward at shin-to-knee height, foot spearing into the target low to the ' +
+      'ground, torso leaned low over the planted leg, arms out for balance, clearly a low crouching kick not a standing one.',
+  },
+  {
+    name: 'crhk-chamber',
+    heightRatio: 0.66,
+    aspect: [0.4, 0.9],
+    pose:
+      'the chamber of a crouching heavy sweep — sunk into the lowest crouch with hips almost at the floor and the ' +
+      'supporting knee folded right down, the rear leg coiled underneath and cocked to swing along the ground, torso ' +
+      'dropped low and turned to load the sweep, arm braced across the lead knee, about to sweep the leg out low.',
+  },
+  {
+    name: 'crhk-active',
+    heightRatio: 0.62,
+    aspect: [0.9, 1.8],
+    pose:
+      'the contact frame of a crouching heavy leg sweep — body dropped extremely low with the hips near the ground ' +
+      'and the supporting knee braced low, the sweeping leg swung all the way out straight along the floor at ankle ' +
+      'height in a long low arc, foot slicing across at the target’s feet, torso low and extended over the planted ' +
+      'leg, the classic low sweep skimming the ground.',
+  },
+  {
+    name: 'jmk-chamber',
+    heightRatio: 0.85,
+    aspect: [0.5, 1.05],
+    pose:
+      'the chamber of a jumping medium kick — fully airborne with both feet off the ground and no ground contact at ' +
+      'all, body compact in the air, the kicking knee tucked up and cocked ready to snap out, the other leg folded, ' +
+      'arms drawn in for balance, clearly mid-air well above the floor.',
+  },
+  {
+    name: 'jmk-active',
+    heightRatio: 0.88,
+    aspect: [0.6, 1.3],
+    pose:
+      'the contact frame of a jumping medium kick — fully airborne with both feet off the ground and no ground ' +
+      'contact at all, the kicking leg extended down and forward driving the foot into the target below, the ' +
+      'supporting leg tucked, torso leaned into the jump-in kick, arms out for balance, clearly a mid-air attack.',
+  },
 ]
 
 /**
@@ -797,6 +880,17 @@ const ATTACK_SHAPES = {
   lk: { startup: [], active: 'lk-active', recovery: [], neutral: STANCE_FRAME },
   mk: { startup: [], active: 'mk-active', recovery: [], neutral: STANCE_FRAME },
   hk: shapeFrom(HK, 'hk-active'),
+  // Stance-correct crouch/air kick families (Tier C). cr.LK/cr.MK/cr.HK and j.MK
+  // previously aliased the STANDING lk/mk/hk shapes — a crouching kick drawn
+  // upright, a jumping kick drawn grounded. Each gets a dedicated crouch/air
+  // chamber + contact key and settles to a crouch (or falling) neutral, not the
+  // standing STANCE_FRAME. A skin that has not yet generated the contact cel
+  // bails in deriveAttackClip to the static standing clip, so the roster rolls
+  // over per-skin as each atlas gains the cels.
+  crlk: { startup: ['crlk-chamber'], active: 'crlk-active', recovery: [], neutral: 'crouch' },
+  crmk: { startup: ['crmk-chamber'], active: 'crmk-active', recovery: [], neutral: 'crouch' },
+  crhk: { startup: ['crhk-chamber'], active: 'crhk-active', recovery: [], neutral: 'crouch' },
+  jmk: { startup: ['jmk-chamber'], active: 'jmk-active', recovery: [], neutral: 'jump-fall' },
   fireball: shapeFrom(FIREBALL, 'special-fireball-release'),
   uppercut: shapeFrom(UPPERCUT, 'special-uppercut'),
   super: shapeFrom(SUPER, 'special-uppercut'),
@@ -820,9 +914,9 @@ export const DERIVED_ATTACKS: Record<string, AttackShapeKey> = {
   'st.MP': 'mp', 'cr.MP': 'mp', 'f.MP': 'mp',
   'st.HP': 'hp', 'j.HP': 'hp', 'throw.f': 'hp',
   'cr.HP': 'uppercut', 'dp.P': 'uppercut',
-  'st.LK': 'lk', 'cr.LK': 'lk',
-  'st.MK': 'mk', 'cr.MK': 'mk', 'j.MK': 'mk',
-  'st.HK': 'hk', 'cr.HK': 'hk', 'j.HK': 'hk', 'f.HK': 'hk', 'qcb.K': 'hk',
+  'st.LK': 'lk', 'cr.LK': 'crlk',
+  'st.MK': 'mk', 'cr.MK': 'crmk', 'j.MK': 'jmk',
+  'st.HK': 'hk', 'cr.HK': 'crhk', 'j.HK': 'hk', 'f.HK': 'hk', 'qcb.K': 'hk',
   'qcf.P': 'fireball', 'charge.P': 'fireball', 'qcf.slow': 'fireball', 'qcf.fast': 'fireball',
   'super.P': 'super', 'super.storm': 'super',
 }
@@ -964,6 +1058,28 @@ export const CLIPS: Record<string, ClipSpec> = {
  * partial fighter degrades to this `hurt` reel — a real reaction, not a lie.
  */
 export const FALLBACK_CLIPS: Record<string, ClipSpec> = {
+  // Reduced breathing idle for a shallow skin that never got the deep idle keys
+  // (idle-4 and its sway tweens tw-i2-i4 / tw-i4-i3a / tw-i4-i3b). turley shipped
+  // with NO idle clip at all: CLIPS.idle references those missing cels, so
+  // resolveClip dropped it and the fighter STATUED on frame 0 while the rest of
+  // the cast breathed — art-deficit #9, with idle-3 and the idle tweens sitting
+  // unreferenced in turley's own atlas. This loop breathes from the cels a
+  // shallow skin DOES carry, on the SAME per-key cadence as the full loop
+  // (8/4/7 … 7/3/3): neutral -> inhale (idle-1 -> tw-i1-i2 -> idle-2) -> exhale
+  // settle (idle-3) -> ease back to neutral (tw-i3-i1a -> tw-i3-i1b) -> loop. The
+  // one hard cut the absent idle-4 forces, idle-2 -> idle-3, is a small breath
+  // delta that reads clean as a key. Reuses existing cells only, so the patch
+  // adds no pose and repacks no atlas. A skin missing even these tweens resolves
+  // to null and is caught RED by the idle-presence gate, never silently statued.
+  idle: clip(
+    true,
+    ['idle-1', 8],
+    ['tw-i1-i2', 4],
+    ['idle-2', 7],
+    ['idle-3', 7],
+    ['tw-i3-i1a', 3],
+    ['tw-i3-i1b', 3],
+  ),
   // Snap-back (the impact, held through hitstop) -> double over -> recover to guard.
   hurt: clip(false, ['hit-high', 5], ['hit-low', 3], ['idle-1', 6]),
   // Hit the ground rigid -> limbs settle and crumple. Two distinct grounded poses.

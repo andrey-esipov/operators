@@ -185,3 +185,78 @@ describe('every attacking move freezes on its contact cel, not the idle pose', (
     expect(gaps, `gate stopped covering high-frequency kicks: ${gaps.join(', ')}`).toEqual([])
   })
 })
+
+// ---------------------------------------------------------------------------
+// Sibling gate: every PLAYABLE skin must ship a breathing idle/stance clip.
+//
+// art-deficit #9. turley shipped with NO idle clip at all: the canonical
+// `CLIPS.idle` (frame-spec) references idle-4 and its sway tweens, which turley's
+// atlas never got, so `resolveClip` dropped the whole reel. Fighter.ts reads
+// `clips['idle'] ?? clips['stance']` with no runtime breathing fallback, so turley
+// STATUED on frame 0 while all five other skins breathed. The cels needed to fix
+// it (idle-3 + the idle tweens) were sitting UNREFERENCED in turley's own atlas —
+// authored-but-never-consumed, this project's ninth confirmed instance. The fix
+// wires `FALLBACK_CLIPS.idle` into the shipped manifest via patch-reaction-
+// fallbacks, reusing those existing cels (atlas byte-identical, no new art).
+//
+// This gate makes #9 un-shippable again. It reads the SHIPPED manifest (what the
+// renderer actually loads) and asserts every choosable fighter has an idle/stance
+// reel of at least two keys — a one-cel "loop" is a statue with extra steps. Scope
+// is derived from ROSTER (the choosable set), never a hardcoded count, and a
+// non-vacuous coverage guard asserts we visited every ROSTER entry against a real
+// imported manifest: the same one-member-of-a-set blindness that shipped the kick
+// defect would otherwise let a playable skin quietly drop out of SKINS and go
+// unwatched while the gate stayed green.
+describe('every playable skin ships a breathing idle clip (art-deficit #9 tripwire)', () => {
+  const MIN_IDLE_KEYS = 2
+  interface IdleRow {
+    skin: string
+    archetype: string
+    source: 'idle' | 'stance' | 'none' | 'MISSING-MANIFEST'
+    keys: number
+    present: boolean
+  }
+  const idleRows: IdleRow[] = ROSTER.map((entry) => {
+    const A = SKINS[entry.skin]
+    if (!A) return { skin: entry.skin, archetype: entry.archetype, source: 'MISSING-MANIFEST', keys: 0, present: false }
+    const clips = A.clips as unknown as Record<string, { frames?: number[] } | undefined>
+    const idleLen = clips['idle']?.frames?.length ?? 0
+    const stanceLen = clips['stance']?.frames?.length ?? 0
+    const source = idleLen ? 'idle' : stanceLen ? 'stance' : 'none'
+    return { skin: entry.skin, archetype: entry.archetype, source, keys: Math.max(idleLen, stanceLen), present: true }
+  })
+
+  it('IDLE-PRESENCE TABLE', () => {
+    const lines = idleRows.map(
+      (r) => `  ${r.skin.padEnd(9)} ${r.archetype.padEnd(9)} ${r.source.padEnd(16)} ${r.keys} keys`,
+    )
+    // eslint-disable-next-line no-console
+    console.log(`\nidle-presence map (shipped manifests):\n${lines.join('\n')}`)
+    expect(idleRows.length).toBeGreaterThan(0)
+  })
+
+  it('has an idle or stance clip of >= 2 keys for every choosable fighter', () => {
+    const gaps = idleRows
+      .filter((r) => r.keys < MIN_IDLE_KEYS)
+      .map((r) =>
+        r.present
+          ? `${r.skin}/${r.archetype}: ${r.source} has only ${r.keys} key(s) (would statue on frame 0)`
+          : `${r.skin}/${r.archetype}: no manifest imported`,
+      )
+    expect(gaps, `skins with no breathing idle:\n  ${gaps.join('\n  ')}`).toEqual([])
+  })
+
+  // Vacuity / anti-scope-shrink guard, ROSTER-derived. `idleRows` is a .map over
+  // ROSTER, so its length is trivially ROSTER.length — the load-bearing assertion
+  // is that every row resolved to a REAL imported manifest (present:true). If a
+  // future edit drops a playable skin out of SKINS, or ROSTER gains a choosable
+  // face nobody wired an import for, that skin's row is present:false and this reds
+  // rather than the gate silently auditing a subset and passing.
+  it('audited every choosable fighter against a real manifest (not a vacuous subset)', () => {
+    expect(ROSTER.length).toBeGreaterThan(0)
+    const audited = idleRows.filter((r) => r.present).map((r) => r.skin)
+    const missing = ROSTER.filter((e) => !audited.includes(e.skin)).map((e) => e.skin)
+    expect(missing, `choosable skins with no imported manifest (unaudited): ${missing.join(', ')}`).toEqual([])
+    expect(audited.length).toBe(ROSTER.length)
+  })
+})

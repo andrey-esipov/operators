@@ -1288,6 +1288,25 @@
         4
       ],
       "loop": false
+    },
+    "idle": {
+      "frames": [
+        0,
+        37,
+        1,
+        2,
+        38,
+        39
+      ],
+      "durations": [
+        8,
+        4,
+        7,
+        7,
+        3,
+        3
+      ],
+      "loop": true
     }
   },
   "heightCm": 180

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { AttractDirector } from '../attractDirector'
+import { ROSTER } from '../../../fighthud/select/roster'
 
 /**
  * Gate for the title-screen attract reel (`AttractMode.tsx`).
@@ -143,6 +144,71 @@ describe('attract director — the title-screen demo fight', () => {
       // racing) must not double-dispose the underlying sim/drivers.
       expectNoThrow(() => dir.dispose())
     })
+  })
+})
+
+/**
+ * Sample the *actual* matchup draw distribution the director produces: the
+ * opener (the cost-constrained bout-1 draw) across many seeds, plus several
+ * rotations per seed (the unconstrained bout-2+ draw). Returns every matchup
+ * seen, so the gate below asserts over the real distribution rather than a
+ * re-implementation of the picker.
+ */
+function sampleDraws(seedCount: number, rotationsPerSeed: number) {
+  const draws: { a: string; b: string; aArch: string; bArch: string }[] = []
+  for (let s = 0; s < seedCount; s++) {
+    const dir = new AttractDirector({ seed: (0x1234 + s * 0x9e3779b1) >>> 0 })
+    const record = () =>
+      draws.push({
+        a: dir.matchup.a.skin,
+        b: dir.matchup.b.skin,
+        aArch: dir.matchup.a.archetype,
+        bArch: dir.matchup.b.archetype,
+      })
+    record() // opener — the firstBout (cost-constrained) path
+    for (let r = 0; r < rotationsPerSeed; r++) {
+      dir.rotate() // bouts 2+ — the unconstrained path
+      record()
+    }
+    dir.dispose()
+  }
+  return draws
+}
+
+describe('attract director — never a moveset (archetype) mirror', () => {
+  // The picker guarantees a distinct *skin* (`j !== i`), but the roster fields
+  // two skins per archetype, so a distinct skin can still be the identical
+  // moveset — a mirror that reads as repetitive on a marquee and made the 6-
+  // character roster look like 3. `visual-critic` measured it at ~1 in 5 bouts
+  // (its whole dead-opener tail was turley↔doshi, both `warden`). This is the
+  // gate for the fix that extends the guard from distinct skin to distinct
+  // archetype.
+  it('draws distinct archetypes on every bout, not merely distinct skins', () => {
+    const draws = sampleDraws(200, 6) // 200 openers + 1200 rotations = 1400 bouts
+
+    // Vacuity 1 — the sample is large and genuinely varied, not one safe pairing
+    // on repeat (a gate that only ever saw a single matchup would pass blind).
+    expect(draws.length).toBeGreaterThanOrEqual(1200)
+    const distinctPairs = new Set(draws.map((d) => `${d.a}>${d.b}`))
+    expect(distinctPairs.size).toBeGreaterThanOrEqual(12)
+
+    // Vacuity 2 — every archetype actually appears in the draw, so "no shared
+    // archetype" can't be trivially true from the reel only ever fielding one.
+    const archsSeen = new Set(draws.flatMap((d) => [d.aArch, d.bArch]))
+    expect([...archsSeen].sort()).toEqual(['operator', 'vanguard', 'warden'])
+
+    // Vacuity 3 — the roster genuinely CAN form a moveset mirror (some archetype
+    // is worn by ≥2 skins), so the guard is rejecting a real case, not an
+    // impossible one. Without this the claim below could be a tautology.
+    const perArch = new Map<string, number>()
+    for (const e of ROSTER) perArch.set(e.archetype, (perArch.get(e.archetype) ?? 0) + 1)
+    expect([...perArch.values()].some((n) => n >= 2)).toBe(true)
+
+    // The claim: across the whole sampled distribution, not one bout pairs two of
+    // the same archetype. Removing the `a.archetype === b.archetype` reject in
+    // pickMatchup turns ~1 in 5 of these draws into a mirror — the mutation proof.
+    const mirrors = draws.filter((d) => d.aArch === d.bArch)
+    expect(mirrors.map((m) => `${m.a}/${m.b}:${m.aArch}`)).toEqual([])
   })
 })
 

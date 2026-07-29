@@ -90,13 +90,13 @@ export class AttractDirector {
   // ── matchup selection ──────────────────────────────────────────────────────
 
   private pickMatchup(firstBout = false): AttractMatchup {
-    // Bouts 2+ (`firstBout` false) take a single unconstrained draw — byte-for-
-    // byte the original random selection, so the reel past the opener is
-    // untouched. Only the opener rejection-samples, re-rolling the pair (never
-    // the stage/seed) until it is within the first-bout download ceiling, so the
-    // shop window's very first load stays off the ~10.9 MB worst-case pairing.
-    // A hard attempt cap guarantees termination and, with ~4 of 5 pairings
-    // eligible, is effectively never reached.
+    // The cost constraint applies to the opener only: bout 1 rejection-samples,
+    // re-rolling the pair (never the stage/seed) until it is within the first-
+    // bout download ceiling, so the shop window's very first load stays off the
+    // ~10.9 MB worst-case pairing; bouts 2+ skip that cost check. The archetype
+    // guard below, by contrast, applies to *every* bout. A hard attempt cap
+    // guarantees termination and, with ~4 of 5 pairings eligible, is effectively
+    // never reached.
     const MAX_ATTEMPTS = 40
     for (let attempt = 0; ; attempt++) {
       const i = this.rng.int(ROSTER.length)
@@ -106,6 +106,17 @@ export class AttractDirector {
       if (j >= i) j++
       const a = ROSTER[i]
       const b = ROSTER[j]
+      // …but a distinct *skin* is not a distinct *fight*. The roster carries two
+      // skins per archetype (chesky/lenny are both `operator`, spiegel/madhavan
+      // `vanguard`, doshi/turley `warden`), so the skip above still let a moveset
+      // mirror through on ~1 in 5 bouts — two fighters throwing the identical
+      // moveset in different costumes, which is the mirror that actually reads as
+      // repetitive on a marquee (and made 6 characters look like 3). Hard-reject
+      // it on *every* bout, unbounded by MAX_ATTEMPTS: unlike the cost ceiling
+      // below — a soft preference we knowingly relax to guarantee termination — a
+      // moveset mirror is never something we choose to show. 4 of every 5 draws
+      // clear it, so this terminates as fast as the skin skip it extends.
+      if (a.archetype === b.archetype) continue
       if (firstBout && attempt < MAX_ATTEMPTS && !isAllowedFirstBout(a.skin, b.skin)) {
         continue
       }

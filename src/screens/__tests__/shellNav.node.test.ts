@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import ts from 'typescript'
-import { existsSync, readFileSync, readdirSync } from 'node:fs'
-import { dirname, resolve, extname } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+import { SRC, rel, reachableFrom, engineOwningModules, auditEngineModules, DEFAULT_ENGINE_CTORS } from '../../__tests__/engineModules'
 
 /**
  * Shell-navigation safety — the two obligations `2cec5fb` (route-as-state) is on
@@ -42,6 +42,11 @@ import { fileURLToPath } from 'node:url'
  *      enumerated from the filesystem, so a NEW engine-owning component is pulled
  *      into the gate automatically and reddens if it forgets to dispose.
  *
+ * The engine-module ENUMERATOR and the transitive-import walk that both gates
+ * lean on are factored into `src/__tests__/engineModules.ts`, so this disposal
+ * gate and impact-vfx's capture-quality gate ask their OWN question of ONE
+ * shared list (rather than each carrying a private enumerator that drifts).
+ *
  * WHY NEITHER CAN LIE VACUOUSLY (this project's signature failure is a checker
  * that passes because it looked at nothing / its matcher matches nothing):
  *   - POSITIVE CONTROLS ship with each gate: the reload detector must fire on
@@ -70,72 +75,9 @@ import { fileURLToPath } from 'node:url'
  * byte-identical to green (md5-verified).
  */
 
-const HERE = dirname(fileURLToPath(import.meta.url))
-const SRC = resolve(HERE, '..', '..') // src/
-const rel = (abs: string) => abs.replace(SRC + '/', '')
-const EXTS = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs']
-
-/** Resolve a *relative* specifier to a real source file, or null. Bare
- *  (node_modules) specifiers return null — external edges can't reach our src. */
-function resolveRelative(fromFile: string, spec: string): string | null {
-  const clean = spec.split('?')[0]
-  if (!clean.startsWith('.')) return null
-  const base = resolve(dirname(fromFile), clean)
-  const cands: string[] = []
-  if (extname(base)) {
-    cands.push(base)
-    if (/\.jsx?$/.test(base)) cands.push(base.replace(/\.jsx?$/, '.ts'), base.replace(/\.jsx?$/, '.tsx'))
-  }
-  for (const e of EXTS) cands.push(base + e)
-  for (const e of EXTS) cands.push(resolve(base, 'index' + e))
-  return cands.find((c) => existsSync(c)) ?? null
-}
-
-/** Every module specifier a file references — static, `export … from`, dynamic
- *  `import()`, `require()`, type-only alike — via the TS preprocessor, which reads
- *  real syntax so a specifier in a comment or string literal is ignored. */
-function edgesOf(file: string): string[] {
-  return ts.preProcessFile(readFileSync(file, 'utf8'), true, true).importedFiles.map((f) => f.fileName)
-}
-
-/** Transitive closure of in-`src` files reachable from `roots` (roots included). */
-function reachableFrom(roots: string[]): Set<string> {
-  const seen = new Set<string>()
-  const stack = [...roots]
-  while (stack.length) {
-    const f = stack.pop()
-    if (f === undefined || seen.has(f)) continue
-    seen.add(f)
-    let specs: string[]
-    try {
-      specs = edgesOf(f)
-    } catch {
-      continue
-    }
-    for (const s of specs) {
-      const r = resolveRelative(f, s)
-      if (r && r.startsWith(SRC + '/') && !seen.has(r)) stack.push(r)
-    }
-  }
-  return seen
-}
-
-/** All shipped source files under a dir — excludes `__tests__/` and `*.test.*` /
- *  `*.probe.*`, which are not shipped modules. */
-function shippedSourceUnder(dir: string): string[] {
-  if (!existsSync(dir)) return []
-  const out: string[] = []
-  for (const ent of readdirSync(dir, { withFileTypes: true })) {
-    const p = resolve(dir, ent.name)
-    if (ent.isDirectory()) {
-      if (ent.name === '__tests__' || ent.name === 'node_modules') continue
-      out.push(...shippedSourceUnder(p))
-    } else if (/\.(ts|tsx)$/.test(ent.name) && !/\.(test|probe)\./.test(ent.name)) {
-      out.push(p)
-    }
-  }
-  return out
-}
+// Enumeration + import-graph plumbing (SRC, rel, reachableFrom, engineOwning
+// modules, auditEngineModules) is imported from `src/__tests__/engineModules`.
+// This file keeps only the two DETECTORS — its own questions — below.
 
 // ── Gate A detector: assignment/call-form full-page navigation, by AST ──────────
 // Matches `X.location.assign(...)` / `.replace(...)` / `.reload(...)` calls and
@@ -178,7 +120,7 @@ function reloadFormsInSource(src: string): string[] {
 // the enclosing `useEffect` callback (skipping the async IIFE the loaders wrap the
 // construction in), then checks the effect's returned cleanup disposes the bound
 // identifier.
-const ENGINE_CTORS = new Set(['FightRenderer', 'Engine'])
+const ENGINE_CTORS = new Set<string>(DEFAULT_ENGINE_CTORS)
 
 function enclosingEffectFn(node: ts.Node): ts.ArrowFunction | ts.FunctionExpression | null {
   let n: ts.Node | undefined = node.parent
@@ -264,15 +206,14 @@ function engineDisposalViolations(src: string): string[] {
   return violations
 }
 
-/** Shipped component modules that construct an engine object AND use `useEffect`
- *  — i.e. React components that mount a WebGL engine. The `useEffect` filter
- *  naturally excludes the `FightRenderer` wrapper class (no effect; its engine
- *  disposal is a METHOD proven by engineContextRelease), with no hardcoded path. */
+/** React components that MOUNT a WebGL engine (construct FightRenderer/Engine in
+ *  an effect) — a thin alias over the shared `engineOwningModules` enumerator, so
+ *  this disposal gate and impact-vfx's capture-quality gate (in its own lane, at
+ *  `src/play/__tests__/`) ask their own question of ONE list. `requireEffect`
+ *  excludes the `FightRenderer` wrapper class (no effect; its disposal is a
+ *  METHOD proven by engineContextRelease). */
 function engineComponentFiles(): string[] {
-  return shippedSourceUnder(SRC).filter((f) => {
-    const s = readFileSync(f, 'utf8')
-    return /\bnew\s+(FightRenderer|Engine)\s*\(/.test(s) && /\buseEffect\b/.test(s)
-  })
+  return engineOwningModules({ requireEffect: true })
 }
 
 const APP = resolve(SRC, 'App.tsx')
@@ -366,11 +307,10 @@ describe('engine lifecycle — every engine-owning component disposes on unmount
   })
 
   it('each engine-owning component disposes its engine in the constructing effect cleanup', () => {
-    const offenders: string[] = []
-    for (const f of components) {
-      const v = engineDisposalViolations(readFileSync(f, 'utf8'))
-      if (v.length) offenders.push(`${rel(f)} → ${v.join('; ')}`)
-    }
+    // Dogfoods the shared `auditEngineModules` seam: one enumerated list, this
+    // gate's disposal question. impact-vfx's capture gate asks the same list its
+    // own freeze-quality question — one walker, two predicates, no drift.
+    const offenders = auditEngineModules(engineDisposalViolations, { requireEffect: true })
     expect(offenders, `engine-owning components that leak on unmount:\n${offenders.join('\n')}`).toEqual([])
   })
 })

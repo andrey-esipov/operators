@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { RouteKind } from './appRoute'
 import type { Phase } from './types'
-import { musicIntentFor, type MusicIntent } from './musicDirector'
+import { musicIntentFor, ROUTE_MUSIC, type MusicIntent } from './musicDirector'
 import { fadeRamp } from './lib/music'
 
 /**
@@ -57,6 +57,34 @@ describe('musicIntentFor — real-time fighter is route-driven', () => {
     expect(beforeMatch).not.toEqual(inMatch) // a real transition — the cross-fade point
   })
 })
+
+describe('musicIntentFor — the route→soundtrack partition is exhaustive', () => {
+  // Type-level completeness: ALL_ROUTES is provably EVERY RouteKind, or this file
+  // does not compile. `Exclude<RouteKind, …>` collapses to `never` iff the list
+  // omits nothing; binding that to `true` fails the moment a route is missed — so
+  // the runtime check below cannot be fooled by a stale hand-maintained list.
+  const ALL_ROUTES = ['lab', 'fight', 'hud', 'select', 'attract', 'cards', 'play', 'frontdoor'] as const
+  type RoutesCovered = Exclude<RouteKind, (typeof ALL_ROUTES)[number]> extends never ? true : false
+  const _routesComplete: RoutesCovered = true
+  void _routesComplete
+
+  it('every RouteKind declares a soundtrack role — no route can silently default', () => {
+    // ROUTE_MUSIC is `satisfies Record<RouteKind, …>`, so a missing route is a
+    // COMPILE error at the table (mutation-proven). This is its visible runtime
+    // companion: the table's keys are EXACTLY the route set — nothing missing,
+    // nothing stray — which is what makes "a 9th route inherits menu music"
+    // impossible rather than merely unlikely.
+    expect(Object.keys(ROUTE_MUSIC).sort()).toEqual([...ALL_ROUTES].sort())
+    for (const r of ALL_ROUTES) expect(ROUTE_MUSIC[r]).toBeDefined()
+  })
+
+  it('ANTI-VACUITY: the partition actually uses all three roles (not one blanket default)', () => {
+    // The defect being closed is precisely "everything defaults to one role", so
+    // a table that mapped every route to 'front-of-house' must NOT pass.
+    expect(new Set(Object.values(ROUTE_MUSIC))).toEqual(new Set(['combat', 'front-of-house', 'cards']))
+  })
+})
+
 
 describe('musicIntentFor — legacy cards route stays phase-driven', () => {
   const cases: Array<[Phase, MusicIntent]> = [

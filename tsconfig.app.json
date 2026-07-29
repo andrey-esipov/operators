@@ -33,6 +33,16 @@
      `*.node.test.ts` are the committed exception: gates that must read files
      from disk (e.g. the atlas VRAM budget reads the real atlas PNG headers).
      They compile under tsconfig.vitest.json WITH node types, so file I/O stays
-     quarantined to those gates and never grants the shipped app node globals. */
-  "exclude": ["src/**/_*.probe.test.ts", "src/**/*.node.test.ts"]
+     quarantined to those gates and never grants the shipped app node globals.
+
+     `src/__tests__/engineModules.ts` is the same category with a different shape:
+     a node-API test-support module (the shared Engine-owning-module enumerator
+     that shellNav's disposal gate and the capture-quality gate both walk — one
+     list, two predicates). It ships no tests of its own, so it is deliberately
+     NOT named `*.node.test.ts` (a test-suite-free `*.test.ts` errors under vitest,
+     and importing a test file from another double-registers its suites). It still
+     reads the source tree from disk, so it must be quarantined out of the app
+     program for the identical reason; it compiles under the vitest lane as a
+     dependency of the `*.node.test.ts` gates that import it. */
+  "exclude": ["src/**/_*.probe.test.ts", "src/**/*.node.test.ts", "src/__tests__/engineModules.ts"]
 }

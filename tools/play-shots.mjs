@@ -29,7 +29,10 @@ const arg = (name, dflt) =>
 // sessions memorising.
 const QUERY = arg('--query', '')
 const OUT = arg('--out', 'play-shots')
-const URL = `http://localhost:${PORT}/${QUERY ? '?' + QUERY.replace(/^\?/, '') : ''}`
+// Bare `/` is the front door now, not a match — default to the `?play=1` escape
+// hatch so a no-arg run still lands in a live fight. An explicit --query
+// (a matchup) is passed through and routes to the fighter on its own.
+const URL = `http://localhost:${PORT}/?${QUERY ? QUERY.replace(/^\?/, '') : 'play=1'}`
 rmSync(OUT, { recursive: true, force: true })
 mkdirSync(OUT, { recursive: true })
 

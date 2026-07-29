@@ -54,18 +54,20 @@ async function read(url) {
   })
 }
 
-// 1) Default route: both fighters ship atlases → both must be real portraits.
-const def = await read(`${base}/`)
-console.log('default /       →', JSON.stringify(def))
+// 1) The play route (default matchup): both fighters ship atlases → both must
+// be real portraits. `?play=1` boots the fighter straight to a live match now
+// that a bare `/` is the front door instead.
+const def = await read(`${base}/?play=1`)
+console.log('play route      →', JSON.stringify(def))
 // 2) Atlas-less fighter on side A → letter badge; chesky on B → portrait.
 const fb = await read(`${base}/?play=1&a=reid&b=chesky`)
 console.log('?a=reid&b=chesky →', JSON.stringify(fb))
 
 // 3) Portrait-frame symmetry. The finding: the box sized to each crop's aspect
 // ratio, so the two mirrored sides rendered 43 vs 51px wide — an asymmetry on a
-// HUD whose whole premise is mirroring. Measure both frames on the default
-// route and require them equal and a real size (not favicon-scale).
-await page.goto(`${base}/`, { waitUntil: 'load' })
+// HUD whose whole premise is mirroring. Measure both frames on the play route
+// and require them equal and a real size (not favicon-scale).
+await page.goto(`${base}/?play=1`, { waitUntil: 'load' })
 await page
   .waitForFunction(
     () => {

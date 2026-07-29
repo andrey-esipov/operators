@@ -7,6 +7,7 @@ import { SCREENS, prefetchScreen } from './screens/registry'
 import { ScreenSkeleton } from './components/ScreenSkeleton'
 import { StoryCutscene } from './components/StoryCutscene'
 import { attachQuoteBankSync, loadQuoteBank } from './lib/persist'
+import { decideRoute } from './appRoute'
 
 /** Renderer sandbox at `?lab=1`. Lazy so it never ships in the main chunk. */
 const ThreeLab = lazy(() =>
@@ -44,49 +45,23 @@ const AttractMode = lazy(() =>
   import('./screens/AttractMode').then((m) => ({ default: m.AttractMode })),
 )
 
-function isLabRoute(): boolean {
-  if (typeof window === 'undefined') return false
-  return new URLSearchParams(window.location.search).get('lab') === '1'
-}
+/** The game's front door at bare `/`: title → attract reel → select → match.
+ *  Lazy so the fighter renderer the reel pulls in never weighs down the capture
+ *  routes; it loads only for a real buyer landing on the default URL. */
+const FrontDoor = lazy(() =>
+  import('./screens/FrontDoor').then((m) => ({ default: m.FrontDoor })),
+)
 
-function isFightRoute(): boolean {
-  if (typeof window === 'undefined') return false
-  return new URLSearchParams(window.location.search).get('fight') === '1'
-}
-
-function isHudRoute(): boolean {
-  if (typeof window === 'undefined') return false
-  return new URLSearchParams(window.location.search).get('fighthud') === '1'
-}
-
-/** The legacy turn-based card game, now at `?cards=1`. */
-function isCardsRoute(): boolean {
-  if (typeof window === 'undefined') return false
-  return new URLSearchParams(window.location.search).get('cards') === '1'
-}
-
-/** Character + stage select at `?select=1`. Deliberately NOT the bare-`/`
- *  landing: many capture tools boot `/` (often with no query at all) and wait
- *  for a live match on `window.__PLAY__`, so gating `/` behind select would
- *  break them mid-run. Select is the human front door; it writes an explicit
- *  matchup query and hands off to the match. */
-function isSelectRoute(): boolean {
-  if (typeof window === 'undefined') return false
-  return new URLSearchParams(window.location.search).get('select') === '1'
-}
-
-/** The live attract reel at `?attract=1`. A distinct query no capture tool
- *  uses, so it can't be confused with a bare-`/` match or a `?fight=1` harness. */
-function isAttractRoute(): boolean {
-  if (typeof window === 'undefined') return false
-  return new URLSearchParams(window.location.search).get('attract') === '1'
-}
-
-/** The fighter is the game, so it owns `/`. The dev routes above are tested
- *  first and still win; `?play=1` keeps working for tools that hardcode it. */
-function isPlayRoute(): boolean {
-  if (typeof window === 'undefined') return false
-  return !isCardsRoute() && !isSelectRoute() && !isAttractRoute()
+/**
+ * Route resolution lives in {@link decideRoute} (pure, node-tested). The one
+ * behavioural change from "the fighter owns `/`": a bare landing with NO match
+ * signal resolves to `frontdoor` (title → attract → select) instead of dropping
+ * the visitor into a live match. Anything carrying `?play=1` or an explicit
+ * matchup param still resolves to `play`, so every capture tool that passes a
+ * matchup — and the `?play=1` escape hatch — is unaffected.
+ */
+function initialRoute() {
+  return decideRoute(typeof window === 'undefined' ? '' : window.location.search)
 }
 
 export function App() {
@@ -94,12 +69,7 @@ export function App() {
   const crtEnabled = useGame((s) => s.crtEnabled)
   const selectedB = useGame((s) => s.selectedB)
   const musicEnabled = useGame((s) => s.musicEnabled)
-  const [lab] = useState(isLabRoute)
-  const [fight] = useState(isFightRoute)
-  const [hud] = useState(isHudRoute)
-  const [select] = useState(isSelectRoute)
-  const [attract] = useState(isAttractRoute)
-  const [play] = useState(isPlayRoute)
+  const [route] = useState(initialRoute)
 
   // Arcade boot gate. Shown once per page load before anything else. The
   // press is a real user gesture, so it unlocks the soundtrack — the menu's
@@ -175,7 +145,7 @@ export function App() {
     ? SCREENS[phase as keyof typeof SCREENS].Component
     : null
 
-  if (lab) {
+  if (route === 'lab') {
     return (
       <Suspense fallback={<div style={{ color: '#fff', padding: 24 }}>loading lab…</div>}>
         <ThreeLab />
@@ -183,7 +153,7 @@ export function App() {
     )
   }
 
-  if (fight) {
+  if (route === 'fight') {
     return (
       <Suspense fallback={<div style={{ color: '#fff', padding: 24 }}>loading fight…</div>}>
         <FightHarness />
@@ -191,7 +161,7 @@ export function App() {
     )
   }
 
-  if (hud) {
+  if (route === 'hud') {
     return (
       <Suspense fallback={<div style={{ color: '#fff', padding: 24 }}>loading hud…</div>}>
         <HudPreview />
@@ -199,7 +169,7 @@ export function App() {
     )
   }
 
-  if (select) {
+  if (route === 'select') {
     return (
       <Suspense fallback={<div style={{ color: '#fff', padding: 24 }}>loading select…</div>}>
         <FightSelect />
@@ -207,7 +177,7 @@ export function App() {
     )
   }
 
-  if (attract) {
+  if (route === 'attract') {
     return (
       <Suspense fallback={<div style={{ color: '#fff', padding: 24 }}>loading attract…</div>}>
         <AttractMode onExit={() => { window.location.search = 'select=1' }} />
@@ -215,7 +185,7 @@ export function App() {
     )
   }
 
-  if (play) {
+  if (route === 'play') {
     return (
       <Suspense fallback={<div style={{ color: '#fff', padding: 24 }}>loading match…</div>}>
         <PlayableMatch />
@@ -223,6 +193,21 @@ export function App() {
     )
   }
 
+  if (route === 'frontdoor') {
+    // Bare `/` with no match signal: the buyer's first impression. Title →
+    // attract reel → character select, then a real match. `onPlay` hands off to
+    // the human select screen, which writes an explicit matchup and lands back
+    // on the `play` route above.
+    return (
+      <Suspense fallback={<div style={{ color: '#fff', padding: 24 }}>loading…</div>}>
+        <FrontDoor onPlay={() => { window.location.search = 'select=1' }} />
+      </Suspense>
+    )
+  }
+
+  // Only `route === 'cards'` reaches here: the legacy turn-based card game's
+  // phase machine (StartScreen → MainMenu → its own screens). Left exactly as it
+  // was — the front door above leads to the real-time fighter, never this.
   return (
     <div className="w-full h-full" style={{ background: '#0F0A1A' }}>
       {!started ? (

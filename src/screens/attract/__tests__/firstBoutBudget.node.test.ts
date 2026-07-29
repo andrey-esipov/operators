@@ -24,12 +24,13 @@
  *     every fighter opens with all its partners and none dominates — the
  *     size-bimodal inversion (madhavan in 100% of openers, spiegel in 0%) is gone.
  *
- * HONESTY: every "second" here is MODELED — real on-disk bytes ÷ a cited
- * lab-throttling rate (Lighthouse slow-4G 1.6 Mbps, WebPageTest 4G 9 Mbps,
- * conservative cable 24 Mbps). It is a download model with no decode/RTT/TCP-ramp
- * term, NOT a live network measurement, and is named as such throughout. FAST
- * assertions read the FULL bytes on disk (what a fast link serves); SLOW
- * assertions read the HERO bytes on disk (what a slow link serves).
+ * HONESTY: every "second" here is MODELED — real on-disk bytes ÷ a throttle rate.
+ * Two of the three rates are cited third-party lab presets (🟢 Lighthouse "Slow 4G"
+ * 1.6 Mbps; 🟢 WebPageTest "4G" 9 Mbps); the cable rate (🔴 24 Mbps) is OUR OWN
+ * conservative desktop anchor, not a preset, and sets only a loose sanity bound. It
+ * is a download model with no decode/RTT/TCP-ramp term, NOT a live network
+ * measurement, and is named as such throughout. FAST assertions read the FULL bytes
+ * on disk (what a fast link serves); SLOW assertions read the HERO bytes on disk.
  *
  * ANTI-VACUITY (this project has a documented history of gates that pass by
  * checking nothing): real bytes are read from disk for every choosable skin; the

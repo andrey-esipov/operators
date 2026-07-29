@@ -84,10 +84,12 @@ export function firstBoutHeroCostBytes(skinA: string, skinB: string): number {
  *
  * The constraint is really TIME-to-first-attract-frame, and it is dominated by
  * the connection, not by ±1 MB of atlas. Numbers below are MODELED — bytes ÷ a
- * cited lab-throttling rate, NOT a live network measurement:
+ *  throttle rate (two cited third-party lab presets plus one in-house broadband
+ *  anchor), NOT a live network measurement:
  *
- *   • Broadband (24 Mbps): the heaviest ~11.5 MB pairing loads in <4 s, so a
- *     byte cap buys nothing there and only withholds our best art.
+ *   • Broadband (our 24 Mbps anchor, not a lab preset): the heaviest ~11.5 MB
+ *     pairing loads in <4 s, so a byte cap buys nothing there and only withholds
+ *     our best art.
  *   • Lighthouse slow-4G (1.6 Mbps): EVERY opener is slow — the choosable roster
  *     is size-homogeneous (5 of 6 atlases are 3.4–5.8 MB), spanning ~20 s
  *     (lightest pairing) to ~57 s (heaviest). 10.0 vs 10.9 MB is ~4 s on an
@@ -101,12 +103,14 @@ export function firstBoutHeroCostBytes(skinA: string, skinB: string): number {
  * reddens on time (a real slow-down), never on an atlas simply getting better.
  */
 
-// MODELED throughput of named lab profiles, in BYTES/sec. These are the standard
-// Lighthouse / WebPageTest throttling presets, cited so the seconds are
-// reproducible; decimal Mbps ÷ 8 (the unit those tools quote).
-export const SLOW_4G_BYTES_PER_SEC = 1_600_000 / 8 //   200_000 — Lighthouse "Slow 4G"
-export const FAST_4G_BYTES_PER_SEC = 9_000_000 / 8 // 1_125_000 — WebPageTest "4G"
-export const CABLE_BYTES_PER_SEC = 24_000_000 / 8 //  3_000_000 — conservative desktop broadband
+// MODELED throughput used only to turn bytes into reproducible SECONDS (decimal
+// Mbps ÷ 8 = bytes/sec). Provenance is per-line and deliberately NOT lumped: two
+// are named third-party lab presets (cited inline so the seconds reproduce against
+// a public number); the third is our own anchor and is marked as such. A rate that
+// grounds nothing external must not travel dressed as a "standard preset".
+export const SLOW_4G_BYTES_PER_SEC = 1_600_000 / 8 //   200_000 — 🟢 Lighthouse `mobileSlow4G` 1.6 Mbps/150ms, which Lighthouse's report labels "Slow 4G" (GoogleChrome/lighthouse docs/throttling.md)
+export const FAST_4G_BYTES_PER_SEC = 9_000_000 / 8 // 1_125_000 — 🟢 WebPageTest "4G" preset, 9 Mbps/170ms (WPO-Foundation/webpagetest connectivity.ini.sample)
+export const CABLE_BYTES_PER_SEC = 24_000_000 / 8 //  3_000_000 — 🔴 OUR conservative desktop anchor, NOT a preset (closest WPT profiles: Cable 5 Mbps, FIOS 20). Sets only a loose broadband sanity bound.
 
 /** MODELED seconds to fetch `bytes` at a named-profile throughput. A download
  *  model only — no decode, RTT or TCP-ramp term — and NOT a live measurement.
@@ -124,10 +128,11 @@ export function modeledFirstFrameSeconds(bytes: number, bytesPerSec: number): nu
 export const FAST_FIRST_BOUT_BUDGET_BYTES = Number.POSITIVE_INFINITY
 
 /**
- * SLOW / Save-Data budget, in buyer-facing SECONDS. A reported-slow visitor must
- * see the opener within ~33 s at Lighthouse slow-4G (≈200 KB/s). This is the time
- * ceiling the opener is held under; the bytes it is measured against are the HERO
- * variant's, not the full atlas's — see the decoupling note below.
+ * SLOW / Save-Data budget, in buyer-facing SECONDS. ~33 s at Lighthouse slow-4G
+ * (≈200 KB/s) is OUR OWN chosen ceiling — not an external norm — set generously
+ * above the heaviest hero pairing (~2.78 MB ≈ 14 s) so it reddens on a real
+ * slow-down, never on art getting heavier. The bytes it is measured against are
+ * the HERO variant's, not the full atlas's — see the decoupling note below.
  *
  * DECOUPLING COST FROM ART — the structural fix, symmetric with `Infinity` on
  * FAST. On a slow link the opener DOWNLOADS a reduced hero atlas (half-res,

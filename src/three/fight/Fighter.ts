@@ -104,6 +104,8 @@ export interface FighterView {
    * forever.
    */
   reactionFrame: number
+  /** The victim was crouching when hit, so the low hit pose (`hit-low`) plays. */
+  low?: boolean
 }
 
 export interface FighterUpdateCtx {
@@ -415,7 +417,7 @@ export class Fighter {
     if (!this.assets) return
 
     // ---- Discrete frame selection (never interpolated) --------------------
-    const idx = resolveFrame(this.assets, { stance: v.stance, move: v.move, globalFrame: v.globalFrame, reactionFrame: v.reactionFrame })
+    const idx = resolveFrame(this.assets, { stance: v.stance, move: v.move, globalFrame: v.globalFrame, reactionFrame: v.reactionFrame, low: v.low })
     this.applyFrame(idx)
 
     // ---- Placement: feet land on the sim position -------------------------

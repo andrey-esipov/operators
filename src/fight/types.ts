@@ -184,6 +184,14 @@ export interface FighterState {
    * multi-frame active window strikes at most once per use.
    */
   attackConnected?: boolean
+  /**
+   * Sim-owned bookkeeping (additive). True when the current hit reaction began
+   * from a crouch, so the renderer plays the low hit pose (`hit-low`) instead of
+   * the standing hurt reel. Purely cosmetic — hitstun frames, AI and recovery
+   * are unchanged. A renderer or atlas without `hit-low` ignores it and falls
+   * back to `hurt`, so a fighter that predates the low reaction is unaffected.
+   */
+  hitLow?: boolean
 }
 
 // ---------------------------------------------------------------------------

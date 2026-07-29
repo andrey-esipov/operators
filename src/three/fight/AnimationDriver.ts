@@ -15,7 +15,7 @@ import type { FighterAssets, Stance } from '../../fight/types'
  */
 
 /** Ordered clip-name candidates for a stance; first that exists in the atlas wins. */
-function clipCandidates(stance: Stance, moveId?: string): string[] {
+function clipCandidates(stance: Stance, moveId?: string, low?: boolean): string[] {
   switch (stance) {
     case 'idle': return ['idle', 'stance']
     case 'walk-fwd': return ['walk', 'walk-fwd', 'idle']
@@ -27,7 +27,7 @@ function clipCandidates(stance: Stance, moveId?: string): string[] {
     case 'backdash': return ['backdash', 'dash', 'idle']
     case 'attack': return moveId ? [moveId, 'attack', 'idle'] : ['attack', 'idle']
     case 'blockstun': return ['block', 'guard', 'idle']
-    case 'hitstun': return ['hurt', 'hit', 'idle']
+    case 'hitstun': return low ? ['hit-low', 'hurt', 'hit', 'idle'] : ['hurt', 'hit', 'idle']
     case 'juggle': return ['juggle', 'hurt', 'idle']
     case 'knockdown': return ['knockdown', 'down', 'hurt', 'idle']
     case 'wakeup': return ['wakeup', 'idle']
@@ -73,6 +73,8 @@ export interface AnimQuery {
   globalFrame: number
   /** Frames elapsed inside the current reaction. See `FighterView`. */
   reactionFrame?: number
+  /** The victim was crouching when hit — select the low hit pose (`hit-low`). */
+  low?: boolean
 }
 
 /**
@@ -97,7 +99,7 @@ const REACTION_STANCES: ReadonlySet<string> = new Set([
  * rather than throwing or drawing frame 0 forever.
  */
 export function resolveFrame(assets: FighterAssets, q: AnimQuery): number {
-  const found = firstClip(assets, clipCandidates(q.stance, q.move?.id))
+  const found = firstClip(assets, clipCandidates(q.stance, q.move?.id, q.low))
   if (!found) return 0
   const { clip } = found
 

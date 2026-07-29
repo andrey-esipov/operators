@@ -472,6 +472,12 @@ function applyHit(
     D.stunRemaining = hitstun
     D.vel.y += hit.knockback.y * juggleScale(D.juggleLeft, allowance)
   } else {
+    // A crouching victim shows the low hit reaction (`hit-low`); a standing one
+    // the regular hurt reel. Read the pre-hit stance here — it is still 'crouch'
+    // because stance is only overwritten on the next line — so a low that lands
+    // mid-crouch does not render a standing recoil. Cosmetic only: hitstun,
+    // AI and recovery all still see plain 'hitstun'.
+    D.hitLow = D.stance === 'crouch'
     D.stance = 'hitstun'
     D.stunRemaining = hitstun
   }

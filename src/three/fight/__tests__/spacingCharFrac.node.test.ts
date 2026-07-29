@@ -22,10 +22,22 @@ import { STAGE_HALF_W, START_X } from '../../../fight/constants'
  * spec. Geometry proves that ~31.5% is a hard ceiling for the current stage
  * width — but geometry alone can't say whether it MATTERS. That depends on how
  * much of a real fight is actually spent near max separation. This measures it,
- * with no GPU and no screenshots: it drives the REAL FightCamera (the class
- * FightRenderer uses) through REAL deterministic CPU-vs-CPU fights (the tiered
+ * with no GPU and no screenshots: it drives the REAL FightCamera + FightVfx
+ * (FightRenderer.ts:118-119 construct them; :284 feeds vfx.handle(events), :653
+ * calls camera.update) through REAL deterministic CPU-vs-CPU fights (the tiered
  * `HarnessSim` that backs the attract reel + dev harness), across seeds and AI
  * tiers, and records the on-screen character height every active frame.
+ *
+ * REACHABILITY (traced to the route table + URL, not the import edge — an
+ * "X renders Y" edge proves Y CAN be reached, never that a buyer hits it):
+ * FightCamera+FightVfx run inside FightRenderer, and FightRenderer is what the
+ * TWO customer-facing fight surfaces mount — `route==='play'` → PlayableMatch
+ * (App.tsx:214; PlayableMatch.tsx:140 `new FightRenderer`) reached by a matchup
+ * URL/`?play=1`, and `route==='attract'` → AttractMode (App.tsx:206;
+ * AttractMode.tsx:147 `new FightRenderer`). See appRoute.ts::decideRoute. This
+ * harness therefore measures the SHIPPED camera. It does NOT touch FightScene3D
+ * (the legacy card game behind `?cards=1`/`?lab=1`, a different camera path) —
+ * which is correct: that is not the shipped fighter (FightScene3D.tsx:36).
  *
  * It also closes the second open question — the launcher/sweep/crumple camera
  * kick was previously INFERRED from the shake constant. Here it is MEASURED:

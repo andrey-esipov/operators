@@ -77,7 +77,7 @@ function charFracAtCentre(cam: THREE.PerspectiveCamera): number {
 // ---------------------------------------------------------------------------
 type Beat = 'ko' | 'super' | 'juggle' | 'heavy' | 'hit' | 'hitstun' | 'footsies' | 'neutral'
 const MARQUEE_BEATS: ReadonlySet<Beat> = new Set<Beat>(['ko', 'super', 'juggle', 'heavy'])
-interface FrameRec { cf: number; beat: Beat; marquee: boolean; contained: boolean }
+interface FrameRec { cf: number; cfPushed: number; beat: Beat; marquee: boolean; contained: boolean }
 
 /** The single most salient beat this frame. A launcher's payoff is the airborne
  *  `juggle`/`knockdown` window — a sustained money shot — so it is read from
@@ -164,14 +164,31 @@ interface FightResult {
 function runFight(
   seed: number, d1: Difficulty, d2: Difficulty,
   p1 = 'operator', p2 = 'vanguard', maxFrames = 20000,
+  cinematic = false, held = false,
 ): FightResult {
   const sim = new HarnessSim({ seed, difficulty1: d1, difficulty2: d2, p1, p2 })
   const cam = new THREE.PerspectiveCamera(FOV, 16 / 9, 0.1, 100)
   const fc = new FightCamera(cam, BOUNDS)
 
+  // Cinematic (marquee) mode drives a SECOND camera through the exact shipped
+  // pipeline (FightRenderer._advance): a real FightVfx receives every sim event
+  // and fires camera.punchIn() at the graded freeze-push sites (jab 0.15 …
+  // heavy 0.5 … super 0.6 … KO 0.8, per FightVfx.ts), so the cine dolly-in that
+  // d88862e wired is APPLIED, not invented. `cam` stays push-free as the built-in
+  // control, so cfPushed (camCine) vs cf (cam) is the buy-back the freeze-push
+  // earns — measured on ONE sim run. Faithful because in real-time play a sim
+  // frame always advances, so kickDt=DT every frame (the "held" gap is capture-
+  // only). The pushIn proximity channel (Engine.hitstopEnv*0.6, a ≤2.4% dolly) is
+  // deliberately NOT modelled — there is no Engine wall clock here — which keeps
+  // cfPushed conservative: it captures the dominant cine push and omits only a
+  // small term that would make fighters a hair BIGGER.
+  const camCine = cinematic ? new THREE.PerspectiveCamera(FOV, 16 / 9, 0.1, 100) : null
+  const fcCine = camCine ? new FightCamera(camCine, BOUNDS) : null
+  const vfx = fcCine ? new FightVfx(vfxInto(fcCine, { amount: -1 })) : null
+
   // Let the framing springs settle onto the opening spacing before recording.
   let framing = framingFromState(sim.initialState)
-  for (let i = 0; i < 180; i++) fc.update(DT, DT, framing)
+  for (let i = 0; i < 180; i++) { fc.update(DT, DT, framing); fcCine?.update(DT, DT, framing) }
 
   const chars: number[] = []
   const sepW: number[] = []
@@ -195,7 +212,21 @@ function runFight(
       if (e.type === 'counter-hit') chLevelCounts[e.level]++
     }
     framing = framingFromState(s)
+    // Events first (they latch punchIn), then the cameras ramp — the order
+    // FightRenderer._advance uses (vfx.handle in the step loop, camera.update
+    // after). `cam` gets no events (push-free control); `camCine` gets the push.
+    if (vfx) for (const e of res.events) vfx.handle(e)
     fc.update(DT, DT, framing)
+    // held mode reproduces the FRAME-STEPPED CAPTURE path (screenshot / marketing
+    // tools: PlayableMatch frozen, stepBudget gates advances). Between captured
+    // frames the sim doesn't advance, so simSteps=0 → kickDt=0, HOLDING the cine
+    // push at full through the freeze (the authored "hold"). LIVE real-time play
+    // (held=false, the matrix) advances a sim frame every render tick — frame++ in
+    // every sim branch incl. hitstop/superFreeze, and _advance uses RAW dt — so
+    // kickDt=DT and the push punches on impact then bleeds across the freeze. That
+    // live curve is what the buyer sees; the held curve is what a promo grab lands.
+    const frozen = held && (s.hitstop > 0 || (s.superFreeze ?? 0) > 0)
+    fcCine?.update(DT, frozen ? 0 : DT, framing)
     if (s.phase === 'fight') {
       sepW.push(Math.abs(framing.ax - framing.bx))
       sepCm.push(Math.abs(s.fighters[0].pos.x - s.fighters[1].pos.x))
@@ -207,11 +238,13 @@ function runFight(
     if (s.phase === 'fight' || s.phase === 'ko') {
       const beat = dominantBeat(s, res.events)
       const subj = s.fighters[subjectIndex(s, res.events, beat)]
+      const realCam = camCine ?? cam // the camera the buyer actually sees
       frames.push({
-        cf: charFracAtCentre(cam),
+        cf: charFracAtCentre(cam),               // push-free control
+        cfPushed: charFracAtCentre(realCam),     // WITH the shipped cine freeze-push
         beat,
         marquee: MARQUEE_BEATS.has(beat),
-        contained: fighterContained(cam, subj),
+        contained: fighterContained(realCam, subj), // containment on the real camera
       })
     }
     if (s.phase === 'match-end') { matchEnded = true; break }
@@ -469,31 +502,39 @@ describe('spacing → charFrac distribution + launcher/sweep/crumple kick', () =
     for (const [p1, p2] of PAIRS) {
       const pf: FrameRec[] = []
       for (const t of MATRIX_TIERS) for (const seed of SEEDS) {
-        pf.push(...runFight(seed, t.d1, t.d2, p1, p2).frames)
+        // cinematic=true: the marquee census must be taken WITH the shipped
+        // freeze-push applied (d88862e), or it measures a camera that no longer
+        // ships. cf (push-free) rides along as the built-in control.
+        pf.push(...runFight(seed, t.d1, t.d2, p1, p2, 20000, true).frames)
       }
       perPair.push({ name: `${p1}/${p2}`, frames: pf })
       for (const r of pf) matrix.push(r)
     }
 
-    const cfOf = (fr: FrameRec[]): number[] => fr.map((r) => r.cf)
+    const cfOf = (fr: FrameRec[]): number[] => fr.map((r) => r.cfPushed)  // FAITHFUL: WITH cine push
+    const ctrlOf = (fr: FrameRec[]): number[] => fr.map((r) => r.cf)      // push-free control
     const BEATS: Beat[] = ['ko', 'super', 'juggle', 'heavy', 'hit', 'hitstun', 'footsies', 'neutral']
     const marqueeAll = matrix.filter((r) => r.marquee)
     const marqueeSeen = marqueeAll.filter((r) => r.contained) // subject actually in-frame
-    const mcf = cfOf(marqueeSeen)
+    const mcf = cfOf(marqueeSeen)      // pushed (faithful)
+    const mctrl = ctrlOf(marqueeSeen)  // push-free control
+    const buyback = mean(mcf) - mean(mctrl)
 
     const nMatches = PAIRS.length * MATRIX_TIERS.length * SEEDS.length
     lines.push(`=== PART 3: charFrac by BEAT across all 6 archetype pairings — the money-shot test ===`)
     lines.push(`  matrix: ${PAIRS.length} pairings x ${MATRIX_TIERS.length} tiers x ${SEEDS.length} seeds = ${nMatches} full matches, ${matrix.length} fight+KO frames`)
-    lines.push('  beat        frames   share    charFrac p50/p90/p99/min        %<40%   %<35%   subj-in-frame')
+    lines.push(`  charFrac is WITH the shipped cinematic freeze-push (d88862e: FightVfx→camera.punchIn); "ctrl" = same frame, push-free.`)
+    lines.push('  beat        frames   share    charFrac(push) p50/p90/p99/min      %<40%   %<35%   ctrl p50  subj-in-frame')
     for (const bt of BEATS) {
       const fr = matrix.filter((r) => r.beat === bt)
       if (!fr.length) { lines.push(`  ${bt.padEnd(9)}   (none in matrix)`); continue }
       const cf = cfOf(fr)
+      const ct = ctrlOf(fr)
       const inFrame = fr.filter((r) => r.contained).length / fr.length
       lines.push(
         `  ${bt.padEnd(9)}  ${String(fr.length).padStart(6)}  ${pctStr(fr.length / matrix.length).padStart(6)}   ` +
-        `${pctStr(pct(cf, 0.5))}/${pctStr(pct(cf, 0.9))}/${pctStr(pct(cf, 0.99))}/${pctStr(minA(cf))}`.padEnd(24) + '   ' +
-        `${pctStr(fracBelow(cf, 0.40)).padStart(5)}   ${pctStr(fracBelow(cf, 0.35)).padStart(5)}   ${pctStr(inFrame)}`,
+        `${pctStr(pct(cf, 0.5))}/${pctStr(pct(cf, 0.9))}/${pctStr(pct(cf, 0.99))}/${pctStr(minA(cf))}`.padEnd(26) + '   ' +
+        `${pctStr(fracBelow(cf, 0.40)).padStart(5)}   ${pctStr(fracBelow(cf, 0.35)).padStart(5)}   ${pctStr(pct(ct, 0.5)).padStart(5)}   ${pctStr(inFrame)}`,
       )
     }
     lines.push('')
@@ -503,34 +544,86 @@ describe('spacing → charFrac distribution + launcher/sweep/crumple kick', () =
       `${marqueeAll.length - marqueeSeen.length} off-frame`,
     )
     lines.push(
-      `    charFrac (in-frame only)  p50=${pctStr(pct(mcf, 0.5))}  p90=${pctStr(pct(mcf, 0.9))}  p99=${pctStr(pct(mcf, 0.99))}  ` +
+      `    charFrac WITH push (in-frame)  p50=${pctStr(pct(mcf, 0.5))}  p90=${pctStr(pct(mcf, 0.9))}  p99=${pctStr(pct(mcf, 0.99))}  ` +
       `mean=${pctStr(mean(mcf))}  min=${pctStr(minA(mcf))}   %<40%=${pctStr(fracBelow(mcf, 0.40))}  %<35%=${pctStr(fracBelow(mcf, 0.35))}`,
+    )
+    lines.push(
+      `    push-free control (in-frame)  p50=${pctStr(pct(mctrl, 0.5))}  mean=${pctStr(mean(mctrl))}  min=${pctStr(minA(mctrl))}` +
+      `   → cine push buys back ${buyback * 100 >= 0 ? '+' : ''}${(buyback * 100).toFixed(1)} pts (mean) on marquee frames`,
     )
 
     // The decider: what ARE the small frames? If they are super/ko/juggle, the
     // money shot renders small; if they are neutral/footsies, nobody screenshots
     // them and this is cosmetically irrelevant.
     for (const th of [0.40, 0.35]) {
-      const small = matrix.filter((r) => r.cf < th)
+      const small = matrix.filter((r) => r.cfPushed < th) // small AFTER the cine push (the real camera)
       const parts = BEATS.map((bt) => `${bt}=${pctStr(small.filter((r) => r.beat === bt).length / Math.max(1, small.length))}`)
       const mShare = small.filter((r) => r.marquee).length / Math.max(1, small.length)
       lines.push('')
-      lines.push(`  Composition of the ${small.length} frames BELOW ${(th * 100).toFixed(0)}%  (marquee share = ${pctStr(mShare)}):`)
+      lines.push(`  Composition of the ${small.length} frames BELOW ${(th * 100).toFixed(0)}% WITH push  (marquee share = ${pctStr(mShare)}):`)
       lines.push(`    ${parts.join('  ')}`)
     }
 
     lines.push('')
-    lines.push('  per-pairing        frames   cf p50/p90/min          %<40%  %<35%   marquee cf p50/min   mrq %<35%')
+    lines.push('  per-pairing        frames   cf(push) p50/p90/min     %<40% %<35%   marquee push p50/min  mrq %<35%  ctrl p50')
     for (const p of perPair) {
       const cf = cfOf(p.frames)
-      const mc = cfOf(p.frames.filter((r) => r.marquee && r.contained))
+      const seen = p.frames.filter((r) => r.marquee && r.contained)
+      const mc = cfOf(seen)
+      const mctl = ctrlOf(seen)
       lines.push(
         `  ${p.name.padEnd(17)}  ${String(p.frames.length).padStart(6)}   ` +
-        `${pctStr(pct(cf, 0.5))}/${pctStr(pct(cf, 0.9))}/${pctStr(minA(cf))}`.padEnd(22) + '  ' +
-        `${pctStr(fracBelow(cf, 0.40)).padStart(5)}  ${pctStr(fracBelow(cf, 0.35)).padStart(5)}   ` +
-        `${pctStr(pct(mc, 0.5))}/${pctStr(minA(mc))}`.padEnd(17) + '   ' + `${pctStr(fracBelow(mc, 0.35))}`,
+        `${pctStr(pct(cf, 0.5))}/${pctStr(pct(cf, 0.9))}/${pctStr(minA(cf))}`.padEnd(20) + '  ' +
+        `${pctStr(fracBelow(cf, 0.40)).padStart(5)} ${pctStr(fracBelow(cf, 0.35)).padStart(5)}   ` +
+        `${pctStr(pct(mc, 0.5))}/${pctStr(minA(mc))}`.padEnd(18) + '  ' + `${pctStr(fracBelow(mc, 0.35)).padStart(6)}` + '   ' + `${pctStr(pct(mctl, 0.5))}`,
       )
     }
+    lines.push('')
+
+    // ---- Built-in mutation proof that the freeze-push is APPLIED and material:
+    // the SAME fight, cine ON vs cine OFF (the code's own __MUT_NO_CINE__ hook,
+    // which nulls camera.punchIn's dolly and leaves the impact kick intact). ON
+    // must buy back real screen height on marquee frames; OFF must collapse to the
+    // push-free control. This isolates the d88862e cine push from everything else,
+    // so a regression that silently unwires punchIn reddens here with a live delta.
+    const avg = (xs: number[]): number => xs.reduce((s, x) => s + x, 0) / Math.max(1, xs.length)
+    const cineDelta = (mutate: boolean): { delta: number; pushed: number; ctrl: number; n: number } => {
+      if (mutate) (globalThis as unknown as Record<string, unknown>).__MUT_NO_CINE__ = true
+      const seen = runFight(4242, 'hard', 'hard', 'vanguard', 'vanguard', 20000, true)
+        .frames.filter((r) => r.marquee && r.contained)
+      if (mutate) delete (globalThis as unknown as Record<string, unknown>).__MUT_NO_CINE__
+      const pushed = avg(seen.map((r) => r.cfPushed))
+      const ctrl = avg(seen.map((r) => r.cf))
+      return { delta: pushed - ctrl, pushed, ctrl, n: seen.length }
+    }
+    const cineOn = cineDelta(false)
+    const cineOff = cineDelta(true)
+    lines.push(`  CINE-PUSH MUTATION (vanguard mirror, seed 4242, ${cineOn.n} marquee-in-frame frames):`)
+    lines.push(
+      `    cine ON : pushed ${pctStr(cineOn.pushed)} vs control ${pctStr(cineOn.ctrl)}` +
+      `  → buy-back ${cineOn.delta * 100 >= 0 ? '+' : ''}${(cineOn.delta * 100).toFixed(2)} pts`,
+    )
+    lines.push(
+      `    cine OFF: pushed ${pctStr(cineOff.pushed)} vs control ${pctStr(cineOff.ctrl)}` +
+      `  → buy-back ${cineOff.delta * 100 >= 0 ? '+' : ''}${(cineOff.delta * 100).toFixed(2)} pts  (~0 expected: push disabled)`,
+    )
+    lines.push('')
+
+    // Live play vs frame-stepped capture: the authored freeze-"hold" only manifests
+    // on the capture path (screenshots/marketing), where the push holds at full; in
+    // live play it punches then bleeds. The captured money-shot is therefore >= the
+    // live number. This only moves the needle where the marquee sits lowest — the
+    // warden (zoner) mirror — so measure held vs live there and at a shoto mirror.
+    const heldVsLive = (p1: string, p2: string): { live: number; held: number; n: number } => {
+      const liveF = runFight(7, 'hard', 'hard', p1, p2, 20000, true, false).frames.filter((r) => r.marquee && r.contained)
+      const heldF = runFight(7, 'hard', 'hard', p1, p2, 20000, true, true).frames.filter((r) => r.marquee && r.contained)
+      return { live: pct(liveF.map((r) => r.cfPushed), 0.5), held: pct(heldF.map((r) => r.cfPushed), 0.5), n: liveF.length }
+    }
+    const wm = heldVsLive('warden', 'warden')
+    const sm = heldVsLive('operator', 'operator')
+    lines.push('  CAPTURE-HELD vs LIVE marquee p50 (authored freeze-hold only holds on the capture/screenshot path):')
+    lines.push(`    warden/warden    : live ${pctStr(wm.live)}  → capture-held ${pctStr(wm.held)}   (${wm.n} marquee-in-frame)`)
+    lines.push(`    operator/operator: live ${pctStr(sm.live)}  → capture-held ${pctStr(sm.held)}   (${sm.n} marquee-in-frame)`)
     lines.push('')
 
     // The full report is a reproducible measurement, not part of the normal test
@@ -542,9 +635,10 @@ describe('spacing → charFrac distribution + launcher/sweep/crumple kick', () =
     }
 
     // ---- Assertions: every one of these can actually FAIL, and the ones that
-    // matter are mutation-proved in the same run (the *_off kick is the live
-    // mutation). They assert STRUCTURAL invariants of the camera + wiring, never
-    // brittle AI-tuning distribution thresholds that a rebalance could redden. ----
+    // matter are mutation-proved in the same run (TWO live mutations: the *_off
+    // kick, and cine ON/OFF via __MUT_NO_CINE__). They assert STRUCTURAL invariants
+    // of the camera + wiring, never brittle AI-tuning distribution thresholds that
+    // a rebalance could redden. ----
 
     // (1) Empty-measurement guard: the report is over real frames, not nothing.
     expect(allChars.length).toBeGreaterThan(1000)
@@ -580,14 +674,16 @@ describe('spacing → charFrac distribution + launcher/sweep/crumple kick', () =
     // (5) Determinism: the sim + camera feed are reproducible, so the same seed
     //     yields a byte-identical spacing trace. A harness whose numbers wobble
     //     run-to-run cannot be trusted to have measured anything.
-    const a = runFight(12345, 'hard', 'hard')
-    const b = runFight(12345, 'hard', 'hard')
+    const a = runFight(12345, 'hard', 'hard', 'operator', 'vanguard', 20000, true)
+    const b = runFight(12345, 'hard', 'hard', 'operator', 'vanguard', 20000, true)
     expect(a.sepCm.length).toBe(b.sepCm.length)
     expect(a.sepCm[0]).toBe(b.sepCm[0])
     expect(a.sepCm[a.sepCm.length - 1]).toBe(b.sepCm[b.sepCm.length - 1])
-    // the new per-frame beat trace is deterministic too (same seed ⇒ same trace).
+    // the per-frame beat trace AND the cine-pushed charFrac are deterministic too
+    // (same seed ⇒ same sim ⇒ same events ⇒ same FightVfx push ⇒ byte-identical).
     expect(a.frames.length).toBe(b.frames.length)
     expect(a.frames[a.frames.length - 1]?.cf).toBe(b.frames[b.frames.length - 1]?.cf)
+    expect(a.frames[a.frames.length - 1]?.cfPushed).toBe(b.frames[b.frames.length - 1]?.cfPushed)
 
     // (6) PART 3 anti-vacuity (rule 1 — the one that has burned this project):
     //     the marquee measurement is over REAL, IN-FRAME money-shot frames, not
@@ -604,5 +700,34 @@ describe('spacing → charFrac distribution + launcher/sweep/crumple kick', () =
     for (const bt of ['ko', 'super', 'juggle'] as Beat[]) {
       expect(matrix.some((r) => r.beat === bt), `no ${bt} frames anywhere in the matrix`).toBe(true)
     }
+
+    // (7) The shipped cinematic freeze-push is APPLIED and MATERIAL on marquee
+    //     frames in LIVE play, and it is the punchIn/cine code that produces it —
+    //     proved by the __MUT_NO_CINE__ mutation in the SAME run: ON buys back real
+    //     screen height, OFF collapses to the push-free control. The live buy-back
+    //     is deliberately small (~0.6 pt): the push punches then bleeds across the
+    //     freeze (kickDt=DT every live tick) AND is clamped by zKeep at the ~60%
+    //     close range where money shots land. Thresholds track that measured
+    //     reality, NOT the unsourced "15-30%" in cameraFreezeShot.test.ts (flagged,
+    //     not inherited). Without this gate Part 3 would silently measure the
+    //     pre-d88862e camera — the exact error the coordinator caught.
+    expect(cineOn.n).toBeGreaterThan(20)                        // the focused fight had money shots
+    expect(cineOn.delta).toBeGreaterThan(0.003)                 // live cine push buys back real height
+    expect(cineOff.delta).toBeLessThan(0.001)                   // disabling it collapses the buy-back
+    expect(cineOn.delta).toBeGreaterThan(cineOff.delta + 0.003) // ON strictly beats OFF
+    //     and the same buy-back holds in aggregate across the whole matrix, and the
+    //     push never SHRINKS the median money shot.
+    expect(buyback).toBeGreaterThan(0.002)
+    expect(pct(mcf, 0.5)).toBeGreaterThanOrEqual(pct(mctrl, 0.5))
+
+    // (8) The capture path HOLDS the push (kickDt=0 in the freeze), so a captured
+    //     money-shot is strictly LARGER than the live one, and the hold does real
+    //     work where it matters most (the low-marquee warden mirror it lifts to the
+    //     ~35% genre max-range floor, and a shoto money shot it punches to ~67%).
+    //     STRICT (> live + margin), not >=, so a held mode that silently stopped
+    //     holding — collapsing held back to live — reddens here instead of passing.
+    expect(wm.n).toBeGreaterThan(20)
+    expect(wm.held).toBeGreaterThan(wm.live + 0.01) // warden mirror: hold lifts the money shot
+    expect(sm.held).toBeGreaterThan(sm.live + 0.02) // shoto mirror: hold punches in hard
   })
 })

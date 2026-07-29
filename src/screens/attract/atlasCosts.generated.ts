@@ -9,12 +9,12 @@ export const ATLAS_COST_BYTES: Readonly<Record<string, number>> = Object.freeze(
   "cagan": 750052,
   "catwu": 626190,
   "chesky": 5040682,
-  "doshi": 5311018,
+  "doshi": 5948050,
   "lenny": 6017834,
-  "madhavan": 662420,
+  "madhavan": 943632,
   "spiegel": 5710006,
   "taylor": 617354,
-  "turley": 3711940,
+  "turley": 4285982,
 })
 
 // Reduced "hero" opener-atlas sizes. On a reported-slow link the attract
@@ -22,9 +22,9 @@ export const ATLAS_COST_BYTES: Readonly<Record<string, number>> = Object.freeze(
 // FULL art can no longer cost it an opener pairing — see attractLoadCost.ts.
 export const HERO_ATLAS_COST_BYTES: Readonly<Record<string, number>> = Object.freeze({
   "chesky": 1209068,
-  "doshi": 1161734,
+  "doshi": 1459316,
   "lenny": 1326452,
-  "madhavan": 131630,
+  "madhavan": 211394,
   "spiegel": 1454122,
-  "turley": 900768,
+  "turley": 1147674,
 })

@@ -18,6 +18,7 @@ import madhavan from '../../../../public/fighters/madhavan/assets.json'
 import spiegel from '../../../../public/fighters/spiegel/assets.json'
 import taylor from '../../../../public/fighters/taylor/assets.json'
 import turley from '../../../../public/fighters/turley/assets.json'
+import { ROSTER as SELECT_ROSTER } from '../../../fighthud/select/roster'
 
 const ROSTER: Array<[string, FighterAssets]> = (
   [
@@ -27,12 +28,22 @@ const ROSTER: Array<[string, FighterAssets]> = (
   ] as Array<[string, unknown]>
 ).map(([n, a]) => [n, a as FighterAssets])
 
+// The skins a player can actually pick (src/fighthud/select/roster.ts). These
+// six ship real airborne-hit `juggle` art; the launcher is the most spectacular
+// non-super hit, so on a selectable fighter it must never silently fall back to
+// the generic hurt reel. The other five skins are non-fightable card art that
+// degrades to its archetype base and legitimately keeps the hurt fallback.
+const FIGHTABLE = new Set(SELECT_ROSTER.map((r) => r.skin))
+
 // A victim is *put into* these stances carrying no `move`, so they run off the
 // reaction clock. If the named clip is missing, AnimationDriver.clipCandidates
 // silently resolves the stance to looping `idle` and the struck body just keeps
-// breathing — "the body registers nothing". `juggle` has no core-pose fallback
-// (no airborne-hit art), so it legitimately degrades to the `hurt` reel:
-// clipCandidates('juggle') === ['juggle','hurt','idle'].
+// breathing — "the body registers nothing". Where no airborne-hit art exists
+// `juggle` degrades to the `hurt` reel (clipCandidates('juggle') ===
+// ['juggle','hurt','idle']); that fallback is legitimate ONLY for the
+// non-fightable card skins. Every FIGHTABLE skin now ships real juggle art and
+// is held to it below (its fallback withdrawn), so a launcher on a pickable
+// fighter can no longer play the light-jab hurt reel.
 const REACTIONS: Array<{ stance: Stance; clip: string; fallbackClip?: string }> = [
   { stance: 'hitstun', clip: 'hurt' },
   { stance: 'knockdown', clip: 'knockdown' },
@@ -47,8 +58,11 @@ describe('every fighter plays a real reaction when hit, not idle', () => {
     for (const r of REACTIONS) {
       // The clip that should actually drive this stance: the dedicated one, or
       // the documented fallback (juggle -> hurt). Anything else means the driver
-      // is dropping to idle.
-      const driving = clips[r.clip] ?? (r.fallbackClip ? clips[r.fallbackClip] : undefined)
+      // is dropping to idle. The juggle->hurt fallback is allowed ONLY for
+      // non-fightable card skins; a fightable skin must ship real juggle art, so
+      // its fallback is withdrawn and a missing clip reddens BY NAME below.
+      const fallbackAllowed = !(r.clip === 'juggle' && FIGHTABLE.has(name))
+      const driving = clips[r.clip] ?? (fallbackAllowed && r.fallbackClip ? clips[r.fallbackClip] : undefined)
 
       it(`${name}: ${r.stance} resolves to a multi-key reaction`, () => {
         expect(driving, `${name} has no ${r.clip} clip for ${r.stance}`).toBeDefined()
@@ -80,4 +94,18 @@ describe('every fighter plays a real reaction when hit, not idle', () => {
       })
     }
   }
+})
+
+// Vacuity guard: the withdrawn-fallback rule above only bites skins this file
+// imports. Tie the gate to the real select roster so a NEW pickable fighter
+// can't ship a launcher that silently falls back to the hurt reel just because
+// nobody added its import here.
+describe('the juggle guard covers the whole fightable roster', () => {
+  const localNames = new Set(ROSTER.map(([n]) => n))
+  it('checks every pickable fighter for real juggle art', () => {
+    const missing = [...FIGHTABLE].filter((s) => !localNames.has(s))
+    expect(missing, `fightable skins not covered by this gate: ${missing.join(', ')}`).toEqual([])
+    // If the roster ever emptied this whole file would pass vacuously.
+    expect(FIGHTABLE.size, 'fightable roster went empty — the juggle guard is vacuous').toBeGreaterThanOrEqual(6)
+  })
 })

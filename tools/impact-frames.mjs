@@ -146,6 +146,16 @@ const PEAK_OFFSET = Number(arg('peak', '3')) // frames past contact to the defor
 // -> distinct, no change.
 const VICTIM = new URLSearchParams(QUERY).get('b') || ''
 const BODY_CLIP = { launcher: 'juggle', sweep: 'knockdown' } // others share the 'hurt' reel
+// Mirror AnimationDriver.clipCandidates for the two body-distinct reaction stances
+// (:31 juggle, :32 knockdown) so the guard resolves the body the way the renderer does.
+// firstClip walks these in order, so a missing primary does NOT always fall to 'hurt' --
+// knockdown carries a 'down' rung BEFORE hurt. Resolving over the full chain (not a
+// hardcoded 'hurt') keeps the fallback label definitionally the renderer's pick, immune to
+// a future authored 'down'/reorder. Kept beside BODY_CLIP so both stay in lockstep.
+const BODY_CHAIN = {
+  launcher: ['juggle', 'hurt', 'idle'],
+  sweep: ['knockdown', 'down', 'hurt', 'idle'],
+}
 // Mirror AnimationDriver.firstClip's EXACT predicate (:47 `clip && clip.frames.length`):
 // a clip counts as authored only if the key EXISTS *and* its frames[] is non-empty. A key
 // with an empty frames[] falls through to `hurt` in the renderer, so the guard must treat
@@ -164,12 +174,17 @@ function victimClipSet(skinOrPath) {
 const VICTIM_ATLAS = arg('victimAtlas', '') // self-test override (synthetic atlas); real runs read the skin
 const VICTIM_CLIPS = victimClipSet(VICTIM_ATLAS || VICTIM)
 // -> { needs, kind: 'shared' (expected hurt reel) | 'distinct' (real pose present)
-//      | 'fallback' (should be distinct but the skin renders hurt) | 'unknown' }
+//      | 'fallback' (should be distinct but the skin renders a LOWER rung) | 'unknown',
+//      resolved: the clip the renderer ACTUALLY draws (firstClip over the full chain) }
 function bodyStatusFor(target) {
   const needs = BODY_CLIP[target]
-  if (!needs) return { needs: 'hurt', kind: 'shared' }
-  if (!VICTIM_CLIPS) return { needs, kind: 'unknown' }
-  return { needs, kind: VICTIM_CLIPS.has(needs) ? 'distinct' : 'fallback' }
+  if (!needs) return { needs: 'hurt', kind: 'shared', resolved: 'hurt' }
+  if (!VICTIM_CLIPS) return { needs, kind: 'unknown', resolved: null }
+  // Resolve the body the RENDERER picks: firstClip walks the WHOLE candidate chain, so a
+  // missing primary is not necessarily 'hurt'. Naming the resolved rung (vs a hardcoded
+  // 'hurt') makes the fallback label track the pixels even if asset-delivery adds 'down'.
+  const resolved = BODY_CHAIN[target].find((k) => VICTIM_CLIPS.has(k)) ?? '(none)'
+  return { needs, kind: resolved === needs ? 'distinct' : 'fallback', resolved }
 }
 
 // ── Self-test: fire the body-guard classifier on demand, no browser ──────────
@@ -183,7 +198,7 @@ if (process.argv.includes('--bodycheck')) {
   console.log(`bodycheck victim=${VICTIM_ATLAS || VICTIM} clips=${VICTIM_CLIPS ? ([...VICTIM_CLIPS].sort().join(',') || '(none)') : 'UNREADABLE'}`)
   for (const r of LADDER) {
     const b = bodyStatusFor(r.target)
-    console.log(`  ${r.label.padEnd(9)} needs=${String(b.needs).padEnd(10)} body=${b.kind}`)
+    console.log(`  ${r.label.padEnd(9)} needs=${String(b.needs).padEnd(10)} body=${b.kind}${b.kind === 'fallback' ? ` renders=${b.resolved}` : ''}`)
   }
   process.exit(0)
 }
@@ -539,8 +554,8 @@ async function captureHero(rung, gap, opts = {}) {
       // Encode a body-fallback INTO the filename so a hero handed off without the
       // JSON still can't be misread as a distinct pose it doesn't show.
       const bs = bodyStatusFor(rung.target)
-      const tag = bs.kind === 'fallback' ? '-HURTFALLBACK' : bs.kind === 'unknown' ? '-BODYUNVERIFIED' : ''
-      if (tag) console.log(`  ⚠️  ${rung.label}: victim '${VICTIM}' ${bs.kind === 'fallback' ? `has no '${bs.needs}' clip — this body is the shared HURT reel, NOT a ${rung.target} pose` : `atlas unreadable — body pose UNVERIFIED`}. Writing '${tag.slice(1)}' into the name so the label can't lie.`)
+      const tag = bs.kind === 'fallback' ? `-${bs.resolved.toUpperCase()}FALLBACK` : bs.kind === 'unknown' ? '-BODYUNVERIFIED' : ''
+      if (tag) console.log(`  ⚠️  ${rung.label}: victim '${VICTIM}' ${bs.kind === 'fallback' ? `has no '${bs.needs}' clip — this body renders the '${bs.resolved}' reel, NOT a ${rung.target} pose` : `atlas unreadable — body pose UNVERIFIED`}. Writing '${tag.slice(1)}' into the name so the label can't lie.`)
       file = `${OUT}/hero-${rung.label}${tag}.png`
     }
     await page.screenshot({ path: file })
@@ -781,7 +796,7 @@ for (const r of results) {
     `  ${r.label.padEnd(8)} ${String(!!r.landed).padEnd(6)} ${String(!!r.verified).padEnd(8)} ` +
     `${String(r.amId || '—').padEnd(9)} ${lvl.padEnd(16)} ${String(r.reactionLevel || '—').padEnd(12)} ` +
     `${String(r.maxHitstop).padStart(6)}  ${String(r.gapUsed).padStart(4)}  ${String(r.peakPx).padStart(6)}  ${String(r.peakPctScreenWidth).padStart(5)}` +
-    (r.body ? `  body=${r.body.kind === 'shared' ? 'hurt·shared' : r.body.kind === 'distinct' ? r.body.needs : r.body.kind === 'fallback' ? `HURT-FALLBACK(no-${r.body.needs})` : 'UNVERIFIED'}` : '') +
+    (r.body ? `  body=${r.body.kind === 'shared' ? 'hurt·shared' : r.body.kind === 'distinct' ? r.body.needs : r.body.kind === 'fallback' ? `${r.body.resolved.toUpperCase()}-FALLBACK(no-${r.body.needs})` : 'UNVERIFIED'}` : '') +
     (r.heroFrame ? `  hero=${r.heroFrame}` : ''),
   )
 }

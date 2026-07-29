@@ -18,30 +18,34 @@
  *     `navigator.connection` is Chromium-only): the opener is uncapped, so our
  *     heaviest (best) art can headline. The heaviest ~11.5 MB pairing is <4 s on
  *     cable and ~10 s on fast-4G; the gate guards only against absurd growth.
- *   • SLOW / Save-Data link: the director re-rolls to the pool's lightest
- *     pairing, so a reported-slow visitor waits ~20–32 s at slow-4G instead of
- *     ~57 s — the best a size-homogeneous heavy roster allows.
+ *   • SLOW / Save-Data link: the opener DOWNLOADS the reduced hero atlas and is
+ *     priced on it (see attractLoadCost), which decouples cold-start cost from
+ *     full-art quality. Every real pairing now fits the ~33 s slow-4G target, so
+ *     every fighter opens with all its partners and none dominates — the
+ *     size-bimodal inversion (madhavan in 100% of openers, spiegel in 0%) is gone.
  *
  * HONESTY: every "second" here is MODELED — real on-disk bytes ÷ a cited
  * lab-throttling rate (Lighthouse slow-4G 1.6 Mbps, WebPageTest 4G 9 Mbps,
  * conservative cable 24 Mbps). It is a download model with no decode/RTT/TCP-ramp
- * term, NOT a live network measurement, and is named as such throughout.
+ * term, NOT a live network measurement, and is named as such throughout. FAST
+ * assertions read the FULL bytes on disk (what a fast link serves); SLOW
+ * assertions read the HERO bytes on disk (what a slow link serves).
  *
  * ANTI-VACUITY (this project has a documented history of gates that pass by
  * checking nothing): real bytes are read from disk for every choosable skin; the
- * SLOW budget is proven to admit ≥1 and exclude ≥1 REAL opener; the director is
- * driven on BOTH connection classes and proven to serve heavy art on fast and
- * only light art on slow; and the shipped budget constants are asserted so the
- * gate cannot drift from the policy it guards.
+ * SLOW section proves every hero pairing is MATERIALLY lighter than its full
+ * pairing (so "priced on hero" is not a no-op) and that every fighter opens with
+ * all partners on slow (a per-fighter coverage floor + a concentration ceiling);
+ * the director is driven on BOTH connection classes and proven to serve heavy art
+ * on fast and rotate the whole pool on slow; and the shipped budget constants are
+ * asserted so the gate cannot drift from the policy it guards.
  *
  * MUTATION-PROVEN (see the task report for red/green transcripts): loosening the
  * SLOW target reddens the slow-4G bound; re-introducing a finite FAST byte cap
- * reddens the "heavy art can headline" assertion AND the new per-fighter coverage
- * guard (the ratchet returning, now caught per fighter — the exact "an atlas grew"
- * commit that used to re-roll silently); dropping the SLOW budget below the
- * lightest pairing reddens the admit-≥1 guard; and eroding the SLOW runway below
- * two admitted openers (an atlas growing until the cold-start pair can no longer
- * rotate) reddens the slow-runway floor — the combat-feel guard.
+ * reddens the "heavy art can headline" assertion AND the per-fighter FAST coverage
+ * guard; repricing the SLOW opener back onto the FULL atlas (or a hero==full
+ * miswire) collapses SLOW coverage/concentration and reddens the shop-window
+ * consequence guard — the exact inversion the hero tier removes.
  */
 
 import { describe, it, expect, vi, afterEach } from 'vitest'
@@ -77,8 +81,22 @@ function realAtlasBytes(skin: string): number {
   return existsSync(diskPath) ? statSync(diskPath).size : 0
 }
 
+/** Real on-disk REDUCED hero-atlas size for a skin — the download a reported-slow
+ *  opener actually serves — resolved through `assets.hero.json` exactly as the
+ *  loader/bake do. 0 when the fighter ships no hero variant. */
+function realHeroAtlasBytes(skin: string): number {
+  const manifestPath = resolve(PUBLIC_DIR, 'fighters', skin, 'assets.hero.json')
+  if (!existsSync(manifestPath)) return 0
+  const atlasField =
+    (JSON.parse(readFileSync(manifestPath, 'utf-8')) as { atlas?: string }).atlas ??
+    `/fighters/${skin}/atlas.hero.webp`
+  const diskPath = resolve(PUBLIC_DIR, atlasField.replace(/^\/+/, ''))
+  return existsSync(diskPath) ? statSync(diskPath).size : 0
+}
+
 /** Every real, reel-eligible opener: distinct skins of DISTINCT archetypes (the
- *  director never shows a moveset mirror), priced from the bytes on disk. */
+ *  director never shows a moveset mirror), priced from the FULL bytes on disk —
+ *  what a FAST link serves. */
 function realOpenerPairs(): { a: string; b: string; bytes: number }[] {
   const pairs: { a: string; b: string; bytes: number }[] = []
   for (let i = 0; i < ROSTER.length; i++) {
@@ -92,6 +110,31 @@ function realOpenerPairs(): { a: string; b: string; bytes: number }[] {
     }
   }
   return pairs
+}
+
+/** The same eligible openers priced from the HERO bytes on disk — what a
+ *  reported-SLOW link actually serves and what the director prices admission on. */
+function realHeroOpenerPairs(): { a: string; b: string; bytes: number }[] {
+  const pairs: { a: string; b: string; bytes: number }[] = []
+  for (let i = 0; i < ROSTER.length; i++) {
+    for (let j = i + 1; j < ROSTER.length; j++) {
+      if (ROSTER[i].archetype === ROSTER[j].archetype) continue
+      pairs.push({
+        a: ROSTER[i].skin,
+        b: ROSTER[j].skin,
+        bytes: realHeroAtlasBytes(ROSTER[i].skin) + realHeroAtlasBytes(ROSTER[j].skin),
+      })
+    }
+  }
+  return pairs
+}
+
+/** Distinct-archetype partners a skin CAN open against — the director never shows
+ *  a moveset mirror, so a skin's maximum opener coverage is the number of skins of
+ *  a different archetype (2 skins/archetype ⇒ 4 today). */
+function distinctArchetypePartners(skin: string): number {
+  const arche = ROSTER.find((r) => r.skin === skin)!.archetype
+  return ROSTER.filter((r) => r.skin !== skin && r.archetype !== arche).length
 }
 
 // A pairing heavier than this only exists among the detailed atlases, so seeing
@@ -125,75 +168,99 @@ describe('first-bout download — real bytes & non-triviality (vacuity)', () => 
     expect(ROSTER.length).toBeGreaterThan(4)
   })
 
-  it('the SLOW budget admits the light openers and excludes the heavy ones (real bytes)', () => {
-    const pairs = realOpenerPairs()
+  it('the SLOW opener is priced on the reduced HERO atlas, so every real pairing now fits the slow-4G target (decoupling)', () => {
+    const heroPairs = realHeroOpenerPairs()
+    const fullPairs = realOpenerPairs()
     // C(6,2)=15 minus 3 archetype mirrors = 12 real openers; guard the count so a
     // roster/archetype change that empties this set cannot pass the gate blind.
-    expect(pairs.length).toBeGreaterThanOrEqual(10)
+    expect(heroPairs.length).toBeGreaterThanOrEqual(10)
+    expect(heroPairs.length).toBe(fullPairs.length)
 
-    const admitted = pairs.filter((p) => p.bytes <= SLOW_FIRST_BOUT_BUDGET_BYTES)
-    const excluded = pairs.filter((p) => p.bytes > SLOW_FIRST_BOUT_BUDGET_BYTES)
-
-    // If nothing is admitted, a slow visitor's re-roll finds no light pairing and
-    // falls through (after MAX_ATTEMPTS) to a heavy opener — the slow path is dead.
+    // THE DECOUPLING WIN. Under the old FULL pricing the roster was byte-bimodal,
+    // so only the four madhavan pairs fit and spiegel never opened. Pricing the
+    // opener on the HERO atlas makes EVERY real pairing fit the 33 s slow-4G
+    // target — nothing is excluded, which is the point: cost no longer tracks art.
+    const overBudget = heroPairs.filter((p) => p.bytes > SLOW_FIRST_BOUT_BUDGET_BYTES)
     expect(
-      admitted.length,
-      'SLOW budget admits no real opener — slow visitors fall through to heavy art',
-    ).toBeGreaterThan(0)
-    // If nothing is excluded, the budget constrains nothing and is vacuous.
-    expect(
-      excluded.length,
-      'SLOW budget excludes no real opener — it is not constraining the first load',
-    ).toBeGreaterThan(0)
-
-    // Every admitted opener really does meet the slow-4G target it was sized for.
-    for (const p of admitted) {
+      overBudget.length,
+      `hero-priced openers over the slow budget: ${overBudget
+        .map((p) => `${p.a}+${p.b} ${(p.bytes / 1e6).toFixed(2)}MB`)
+        .join(', ')}`,
+    ).toBe(0)
+    for (const p of heroPairs) {
       const s = modeledFirstFrameSeconds(p.bytes, SLOW_4G_BYTES_PER_SEC)
-      expect(s, `${p.a}+${p.b} admitted on slow but modeled ${s.toFixed(1)}s`).toBeLessThanOrEqual(
+      expect(s, `${p.a}+${p.b} hero opener modeled ${s.toFixed(1)}s`).toBeLessThanOrEqual(
         SLOW_FIRST_BOUT_TARGET_SEC,
+      )
+    }
+
+    // VACUITY against a hero==full miswire (the exact bug the structural decoupling
+    // gate guards): every hero pairing must be MATERIALLY lighter than the same
+    // FULL pairing, or "priced on hero" is a no-op that decoupled nothing and the
+    // "everything fits" result above is an accident of a loose budget, not the tier.
+    const fullByKey = new Map(fullPairs.map((p) => [`${p.a}+${p.b}`, p.bytes]))
+    for (const p of heroPairs) {
+      const full = fullByKey.get(`${p.a}+${p.b}`)!
+      expect(p.bytes, `${p.a}+${p.b} hero (${p.bytes}) not materially lighter than full (${full})`).toBeLessThan(
+        full * 0.6,
       )
     }
   })
 
-  it('the SLOW opener set keeps a runway above the single-pair floor (the combat-feel guard)', () => {
-    // WHY THIS EXISTS. The `admitted > 0` check above only proves the slow path
-    // isn't dead; it is exactly the "the budget constrains something" gate that
-    // canNOT see that every admitted opener shares ONE fighter (today all four are
-    // madhavan pairs). This asserts the runway a rising art budget actually erodes.
-    //
-    // The roster is byte-bimodal (madhavan 0.66 MB; the other five 3.2–5.5 MB), so
-    // every affordable opener contains madhavan and the slow cold-start partner can
-    // only be one of madhavan's distinct-archetype partners. As `combat-feel` adds
-    // bespoke supers the heavier partners cross the budget one by one:
-    //   • below TWO admitted pairs the partner can no longer rotate — every slow
-    //     visit opens on the exact same frame (a monotone first impression), and
-    //   • at one more crossing the set is empty and EVERY slow visitor falls
-    //     through MAX_ATTEMPTS to a heavy cold start — the silent failure on the
-    //     one route (a slow link) nobody instruments.
-    // Floor = 2 reddens while there is still headroom to react, not after the
-    // failure. Today = 4 (two crossings of slack). NOTE the reach of a super on
-    // madhavan itself: it is in 100% of admitted pairs, so it erodes every
-    // headroom at once — ~4× a super on any single partner.
-    //
-    // This is the achievable half of the shop-window ask: it gates opener
-    // ROTATION + non-emptiness on slow. It does NOT gate per-fighter opener
-    // coverage (spiegel's lightest opener is 9.08 MB ≈ 45 s — unreachable under a
-    // fast-cold-start budget); full-roster variety on slow is delivered by the
-    // coverage picker within COVERAGE_BOUND bouts and gated in attractDirector.
-    const SLOW_OPENER_FLOOR = 2
-    const pairs = realOpenerPairs()
+  it('every fighter opens on SLOW with ALL its partners and none dominates — the shop-window consequence, now reachable', () => {
+    // THE PROPERTY THE OLD FULL-PRICED BUDGET COULD NOT REACH. Because the roster
+    // was byte-bimodal, the slow opener admitted ONLY madhavan pairs: madhavan was
+    // the cold-start face in 100% of openers and spiegel in 0%. The previous gate
+    // could only assert a runway FLOOR (≥2 admitted) and explicitly conceded that
+    // per-fighter coverage was "unreachable under a fast-cold-start budget". Hero
+    // pricing decouples cost from art, so the whole pool is affordable and this
+    // asserts the consequence DIRECTLY — a per-fighter coverage FLOOR and a
+    // concentration CEILING. Today they read 4/4 partners and 33%; a regression to
+    // full pricing (or a hero==full miswire) collapses coverage toward one fighter
+    // and drives concentration to 100%, reddening this immediately.
+    const pairs = realHeroOpenerPairs()
     expect(pairs.length).toBeGreaterThanOrEqual(10) // vacuity: real openers exist
     const admitted = pairs.filter((p) => p.bytes <= SLOW_FIRST_BOUT_BUDGET_BYTES)
-    const smallestHeadroom = Math.min(
-      ...admitted.map((p) => SLOW_FIRST_BOUT_BUDGET_BYTES - p.bytes),
-    )
+    expect(admitted.length, 'no hero opener fits the slow budget — the tier is mis-sized').toBeGreaterThan(0)
+
+    const appearances: Record<string, number> = {}
+    const partnersOf: Record<string, Set<string>> = {}
+    for (const r of ROSTER) {
+      appearances[r.skin] = 0
+      partnersOf[r.skin] = new Set()
+    }
+    for (const p of admitted) {
+      appearances[p.a]++
+      appearances[p.b]++
+      partnersOf[p.a].add(p.b)
+      partnersOf[p.b].add(p.a)
+    }
+
+    // COVERAGE FLOOR: every fighter opens on slow with ALL its distinct-archetype
+    // partners (≥1 is the reviewer's floor; today it is the full 4/4).
+    let checked = 0
+    for (const r of ROSTER) {
+      const obligation = distinctArchetypePartners(r.skin)
+      expect(obligation, `${r.skin} has no distinct-archetype partner — roster shape broke`).toBeGreaterThan(0)
+      expect(
+        partnersOf[r.skin].size,
+        `${r.skin} opens on SLOW with only ${partnersOf[r.skin].size}/${obligation} partners — the slow ` +
+          `opener has re-concentrated off this fighter (a full-priced or hero==full regression).`,
+      ).toBe(obligation)
+      checked++
+    }
+    expect(checked).toBe(ROSTER.length) // vacuity: every fighter really checked
+    expect(ROSTER.length).toBeGreaterThan(4)
+
+    // CONCENTRATION CEILING: no fighter is in more than half the admitted openers.
+    // Uniform coverage puts each in 4/12 = 33%; the broken bimodal state put one
+    // fighter in 100%. 0.5 reddens that regression while leaving uniform coverage
+    // ample headroom.
+    const maxFrac = Math.max(...ROSTER.map((r) => appearances[r.skin])) / admitted.length
     expect(
-      admitted.length,
-      `SLOW admitted openers = ${admitted.length} (need ≥ ${SLOW_OPENER_FLOOR}). ` +
-        `An atlas grew until too few light pairings remain: below ${SLOW_OPENER_FLOOR} the ` +
-        `cold-start pair can no longer rotate and the slow path is one crossing from heavy ` +
-        `fallthrough. Smallest surviving headroom: ${smallestHeadroom.toLocaleString()} B.`,
-    ).toBeGreaterThanOrEqual(SLOW_OPENER_FLOOR)
+      maxFrac,
+      `one fighter is in ${(maxFrac * 100).toFixed(0)}% of SLOW openers (ceiling 50%) — the concentration inversion is back`,
+    ).toBeLessThanOrEqual(0.5)
   })
 
   it('prices this gate against the SHIPPED budget constants (no drift)', () => {
@@ -263,44 +330,54 @@ describe('first-bout download — the shipped director honors the budget per con
   )
 
   it(
-    'SLOW / Save-Data: a reported-slow visitor is served a light opener within the slow-4G target',
+    'SLOW / Save-Data: the shipped director serves a HERO-priced opener within target, rotating the WHOLE pool',
     () => {
       vi.stubGlobal('navigator', { connection: { effectiveType: '2g' } })
       let tested = 0
-      let maxBytes = 0
+      let maxHeroBytes = 0
+      const appearances: Record<string, number> = {}
+      for (const r of ROSTER) appearances[r.skin] = 0
       for (let s = 1; s <= SEEDS; s++) {
         const dir = new AttractDirector({ seed: s })
         const { a, b } = dir.matchup
-        const bytes = realAtlasBytes(a.skin) + realAtlasBytes(b.skin)
-        // The director actually re-rolled to an admitted (light) pairing — proof
-        // the pure policy is CONSUMED by the shipped picker, not merely present.
-        expect(bytes, `seed ${s} slow opener ${a.skin}+${b.skin} exceeded the SLOW budget`).toBeLessThanOrEqual(
-          SLOW_FIRST_BOUT_BUDGET_BYTES,
-        )
-        const slowSec = modeledFirstFrameSeconds(bytes, SLOW_4G_BYTES_PER_SEC)
+        // On a slow link the opener DOWNLOADS the hero variant, so price the
+        // served bytes on hero — proof the hero policy is CONSUMED by the shipped
+        // picker, not merely present. (Full pricing here would wrongly reject the
+        // heavy pairings the director now legitimately opens on slow.)
+        const heroBytes = realHeroAtlasBytes(a.skin) + realHeroAtlasBytes(b.skin)
+        expect(
+          heroBytes,
+          `seed ${s} slow opener ${a.skin}+${b.skin} hero download exceeded the SLOW budget`,
+        ).toBeLessThanOrEqual(SLOW_FIRST_BOUT_BUDGET_BYTES)
+        const slowSec = modeledFirstFrameSeconds(heroBytes, SLOW_4G_BYTES_PER_SEC)
         expect(slowSec, `seed ${s} slow opener modeled ${slowSec.toFixed(1)}s`).toBeLessThanOrEqual(SLOW_HARD_MAX_SEC)
-        maxBytes = Math.max(maxBytes, bytes)
+        maxHeroBytes = Math.max(maxHeroBytes, heroBytes)
+        appearances[a.skin]++
+        appearances[b.skin]++
         dir.dispose()
         tested++
       }
       expect(tested).toBe(SEEDS)
-      // Vacuity: the slow path is genuinely lighter than the worst fast opener.
-      expect(maxBytes).toBeLessThan(HEAVY_OPENER_BYTES)
+      // THE INVERSION IS RESOLVED IN PRACTICE, not just in the static admitted set:
+      // across seeds EVERY fighter opens on slow — including spiegel, which the old
+      // full-priced budget excluded entirely — and none dominates. This is the
+      // director-level proof of the coverage/concentration property above.
+      for (const r of ROSTER) {
+        expect(appearances[r.skin], `${r.skin} NEVER opens on slow across ${SEEDS} seeds`).toBeGreaterThan(0)
+      }
+      const maxFrac = Math.max(...ROSTER.map((r) => appearances[r.skin])) / SEEDS
+      expect(
+        maxFrac,
+        `one fighter opens ${(maxFrac * 100).toFixed(0)}% of slow visits (ceiling 50%) — slow openers re-concentrated`,
+      ).toBeLessThanOrEqual(0.5)
+      // Vacuity: the slow path genuinely serves the reduced tier, not full atlases.
+      expect(maxHeroBytes).toBeLessThan(HEAVY_OPENER_BYTES)
     },
     30_000,
   )
 })
 
 describe('first-bout opener — every fighter keeps full shop-window coverage on the primary path', () => {
-  /** Distinct-archetype partners a skin CAN open against — the director never
-   *  shows a moveset mirror, so a skin's maximum coverage is the number of skins
-   *  of a different archetype (2 skins/archetype ⇒ 4 today). This is the exact
-   *  obligation the primary-path budget must honor for that skin. */
-  function distinctArchetypePartners(skin: string): number {
-    const arche = ROSTER.find((r) => r.skin === skin)!.archetype
-    return ROSTER.filter((r) => r.skin !== skin && r.archetype !== arche).length
-  }
-
   it('the FAST / default budget admits EVERY fighter with ALL its partners — the ratchet cannot return per-fighter', () => {
     // THE PROPERTY THE OLD FIXED CEILING SILENTLY BROKE. Under a fixed byte cap,
     // as the art run made a fighter's atlas heavier its pairings crossed the line

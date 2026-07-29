@@ -2,9 +2,14 @@ import { describe, it, expect } from 'vitest'
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { ATLAS_COST_BYTES, firstBoutCostBytes } from '../attractLoadCost'
+import {
+  ATLAS_COST_BYTES,
+  HERO_ATLAS_COST_BYTES,
+  firstBoutCostBytes,
+  firstBoutHeroCostBytes,
+} from '../attractLoadCost'
 import { ROSTER } from '../../../fighthud/select/roster'
-import { readAtlasCosts } from '../../../../scripts/atlasCosts.ts'
+import { readAtlasCosts, readHeroAtlasCosts } from '../../../../scripts/atlasCosts.ts'
 
 /**
  * Bake-integrity gate for the attract reel's first-bout cost accounting.
@@ -45,6 +50,19 @@ function realAtlasBytes(skin: string): number {
   const atlasField =
     (JSON.parse(readFileSync(manifestPath, 'utf-8')) as { atlas?: string }).atlas ??
     `/fighters/${skin}/atlas.webp`
+  const diskPath = resolve(PUBLIC_DIR, atlasField.replace(/^\/+/, ''))
+  return existsSync(diskPath) ? statSync(diskPath).size : 0
+}
+
+/** Real on-disk REDUCED hero-atlas size for a skin, resolved through
+ *  `assets.hero.json` exactly as the loader (variant='hero') + bake do. 0 when
+ *  the fighter ships no hero variant. */
+function realHeroAtlasBytes(skin: string): number {
+  const manifestPath = resolve(PUBLIC_DIR, 'fighters', skin, 'assets.hero.json')
+  if (!existsSync(manifestPath)) return 0
+  const atlasField =
+    (JSON.parse(readFileSync(manifestPath, 'utf-8')) as { atlas?: string }).atlas ??
+    `/fighters/${skin}/atlas.hero.webp`
   const diskPath = resolve(PUBLIC_DIR, atlasField.replace(/^\/+/, ''))
   return existsSync(diskPath) ? statSync(diskPath).size : 0
 }
@@ -91,5 +109,86 @@ describe('attract first-bout cost is baked from the real atlases, not a stale ta
     const onDisk = readAtlasCosts()
     expect(Object.keys(onDisk).length, 'reader found no atlases — path/scan broke').toBeGreaterThan(4)
     expect(ATLAS_COST_BYTES).toEqual(onDisk)
+  })
+})
+
+/**
+ * Bake-integrity gate for the REDUCED hero atlas — the variant a reported-slow
+ * visitor downloads for the opener (bout 1), upgrading to full art for bouts 2+.
+ *
+ * The hero tier is what decouples opener cost from full-art quality: the opener is
+ * priced on `HERO_ATLAS_COST_BYTES`, so `combat-feel` can grow a full atlas
+ * without ever pushing a pairing over the slow budget. That guarantee is only real
+ * if the baked hero costs actually track the reduced files on disk, so this
+ * asserts the same join for hero that the block above asserts for full:
+ *
+ *  - a hero cost is baked for every roster skin (vacuity: the hero bake is wired);
+ *  - each baked hero byte EQUALS the reduced file on disk (resolved through
+ *    assets.hero.json exactly as the loader's variant='hero' path does);
+ *  - the committed hero map is FRESH (deep-equals readHeroAtlasCosts()); and
+ *  - every hero atlas is MATERIALLY smaller than its full atlas (< 60%), so
+ *    "priced on hero" is a genuine reduction, not a hero==full miswire that would
+ *    silently re-couple opener cost to art quality.
+ *
+ * Mutation-proven (see the task report): perturbing a byte in the committed hero
+ * map fails per-skin equality + freshness; pointing readHeroAtlasCosts at the full
+ * manifest fails the reduction check; deleting a hero entry fails coverage.
+ */
+describe('attract hero-atlas cost is baked from the reduced atlases, not a stale table', () => {
+  it('bakes a hero cost for every choosable roster skin (vacuity: the hero bake is wired)', () => {
+    expect(Object.keys(HERO_ATLAS_COST_BYTES).length).toBeGreaterThanOrEqual(6)
+    for (const r of ROSTER) {
+      expect(HERO_ATLAS_COST_BYTES[r.skin], `no baked hero cost for roster skin ${r.skin}`).toBeGreaterThan(0)
+    }
+  })
+
+  it('prices each roster skin at its exact on-disk HERO atlas byte count', () => {
+    let checked = 0
+    for (const r of ROSTER) {
+      const disk = realHeroAtlasBytes(r.skin)
+      expect(disk, `missing hero atlas on disk for ${r.skin}`).toBeGreaterThan(0)
+      expect(
+        HERO_ATLAS_COST_BYTES[r.skin],
+        `baked hero cost for ${r.skin} (${HERO_ATLAS_COST_BYTES[r.skin]}) != on-disk hero atlas ${disk}`,
+      ).toBe(disk)
+      checked++
+    }
+    expect(checked).toBe(ROSTER.length) // vacuity: we really compared the roster
+    expect(checked).toBeGreaterThan(4)
+  })
+
+  it('sums a hero pairing from the same baked bytes the slow opener is priced against', () => {
+    // The slow-path admission (isAllowedFirstBout on a constrained link) prices on
+    // firstBoutHeroCostBytes; it must be the SAME number as the reduced files sum.
+    const a = ROSTER[0].skin
+    const b = ROSTER[1].skin
+    expect(firstBoutHeroCostBytes(a, b)).toBe(realHeroAtlasBytes(a) + realHeroAtlasBytes(b))
+  })
+
+  it('committed hero map is fresh: it deep-equals the reduced sizes on disk right now', () => {
+    const onDisk = readHeroAtlasCosts()
+    expect(Object.keys(onDisk).length, 'hero reader found no reduced atlases — path/scan broke').toBeGreaterThan(4)
+    expect(HERO_ATLAS_COST_BYTES).toEqual(onDisk)
+  })
+
+  it('every hero atlas is MATERIALLY smaller than its full atlas (the reduction is real)', () => {
+    // If hero ever equalled (or approached) full, opener cost would re-couple to
+    // art quality and the whole decoupling would be a no-op. Assert a real cut on
+    // every roster skin — today heroes are 0.20–0.27× full (scale 0.5 ⇒ ~¼ area).
+    let checked = 0
+    for (const r of ROSTER) {
+      const full = realAtlasBytes(r.skin)
+      const hero = realHeroAtlasBytes(r.skin)
+      expect(full, `missing full atlas for ${r.skin}`).toBeGreaterThan(0)
+      expect(hero, `missing hero atlas for ${r.skin}`).toBeGreaterThan(0)
+      expect(
+        hero,
+        `hero atlas for ${r.skin} (${hero}) is not materially smaller than full (${full}) — ` +
+          `the reduced variant decouples nothing`,
+      ).toBeLessThan(full * 0.6)
+      checked++
+    }
+    expect(checked).toBe(ROSTER.length)
+    expect(checked).toBeGreaterThan(4)
   })
 })

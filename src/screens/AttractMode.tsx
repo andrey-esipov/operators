@@ -4,6 +4,7 @@ import { loadFighterAtlas } from '../three/fight/loadFighterAtlas'
 import { getFighter } from '../data/fighters'
 import { applyCaptureQuality } from '../play/captureQuality'
 import { AttractDirector } from './attract/attractDirector'
+import { firstBoutAtlasVariant } from './attract/attractLoadCost'
 import './menu/menu.css'
 
 interface Props {
@@ -155,9 +156,16 @@ export function AttractMode({ onExit }: Props) {
         // __PLAY__/__FIGHT__ do — the captureCoverage node gate enforces that
         // this call is present instead. See captureQuality.ts.
         applyCaptureQuality(renderer.engine, window.location.search, { captureRoute: true })
+        // The OPENER (bout 1, segment 0) is the one download a cold visitor waits
+        // on. On a reported-slow link it is served the reduced HERO atlas so its
+        // cost is decoupled from full-art growth (see attractLoadCost.ts); bouts
+        // 2+ always upgrade to full art. A fast/unknown link gets full art here
+        // too — firstBoutAtlasVariant() returns 'full' unless the browser reports
+        // a slow connection. A missing hero variant falls back to full in the loader.
+        const variant = segment === 0 ? firstBoutAtlasVariant() : 'full'
         const [atlasA, atlasB] = await Promise.all([
-          loadFighterAtlas(m.a.skin),
-          loadFighterAtlas(m.b.skin),
+          loadFighterAtlas(m.a.skin, variant),
+          loadFighterAtlas(m.b.skin, variant),
         ])
         if (disposed) return renderer.dispose()
         await renderer.setFighterAssets(0, atlasA.assets, atlasA.atlas, m.a.accent, getFighter(m.a.skin)?.reval)

@@ -23,20 +23,22 @@ import { fileURLToPath } from 'node:url'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const FIGHTERS_DIR = resolve(HERE, '../public/fighters')
-const PUBLIC_DIR = resolve(FIGHTERS_DIR, '..')
 
 export type AtlasCostMap = Record<string, number>
 
-/** Read skin id → shipped atlas byte size from disk. A skin whose atlas file is
- *  missing is omitted (treated as unknown → heavy → excluded from the cold first
- *  bout by attractLoadCost, never optimistically allowed onto it). */
-export function readAtlasCosts(): AtlasCostMap {
+/** Read skin id → atlas byte size from disk, resolving each id's `atlas` field
+ *  from `manifestName` EXACTLY as the runtime loader and byte gates do. A skin
+ *  whose manifest or atlas file is missing is omitted (treated as unknown →
+ *  heavy → excluded from the cold first bout, never optimistically allowed).
+ *  `fightersDir` is parameterised so a gate can point it at a fixture dir. */
+function readCostsFrom(fightersDir: string, manifestName: string, fallbackAtlas: (id: string) => string): AtlasCostMap {
   const costs: AtlasCostMap = {}
-  if (!existsSync(FIGHTERS_DIR)) return costs
-  for (const id of readdirSync(FIGHTERS_DIR)) {
-    const manifestPath = resolve(FIGHTERS_DIR, id, 'assets.json')
+  if (!existsSync(fightersDir)) return costs
+  const publicDir = resolve(fightersDir, '..')
+  for (const id of readdirSync(fightersDir)) {
+    const manifestPath = resolve(fightersDir, id, manifestName)
     if (!existsSync(manifestPath)) continue
-    let atlasField = `/fighters/${id}/atlas.webp`
+    let atlasField = fallbackAtlas(id)
     try {
       const parsed = JSON.parse(readFileSync(manifestPath, 'utf-8')) as { atlas?: unknown }
       if (typeof parsed.atlas === 'string') atlasField = parsed.atlas
@@ -44,27 +46,47 @@ export function readAtlasCosts(): AtlasCostMap {
       // A malformed manifest falls back to the conventional atlas path; if that
       // is missing too the skin is simply omitted.
     }
-    const diskPath = resolve(PUBLIC_DIR, atlasField.replace(/^\/+/, ''))
+    const diskPath = resolve(publicDir, atlasField.replace(/^\/+/, ''))
     if (existsSync(diskPath)) costs[id] = statSync(diskPath).size
   }
   return costs
 }
 
-/** Render the committed generated module from a cost map. Keys are sorted so an
- *  unchanged roster produces a byte-identical file (write-if-changed is a no-op). */
-export function renderAtlasCostsModule(costs: AtlasCostMap): string {
+/** Read skin id → shipped FULL atlas byte size (`assets.json`). */
+export function readAtlasCosts(fightersDir: string = FIGHTERS_DIR): AtlasCostMap {
+  return readCostsFrom(fightersDir, 'assets.json', (id) => `/fighters/${id}/atlas.webp`)
+}
+
+/** Read skin id → reduced HERO opener-atlas byte size (`assets.hero.json`). Only
+ *  skins that carry a hero manifest appear; on a slow link the opener is priced
+ *  and served from THIS map, decoupling opener cost from full-atlas growth. */
+export function readHeroAtlasCosts(fightersDir: string = FIGHTERS_DIR): AtlasCostMap {
+  return readCostsFrom(fightersDir, 'assets.hero.json', (id) => `/fighters/${id}/atlas.hero.webp`)
+}
+
+function renderFrozenMap(name: string, costs: AtlasCostMap): string {
   const entries = Object.keys(costs)
     .sort()
     .map((k) => `  ${JSON.stringify(k)}: ${costs[k]},`)
     .join('\n')
+  return `export const ${name}: Readonly<Record<string, number>> = Object.freeze({\n${entries}\n})\n`
+}
+
+/** Render the committed generated module from the full + hero cost maps. Keys are
+ *  sorted so an unchanged roster produces a byte-identical file (write-if-changed
+ *  is a no-op). */
+export function renderAtlasCostsModule(costs: AtlasCostMap, heroCosts: AtlasCostMap = {}): string {
   return (
-    '// GENERATED from public/fighters/*/assets.json (real on-disk atlas byte\n' +
-    '// sizes) by scripts/genAtlasCosts.ts — DO NOT hand-edit. Regenerate with:\n' +
-    '//   npx tsx scripts/genAtlasCosts.ts\n' +
+    '// GENERATED from public/fighters/*/assets.json + assets.hero.json (real\n' +
+    '// on-disk atlas byte sizes) by scripts/genAtlasCosts.ts — DO NOT hand-edit.\n' +
+    '// Regenerate with:  npx tsx scripts/genAtlasCosts.ts\n' +
     '// scripts/atlasCostsPlugin.ts keeps it fresh at dev/build; freshness is gated\n' +
     '// by src/screens/attract/__tests__/atlasCostBake.node.test.ts.\n' +
-    'export const ATLAS_COST_BYTES: Readonly<Record<string, number>> = Object.freeze({\n' +
-    entries +
-    '\n})\n'
+    renderFrozenMap('ATLAS_COST_BYTES', costs) +
+    '\n' +
+    '// Reduced "hero" opener-atlas sizes. On a reported-slow link the attract\n' +
+    '// opener (bout 1) is served AND priced from these, so improving a fighter\'s\n' +
+    '// FULL art can no longer cost it an opener pairing — see attractLoadCost.ts.\n' +
+    renderFrozenMap('HERO_ATLAS_COST_BYTES', heroCosts)
   )
 }

@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { readAtlasCosts, renderAtlasCostsModule } from './atlasCosts.ts'
+import { readAtlasCosts, readHeroAtlasCosts, renderAtlasCostsModule } from './atlasCosts.ts'
 
 /**
  * Generator for the committed atlas-cost module. Baking the reel's per-skin atlas
@@ -17,7 +17,7 @@ export const GENERATED_PATH = resolve(HERE, '../src/screens/attract/atlasCosts.g
 /** Regenerate the committed module from disk, writing only when it changed.
  *  Returns true iff a write happened. */
 export function generateAtlasCosts(): boolean {
-  const next = renderAtlasCostsModule(readAtlasCosts())
+  const next = renderAtlasCostsModule(readAtlasCosts(), readHeroAtlasCosts())
   const prev = existsSync(GENERATED_PATH) ? readFileSync(GENERATED_PATH, 'utf-8') : ''
   if (prev === next) return false
   writeFileSync(GENERATED_PATH, next)

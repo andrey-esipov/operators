@@ -42,17 +42,40 @@ function loadImage(src: string): Promise<HTMLImageElement> {
 }
 
 /** Fighters whose generated set is present under `public/fighters/<id>/`. */
-export async function loadFighterAtlas(id: string): Promise<LoadedAtlas> {
-  try {
-    const res = await fetch(`/fighters/${id}/assets.json`)
-    // A dev server happily returns index.html for a missing asset, so a 200 is
-    // not enough — the payload has to actually parse as an atlas manifest.
-    if (!res.ok) throw new Error(`no manifest (${res.status})`)
-    const assets = (await res.json()) as FighterAssets
-    if (!assets?.frames?.length || !assets?.clips) throw new Error('manifest is not an atlas')
+async function loadFromManifest(id: string, manifestUrl: string, heroFallback: boolean): Promise<LoadedAtlas> {
+  const res = await fetch(manifestUrl)
+  // A dev server happily returns index.html for a missing asset, so a 200 is
+  // not enough — the payload has to actually parse as an atlas manifest.
+  if (!res.ok) throw new Error(`no manifest (${res.status})`)
+  const assets = (await res.json()) as FighterAssets
+  if (!assets?.frames?.length || !assets?.clips) throw new Error('manifest is not an atlas')
+  const atlas = await loadImage(assets.atlas ?? `/fighters/${id}/atlas${heroFallback ? '.hero' : ''}.webp`)
+  return { assets, atlas, real: true }
+}
 
-    const atlas = await loadImage(assets.atlas ?? `/fighters/${id}/atlas.webp`)
-    return { assets, atlas, real: true }
+/**
+ * Load a fighter's animation set. `variant` selects the atlas tier: 'full' (the
+ * default, and every existing caller) loads the shipped full-res atlas; 'hero'
+ * loads the reduced opener atlas (`assets.hero.json` / `atlas.hero.webp`) used for
+ * the attract opener on a reported-slow link. A hero request that cannot be
+ * satisfied — a fighter without a hero variant, or a decode failure — falls back
+ * to the FULL atlas (correct art, not the 4-pose mock); only a failed FULL load
+ * degrades to the stand-in, exactly as before.
+ */
+export async function loadFighterAtlas(id: string, variant: 'full' | 'hero' = 'full'): Promise<LoadedAtlas> {
+  if (variant === 'hero') {
+    try {
+      return await loadFromManifest(id, `/fighters/${id}/assets.hero.json`, true)
+    } catch (err) {
+      console.warn(
+        `[atlas] "${id}" hero variant unavailable (${
+          err instanceof Error ? err.message : err
+        }) — using full atlas for the opener.`,
+      )
+    }
+  }
+  try {
+    return await loadFromManifest(id, `/fighters/${id}/assets.json`, false)
   } catch (err) {
     console.warn(
       `[atlas] "${id}" has no generated animation set (${

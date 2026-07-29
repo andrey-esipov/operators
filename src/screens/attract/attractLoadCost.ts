@@ -1,4 +1,4 @@
-import { ATLAS_COST_BYTES } from './atlasCosts.generated'
+import { ATLAS_COST_BYTES, HERO_ATLAS_COST_BYTES } from './atlasCosts.generated'
 /**
  * Attract-reel load-order policy — an ASSET concern, deliberately kept OUT of
  * the pure sim `AttractDirector`.
@@ -42,12 +42,33 @@ const MB = 1024 * 1024
  */
 export { ATLAS_COST_BYTES }
 
+/**
+ * Per-skin REDUCED "hero" opener-atlas cost in bytes, baked from the real
+ * `atlas.hero.webp` files on disk alongside {@link ATLAS_COST_BYTES}. On a
+ * reported-slow link the opener is served AND priced from these, so improving a
+ * fighter's FULL art can no longer cost it an opener pairing. A skin absent here
+ * has no hero variant and is treated as heavy by {@link firstBoutHeroCostBytes}.
+ */
+export { HERO_ATLAS_COST_BYTES }
+
 /** A skin with no known cost is assumed heavier than any real atlas, so it is
  *  excluded from a cost-capped first bout rather than optimistically allowed on. */
 const UNKNOWN_COST_BYTES = 12 * MB
 
+/** Combined FULL-atlas download for a pairing — what bouts 2+ (and a fast-link
+ *  opener) actually stream. Kept as the honest full-art figure that
+ *  atlasByteBudget/atlasCostBake gate; the slow-link opener is priced on
+ *  {@link firstBoutHeroCostBytes} instead. */
 export function firstBoutCostBytes(skinA: string, skinB: string): number {
   return (ATLAS_COST_BYTES[skinA] ?? UNKNOWN_COST_BYTES) + (ATLAS_COST_BYTES[skinB] ?? UNKNOWN_COST_BYTES)
+}
+
+/** Combined HERO-atlas download for a pairing — what a reported-slow link's
+ *  opener actually streams. Decoupled from {@link firstBoutCostBytes}: growing a
+ *  fighter's full atlas does not change this until the hero is regenerated, and
+ *  even then only at ~scale² of the full growth. */
+export function firstBoutHeroCostBytes(skinA: string, skinB: string): number {
+  return (HERO_ATLAS_COST_BYTES[skinA] ?? UNKNOWN_COST_BYTES) + (HERO_ATLAS_COST_BYTES[skinB] ?? UNKNOWN_COST_BYTES)
 }
 
 /**
@@ -103,47 +124,41 @@ export function modeledFirstFrameSeconds(bytes: number, bytesPerSec: number): nu
 export const FAST_FIRST_BOUT_BUDGET_BYTES = Number.POSITIVE_INFINITY
 
 /**
- * SLOW / Save-Data budget. Caps the opener at "the lightest fighter (madhavan,
- * 0.66 MB) opposite anyone", i.e. every madhavan pairing up to ~6.4 MB
- * (madhavan+lenny) — so a reported-slow visitor waits ~20–32 s at slow-4G rather
- * than up to ~57 s, the best a size-homogeneous heavy roster allows.
+ * SLOW / Save-Data budget, in buyer-facing SECONDS. A reported-slow visitor must
+ * see the opener within ~33 s at Lighthouse slow-4G (≈200 KB/s). This is the time
+ * ceiling the opener is held under; the bytes it is measured against are the HERO
+ * variant's, not the full atlas's — see the decoupling note below.
  *
- * WHY THIS THRESHOLD AND NOT THE ~4 MB ABSOLUTE FLOOR: the director's cost
- * re-roll is a SOFT preference that relaxes after MAX_ATTEMPTS to guarantee
- * termination. A budget admitting only the single lightest pairing (~4 MB) makes
- * the re-roll succeed on ~1 draw in 15, so ~6% of slow visitors would exhaust
- * the cap and fall through to a heavy opener — a silent failure on the exact
- * route (a slow link) nobody instruments. Admitting all four madhavan pairings
- * (~8 draws in 30) drops that tail below 1e-5: a reliable ~32 s ceiling beats a
- * ~20 s one that betrays 1 in 16 of the very users it exists to protect.
+ * DECOUPLING COST FROM ART — the structural fix, symmetric with `Infinity` on
+ * FAST. On a slow link the opener DOWNLOADS a reduced hero atlas (half-res,
+ * scripts/lib/heroAtlas.ts) and {@link isAllowedFirstBout} PRICES it on the hero
+ * cost ({@link firstBoutHeroCostBytes}). Because the hero bytes are ~a quarter of
+ * the full atlas's and decoupled from it, EVERY non-mirror roster pairing now
+ * fits the 33 s ceiling — the heaviest, spiegel+lenny, is ~2.78 MB ≈ 14 s — so
+ * the opener is drawn from the WHOLE pool: every fighter opens with all four of
+ * its non-twin partners (spiegel included, which the old full-priced budget
+ * excluded entirely), and none is over-represented — each appears in exactly 4 of
+ * the 12 admitted pairs. That kills the ratchet by which improving a fighter's
+ * full art shrank its opener chances: full art can now grow freely because the
+ * opener no longer prices the full atlas at all.
  *
- * SHOP-WINDOW CONSEQUENCE — deliberate, and decided here rather than left to the
- * budget to decide by accident. The roster is byte-BIMODAL: madhavan is 0.66 MB,
- * the other five are 3.2–5.5 MB. So EVERY pairing under a fast-cold-start budget
- * necessarily contains madhavan — on a reported-slow link madhavan is the
- * cold-start face in 100% of openers, and spiegel (whose lightest opener,
- * spiegel+turley, is 9.08 MB ≈ 45 s at slow-4G) never opens. That concentration
- * is CHOSEN for the opener, and it is the right call there because:
- *   • The opener is bout 1 ONLY. The coverage picker (bouts 2+, unbudgeted) shows
- *     every skin within COVERAGE_BOUND bouts on ANY connection — spiegel and the
- *     heavy hero art included — streamed during bout 1's playback (gated
- *     behaviourally in attractDirector.node.test.ts). A slow visitor gets the
- *     whole roster; they just meet the lightest art FIRST.
- *   • Both alternatives are worse or unavailable in this lane. (a) Raising the
- *     budget to admit a spiegel opener means ≥45 s at slow-4G / ~3 min on 2g —
- *     recreating the wait this budget exists to kill. (b) A low-res / progressive
- *     hero atlas would decouple cold-start cost from fidelity exactly as
- *     `Infinity` does on FAST — the principled fix — but it needs the
- *     sprite-frame-scale change plus visual validation, so it is DEFERRED here,
- *     named rather than pretended-done.
- * Two consequences that land on OTHER lanes, recorded so they aren't lost:
- * madhavan is the slow cold-start face by construction, so its atlas quality has
- * outsized leverage and its half of the chesky/madhavan palette collision is the
- * cheapest real first-impression win (art / combat-feel); and because madhavan is
- * in 100% of admitted openers, a bespoke super on MADHAVAN erodes the slow runway
- * ~4× as fast as one on any other fighter — it subtracts from all four headrooms
- * at once. The runway itself (how many admitted openers survive before every slow
- * visitor falls through to a heavy cold start) is gated in firstBoutBudget.
+ * HONEST BOUND — what "decoupled" does and does not mean. Admission reads the hero
+ * cost, so growing a fighter's FULL atlas leaves opener admission bit-for-bit
+ * unchanged (gated structurally: a fixture grows a full atlas and the opener cost
+ * is asserted invariant). It is NOT frozen forever: when combat-feel adds cels and
+ * the hero is REGENERATED, the hero grows at ~scale² ≈ ¼ of the full growth, and
+ * at the achieved sizes (pairs ~0.98–2.78 MB against the ~6.6 MB / 33 s budget)
+ * there is ≥3.8 MB of headroom per pair — enough to absorb ~15 MB of full-atlas
+ * growth before the lightest slow ceiling is even approached. TRUE zero-erosion
+ * would need the hero to be a FRAME SUBSET (idle/establishing poses only), a
+ * larger change named for later rather than pretended-done here.
+ *
+ * Bouts 2+ always stream FULL art ({@link firstBoutAtlasVariant} → 'full'), so a
+ * slow visitor still meets every fighter's best art within COVERAGE_BOUND bouts
+ * (gated in attractDirector.node.test.ts); the hero is a bout-1-only, slow-link
+ * only cold-start tier. The bout-1(hero)→bout-2(full) upgrade seam is the one
+ * thing needing visual sign-off — queued for the capture manifest, not asserted
+ * here.
  */
 export const SLOW_FIRST_BOUT_TARGET_SEC = 33
 export const SLOW_FIRST_BOUT_BUDGET_BYTES = Math.round(SLOW_FIRST_BOUT_TARGET_SEC * SLOW_4G_BYTES_PER_SEC)
@@ -174,14 +189,30 @@ export function firstBoutBudgetBytes(): number {
   return FAST_FIRST_BOUT_BUDGET_BYTES
 }
 
-/** May this pairing open the reel? True when its combined download is within the
- *  budget for the viewer's connection class. `budgetBytes` is injectable so the
- *  gate can price each named profile deterministically; production callers use
- *  the runtime {@link firstBoutBudgetBytes} default. */
+/**
+ * Which atlas variant the OPENER (bout 1) should download for the current viewer.
+ * A finite (reported-slow / Save-Data) budget serves the reduced hero atlas so
+ * cold-start cost is decoupled from full-art quality; a fast/unknown link — the
+ * common desktop case — serves full art. Bouts 2+ are always 'full' (the caller
+ * upgrades after the opener), so the hero is a bout-1-only, slow-link-only tier.
+ */
+export function firstBoutAtlasVariant(budgetBytes: number = firstBoutBudgetBytes()): 'full' | 'hero' {
+  return budgetBytes === FAST_FIRST_BOUT_BUDGET_BYTES ? 'full' : 'hero'
+}
+
+/** May this pairing open the reel? True when the download it will ACTUALLY serve
+ *  is within the budget for the viewer's connection class. The opener is priced on
+ *  the variant it downloads: a finite (slow) budget serves — and so prices — the
+ *  HERO atlas, which decouples admission from full-atlas growth; an infinite
+ *  (fast) budget serves full art but admits everything anyway. `budgetBytes` is
+ *  injectable so the gate can price each named profile deterministically. */
 export function isAllowedFirstBout(
   skinA: string,
   skinB: string,
   budgetBytes: number = firstBoutBudgetBytes(),
 ): boolean {
-  return firstBoutCostBytes(skinA, skinB) <= budgetBytes
+  const cost = firstBoutAtlasVariant(budgetBytes) === 'hero'
+    ? firstBoutHeroCostBytes(skinA, skinB)
+    : firstBoutCostBytes(skinA, skinB)
+  return cost <= budgetBytes
 }

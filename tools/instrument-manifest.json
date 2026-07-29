@@ -290,6 +290,10 @@
       "app": "shipped-fight",
       "note": "SHIPPED fighter via ?fight=1 / __FIGHT__ (deterministic FightHarness → FightRenderer + FightVfx / ProjectileLayer)."
     },
+    "_fpsverify": {
+      "app": "shipped-play",
+      "note": "SHIPPED fighter via ?play=1 / __PLAY__. Frame-rate probe. Records EVERY rAF delta with NO filtering and reports effFps (stalls included) separately from smoothFps (from p50) — the probe it replaces silently dropped every >1000ms frame and reported '54 fps' for a window that was 7/8 stalls. Proves liveness by requiring 3 screenshot hashes to differ, so a frozen page cannot report a good frame time, and snapshots co-tenant CPU because on a shared box an fps reading is a function of the observer's load too. CONSTRAINT: any number from this tool is meaningless unless VW/VH/DPR are quoted with it — resolution is what made two correct fps measurements (60 vs 25) disagree. Needs a real GPU: launch with --use-angle=metal and an explicit Chrome executablePath; --use-gl=swiftshader yields no WebGL."
+    },
     "measure-separation": {
       "app": "shipped-fight",
       "note": "SHIPPED fighter via ?fight=1 / __FIGHT__ (deterministic FightHarness → FightRenderer + FightVfx / ProjectileLayer)."

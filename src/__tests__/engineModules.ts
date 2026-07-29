@@ -121,12 +121,16 @@ export function constructsAny(src: string, ctors: Iterable<string>): boolean {
 }
 
 export interface EngineModuleOptions {
-  /** Which constructors count. Default: {@link DEFAULT_ENGINE_CTORS}. impact-vfx
-   *  scopes to `['FightRenderer']` (the capture renderer) for its quality gate. */
+  /** Which constructors count as owning an engine. Default:
+   *  {@link DEFAULT_ENGINE_CTORS} (`FightRenderer` + `Engine`). Narrow it only to
+   *  scope a gate to one engine class. */
   ctors?: readonly string[]
   /** Also require a `useEffect` reference, scoping the set to React components
    *  that MOUNT an engine (excludes the `FightRenderer` wrapper class, whose
-   *  engine disposal is a METHOD, not effect cleanup). shellNav uses this. */
+   *  engine disposal is a METHOD, not effect cleanup). Both current consumers use
+   *  this: shellNav's disposal gate, and impact-vfx's capture-quality gate — which
+   *  widened (34167c6) from `['FightRenderer']` to this Engine-owning-component set
+   *  so all four routes (play/fight/attract/lab) freeze on capture. */
   requireEffect?: boolean
 }
 

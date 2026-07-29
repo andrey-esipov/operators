@@ -6,7 +6,7 @@ import { WORLD } from '../../types'
 import { CM_TO_WORLD } from '../worldScale'
 import { HarnessSim } from '../../../fight/harnessSim'
 import type { Difficulty } from '../../../fight/ai'
-import type { FightState, FightEvent, HitLevel } from '../../../fight/types'
+import type { FightState, FightEvent, HitLevel, FighterState } from '../../../fight/types'
 import { STAGE_HALF_W, START_X } from '../../../fight/constants'
 
 /**
@@ -68,6 +68,72 @@ function charFracAtCentre(cam: THREE.PerspectiveCamera): number {
   return head - foot
 }
 
+// ---------------------------------------------------------------------------
+// Beat classification — the "money shot" question. Every frame gets ONE
+// dominant beat (most cinematic wins, mirroring the sim's own labelFor). The
+// four MARQUEE beats are the frames a buyer screenshots; charFrac restricted to
+// them decides whether the pulled-out small-frame regime is the money regime or
+// the boring-neutral regime.
+// ---------------------------------------------------------------------------
+type Beat = 'ko' | 'super' | 'juggle' | 'heavy' | 'hit' | 'hitstun' | 'footsies' | 'neutral'
+const MARQUEE_BEATS: ReadonlySet<Beat> = new Set<Beat>(['ko', 'super', 'juggle', 'heavy'])
+interface FrameRec { cf: number; beat: Beat; marquee: boolean; contained: boolean }
+
+/** The single most salient beat this frame. A launcher's payoff is the airborne
+ *  `juggle`/`knockdown` window — a sustained money shot — so it is read from
+ *  stance, not just the one launch frame. */
+function dominantBeat(s: FightState, events: FightEvent[]): Beat {
+  if (s.phase === 'ko' || events.some((e) => e.type === 'ko')) return 'ko'
+  const [a, b] = s.fighters
+  if (a.move?.id.startsWith('super') || b.move?.id.startsWith('super') || events.some((e) => e.type === 'super-flash')) return 'super'
+  if (
+    a.stance === 'juggle' || b.stance === 'juggle' || a.stance === 'knockdown' || b.stance === 'knockdown' ||
+    events.some((e) => e.type === 'launch' || ((e.type === 'hit' || e.type === 'counter-hit') && e.level === 'launcher'))
+  ) return 'juggle'
+  if (events.some((e) => (e.type === 'hit' || e.type === 'counter-hit' || e.type === 'throw') && e.level === 'heavy')) return 'heavy'
+  if (events.some((e) => e.type === 'hit' || e.type === 'counter-hit')) return 'hit'
+  if (a.stance === 'hitstun' || b.stance === 'hitstun') return 'hitstun'
+  return Math.abs(a.pos.x - b.pos.x) < 170 ? 'footsies' : 'neutral'
+}
+
+/** The fighter a screenshot of this beat is OF — used only for the in-frame
+ *  containment guard (rule 1: never measure a subject that left the frame). */
+function subjectIndex(s: FightState, events: FightEvent[], beat: Beat): 0 | 1 {
+  for (const e of events) {
+    if (e.type === 'ko') return e.who
+    if (e.type === 'super-flash') return e.who
+  }
+  const [a, b] = s.fighters
+  if (beat === 'ko') {
+    if (a.stance === 'ko' || a.stance === 'defeat' || a.health <= 0) return 0
+    if (b.stance === 'ko' || b.stance === 'defeat' || b.health <= 0) return 1
+    return a.health <= b.health ? 0 : 1
+  }
+  if (beat === 'super') return a.move?.id.startsWith('super') ? 0 : 1
+  if (beat === 'juggle') {
+    if (a.stance === 'juggle' || a.stance === 'knockdown') return 0
+    if (b.stance === 'juggle' || b.stance === 'knockdown') return 1
+    for (const e of events) {
+      if (e.type === 'launch') return (1 - e.attacker) as 0 | 1
+      if ((e.type === 'hit' || e.type === 'counter-hit') && e.level === 'launcher') return (1 - e.attacker) as 0 | 1
+    }
+    return 0
+  }
+  for (const e of events) {
+    if (e.type === 'hit' || e.type === 'counter-hit' || e.type === 'throw') return (1 - e.attacker) as 0 | 1
+  }
+  return 0
+}
+
+/** Whole-body (foot→head) containment of fighter `f` in the camera's NDC box. */
+function fighterContained(cam: THREE.PerspectiveCamera, f: FighterState): boolean {
+  const wx = f.pos.x * CM_TO_WORLD
+  const fy = GY + f.pos.y * CM_TO_WORLD
+  const foot = new THREE.Vector3(wx, fy, 0).project(cam)
+  const head = new THREE.Vector3(wx, fy + FH, 0).project(cam)
+  return Math.abs(foot.x) <= 1 && Math.abs(foot.y) <= 1 && Math.abs(head.x) <= 1 && Math.abs(head.y) <= 1
+}
+
 /** SETTLED charFrac at a fixed neutral-stance separation (both fighters
  *  grounded, symmetric about centre). Pure geometry of the real camera: it
  *  answers "if the two fighters stand `sepCm` apart, how tall is each on
@@ -92,6 +158,7 @@ interface FightResult {
   chLevelCounts: Record<HitLevel, number>
   eventCounts: Record<string, number>
   matchEnded: boolean
+  frames: FrameRec[]
 }
 
 function runFight(
@@ -117,6 +184,7 @@ function runFight(
   }
   const eventCounts: Record<string, number> = {}
   let matchEnded = false
+  const frames: FrameRec[] = []
 
   for (let n = 0; n < maxFrames; n++) {
     const res = sim.step()
@@ -133,9 +201,22 @@ function runFight(
       sepCm.push(Math.abs(s.fighters[0].pos.x - s.fighters[1].pos.x))
       chars.push(charFracAtCentre(cam))
     }
+    // Marquee census spans BOTH play and the KO freeze — the KO freeze is the
+    // single most-screenshotted frame in the game and the old harness skipped
+    // it entirely (it recorded only `phase === 'fight'`).
+    if (s.phase === 'fight' || s.phase === 'ko') {
+      const beat = dominantBeat(s, res.events)
+      const subj = s.fighters[subjectIndex(s, res.events, beat)]
+      frames.push({
+        cf: charFracAtCentre(cam),
+        beat,
+        marquee: MARQUEE_BEATS.has(beat),
+        contained: fighterContained(cam, subj),
+      })
+    }
     if (s.phase === 'match-end') { matchEnded = true; break }
   }
-  return { chars, sepW, sepCm, levelCounts, chLevelCounts, eventCounts, matchEnded }
+  return { chars, sepW, sepCm, levelCounts, chLevelCounts, eventCounts, matchEnded, frames }
 }
 
 const pct = (a: number[], p: number): number => {
@@ -244,7 +325,7 @@ const ZONER: Array<{ name: string; p1: string; p2: string; d1: Difficulty; d2: D
 const WALL_TO_WALL_CM = 2 * STAGE_HALF_W
 
 describe('spacing → charFrac distribution + launcher/sweep/crumple kick', () => {
-  it('reports the distribution and the six-level kick curve', { timeout: 180000 }, () => {
+  it('reports the distribution and the six-level kick curve', { timeout: 300000 }, () => {
     const allChars: number[] = []
     const allSepCm: number[] = []
     const totalLevels: Record<HitLevel, number> = {
@@ -369,6 +450,89 @@ describe('spacing → charFrac distribution + launcher/sweep/crumple kick', () =
     }
     lines.push('')
 
+    // -----------------------------------------------------------------------
+    // PART 3 — the decision the coordinator asked for: across ALL 6 archetype
+    // pairings, is the pulled-out small-frame (sub-40/35%) regime the MONEY-SHOT
+    // regime (super/KO/juggle/heavy) or the boring-neutral regime? charFrac
+    // restricted to marquee frames decides it. Same real camera + real sim,
+    // sim-frame (load-invariant), no GPU. Spans fight+KO-freeze phases.
+    // -----------------------------------------------------------------------
+    const PAIRS: Array<[string, string]> = [
+      ['operator', 'operator'], ['operator', 'vanguard'], ['operator', 'warden'],
+      ['vanguard', 'vanguard'], ['vanguard', 'warden'], ['warden', 'warden'],
+    ]
+    const MATRIX_TIERS: Array<{ d1: Difficulty; d2: Difficulty }> = [
+      { d1: 'easy', d2: 'easy' }, { d1: 'medium', d2: 'medium' }, { d1: 'hard', d2: 'hard' },
+    ]
+    const perPair: Array<{ name: string; frames: FrameRec[] }> = []
+    const matrix: FrameRec[] = []
+    for (const [p1, p2] of PAIRS) {
+      const pf: FrameRec[] = []
+      for (const t of MATRIX_TIERS) for (const seed of SEEDS) {
+        pf.push(...runFight(seed, t.d1, t.d2, p1, p2).frames)
+      }
+      perPair.push({ name: `${p1}/${p2}`, frames: pf })
+      for (const r of pf) matrix.push(r)
+    }
+
+    const cfOf = (fr: FrameRec[]): number[] => fr.map((r) => r.cf)
+    const BEATS: Beat[] = ['ko', 'super', 'juggle', 'heavy', 'hit', 'hitstun', 'footsies', 'neutral']
+    const marqueeAll = matrix.filter((r) => r.marquee)
+    const marqueeSeen = marqueeAll.filter((r) => r.contained) // subject actually in-frame
+    const mcf = cfOf(marqueeSeen)
+
+    const nMatches = PAIRS.length * MATRIX_TIERS.length * SEEDS.length
+    lines.push(`=== PART 3: charFrac by BEAT across all 6 archetype pairings — the money-shot test ===`)
+    lines.push(`  matrix: ${PAIRS.length} pairings x ${MATRIX_TIERS.length} tiers x ${SEEDS.length} seeds = ${nMatches} full matches, ${matrix.length} fight+KO frames`)
+    lines.push('  beat        frames   share    charFrac p50/p90/p99/min        %<40%   %<35%   subj-in-frame')
+    for (const bt of BEATS) {
+      const fr = matrix.filter((r) => r.beat === bt)
+      if (!fr.length) { lines.push(`  ${bt.padEnd(9)}   (none in matrix)`); continue }
+      const cf = cfOf(fr)
+      const inFrame = fr.filter((r) => r.contained).length / fr.length
+      lines.push(
+        `  ${bt.padEnd(9)}  ${String(fr.length).padStart(6)}  ${pctStr(fr.length / matrix.length).padStart(6)}   ` +
+        `${pctStr(pct(cf, 0.5))}/${pctStr(pct(cf, 0.9))}/${pctStr(pct(cf, 0.99))}/${pctStr(minA(cf))}`.padEnd(24) + '   ' +
+        `${pctStr(fracBelow(cf, 0.40)).padStart(5)}   ${pctStr(fracBelow(cf, 0.35)).padStart(5)}   ${pctStr(inFrame)}`,
+      )
+    }
+    lines.push('')
+    lines.push(
+      `  MARQUEE (ko∪super∪juggle∪heavy): ${marqueeAll.length} frames; ` +
+      `${marqueeSeen.length} with subject in-frame (${pctStr(marqueeSeen.length / Math.max(1, marqueeAll.length))}), ` +
+      `${marqueeAll.length - marqueeSeen.length} off-frame`,
+    )
+    lines.push(
+      `    charFrac (in-frame only)  p50=${pctStr(pct(mcf, 0.5))}  p90=${pctStr(pct(mcf, 0.9))}  p99=${pctStr(pct(mcf, 0.99))}  ` +
+      `mean=${pctStr(mean(mcf))}  min=${pctStr(minA(mcf))}   %<40%=${pctStr(fracBelow(mcf, 0.40))}  %<35%=${pctStr(fracBelow(mcf, 0.35))}`,
+    )
+
+    // The decider: what ARE the small frames? If they are super/ko/juggle, the
+    // money shot renders small; if they are neutral/footsies, nobody screenshots
+    // them and this is cosmetically irrelevant.
+    for (const th of [0.40, 0.35]) {
+      const small = matrix.filter((r) => r.cf < th)
+      const parts = BEATS.map((bt) => `${bt}=${pctStr(small.filter((r) => r.beat === bt).length / Math.max(1, small.length))}`)
+      const mShare = small.filter((r) => r.marquee).length / Math.max(1, small.length)
+      lines.push('')
+      lines.push(`  Composition of the ${small.length} frames BELOW ${(th * 100).toFixed(0)}%  (marquee share = ${pctStr(mShare)}):`)
+      lines.push(`    ${parts.join('  ')}`)
+    }
+
+    lines.push('')
+    lines.push('  per-pairing        frames   cf p50/p90/min          %<40%  %<35%   marquee cf p50/min   mrq %<35%')
+    for (const p of perPair) {
+      const cf = cfOf(p.frames)
+      const mc = cfOf(p.frames.filter((r) => r.marquee && r.contained))
+      lines.push(
+        `  ${p.name.padEnd(17)}  ${String(p.frames.length).padStart(6)}   ` +
+        `${pctStr(pct(cf, 0.5))}/${pctStr(pct(cf, 0.9))}/${pctStr(minA(cf))}`.padEnd(22) + '  ' +
+        `${pctStr(fracBelow(cf, 0.40)).padStart(5)}  ${pctStr(fracBelow(cf, 0.35)).padStart(5)}   ` +
+        `${pctStr(pct(mc, 0.5))}/${pctStr(minA(mc))}`.padEnd(17) + '   ' + `${pctStr(fracBelow(mc, 0.35))}`,
+      )
+    }
+    lines.push('')
+
     // The full report is a reproducible measurement, not part of the normal test
     // signal, so it is gated behind SPACING_REPORT to keep the suite quiet. Get
     // it with:  SPACING_REPORT=1 npx vitest run <this file> --disable-console-intercept
@@ -421,5 +585,24 @@ describe('spacing → charFrac distribution + launcher/sweep/crumple kick', () =
     expect(a.sepCm.length).toBe(b.sepCm.length)
     expect(a.sepCm[0]).toBe(b.sepCm[0])
     expect(a.sepCm[a.sepCm.length - 1]).toBe(b.sepCm[b.sepCm.length - 1])
+    // the new per-frame beat trace is deterministic too (same seed ⇒ same trace).
+    expect(a.frames.length).toBe(b.frames.length)
+    expect(a.frames[a.frames.length - 1]?.cf).toBe(b.frames[b.frames.length - 1]?.cf)
+
+    // (6) PART 3 anti-vacuity (rule 1 — the one that has burned this project):
+    //     the marquee measurement is over REAL, IN-FRAME money-shot frames, not
+    //     nothing. A crop that stopped containing the fighter, or a beat map that
+    //     silenced supers, collapses these. All can fail.
+    expect(matrix.length).toBeGreaterThan(20000)          // the 72-match matrix actually ran
+    expect(marqueeAll.length).toBeGreaterThan(500)        // supers/KOs/juggles occur in CPU play
+    expect(marqueeSeen.length).toBeGreaterThan(300)       // and their subject is genuinely framed
+    //     containment is plausible, not degenerate: most marquee subjects are in
+    //     frame (a broken beat/subject/containment map would collapse this ratio).
+    expect(marqueeSeen.length / marqueeAll.length).toBeGreaterThan(0.6)
+    //     each headline marquee beat is exercised at least once across the roster
+    //     (if a future change silences supers or KOs, this reddens by name).
+    for (const bt of ['ko', 'super', 'juggle'] as Beat[]) {
+      expect(matrix.some((r) => r.beat === bt), `no ${bt} frames anywhere in the matrix`).toBe(true)
+    }
   })
 })

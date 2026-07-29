@@ -5,12 +5,25 @@ import {
   useMemo,
   useRef,
   useState,
+  lazy,
+  Suspense,
 } from 'react'
 import { useGame } from '../state/game'
 import { Sfx } from '../lib/audio'
 import { FIGHTERS, FEATURED_ROSTER, getFighter } from '../data/fighters'
 import { Sprite } from '../components/Sprite'
-import { AttractMode } from './AttractMode'
+/**
+ * Lazy-load the attract reel. It statically pulls in the full ThreeJS
+ * `FightRenderer`, so importing it eagerly here dragged all of three.js into the
+ * app's entry chunk — a static import in MainMenu defeats the `lazy()` App.tsx
+ * already wraps it in (Vite: "dynamic import will not move module into another
+ * chunk"), so three shipped before the title was even interactive. Splitting it
+ * behind `lazy()` keeps the fight engine out of the first-load bundle; it loads
+ * when the reel actually mounts, behind the Suspense fallback below.
+ */
+const AttractMode = lazy(() =>
+  import('./AttractMode').then((m) => ({ default: m.AttractMode })),
+)
 import { prefetchScreen } from './registry'
 import type { Phase } from '../types'
 import './menu/menu.css'
@@ -267,7 +280,13 @@ export function MainMenu() {
   const opposingFighter = featured[(focusIdx + Math.floor(featured.length / 2)) % featured.length]
 
   if (attract) {
-    return <AttractMode onExit={() => setAttract(false)} />
+    // Dark full-bleed fallback matching the reel's own backdrop, so the brief
+    // chunk load reads as the title settling in, never a white flash.
+    return (
+      <Suspense fallback={<div style={{ position: 'absolute', inset: 0, background: '#05060a' }} />}>
+        <AttractMode onExit={() => setAttract(false)} />
+      </Suspense>
+    )
   }
 
   const animClass = prefersReduced ? '' : 'mm-anim'

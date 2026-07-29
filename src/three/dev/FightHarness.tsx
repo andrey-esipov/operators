@@ -111,10 +111,12 @@ export function FightHarness() {
       setStatus('loading sprites')
       const accentA = getFighter(aId)?.accent ?? '#E63946'
       const accentB = getFighter(bId)?.accent ?? '#4361EE'
+      const revalA = getFighter(aId)?.reval
+      const revalB = getFighter(bId)?.reval
       const [atlasA, atlasB] = await Promise.all([loadFighterAtlas(aId), loadFighterAtlas(bId)])
       if (disposed) return renderer.dispose()
-      await renderer.setFighterAssets(0, atlasA.assets, atlasA.atlas, accentA)
-      await renderer.setFighterAssets(1, atlasB.assets, atlasB.atlas, accentB)
+      await renderer.setFighterAssets(0, atlasA.assets, atlasA.atlas, accentA, revalA)
+      await renderer.setFighterAssets(1, atlasB.assets, atlasB.atlas, accentB, revalB)
       if (disposed) return renderer.dispose()
 
       renderer.setInitialState(sim.step().state)

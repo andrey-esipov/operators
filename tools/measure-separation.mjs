@@ -63,7 +63,7 @@ const PORT = Number(arg('port', '5751'))
 const OUT = arg('out', '')
 const ASSERT = has('assert')
 const SELFTEST = has('selftest')
-const MUTATE = arg('mutate', '') // '', 'keyline', 'behind'
+const MUTATE = arg('mutate', '') // '', 'keyline', 'behind', 'selffill', 'reval'
 // HiDPI capture. deviceScaleFactor drives Chrome's screenshot resolution; to
 // keep the app's DRAWING BUFFER (which geo box coords are projected into via
 // canvas.width) aligned 1:1 with that screenshot, the renderer pixel-ratio cap
@@ -229,6 +229,8 @@ async function measure(browser, stage, a, b) {
   // Install the requested mutation on the page BEFORE the first frame we read.
   if (MUTATE === 'keyline') await page.evaluate(() => { window.__MUT_KEYLINE_OFF__ = true })
   if (MUTATE === 'behind') await page.evaluate(() => { window.__MUT_SEP_BEHIND_OFF__ = true })
+  if (MUTATE === 'selffill') await page.evaluate(() => { window.__MUT_SELFFILL_OFF__ = true })
+  if (MUTATE === 'reval') await page.evaluate(() => { window.__MUT_REVAL_OFF__ = true })
 
   let ready = 0
   for (let i = 0; i < 600 && ready < 10; i++) {
@@ -292,13 +294,18 @@ async function measure(browser, stage, a, b) {
     const y0 = Math.max(0, (bx.topY - 6) | 0)
     const y1 = Math.min(h, (bx.botY - 4) | 0)
     const mask = new Uint8Array(w * h)
-    let mCount = 0, fLumSum = 0
+    let mCount = 0, fLumSum = 0, fRSum = 0, fGSum = 0, fBSum = 0
     for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) {
       const i = (y * w + x) * ch
-      if (Math.abs(L(RA.data, i) - L(RB.data, i)) > 18) { mask[y * w + x] = 1; mCount++; fLumSum += L(RA.data, i) }
+      if (Math.abs(L(RA.data, i) - L(RB.data, i)) > 18) { mask[y * w + x] = 1; mCount++; fLumSum += L(RA.data, i); fRSum += RA.data[i]; fGSum += RA.data[i + 1]; fBSum += RA.data[i + 2] }
     }
     maskTotal += mCount
     const fighterLum = mCount ? fLumSum / mCount : 0
+    // Body-average colour over the exact silhouette mask (stage excluded by
+    // construction: the mask is fighters-shown MINUS fighters-hidden). This is
+    // the DIFFERENCE method for the chesky/madhavan palette-collision check —
+    // never a fixed screen box, which lumps the fighter with the wall behind it.
+    const bodyRGB = mCount ? [Math.round(fRSum / mCount), Math.round(fGSum / mCount), Math.round(fBSum / mCount)] : [0, 0, 0]
     let ringSum = 0, ringN = 0
     const R = RINGR
     for (let y = y0; y < y1; y++) for (let x = Math.max(0, x0 - R); x < Math.min(w, x1 + R); x++) {
@@ -362,6 +369,7 @@ async function measure(browser, stage, a, b) {
     per.push({
       side: bx.side, maskPx: mCount,
       fighterLum: +fighterLum.toFixed(1), localBgLum: +localBgLum.toFixed(1),
+      bodyRGB,
       contrast: +(fighterLum - localBgLum).toFixed(1),
       edgeContrast: +edgeContrast.toFixed(1),
       rimWidthPx: +rimWidthPx.toFixed(1),

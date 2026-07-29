@@ -224,9 +224,9 @@ export class FightRenderer {
     return { freeze, who, ownerPos: anchor, facing }
   }
 
-  async setFighterAssets(side: 0 | 1, assets: FighterAssets, atlas: AtlasSource, accent: string) {
+  async setFighterAssets(side: 0 | 1, assets: FighterAssets, atlas: AtlasSource, accent: string, reval?: readonly [number, number, number]) {
     const tex = buildAtlasTextures(atlas, 8)
-    this.fighters[side].setAssets(assets, tex, accent)
+    this.fighters[side].setAssets(assets, tex, accent, reval)
   }
 
   reset() {

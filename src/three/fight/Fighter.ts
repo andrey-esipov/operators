@@ -39,6 +39,24 @@ export const KEYLINE_WIDTH_FRAC = 0.0038
 export const KEYLINE_INTENSITY = 2.2
 
 /**
+ * Stage-independent self-fill strength ("the Xrd move"). A fixed hemispheric
+ * light the sprite carries regardless of the arena so a dark-bodied fighter on
+ * a dim/warm stage keeps a minimum body value — a SECOND separation mechanism
+ * underneath the keyline, so the read no longer depends on the keyline alone.
+ * Module-owned (not stage-driven), same discipline as the keyline: the whole
+ * point is that it does NOT ride the arena rig.
+ */
+export const SELF_FILL_INTENSITY = 0.55
+
+/**
+ * Additive shadow-lift floor — the non-albedo half of the self-fill. Lifts only
+ * the darkest body regions (mask = 1 - albedo luminance) so dark-neutral
+ * fighters stop sinking into bright warm walls; pale bodies are untouched.
+ * Shares the self-fill mutation hook (both are "the Xrd move").
+ */
+export const SHADOW_LIFT = 0.02
+
+/**
  * The hit-flash envelope as a self-contained, testable unit.
  *
  * The one invariant that matters: the flash is a fixed-length box armed at the
@@ -166,6 +184,9 @@ export class Fighter {
   private dissolve = 0
   private targetDissolve = 0
   private accent = new THREE.Color(0xffa53c)
+  /** Data-authored body re-value (albedo multiplier); identity for most. Held
+   *  so the per-frame DEV mutation can force identity and be restored. */
+  private authoredReval: [number, number, number] = [1, 1, 1]
   private side: 'a' | 'b'
   private tmp = new THREE.Vector3()
 
@@ -242,7 +263,7 @@ export class Fighter {
     this.group.add(this.mesh, this.bloomMask, ...this.shadowStamps)
   }
 
-  setAssets(assets: FighterAssets, tex: AtlasTextureSet, accent: string) {
+  setAssets(assets: FighterAssets, tex: AtlasTextureSet, accent: string, reval?: readonly [number, number, number]) {
     this.assets = assets
     this.accent.set(accent)
     this.uniforms.uAlbedo.value = tex.albedo
@@ -250,6 +271,11 @@ export class Fighter {
     this.uniforms.uHeight.value = tex.height
     this.uniforms.uTexel.value.set(1 / tex.width, 1 / tex.height_px)
     this.uniforms.uAccent.value.copy(this.accent)
+    // Per-fighter body re-value (albedo channel multiplier). Identity for
+    // everyone; the few dark-neutral fighters that sink into warm walls and
+    // collide with each other in palette carry a data-authored lift/hue-diverge.
+    this.authoredReval = reval ? [reval[0], reval[1], reval[2]] : [1, 1, 1]
+    this.uniforms.uBodyReval.value.set(...this.authoredReval)
 
     // Reference character pixel height → world scale. Use an idle frame so the
     // standing character is exactly `heightCm` tall; other poses inherit the
@@ -449,6 +475,26 @@ export class Fighter {
     const keylineOff =
       import.meta.env.DEV && (globalThis as Record<string, unknown>).__MUT_KEYLINE_OFF__
     this.uniforms.uKeylineIntensity.value = keylineOff ? 0 : KEYLINE_INTENSITY
+
+    // ---- Stage-independent self-fill ("the Xrd move") ---------------------
+    // A fixed body-illumination floor the sprite carries on every arena so its
+    // value never collapses toward a dim/warm wall — the structural second
+    // mechanism beneath the keyline. Deliberately NOT from the stage rig. The
+    // DEV mutation hook forces it off so the separation gate can prove the
+    // luminance-path gain comes from THIS term, not from the instrument.
+    const selfFillOff =
+      import.meta.env.DEV && (globalThis as Record<string, unknown>).__MUT_SELFFILL_OFF__
+    this.uniforms.uSelfFillIntensity.value = selfFillOff ? 0 : SELF_FILL_INTENSITY
+    this.uniforms.uShadowLift.value = selfFillOff ? 0 : SHADOW_LIFT
+
+    // ---- Per-fighter body re-value (DEV mutation restore) -----------------
+    // Re-asserted per-frame so the gate's __MUT_REVAL_OFF__ can force identity
+    // and prove the dark-neutral fighters' warm-stage lift comes from the
+    // authored re-value, not the instrument. Ships as the authored value.
+    const revalOff =
+      import.meta.env.DEV && (globalThis as Record<string, unknown>).__MUT_REVAL_OFF__
+    const rv = revalOff ? ([1, 1, 1] as const) : this.authoredReval
+    this.uniforms.uBodyReval.value.set(rv[0], rv[1], rv[2])
 
     // ---- Hit flash (a fixed-length flashbulb, boxed from the contact event) ----
     // Driven off a timer armed at contact (see HitFlashBox), NOT the hurt stance:

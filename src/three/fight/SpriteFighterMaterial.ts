@@ -71,6 +71,13 @@ export interface SpriteFighterUniforms {
   uKeylineColor: { value: THREE.Color }
   uKeylineIntensity: { value: number }
   uKeylineWidthPx: { value: number }
+
+  // Stage-independent self-fill ("the Xrd move") + per-fighter body re-value.
+  uSelfFillColor: { value: THREE.Color }
+  uSelfFillIntensity: { value: number }
+  uSelfFillDir: { value: THREE.Vector3 }
+  uShadowLift: { value: number }
+  uBodyReval: { value: THREE.Vector3 }
 }
 
 export function createSpriteUniforms(): SpriteFighterUniforms {
@@ -122,6 +129,24 @@ export function createSpriteUniforms(): SpriteFighterUniforms {
     uKeylineColor: { value: new THREE.Color(0.72, 0.86, 1.0) },
     uKeylineIntensity: { value: 2.2 },
     uKeylineWidthPx: { value: 3.0 },
+
+    // Stage-independent self-fill ("the Xrd move"): a fixed cool-neutral
+    // hemispheric light the sprite carries REGARDLESS of the arena, so a
+    // dark-bodied fighter on a dim/warm stage keeps a minimum body value and the
+    // keyline stops being the ONLY thing separating it from the wall. Guilty
+    // Gear Xrd's sprite shader deliberately ignores environment light for
+    // exactly this reason. Intensity is owned by Fighter.ts (live value +
+    // mutation hook), same convention as the keyline. Cool-neutral so it lifts
+    // value and nudges the fighter off a warm wall in hue without recolouring.
+    uSelfFillColor: { value: new THREE.Color(0.60, 0.68, 0.82) },
+    uSelfFillIntensity: { value: 0.55 },
+    uSelfFillDir: { value: new THREE.Vector3(0.15, 0.5, 1.0) },
+    uShadowLift: { value: 0.02 },
+    // Per-fighter body re-value (albedo channel multiplier). Identity (1,1,1)
+    // for all but the few dark-neutral fighters whose body sinks into warm walls
+    // AND collides with each other in palette; set from fighter data in
+    // setAssets. Lifts value and diverges hue without touching the atlas art.
+    uBodyReval: { value: new THREE.Vector3(1, 1, 1) },
   }
 }
 
@@ -217,6 +242,11 @@ const FRAG = /* glsl */ `
   uniform vec3 uKeylineColor;
   uniform float uKeylineIntensity;
   uniform float uKeylineWidthPx;
+  uniform vec3 uSelfFillColor;
+  uniform float uSelfFillIntensity;
+  uniform vec3 uSelfFillDir;
+  uniform float uShadowLift;
+  uniform vec3 uBodyReval;
 
   varying vec2 vUv;
   varying vec3 vWorld;
@@ -256,6 +286,11 @@ const FRAG = /* glsl */ `
     vec2 snap = clamp((frac - 0.5) / fw + 0.5, 0.0, 1.0);
     vec2 uvCrisp = (seam + snap) * uTexel;
     vec3 albedoRgb = texture2D(uAlbedo, uvCrisp).rgb;
+    // Per-fighter body re-value: lift value + diverge hue for the handful of
+    // dark-neutral fighters that otherwise sink into warm walls and collide with
+    // each other in palette. Identity (1,1,1) for everyone else, so this touches
+    // only the named fighters and never the atlas art itself.
+    albedoRgb *= uBodyReval;
 
     // Unpack the tangent-space normal. The map ships two channels (RG); z is
     // reconstructed as the positive hemisphere. Mirror x with facing so lighting
@@ -286,6 +321,29 @@ const FRAG = /* glsl */ `
     // ---- Fill: soft directional + a hemispheric floor ---------------------
     float ndf = dot(Nl, normalize(uFillDir)) * 0.5 + 0.5;
     vec3 fill = uFillColor * uFillIntensity * (0.24 + 0.76 * ndf);
+
+    // ---- Stage-independent self-fill ("the Xrd move") ---------------------
+    // A fixed hemispheric light the sprite carries no matter the arena, so the
+    // body value never collapses toward a dim/warm wall and the keyline stops
+    // being the only separator. Directional (not flat) so it still models the
+    // form; albedo-multiplied in the compose below (like the stage lights) so it
+    // lifts value without washing out hue or the material read. NOT sourced from
+    // LightRig on purpose — that is exactly what makes it stage-independent.
+    float selfW = dot(Nl, normalize(uSelfFillDir)) * 0.5 + 0.5;
+    vec3 selfFill = uSelfFillColor * uSelfFillIntensity * (0.5 + 0.5 * selfW);
+
+    // ---- Shadow-lift floor (the additive half of the Xrd move) ------------
+    // An albedo-MULTIPLIED fill (selfFill above, and the whole stage rig) lifts
+    // a dark body by almost nothing — it vanishes exactly where the body is
+    // darkest, which is why a dark-neutral fighter still sinks into a bright
+    // warm wall even with the self-fill on. This ADDITIVE term supplies the
+    // missing floor: a small cool fill gated to the darkest body regions only
+    // (mask = 1 - albedo luminance), so genuinely dark fighters get a value
+    // floor while pale bodies are left essentially untouched (their mask ~0).
+    // Scales with uShadowLift, which the gate's self-fill mutation zeroes.
+    float albLum = dot(albedoRgb, vec3(0.299, 0.587, 0.114));
+    float darkMask = 1.0 - smoothstep(0.14, 0.6, albLum);
+    vec3 shadowLift = uSelfFillColor * uShadowLift * darkMask;
 
     // ---- Ambient + warm floor bounce on the lower body --------------------
     float lowBody = 1.0 - smoothstep(0.0, 0.4, vUv.y); // near feet (v grows down)
@@ -378,7 +436,7 @@ const FRAG = /* glsl */ `
     // side reading as volume rather than a flat cutout.
     float ao = mix(0.72, 1.0, height);
     vec3 albedo = albedoRgb;
-    vec3 color = albedo * (ambient + diffuse * ao + fill * ao) + rim * (0.5 + 0.5 * albedo) + flash;
+    vec3 color = albedo * (ambient + diffuse * ao + fill * ao + selfFill * ao) + shadowLift * ao + rim * (0.5 + 0.5 * albedo) + flash;
 
     // Additive keyline in linear scene colour (post owns the tonemap). Added
     // before the knee below so the bright cool edge is compressed rather than

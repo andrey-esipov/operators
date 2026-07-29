@@ -136,8 +136,8 @@ export function PlayableMatch() {
         setPhase('loading')
         const [atlasA, atlasB] = await Promise.all([loadFighterAtlas(aId), loadFighterAtlas(bId)])
         if (disposed) return renderer.dispose()
-        await renderer.setFighterAssets(0, atlasA.assets, atlasA.atlas, defA?.accent ?? '#E63946')
-        await renderer.setFighterAssets(1, atlasB.assets, atlasB.atlas, defB?.accent ?? '#4361EE')
+        await renderer.setFighterAssets(0, atlasA.assets, atlasA.atlas, defA?.accent ?? '#E63946', defA?.reval)
+        await renderer.setFighterAssets(1, atlasB.assets, atlasB.atlas, defB?.accent ?? '#4361EE', defB?.reval)
         if (disposed) return renderer.dispose()
 
         renderer.setInitialState(sim.initialState)

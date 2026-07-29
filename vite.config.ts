@@ -52,6 +52,30 @@ export default defineConfig({
     //    gate over code that no longer exists, or stay green over code that was
     //    since broken. A gate that reports on a different revision than the one
     //    you are about to ship is a lying harness by construction.
+    // 3. Timeouts are a LIVENESS backstop, not a performance threshold.
+    //
+    //    This block previously set no timeout at all, so the whole suite ran on
+    //    vitest's 5s default while several gates do real work: `sharp` image
+    //    decoding against on-disk PNGs, the atlas VRAM budget reading IHDR
+    //    headers, and the AI moveset census stepping thousands of sim frames.
+    //
+    //    The result was a gate whose verdict depended on how busy the machine
+    //    was. The same SHA returned `3 failed | 565 passed` and then
+    //    `0 failed | 568 passed` on consecutive runs, with no test touching
+    //    wall-clock, `Date.now`, or timers. A 5s default is a performance gate
+    //    cosplaying as a hang-guard.
+    //
+    //    That is not a flake, it is a teaching failure: it trains everyone to
+    //    re-run until green, which is precisely how a real regression gets
+    //    waved through. Note the asymmetry — green under load is conclusive
+    //    (if it passes busy it passes idle), but RED under load is only a
+    //    bound, and the gate was hard-failing on it either way.
+    //
+    //    60s is chosen so that crossing it can only mean "hung", never "slow
+    //    box". Timeouts cost nothing when tests pass, so there is no reason to
+    //    keep the budget tight enough to race a co-tenant.
+    testTimeout: 60_000,
+    hookTimeout: 60_000,
     exclude: [
       ...configDefaults.exclude,
       '**/_*.probe.test.ts',

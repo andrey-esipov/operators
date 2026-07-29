@@ -1,11 +1,11 @@
 {
   "note": "Self-hosted latin font faces, delivered from this origin (no third-party font CDN on any route). codepoints/sha256/bytes reflect the shipped woff2 exactly; the gate re-hashes them. '\u25cf' (U+25CF) is intentionally absent from every face \u2014 the app renders it via CSS fallback \u2014 which is what proves this manifest is a real cmap enumeration and not a rubber stamp.",
   "provenance": {
-    "brand": "Press Start 2P + VT323: custom pyftsubset build from google/fonts OFL TTFs (--no-hinting --desubroutinize --drop-tables+=DSIG), smaller than Google's served build.",
-    "secondary": "Anton, Chakra Petch, Oswald, Saira, Barlow Condensed: Google Fonts' OWN latin-subset woff2 (redistributed under OFL 1.1), used verbatim because Google's woff2 glyf-transform build is ~55% smaller than a local re-subset AND byte-identical to what the app fetched from gstatic before self-hosting \u2014 so rendering is unchanged. Oswald is Google's variable woff2 (wght 400-700, one file covering 400/600/700). Only the faces the app actually renders are shipped; Bebas Neue and Saira Condensed were declared in the old @imports but render zero pixels and are dropped (routed consolidation finding)."
+    "brand": "VT323 only: custom pyftsubset build from the google/fonts OFL TTF (--no-hinting --desubroutinize --drop-tables+=DSIG), smaller than Google's served build and rendering identically under -webkit-font-smoothing:none. VT323 declares NO Reserved Font Name, so an outline-preserving subset under the original family name is unambiguously permitted (a Modified Version without an RFN). Press Start 2P is NOT custom-subset (see 'verbatim') because it is the only family carrying a Reserved Font Name.",
+    "secondary": "Press Start 2P, Anton, Chakra Petch, Oswald, Saira, Barlow Condensed: Google Fonts' OWN latin-subset woff2, re-hosted verbatim under OFL 1.1. Google's woff2 glyf-transform build is byte-identical to what the app fetched from gstatic before self-hosting, so rendering is unchanged. For Press Start 2P \u2014 the ONLY Reserved-Font-Name family \u2014 verbatim redistribution of the copyright holder's authorized distribution (which itself carries the RFN 'Press Start 2P' in its name table) means we author NO Modified Version under the RFN; a self-made subset would (SIL OFL FAQ 2.6/2.8 + Webfonts-and-RFN paper: a static latin subset is a Modified Version for which RFN restrictions apply). Oswald is Google's variable woff2 (wght 400-700, one file covering 400/600/700). Bebas Neue and Saira Condensed were declared in the old @imports but render zero pixels and are dropped (routed consolidation)."
   },
   "source": "https://github.com/google/fonts (ofl/pressstart2p, ofl/vt323, ofl/anton, ofl/chakrapetch, ofl/oswald, ofl/saira, ofl/barlowcondensed)",
-  "subsetCommand": "brand: pyftsubset <ttf> --unicodes=\"<google-latin>\" --flavor=woff2 --no-hinting --desubroutinize --drop-tables+=DSIG ; secondary: Google Fonts css2 latin woff2, re-hosted verbatim",
+  "subsetCommand": "verbatim (6 families incl. Press Start 2P): Google Fonts css2 latin woff2, re-hosted byte-for-byte. VT323 only: pyftsubset <ttf> --unicodes=\"<google-latin>\" --flavor=woff2 --no-hinting --desubroutinize --drop-tables+=DSIG",
   "fonts": [
     {
       "family": "Press Start 2P",
@@ -13,9 +13,9 @@
       "style": "normal",
       "file": "PressStart2P-latin.woff2",
       "format": "woff2",
-      "bytes": 4284,
-      "sha256": "11dff42ae11777cfb8f093dfa8ca04c268c8d38736aa58caf6084e48888f497a",
-      "glyphCount": 223,
+      "bytes": 12512,
+      "sha256": "afec86997fdaf54af1f59358fa2c1e2a0f1d04146edad18e5cd141d0384a7548",
+      "glyphCount": 220,
       "codepoints": [
         0,
         13,
@@ -114,7 +114,6 @@
         124,
         125,
         126,
-        127,
         160,
         161,
         162,
@@ -218,20 +217,18 @@
         710,
         730,
         732,
+        768,
+        769,
         8211,
         8212,
-        8213,
         8216,
         8217,
         8218,
         8220,
         8221,
         8222,
-        8224,
-        8225,
         8226,
         8230,
-        8240,
         8249,
         8250,
         8260,

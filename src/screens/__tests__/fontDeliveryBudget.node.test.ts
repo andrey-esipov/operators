@@ -279,15 +279,72 @@ describe('app font delivery budget', () => {
   })
 
   it('total self-hosted font payload stays within budget', () => {
-    // Sum of ALL nine self-hosted faces. Achieved 116,832 B; a player fetches
+    // Sum of ALL nine self-hosted faces. Achieved 125,060 B; a player fetches
     // only the faces a given screen renders, but this caps the whole set so it
     // cannot silently balloon (e.g. a full non-latin re-subset, or re-adding a
-    // dead family). Modest headroom above achieved.
-    const BUDGET_BYTES = 126_976 // achieved 116,832 B (~8.7% headroom)
+    // dead family). +8.2 KB vs the prior 116,832 B: Press Start 2P moved from a
+    // local pyftsubset to Google's verbatim latin woff2 because it is the only
+    // Reserved-Font-Name family (see README licence section). Modest headroom.
+    const BUDGET_BYTES = 135_168 // achieved 125,060 B (~8.1% headroom)
     const total = coverage.fonts.reduce((n, f) => n + f.bytes, 0)
     expect(total, 'font payload suspiciously small').toBeGreaterThan(90_000)
     expect(total, `self-hosted fonts ${total} B exceed budget ${BUDGET_BYTES} B`).toBeLessThan(
       BUDGET_BYTES,
     )
+  })
+
+  // Attribution must not drift from the licence files sitting next to it. Every
+  // family's copyright line in public/fonts/README.md has to appear VERBATIM
+  // (whitespace-normalised for markdown line-wrapping) in the shipped
+  // <Family>-OFL.txt, and the Reserved Font Name flag is derived mechanically
+  // from those files — never from memory. This exists because the README once
+  // claimed VT323 carried an RFN it does not, and dropped ".git" from two
+  // upstream URLs: attribution that is wrong where it is checkable is worth
+  // less everywhere else.
+  it('README attribution matches the shipped OFL licence files verbatim', () => {
+    const OFL_FILES: Record<string, string> = {
+      'Press Start 2P': 'PressStart2P-OFL.txt',
+      VT323: 'VT323-OFL.txt',
+      Anton: 'Anton-OFL.txt',
+      'Chakra Petch': 'ChakraPetch-OFL.txt',
+      Oswald: 'Oswald-OFL.txt',
+      Saira: 'Saira-OFL.txt',
+      'Barlow Condensed': 'BarlowCondensed-OFL.txt',
+    }
+    // Vacuity: seven real licence files, exactly one per shipped family.
+    expect(Object.keys(OFL_FILES).length).toBe(7)
+    expect(new Set(Object.keys(OFL_FILES))).toEqual(new Set(ALL_FAMILIES))
+
+    const readme = readFileSync(resolve(REPO, 'public/fonts/README.md'), 'utf8')
+    const norm = (s: string) => s.replace(/\s+/g, ' ').trim()
+    const readmeNorm = norm(readme)
+
+    let rfnCount = 0
+    for (const [family, file] of Object.entries(OFL_FILES)) {
+      const oflPath = resolve(REPO, 'public/fonts', file)
+      expect(existsSync(oflPath), `${file} missing on disk`).toBe(true)
+      const ofl = readFileSync(oflPath, 'utf8')
+      const copyright = ofl
+        .split('\n')
+        .map((l) => l.trim())
+        .find((l) => /^Copyright/i.test(l))
+      expect(copyright, `${file} has no Copyright line`).toBeTruthy()
+      // README must quote the licence's copyright line verbatim.
+      expect(
+        readmeNorm.includes(norm(copyright!)),
+        `README attribution for ${family} does not match ${file} verbatim:\n  OFL: ${copyright}`,
+      ).toBe(true)
+      // RFN flag comes from the licence file itself, not the README's prose.
+      const hasRFN = /with Reserved Font Name/i.test(ofl)
+      if (family === 'Press Start 2P') {
+        expect(hasRFN, `${file} should declare its Reserved Font Name`).toBe(true)
+        rfnCount++
+      } else {
+        expect(hasRFN, `${file} unexpectedly declares a Reserved Font Name`).toBe(false)
+      }
+    }
+    // Exactly one shipped family carries an RFN (Press Start 2P). If the licence
+    // files ever change, this and the per-family checks move together.
+    expect(rfnCount).toBe(1)
   })
 })

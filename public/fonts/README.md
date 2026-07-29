@@ -17,7 +17,7 @@ network request to a CDN we do not control.
 
 | Family           | Face        | File                              | Bytes  | Glyphs | Licence     |
 |------------------|-------------|-----------------------------------|--------|--------|-------------|
-| Press Start 2P   | 400         | `PressStart2P-latin.woff2`        | 4,284  | 223    | SIL OFL 1.1 |
+| Press Start 2P   | 400         | `PressStart2P-latin.woff2`        | 12,512 | 220    | SIL OFL 1.1 |
 | VT323            | 400         | `VT323-latin.woff2`               | 6,656  | 222    | SIL OFL 1.1 |
 | Anton            | 400         | `Anton-400-latin.woff2`           | 18,612 | 232    | SIL OFL 1.1 |
 | Chakra Petch     | 400         | `ChakraPetch-400-latin.woff2`     | 9,756  | 228    | SIL OFL 1.1 |
@@ -27,7 +27,7 @@ network request to a CDN we do not control.
 | Saira            | 400         | `Saira-400-latin.woff2`           | 13,876 | 229    | SIL OFL 1.1 |
 | Barlow Condensed | 600         | `BarlowCondensed-600-latin.woff2` | 22,308 | 227    | SIL OFL 1.1 |
 
-**Total: 116,832 bytes across 7 files / 9 faces.** `@font-face` is declared once
+**Total: 125,060 bytes across 7 files / 9 faces.** `@font-face` is declared once
 in the bundled stylesheet (`src/index.css`) for the React app, and inline in the
 standalone `public/hud.html` lab preview. Fonts fetch lazily, same-origin, at
 first use; none is `<link rel=preload>`ed, so they never steal critical
@@ -56,24 +56,31 @@ Source for every family: the upstream OFL project on
 <https://github.com/google/fonts> (`ofl/pressstart2p`, `ofl/vt323`, `ofl/anton`,
 `ofl/chakrapetch`, `ofl/oswald`, `ofl/saira`, `ofl/barlowcondensed`). The
 delivery is **mixed-provenance**, chosen per family for the smallest bytes with
-zero rendering change:
+zero rendering change — except Press Start 2P, where licence hygiene (it is the
+one family with a Reserved Font Name) takes priority over a smaller local subset:
 
-- **Brand fonts (Press Start 2P, VT323)** — a custom `pyftsubset` build from the
-  OFL TTFs:
+- **VT323 (the only remaining local subset)** — a custom `pyftsubset` build from
+  the OFL TTF:
   ```
   pyftsubset <ttf> --unicodes="<google-latin-range>" --flavor=woff2 \
              --no-hinting --desubroutinize --drop-tables+=DSIG
   ```
-  For these two bitmap/pixel fonts the local subset is marginally *smaller* than
-  Google's served woff2 while rendering identically (correct under the app's
-  `-webkit-font-smoothing: none; image-rendering: pixelated`).
+  For this bitmap/pixel font the local subset is *smaller* than Google's served
+  woff2 while rendering identically (correct under the app's
+  `-webkit-font-smoothing: none; image-rendering: pixelated`). VT323 declares
+  **no Reserved Font Name**, so an outline-preserving subset served under the
+  original `font-family` is a Modified Version without an RFN — unambiguously
+  permitted (see the licence section).
 
-- **Secondary fonts (Anton, Chakra Petch, Oswald, Saira, Barlow Condensed)** —
-  **Google Fonts' own `latin`-subset woff2, re-hosted verbatim** under OFL 1.1.
-  Google applies a woff2 `glyf`-transform (a build step `fontTools` does not
-  emit) that makes their served file ~55% smaller than a local re-subset — *and*
-  byte-identical to what the app already fetched from `gstatic.com` before
-  self-hosting, so on-screen rendering is provably unchanged. `Oswald` is
+- **Verbatim families (Press Start 2P, Anton, Chakra Petch, Oswald, Saira,
+  Barlow Condensed)** — **Google Fonts' own `latin`-subset woff2, re-hosted
+  verbatim** under OFL 1.1. Google applies a woff2 `glyf`-transform (a build step
+  `fontTools` does not emit) that makes their served file byte-identical to what
+  the app already fetched from `gstatic.com` before self-hosting, so on-screen
+  rendering is provably unchanged. **Press Start 2P is served this way on
+  purpose:** it is the one family carrying a Reserved Font Name, and shipping the
+  copyright holder's own authorised distribution verbatim — rather than a subset
+  we author — keeps us clear of the RFN restriction (see below). `Oswald` is
   Google's single **variable** woff2 (`wght` 400–700, one file covering the
   400/600/700 the app requests). Only faces the app renders are shipped.
 
@@ -93,22 +100,53 @@ full licence text ships alongside the fonts, one file per family:
 
 - `PressStart2P-OFL.txt` — Copyright 2012 The Press Start 2P Project Authors
   (cody@zone38.net), with Reserved Font Name "Press Start 2P".
-- `VT323-OFL.txt` — Copyright 2011 The VT323 Project Authors
-  (peter.hull@oikoi.com), with Reserved Font Name "VT323".
+- `VT323-OFL.txt` — Copyright 2011, The VT323 Project Authors
+  (peter.hull@oikoi.com)
 - `Anton-OFL.txt` — Copyright 2020 The Anton Project Authors
-  (https://github.com/googlefonts/AntonFont).
+  (https://github.com/googlefonts/AntonFont.git)
 - `ChakraPetch-OFL.txt` — Copyright 2018 The Chakra Petch Project Authors
-  (https://github.com/m4rc1e/Chakra-Petch).
+  (https://github.com/m4rc1e/Chakra-Petch.git)
 - `Oswald-OFL.txt` — Copyright 2016 The Oswald Project Authors
-  (https://github.com/googlefonts/OswaldFont).
+  (https://github.com/googlefonts/OswaldFont)
 - `Saira-OFL.txt` — Copyright 2020 The Saira Project Authors
-  (https://github.com/Omnibus-Type/Saira).
+  (https://github.com/Omnibus-Type/Saira)
 - `BarlowCondensed-OFL.txt` — Copyright 2017 The Barlow Project Authors
-  (https://github.com/jpt/barlow).
+  (https://github.com/jpt/barlow)
 
-The OFL permits bundling, subsetting, and web-serving with attribution. Of the
-nine faces, only Press Start 2P and VT323 declare a **Reserved Font Name**; both
-are shipped either unmodified (secondary families) or as a plain outline-
-preserving subset (brand fonts) under the original `font-family` name — exactly
-what Google Fonts and Fontsource serve — so the reserved names are honoured and
-the unmodified licence text is shipped for every family to satisfy attribution.
+The OFL permits bundling, subsetting, and web-serving, provided the licence text
+travels with the font and — critically — that **Reserved Font Names (RFNs)** are
+honoured. The full, unmodified `-OFL.txt` ships for every family above.
+
+**Only Press Start 2P carries an RFN.** VT323's licence has a bare copyright line
+with no reserved name (an earlier version of this file wrongly claimed otherwise,
+and dropped `.git` from the Anton/Chakra Petch URLs — both now re-derived
+verbatim from the shipped `-OFL.txt` and gated so they can't drift again). The
+five secondary families carry no RFN either — verified by reading each shipped
+licence file, not from memory.
+
+The RFN needs care because subsetting is **not** licence-neutral. The SIL OFL FAQ
+is explicit:
+
+> **2.6 Is subsetting a webfont considered modification?** Yes. Removing any parts
+> of the font when delivering a webfont to a browser … is considered
+> modification. This is permitted by the OFL but **would not normally allow the
+> use of RFNs**.
+
+and the companion *Webfonts and Reserved Font Names* paper rules that a premade
+`subset=latin` webfont, because it "do[es] not deliver complete functionality …
+needs to be considered a **Modified Version for which RFN restrictions apply**."
+FAQ 5.3 confirms the restriction covers the font-menu name "and other mechanisms
+that specify a font in a document" — i.e. the CSS `font-family` too.
+
+Consequence: a **self-made** latin subset of Press Start 2P served as
+`font-family: "Press Start 2P"` would be a Modified Version using the RFN — the
+one thing OFL clause 3 restricts. So we do **not** author a subset of it. Instead
+we ship **Google Fonts' own latin-subset woff2 verbatim, byte-for-byte** — it
+carries `Press Start 2P` in its own `name` table exactly as the copyright
+holder's authorised distribution serves it. Redistributing that file with its OFL
+text is ordinary, explicitly-allowed distribution (FAQ 2.1: hosting webfonts on
+your own server "is recommended and explicitly allowed … because it is
+distribution"); we author no Modified Version, so clause 3's authoring
+restriction never attaches to us. Measured cost of the choice: **+8.2 KB** over a
+local subset (4,284 → 12,512 B), render-identical. VT323 stays a local subset
+because, carrying no RFN, a Modified Version of it is unrestricted.

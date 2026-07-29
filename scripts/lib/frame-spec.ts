@@ -1062,24 +1062,43 @@ function shapeFrom(spec: ClipSpec, active: string, neutral: string = STANCE_FRAM
  * the LAST active frame back onto idle (st.MP active[6..8] but mp-active only
  * covered 3-7; qcf.P active[11..14] but the release cel expired at 13).
  */
+// Standing kick shapes, named so the crouch/air families below can declare them
+// as `fallback`. A shared reference, not a copy: two literals would drift, and
+// the whole point of the fallback is that the un-generated skin keeps playing
+// EXACTLY the standing shape it played before the crouch family existed.
+const LK_SHAPE: AttackShape = { startup: [], active: 'lk-active', recovery: [], neutral: STANCE_FRAME }
+const MK_SHAPE: AttackShape = { startup: [], active: 'mk-active', recovery: [], neutral: STANCE_FRAME }
+const HK_SHAPE: AttackShape = shapeFrom(HK, 'hk-active')
+
 const ATTACK_SHAPES = {
   lp: shapeFrom(LP, 'lp-active'),
   mp: shapeFrom(MP, 'mp-active'),
   hp: shapeFrom(HP, 'hp-active'),
-  lk: { startup: [], active: 'lk-active', recovery: [], neutral: STANCE_FRAME },
-  mk: { startup: [], active: 'mk-active', recovery: [], neutral: STANCE_FRAME },
-  hk: shapeFrom(HK, 'hk-active'),
+  lk: LK_SHAPE,
+  mk: MK_SHAPE,
+  hk: HK_SHAPE,
   // Stance-correct crouch/air kick families (Tier C). cr.LK/cr.MK/cr.HK and j.MK
   // previously aliased the STANDING lk/mk/hk shapes — a crouching kick drawn
   // upright, a jumping kick drawn grounded. Each gets a dedicated crouch/air
   // chamber + contact key and settles to a crouch (or falling) neutral, not the
-  // standing STANCE_FRAME. A skin that has not yet generated the contact cel
-  // bails in deriveAttackClip to the static standing clip, so the roster rolls
-  // over per-skin as each atlas gains the cels.
-  crlk: { startup: ['crlk-chamber'], active: 'crlk-active', recovery: [], neutral: 'crouch' },
-  crmk: { startup: ['crmk-chamber'], active: 'crmk-active', recovery: [], neutral: 'crouch' },
-  crhk: { startup: ['crhk-chamber'], active: 'crhk-active', recovery: [], neutral: 'crouch' },
-  jmk: { startup: ['jmk-chamber'], active: 'jmk-active', recovery: [], neutral: 'jump-fall' },
+  // standing STANCE_FRAME.
+  //
+  // Each declares `fallback` to its STANDING shape. The original cut had no
+  // fallback and relied on deriveAttackClip bailing to the static CLIPS entry —
+  // but the static kick clips are hand-tuned `['lk-active',4],['idle-1',5]`,
+  // whose fixed durations put IDLE-1 on the contact frames. That is the exact
+  // "kick ladder freezes on the standing idle pose" defect this file's header
+  // documents, and only chesky has the Tier C cels, so the other TEN skins were
+  // one regeneration away from re-acquiring it on cr.LK/cr.MK/cr.HK/j.MK —
+  // ~30% of all connecting attacks by the traffic census. Committed manifests
+  // predate this family and still hold the good derived layout, so the suite
+  // stayed green while the generator was primed to regress it. Falling back to
+  // the standing SHAPE re-derives durations from the crouch move's own timing,
+  // so the contact cel spans the real active window.
+  crlk: { startup: ['crlk-chamber'], active: 'crlk-active', recovery: [], neutral: 'crouch', fallback: LK_SHAPE },
+  crmk: { startup: ['crmk-chamber'], active: 'crmk-active', recovery: [], neutral: 'crouch', fallback: MK_SHAPE },
+  crhk: { startup: ['crhk-chamber'], active: 'crhk-active', recovery: [], neutral: 'crouch', fallback: HK_SHAPE },
+  jmk: { startup: ['jmk-chamber'], active: 'jmk-active', recovery: [], neutral: 'jump-fall', fallback: MK_SHAPE },
   fireball: shapeFrom(FIREBALL, 'special-fireball-release'),
   uppercut: shapeFrom(UPPERCUT, 'special-uppercut'),
   // Bespoke super arc — charge -> release -> recovery, none recycled (the old
@@ -1350,6 +1369,30 @@ export const FALLBACK_CLIPS: Record<string, ClipSpec> = {
   knockdown: clip(false, ['knockdown', 5], ['ko', 16]),
   // Kneel-and-push-up -> stood in guard. (The core set has no mid-rise pose.)
   wakeup: clip(false, ['wakeup', 8], ['idle-1', 4]),
+  // ── Shallow-skin locomotion ────────────────────────────────────────────────
+  // Same failure mode as the idle entry above, found again on six more clips.
+  // Each CLIPS definition below reaches for a richness key a shallow skin never
+  // generated — crouch-2, block-absorb, dash-ready, backdash-ready, jump-rise-2,
+  // jump-land — so resolveClip returns null and the clip is DROPPED. The
+  // renderer then falls through to idle, and the fighter "crouches" by standing
+  // in its breathing pose. That is strictly worse than a held single cel, and it
+  // is invisible in a diff: the manifest simply has fewer keys.
+  //
+  // These rebuild each clip from the cels a shallow skin DOES carry. The result
+  // is the shape turley already ships (1/1/1/1/2/2), so both shallow skins agree
+  // rather than one silently losing clips the other keeps.
+  //
+  // This deliberately does NOT mask under-delivery. A skin that regresses from
+  // animated to fallback locomotion still reds: locomotionRichness pins the cel
+  // count per skin per variant and reds on drift in either direction, and
+  // locomotionCoverage separately asserts the clip resolves to its own pose and
+  // never to idle. The fallback prevents a HOLE; the gates keep it honest.
+  crouch: clip(true, ['crouch', 8]),
+  block: clip(true, ['block-stand', 8]),
+  dash: clip(false, ['dash', 6]),
+  backdash: clip(false, ['backdash', 6]),
+  'jump-rise': clip(false, ['jump-rise', 5], ['jump-apex', 8]),
+  'jump-fall': clip(false, ['jump-apex', 4], ['jump-fall', 6]),
 }
 
 /**

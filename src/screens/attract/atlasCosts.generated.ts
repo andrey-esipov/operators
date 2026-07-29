@@ -11,7 +11,7 @@ export const ATLAS_COST_BYTES: Readonly<Record<string, number>> = Object.freeze(
   "chesky": 5040682,
   "doshi": 5948050,
   "lenny": 6017834,
-  "madhavan": 943632,
+  "madhavan": 3614942,
   "spiegel": 5710006,
   "taylor": 617354,
   "turley": 4285982,
@@ -24,7 +24,7 @@ export const HERO_ATLAS_COST_BYTES: Readonly<Record<string, number>> = Object.fr
   "chesky": 1209068,
   "doshi": 1459316,
   "lenny": 1405922,
-  "madhavan": 211394,
+  "madhavan": 824774,
   "spiegel": 1454122,
   "turley": 1147674,
 })

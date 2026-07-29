@@ -60,15 +60,20 @@ const VARIANTS: Array<[string, Record<string, unknown>]> = [
 // locomotionCoverage lists. The last three were added after a manifest census
 // found the roster's WORST animation deficit living in them, outside every gate:
 //
-//               lenny chesky spiegel doshi | turley | madhavan
+//               lenny chesky spiegel doshi | turley | madhavan  (AT DISCOVERY)
 //   idle          10    10     10     10   |    6   |    4    <- 0 tweens
 //   walk-fwd       8     8      8      8   |    8   |    4    <- 0 tweens
 //   walk-back      8     8      8      8   |    8   |    4    <- 0 tweens
 //
-// Note turley is 8/8 on both walks: on the walk rows madhavan is alone, and the
-// other five ship a byte-identical 8-cel structure. That is the uniformity
-// discriminator at its strongest — five-of-six identical means the sixth is
+// turley was 8/8 on both walks, so on the walk rows madhavan was alone and the
+// other five shipped a byte-identical 8-cel structure — the uniformity
+// discriminator at its strongest: five-of-six identical means the sixth is
 // under-delivery, not a style choice.
+//
+// That deficit is now CLOSED (madhavan reads 6/8/8, matching turley on idle and
+// the whole roster on the walks). The table is kept as the discovery record, and
+// the numbers below are the live pins. See the density block for the mechanism
+// and for why cel count alone would not have been a sufficient gate.
 //
 // `idle` is not input-driven (it is the neutral fallback), so it is a slight
 // category stretch to file it under "locomotion". It is pinned here anyway
@@ -101,9 +106,11 @@ const TODAY: Record<string, Record<string, number>> = {
   doshi: { crouch: 4, block: 3, dash: 3, backdash: 3, 'jump-rise': 3, 'jump-fall': 3, 'walk-fwd': 8, 'walk-back': 8, idle: 10 },
   lenny: { crouch: 4, block: 3, dash: 3, backdash: 3, 'jump-rise': 3, 'jump-fall': 3, 'walk-fwd': 8, 'walk-back': 8, idle: 10 },
   // Static single-cell DRIVEN locomotion — the Stage-2 deficit this file documents.
-  // madhavan additionally halves the three continuously-visible clips; turley does
-  // not (it is 8/8 on the walks and runs a genuinely tighter 32-frame idle cycle).
-  madhavan: { crouch: 1, block: 1, dash: 1, backdash: 1, 'jump-rise': 2, 'jump-fall': 1, 'walk-fwd': 4, 'walk-back': 4, idle: 4 },
+  // The three continuously-visible clips are now at parity for BOTH static
+  // fighters: madhavan's 15 missing tweens were synthesised from key poses it
+  // already shipped (see the density block below), bringing idle to turley's
+  // shape and both walks to the roster's. What remains here is the driven six.
+  madhavan: { crouch: 1, block: 1, dash: 1, backdash: 1, 'jump-rise': 2, 'jump-fall': 2, 'walk-fwd': 8, 'walk-back': 8, idle: 6 },
   turley: { crouch: 1, block: 1, dash: 1, backdash: 1, 'jump-rise': 2, 'jump-fall': 2, 'walk-fwd': 8, 'walk-back': 8, idle: 6 },
 }
 
@@ -255,8 +262,10 @@ const TWEENS_TODAY: Record<string, Record<string, number>> = {
   doshi: { idle: 6, 'walk-fwd': 4, 'walk-back': 4 },
   lenny: { idle: 6, 'walk-fwd': 4, 'walk-back': 4 },
   turley: { idle: 3, 'walk-fwd': 4, 'walk-back': 4 },
-  // Zero in-betweens anywhere continuously visible — the defect, stated exactly.
-  madhavan: { idle: 0, 'walk-fwd': 0, 'walk-back': 0 },
+  // Was { idle: 0, 'walk-fwd': 0, 'walk-back': 0 } — zero in-betweens anywhere
+  // continuously visible. All 15 missing tweens were morphed from key poses
+  // madhavan already shipped, so this reached parity with no new art.
+  madhavan: { idle: 3, 'walk-fwd': 4, 'walk-back': 4 },
 }
 
 const MAX_HOLD_TODAY: Record<string, Record<string, number>> = {
@@ -265,8 +274,10 @@ const MAX_HOLD_TODAY: Record<string, Record<string, number>> = {
   doshi: { idle: 8, 'walk-fwd': 5, 'walk-back': 5 },
   lenny: { idle: 8, 'walk-fwd': 5, 'walk-back': 5 },
   turley: { idle: 8, 'walk-fwd': 5, 'walk-back': 5 },
-  // 12 frames = 200ms on one idle pose; 9 = 150ms on one walk pose.
-  madhavan: { idle: 12, 'walk-fwd': 9, 'walk-back': 9 },
+  // Was { idle: 12, 'walk-fwd': 9, 'walk-back': 9 } — 200ms on one idle pose and
+  // 150ms on one walk pose, the "same tempo, fewer frames, longer holds"
+  // signature. Interleaving the tweens restored the roster's dwell exactly.
+  madhavan: { idle: 8, 'walk-fwd': 5, 'walk-back': 5 },
 }
 
 describe('in-between density — tweens and dwell are pinned (both variants)', () => {
@@ -307,17 +318,20 @@ describe('in-between density — tweens and dwell are pinned (both variants)', (
   }
 })
 
-// ── Stage-2 density target (SKIPPED until the art lands) ──────────────────────
-// Floors are again what the roster already demonstrates, not a wish:
-//   walks  4 tweens / dwell <= 5f — five of six ship exactly this, identically.
+// ── Stage-2 density target — LIVE (the art landed) ───────────────────────────
+// Floors are what the roster already demonstrates, not a wish:
+//   walks  4 tweens / dwell <= 5f — all six now ship exactly this, identically.
 //   idle   3 tweens / dwell <= 8f — turley's number, the conservative floor.
-// madhavan fails all six cells of this target today; every other fighter passes
-// it already, so un-skipping is gated purely on madhavan's art landing.
+// This was .skip'd while madhavan failed all six cells of it. It is now UN-SKIPPED
+// and enforced: madhavan's 15 absent in-betweens were synthesised by optical-flow
+// morph from key poses it already shipped, so the fix needed no new art at all.
+// Keeping it live means a future partial fighter cannot ship keyframes with no
+// in-betweens and pass on cel count alone.
 const TWEEN_PARITY: Record<string, number> = { idle: 3, 'walk-fwd': 4, 'walk-back': 4 }
 const HOLD_CEILING: Record<string, number> = { idle: 8, 'walk-fwd': 5, 'walk-back': 5 }
 
 describe('in-between density — Stage-2 target', () => {
-  it.skip('TODO(stage-2): every fightable fighter interleaves tweens and holds no pose too long', () => {
+  it('every fightable fighter interleaves tweens and holds no pose too long', () => {
     let checked = 0
     const shortfall: string[] = []
     for (const [variant, manifests] of VARIANTS) {

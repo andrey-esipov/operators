@@ -19,7 +19,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { attackTimingForSkin } from './lib/fighter-timing'
-import { DERIVED_ATTACKS, deriveAttackClip, resolveClip } from './lib/frame-spec'
+import { CLIPS, DERIVED_ATTACKS, FALLBACK_CLIPS, deriveAttackClip, resolveClip } from './lib/frame-spec'
 import { ROSTER } from '../src/fighthud/select/roster'
 import type { FighterAssets } from '../src/fight/types'
 
@@ -64,8 +64,19 @@ for (const skin of skins) {
     const t = timing.get(moveId)
     if (!t) continue // move-id not in this archetype's set
     const spec = deriveAttackClip(moveId, t, (n) => nameToIdx.has(n))
-    if (!spec) continue
-    const resolved = resolveClip(spec, nameToIdx)
+    // Mirror the GENERATOR's resolution exactly (scripts/lib/atlas.ts): when
+    // deriveAttackClip bails, the pipeline bakes the static CLIPS entry, then
+    // FALLBACK_CLIPS. Skipping the null case here (`if (!spec) continue`) made
+    // this checker blind to the single most consequential drift there is — a
+    // move falling OUT of the derived ladder and back onto a hand-tuned static
+    // whose fixed durations misalign with the real active window. That is the
+    // "kick ladder freezes on the standing idle pose" defect, and it went
+    // undetected on cr.LK/cr.MK/cr.HK/j.MK for every skin without the Tier C
+    // crouch cels. The header's claim that the two paths "cannot diverge" was
+    // false precisely here, because this line forked the resolution and dropped
+    // a case the generator handles.
+    const resolved =
+      resolveClip(spec ?? CLIPS[moveId], nameToIdx) ?? resolveClip(FALLBACK_CLIPS[moveId], nameToIdx)
     if (!resolved) {
       console.error(`  ${skin}: derived clip ${moveId} references a cel this skin lacks — not overwriting`)
       process.exitCode = 1

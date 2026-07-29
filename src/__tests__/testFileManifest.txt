@@ -86,6 +86,7 @@ src/three/fight/__tests__/impactScreenPunch.test.ts
 src/three/fight/__tests__/impactSheet.test.ts
 src/three/fight/__tests__/locomotionCoverage.test.ts
 src/three/fight/__tests__/locomotionRichness.test.ts
+src/three/fight/__tests__/manifestSpecDrift.node.test.ts
 src/three/fight/__tests__/mockSim.test.ts
 src/three/fight/__tests__/projectileClash.test.ts
 src/three/fight/__tests__/projectileClip.test.ts

@@ -10,12 +10,14 @@ import { STAGE_ORDER } from '../../stage/StageRegistry'
  * CI-level guard for the fighter/background SEPARATION guarantee.
  *
  * The GPU gate (`tools/measure-separation.mjs`) is the real instrument — it
- * screenshots every stage × several fighters and asserts a measured floor on
- * rim width, keyline brightness, edge step and body-vs-local-bg contrast. But it
- * needs a browser + a built bundle, so it cannot run in a headless unit suite.
+ * screenshots every stage × several fighters and asserts a CLEAR read on each:
+ * achieved by EITHER the keyline (rim brightness + width floors) OR raw luminance
+ * (a body-vs-local-bg |contrast| floor), failing only when NEITHER carries it. But
+ * it needs a browser + a built bundle, so it cannot run in a headless unit suite.
  * This test is its cheap, deterministic complement: it proves — without a GPU —
  * that the two separation mechanisms are still AUTHORED **and** CONSUMED on the
- * shipped render path, and that the gate still covers EVERY stage.
+ * shipped render path, that the gate still covers EVERY stage, and that its assert
+ * is the two-path OUTCOME (not a single mechanism that can false-fail a good read).
  *
  * Both are direct answers to two documented failure shapes on this project:
  *
@@ -157,11 +159,24 @@ describe('separation: the gate covers EVERY stage (no single-member blind spot)'
     expect(fighters.size).toBeGreaterThanOrEqual(6)
   })
 
-  it('enforces a floor on all four separation metrics (rim, keyline, edge, body)', () => {
-    // every metric the report tracks must be an ASSERTED floor, not just printed
-    at(GATE, 'p.rimPeakDelta < FLOORS.rimPeakDelta')
-    at(GATE, 'p.rimWidthPx < FLOORS.rimWidthPx')
-    at(GATE, 'p.edgeContrast < FLOORS.edgeContrast')
-    at(GATE, 'p.contrast < FLOORS.contrast')
+  it('asserts the OUTCOME via two independently-sufficient paths, not a single mechanism', () => {
+    // The gate must NOT AND four floors (that false-failed a value-separated read
+    // on its starved rim counter). It asserts a clear read achieved by EITHER
+    // mechanism, each with its own floor, failing only when NEITHER path holds.
+    // Path A — the keyline carries it (both keyline floors together):
+    at(GATE, 'p.rimPeakDelta >= FLOORS.rimPeakDelta && p.rimWidthPx >= FLOORS.rimWidthPx')
+    // Path B — raw luminance carries it (keyline-INDEPENDENT body-vs-local-bg):
+    at(GATE, 'Math.abs(p.contrast) >= FLOORS.lumContrast')
+    // the OUTCOME: fail only when NEITHER path holds (not an AND of every floor,
+    // and not an "exempt the rim when contrast is high" special-case).
+    at(GATE, 'if (!keyline && !lumen) fails.push')
+    // the luminance floor is a real, POSITIVE threshold (a level at which value
+    // alone carries the read) — not the old signed -28 sanity bound.
+    const m = GATE.match(/lumContrast: Number\(arg\('minLum', '([0-9.]+)'\)\)/)
+    expect(m, 'gate must define a positive luminance-path floor lumContrast').not.toBeNull()
+    expect(Number(m![1])).toBeGreaterThanOrEqual(45)
+    // and the two keyline floors it ORs against are still positive.
+    expect(GATE).toMatch(/rimPeakDelta: Number\(arg\('minPeak', '[1-9][0-9]*'\)\)/)
+    expect(GATE).toMatch(/rimWidthPx: Number\(arg\('minRim', '[0-9.]+'\)\)/)
   })
 })

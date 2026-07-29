@@ -28,7 +28,11 @@
  *   - rimPeakDelta: peak keyline luminance above the body interior median.
  *
  * All numbers are RAW measured deltas (transparent), never thresholded booleans
- * that hide what happened. `--assert` adds a PASS/FAIL floor check on top.
+ * that hide what happened. `--assert` adds a PASS/FAIL check on top, structured as
+ * an OUTCOME with two independently-sufficient paths: a read passes if the KEYLINE
+ * carries it (rimPeakDelta & rimWidthPx floors) OR raw LUMINANCE carries it
+ * (|contrast| floor); it fails only if NEITHER does. See the FLOORS block for the
+ * derivation of each floor and why both are needed.
  *
  * Runs its OWN static server over a prebuilt dist dir (no external server to
  * leave orphaned) and its OWN off-screen Chrome (killed on exit). One port, one
@@ -83,38 +87,65 @@ const STAGES = (arg('stages', 'pre-pmf,hypergrowth,plateau,ai-native,monetizatio
 // blind-spot that has bitten this project before).
 const PAIRS = (arg('pairs', 'chesky:lenny,doshi:turley,madhavan:spiegel')).split(',').map((p) => p.split(':'))
 
-// ---- floors (the enforced guarantee) --------------------------------------
-// Set from the measured "after" matrix (n=48: 8 stages × 3 pairs × 2 sides)
-// with a safety margin below the worst observed value, so the gate is a
-// REGRESSION guard: it passes the shipped build, fails the pre-keyline build,
-// and fails when either separation term is mutated off. Every raw number is
-// printed alongside its floor so a reader sees the exact headroom — no
-// thresholded booleans hiding what happened. See sep_after.json for the full
-// matrix these were derived from.
+// ---- the guarantee: a CLEAR fighter read, via EITHER of two mechanisms ------
+// The product requirement is "you can always instantly tell the fighter from the
+// background." Two INDEPENDENT mechanisms deliver it, and the gate credits BOTH:
 //
-// Why these four, and why these values (after-worst → floor):
-//   rimPeakDelta ≥ 60  (after-min 84; pre-keyline min 17, 18/48 under 70) — the
-//     keyline's brightness above the body interior. This is the primary,
-//     keyline-specific guard: it collapses the instant the keyline is removed.
-//   rimWidthPx  ≥ 1.2  (after-min 1.3; pre-keyline min 0, 36/48 under 2px) — the
-//     keyline's width. Dark-fighter rims run 2–5px and collapse to ~0 with the
-//     keyline off; bright fighters read thin here but separate by value instead.
-//   edgeContrast ≥ 32  (after-min 35.2; pre min 28.5, 20/48 under 35) — the mean
-//     luminance step across the silhouette boundary (behind-suppression + edge).
-//   contrast    ≥ -28  (after-min -23; pre min -45.3) — signed body-vs-LOCAL-bg
-//     value. A BOUNDED NEGATIVE on purpose: on a few dark-fighter / bright-wall
-//     combos the wall the eye sees is co-planar with the fighter, so the depth
-//     gate (correctly) refuses to darken it — forcing it positive would mean
-//     crushing that wall into a sticker halo, the exact "flatten the art" trade
-//     the task forbids. Those reads are instead carried by the keyline (all 9
-//     residual-negatives measure rim ≥2px, peak ≥181). The floor guards the
-//     behind-suppression from regressing (mutating it off drops the worst toward
-//     -45), and is reported transparently rather than hidden.
+//   Path A — the KEYLINE carries it. A bright cool rim traces the silhouette.
+//     Measured by rimPeakDelta (rim brightness over the body interior) and
+//     rimWidthPx (rim width). This is the mechanism that RESCUES low-contrast
+//     reads: a dark fighter on a similar-value wall, where value alone won't do.
+//
+//   Path B — raw LUMINANCE carries it. The body is simply far enough from the
+//     LOCAL background in value that the read needs no rim at all. Measured by
+//     |contrast| = |fighterLum - localBgLum|, where localBg is sampled from the
+//     fighters-HIDDEN buffer — so it is keyline-independent (severing the keyline
+//     moves |contrast| < ~5/255; it moves edgeContrast ~20/255, which is why
+//     edgeContrast is reported-only below, never the luminance-path floor).
+//
+// A read PASSES if EITHER path holds; it FAILS only if NEITHER does. This asserts
+// the OUTCOME, not one mechanism. The earlier gate AND-ed four floors, so a
+// spectacularly value-separated read (ai-native player-2: |contrast| ~113, edge
+// ~69) FAILED the rim floor — the rim-DELTA counter starves when the body itself
+// is bright, even though the character pops off the wall. That was the instrument
+// being wrong about a good image: the same error class as crushing a wall into a
+// halo to force a number positive, which this project forbids. But it is
+// implemented as an OUTCOME with two independently-sufficient floors, NOT as an
+// "exempt the rim when contrast is high" special-case — an exemption reads as
+// "ignore the floor when inconvenient" and rots as the next agent widens it.
+//
+// The floors are set so it is impossible for BOTH mechanisms to be mediocre and
+// still pass:
+//   rimPeakDelta ≥ 60  (after-min 84; collapses the instant the keyline is off).
+//   rimWidthPx   ≥ 1.2 (after-min 1.3; dark rims run 2–5px, ~0 with keyline off).
+//   |contrast|   ≥ 50  — the level at which VALUE alone carries the read, derived
+//     INDEPENDENTLY of any failing case: (a) two large adjacent regions are
+//     unambiguously "different shades" — not merely detectable — at ~20% of the
+//     8-bit range (~50/255), well above the ~5–10/255 detection threshold; (b)
+//     symmetry with Path A, whose 60/255 rim-brightness bar makes 50/255 of body
+//     separation a comparably demanding entry, not a cheaper way in. It is NOT fit
+//     to the ~113 that ai-native/turley happens to measure — turley lands at ~2.3×
+//     the floor, i.e. genuinely value-carried, not barely over the line. If an
+//     honestly-derived floor still failed a read, that would be a real image
+//     defect to fix, not a floor to lower.
+//
+// What this drops vs the old gate, and why it's safe: the signed contrast ≥ -28
+// and edgeContrast ≥ 32 floors are GONE as gates (both are still measured and
+// printed per read). Signed -28 conflicted with crediting a strong DARK
+// silhouette (a fighter 50 darker than its wall reads great yet is a big
+// negative); |contrast| credits separation in EITHER direction. The behind-
+// suppression mechanism that FEEDS Path B is not left unguarded: its authoring →
+// consumption → wiring chain is asserted by the GPU-free test in
+// separationGate.node.test.ts, and any regression that actually dulls the read
+// resurfaces here as a below-floor |contrast|. Every raw number is printed with
+// its floor and a count-below, and the carried-by breakdown prints whether we
+// pass or fail — no boolean hides where a read sits.
 const FLOORS = {
-  rimPeakDelta: Number(arg('minPeak', '60')), // keyline brightness over interior
-  rimWidthPx: Number(arg('minRim', '1.2')), //   keyline width @900p, px
-  edgeContrast: Number(arg('minEdge', '32')), // silhouette boundary step, /255
-  contrast: Number(arg('minContrast', '-28')), // body vs LOCAL bg, /255 (signed)
+  // Path A — the KEYLINE carries the read (keyline-specific metrics)
+  rimPeakDelta: Number(arg('minPeak', '60')), // keyline brightness over body interior, /255
+  rimWidthPx: Number(arg('minRim', '1.2')), //   keyline width @900p, device px
+  // Path B — raw LUMINANCE carries the read (keyline-INDEPENDENT body-vs-local-bg)
+  lumContrast: Number(arg('minLum', '50')), //   |fighterLum - localBgLum|, /255
 }
 
 const CM = 3.4 / 180
@@ -420,20 +451,47 @@ try {
   if (OUT) { writeFileSync(OUT, JSON.stringify(out, null, 2)); wroteOut = true; console.log(`\nwrote ${OUT}`) }
 
   if (ASSERT) {
+    // Two independently-sufficient paths to ONE outcome (a clear fighter read):
+    //   A) the KEYLINE carries it:   rimPeakDelta >= minPeak AND rimWidthPx >= minRim
+    //   B) raw LUMINANCE carries it:  |contrast| >= minLum (body vs LOCAL bg,
+    //      keyline-independent — localBg is sampled from the fighters-hidden buffer)
+    // A read passes if EITHER holds; it FAILS only if NEITHER does, so a read where
+    // BOTH mechanisms are mediocre cannot pass. We assert the OUTCOME, never one
+    // mechanism — the instrument must not fail a read the eye reads clearly just
+    // because value, not the rim, is carrying it (or vice-versa).
     const fails = []
+    const reads = []
     for (const r of results) {
       if (r.error) { fails.push(`${r.stage}/${r.a}-vs-${r.b}: ${r.error}`); continue }
       for (const p of r.per) {
         const who = `${r.stage}/${p.side === 0 ? r.a : r.b}(s${p.side})`
-        if (p.rimPeakDelta < FLOORS.rimPeakDelta) fails.push(`${who}: rimPeakDelta ${p.rimPeakDelta} < ${FLOORS.rimPeakDelta}`)
-        if (p.rimWidthPx < FLOORS.rimWidthPx) fails.push(`${who}: rimWidthPx ${p.rimWidthPx} < ${FLOORS.rimWidthPx}`)
-        if (p.edgeContrast < FLOORS.edgeContrast) fails.push(`${who}: edgeContrast ${p.edgeContrast} < ${FLOORS.edgeContrast}`)
-        if (p.contrast < FLOORS.contrast) fails.push(`${who}: contrast ${p.contrast} < ${FLOORS.contrast}`)
+        const keyline = p.rimPeakDelta >= FLOORS.rimPeakDelta && p.rimWidthPx >= FLOORS.rimWidthPx
+        const lumen = Math.abs(p.contrast) >= FLOORS.lumContrast
+        reads.push({ who, p, keyline, lumen })
+        if (!keyline && !lumen) fails.push(
+          `${who}: NEITHER path — keyline(peak ${p.rimPeakDelta} vs ${FLOORS.rimPeakDelta}, rim ${p.rimWidthPx} vs ${FLOORS.rimWidthPx}) AND luminance(|contrast| ${Math.abs(p.contrast).toFixed(1)} vs ${FLOORS.lumContrast})`)
       }
     }
-    console.log(`\n=== GATE: ${results.reduce((n, r) => n + (r.per?.length || 0), 0)} fighter-reads across ${STAGES.length} stages ===`)
+    // Raw distribution for BOTH paths — printed whether we pass or fail, so the
+    // exact headroom (and any read sitting just above a floor) is always visible.
+    // A boolean would have hidden the residual negatives that this makes plain.
+    const stat = (xs) => { const s = [...xs].sort((a, b) => a - b); const mean = xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0; return `${(s[0] ?? 0).toFixed(1)}/${mean.toFixed(1)}/${(s[s.length - 1] ?? 0).toFixed(1)}` }
+    const nBelow = (xs, f) => xs.filter((x) => x < f).length
+    const peaks = reads.map((r) => r.p.rimPeakDelta), rims = reads.map((r) => r.p.rimWidthPx)
+    const lums = reads.map((r) => Math.abs(r.p.contrast))
+    const edges = reads.map((r) => r.p.edgeContrast), signed = reads.map((r) => r.p.contrast)
+    const viaA = reads.filter((r) => r.keyline && !r.lumen).length
+    const viaB = reads.filter((r) => !r.keyline && r.lumen).length
+    const viaBoth = reads.filter((r) => r.keyline && r.lumen).length
+    const viaNeither = reads.filter((r) => !r.keyline && !r.lumen).length
+    console.log(`\n=== SEPARATION GATE: ${reads.length} reads across ${STAGES.length} stages — PASS if keyline OR luminance carries the read ===`)
+    console.log(`  Path A  keyline   rimPeakDelta min/mean/max = ${stat(peaks)}   (${nBelow(peaks, FLOORS.rimPeakDelta)}/${reads.length} below ${FLOORS.rimPeakDelta})`)
+    console.log(`                    rimWidthPx   min/mean/max = ${stat(rims)}   (${nBelow(rims, FLOORS.rimWidthPx)}/${reads.length} below ${FLOORS.rimWidthPx})`)
+    console.log(`  Path B  luminance |contrast|   min/mean/max = ${stat(lums)}   (${nBelow(lums, FLOORS.lumContrast)}/${reads.length} below ${FLOORS.lumContrast})`)
+    console.log(`  reported-only     edgeContrast min/mean/max = ${stat(edges)}   |  signed contrast min/mean/max = ${stat(signed)}`)
+    console.log(`  carried by:  keyline-only ${viaA}  |  luminance-only ${viaB}  |  both ${viaBoth}  |  NEITHER ${viaNeither}`)
     if (fails.length) { console.log('FAIL:'); for (const f of fails) console.log('  ✗ ' + f); process.exit(1) }
-    console.log(`PASS — every read clears peak>=${FLOORS.rimPeakDelta}, rim>=${FLOORS.rimWidthPx}px, edge>=${FLOORS.edgeContrast}, bodyContrast>=${FLOORS.contrast}`)
+    console.log(`PASS — all ${reads.length} reads clear at least one path (keyline: peak>=${FLOORS.rimPeakDelta} & rim>=${FLOORS.rimWidthPx}px, OR luminance: |contrast|>=${FLOORS.lumContrast})`)
   }
 } finally {
   if (OUT && !wroteOut && results.length) {

@@ -27,6 +27,7 @@ import { makeRng, type Rng } from '../../fight/rng'
 import { MAX_METER } from '../../fight/constants'
 import { ROSTER, type RosterEntry } from '../../fighthud/select/roster'
 import { STAGE_ORDER } from '../../three/stage/StageRegistry'
+import { isAllowedFirstBout } from './attractLoadCost'
 import type { ScenarioId } from '../../types'
 import type { FightState, StepResult } from '../../fight/types'
 
@@ -79,21 +80,38 @@ export class AttractDirector {
 
   constructor(opts: AttractDirectorOptions = {}) {
     this.rng = makeRng((opts.seed ?? (Date.now() & 0xffffffff)) >>> 0)
-    this._matchup = this.pickMatchup()
+    // The opener is cost-constrained so a cold first visit never waits on the
+    // heaviest atlas pairing; every subsequent bout is unconstrained.
+    this._matchup = this.pickMatchup(true)
     this.sim = this.buildSim(this._matchup)
   }
 
   // ── matchup selection ──────────────────────────────────────────────────────
 
-  private pickMatchup(): AttractMatchup {
-    const i = this.rng.int(ROSTER.length)
-    // Distinct opponent: draw in [0, n-1) and skip past `i`, so the two sides
-    // are never the identical skin (a mirror reads as a bug on a marquee).
-    let j = this.rng.int(ROSTER.length - 1)
-    if (j >= i) j++
-    const stage = STAGE_ORDER[this.rng.int(STAGE_ORDER.length)]
-    const seed = this.rng.int(0x7fffffff)
-    return { a: ROSTER[i], b: ROSTER[j], stage, seed }
+  private pickMatchup(firstBout = false): AttractMatchup {
+    // Bouts 2+ (`firstBout` false) take a single unconstrained draw — byte-for-
+    // byte the original random selection, so the reel past the opener is
+    // untouched. Only the opener rejection-samples, re-rolling the pair (never
+    // the stage/seed) until it is within the first-bout download ceiling, so the
+    // shop window's very first load stays off the ~10.9 MB worst-case pairing.
+    // A hard attempt cap guarantees termination and, with ~4 of 5 pairings
+    // eligible, is effectively never reached.
+    const MAX_ATTEMPTS = 40
+    for (let attempt = 0; ; attempt++) {
+      const i = this.rng.int(ROSTER.length)
+      // Distinct opponent: draw in [0, n-1) and skip past `i`, so the two sides
+      // are never the identical skin (a mirror reads as a bug on a marquee).
+      let j = this.rng.int(ROSTER.length - 1)
+      if (j >= i) j++
+      const a = ROSTER[i]
+      const b = ROSTER[j]
+      if (firstBout && attempt < MAX_ATTEMPTS && !isAllowedFirstBout(a.skin, b.skin)) {
+        continue
+      }
+      const stage = STAGE_ORDER[this.rng.int(STAGE_ORDER.length)]
+      const seed = this.rng.int(0x7fffffff)
+      return { a, b, stage, seed }
+    }
   }
 
   private buildSim(m: AttractMatchup): MatchSim {

@@ -14,6 +14,8 @@ import { createLiveSink } from '../audio/liveSink'
 import type { LiveFightAudioSink, LiveSinkStats } from '../audio/liveSink'
 import { FightAudioReactor } from '../audio/reactor'
 import { useGame } from '../state/game'
+import { applyCaptureQuality } from './captureQuality'
+import type { QualityTier } from '../three/types'
 
 declare global {
   interface Window {
@@ -31,6 +33,15 @@ declare global {
        *  and whether the AudioContext has unlocked. A camera cannot hear, so a
        *  live capture reads this to check sound is actually being driven. */
       audio: () => LiveSinkStats
+      /** Hold the quality tier still (disable the adaptive demotion in
+       *  Engine.maybeAdapt) so a capture measures ONE tier. Auto-enabled when
+       *  ?quality= pins a tier; exposed so a tool can assert the freeze or opt a
+       *  specific run back into live adaptation with freezeQuality(false). */
+      freezeQuality: (frozen?: boolean) => void
+      /** Current quality tier. A capture asserts this is identical at window
+       *  start and end to PROVE the freeze held — a moving tier changes
+       *  pixelRatio + DOF underfoot, which is what corrupted the screenshot corpus. */
+      quality: () => QualityTier
     }
   }
 }
@@ -133,6 +144,11 @@ export function PlayableMatch() {
         // and the orphan silently overdraws the live one.
         if (disposed) return renderer.dispose()
 
+        // A capture that pins ?quality= is measuring THAT tier — hold it so the
+        // adaptive loop can't demote pixelRatio/DOF/bloom mid-measurement. No
+        // ?quality= (a real player) stays adaptive. See captureQuality.ts.
+        applyCaptureQuality(renderer.engine, window.location.search)
+
         setPhase('loading')
         const [atlasA, atlasB] = await Promise.all([loadFighterAtlas(aId), loadFighterAtlas(bId)])
         if (disposed) return renderer.dispose()
@@ -227,6 +243,8 @@ export function PlayableMatch() {
                 calls: 0, impacts: 0, footsteps: 0, announces: 0,
                 voices: 0, contextRunning: false, musicStarted: false,
               },
+            freezeQuality: (frozen = true) => renderer!.engine.setAdaptiveQuality(!frozen),
+            quality: () => renderer!.engine.quality,
           }
         }
 

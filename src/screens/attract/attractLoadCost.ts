@@ -1,5 +1,4 @@
-/// <reference path="./virtualAtlasCosts.d.ts" />
-import { ATLAS_COST_BYTES } from 'virtual:atlas-costs'
+import { ATLAS_COST_BYTES } from './atlasCosts.generated'
 /**
  * Attract-reel load-order policy — an ASSET concern, deliberately kept OUT of
  * the pure sim `AttractDirector`.
@@ -21,22 +20,25 @@ import { ATLAS_COST_BYTES } from 'virtual:atlas-costs'
  * because we improved the strong ones.
  *
  * WHY THESE NUMBERS CAN'T QUIETLY LIE: they are no longer hand-maintained. The
- * costs are BAKED from the real files on disk at build time (see
- * `virtual:atlas-costs` / scripts/atlasCostsPlugin.ts), so the byte the director
+ * costs are BAKED from the real files on disk into a committed generated module
+ * (`./atlasCosts.generated.ts`, produced by scripts/genAtlasCosts.ts and kept
+ * fresh at dev/build by scripts/atlasCostsPlugin.ts), so the byte the director
  * prices an opener with IS the byte on disk — the same one `firstBoutBudget` and
  * `atlasByteBudget` gate. There is no literal to drift from the shipped art, and
- * `atlasCostBake.node.test.ts` reddens if the bake is ever unwired.
+ * `atlasCostBake.node.test.ts` reddens if the committed bake ever goes stale.
  */
 
 const MB = 1024 * 1024
 
 /**
- * Per-skin atlas download cost in bytes, BAKED from the real files on disk at
- * build time by scripts/atlasCostsPlugin.ts — there is no committed table to go
- * stale (that was a real drift class: a hand-copied literal shadowing a binary
- * the art run keeps growing). Keys are skin ids; a skin absent here (e.g. its
- * atlas file is missing) is treated as heavy by {@link firstBoutCostBytes} and so
- * excluded from the cold first bout rather than gambled onto it.
+ * Per-skin atlas download cost in bytes, BAKED from the real files on disk into a
+ * committed generated module (scripts/genAtlasCosts.ts → ./atlasCosts.generated.ts,
+ * kept fresh at dev/build by scripts/atlasCostsPlugin.ts). Unlike the old
+ * hand-copied literals it replaced, the committed values cannot SILENTLY drift from
+ * the shipped art: atlasCostBake.node.test.ts reddens the moment they diverge from
+ * disk. Keys are skin ids; a skin absent here (e.g. its atlas file is missing) is
+ * treated as heavy by {@link firstBoutCostBytes} and so excluded from the cold
+ * first bout rather than gambled onto it.
  */
 export { ATLAS_COST_BYTES }
 

@@ -8,7 +8,7 @@ import { ScreenSkeleton } from './components/ScreenSkeleton'
 import { BootCard } from './screens/boot/BootCard'
 import { StoryCutscene } from './components/StoryCutscene'
 import { attachQuoteBankSync, loadQuoteBank } from './lib/persist'
-import { decideRoute } from './appRoute'
+import { decideRoute, SELECT_SEARCH } from './appRoute'
 
 /** Renderer sandbox at `?lab=1`. Lazy so it never ships in the main chunk. */
 const ThreeLab = lazy(() =>
@@ -60,9 +60,17 @@ const FrontDoor = lazy(() =>
  * the visitor into a live match. Anything carrying `?play=1` or an explicit
  * matchup param still resolves to `play`, so every capture tool that passes a
  * matchup — and the `?play=1` escape hatch — is unaffected.
+ *
+ * ENTRY is read once from the real URL; in-app NAVIGATION is route-as-state (see
+ * `navigate` below): we `history.pushState` the next search and mirror it into
+ * `search`, so a menu hop renders a new surface WITHOUT a full-page reload. That
+ * is what lets the WebGL context, the fighter atlases and the AudioContext
+ * survive title → attract → select — a reload used to destroy all three on every
+ * hop. Entry stays byte-identical, so deep links and the ~dozen capture tools
+ * that pass an explicit matchup are unaffected.
  */
-function initialRoute() {
-  return decideRoute(typeof window === 'undefined' ? '' : window.location.search)
+function initialSearch() {
+  return typeof window === 'undefined' ? '' : window.location.search
 }
 
 export function App() {
@@ -70,7 +78,29 @@ export function App() {
   const crtEnabled = useGame((s) => s.crtEnabled)
   const selectedB = useGame((s) => s.selectedB)
   const musicEnabled = useGame((s) => s.musicEnabled)
-  const [route] = useState(initialRoute)
+  const [search, setSearch] = useState(initialSearch)
+  const route = decideRoute(search)
+
+  // In-app navigation without a reload: push the next search onto history and
+  // mirror it into state so `route` recomputes. The old `window.location.search
+  // = …` tore down the GL context, atlases and the AudioContext on every menu
+  // hop; pushState keeps one persistent document — and the running soundtrack —
+  // alive across screens. The URL still changes, so deep links, capture tools
+  // and Back/Forward all keep working.
+  const navigate = useCallback((nextSearch: string) => {
+    if (typeof window === 'undefined') return
+    const next = nextSearch.startsWith('?') ? nextSearch : `?${nextSearch}`
+    window.history.pushState(null, '', `${window.location.pathname}${next}`)
+    setSearch(next)
+  }, [])
+
+  // Back/Forward: re-derive the surface from the URL the browser restored.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const onPop = () => setSearch(window.location.search)
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+  }, [])
 
   // Arcade boot gate. Shown once per page load before anything else. The
   // press is a real user gesture, so it unlocks the soundtrack — the menu's
@@ -173,7 +203,7 @@ export function App() {
   if (route === 'select') {
     return (
       <Suspense fallback={<BootCard label="Loading roster" />}>
-        <FightSelect />
+        <FightSelect onLaunch={navigate} />
       </Suspense>
     )
   }
@@ -181,7 +211,7 @@ export function App() {
   if (route === 'attract') {
     return (
       <Suspense fallback={<BootCard label="Loading attract reel" />}>
-        <AttractMode onExit={() => { window.location.search = 'select=1' }} />
+        <AttractMode onExit={() => navigate(SELECT_SEARCH)} />
       </Suspense>
     )
   }
@@ -201,7 +231,7 @@ export function App() {
     // on the `play` route above.
     return (
       <Suspense fallback={<BootCard />}>
-        <FrontDoor onPlay={() => { window.location.search = 'select=1' }} />
+        <FrontDoor onPlay={() => navigate(SELECT_SEARCH)} />
       </Suspense>
     )
   }

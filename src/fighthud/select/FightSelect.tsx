@@ -8,6 +8,7 @@ import { Sfx } from '../../lib/audio'
 import { Voice } from '../../lib/voice'
 import { getFighter } from '../../data/fighters'
 import { ARCHETYPES, ROSTER, STAGES, type RosterEntry, type StageEntry } from './roster'
+import { matchupSearch } from '../../appRoute'
 import './select.css'
 import '../hud.css'
 
@@ -23,9 +24,12 @@ import '../hud.css'
  *
  *     /?a=<skin>&b=<skin>&p1=<arch>&p2=<arch>&stage=<id>&cpu=medium
  *
- * A full navigation (not a client swap) is intentional — PlayableMatch gets the
- * same clean mount a tool's URL would give it, so there is exactly one code path
- * into a match.
+ * It no longer *navigates* to that URL — it hands the search to `onLaunch`, which
+ * the shell pushState's (route-as-state) so PlayableMatch mounts on it without a
+ * full-page reload. Entry semantics are unchanged: an explicit matchup still maps
+ * to `play` via `decideRoute`, so a tool's URL and a locked-in pick reach the
+ * fight through the same one code path — the reload is simply gone, which is what
+ * keeps the soundtrack and the GL context alive across the hop.
  *
  * It reuses the HUD's own visual language rather than inventing a second one:
  * the extruded `Word` lettering from Announcements, the accent-ramp nameplates,
@@ -243,7 +247,18 @@ function HeroPodium({
   )
 }
 
-export function FightSelect() {
+interface Props {
+  /**
+   * Push the chosen matchup's search onto the shell's history so PlayableMatch
+   * mounts on it — the client-swap replacement for the old full-page
+   * `window.location.assign`. Required, not optional: a select screen that
+   * silently failed to launch is exactly the dead-seam class this codebase keeps
+   * getting burned by, so the compiler enforces the wire at the one call site.
+   */
+  onLaunch: (search: string) => void
+}
+
+export function FightSelect({ onLaunch }: Props) {
   const [phase, setPhase] = useState<Phase>('p1')
   const [cursor, setCursor] = useState(0)
   const [p1, setP1] = useState<number | null>(null)
@@ -295,16 +310,17 @@ export function FightSelect() {
     const a = ROSTER[p1i]
     const b = ROSTER[p2i]
     const st = STAGES[stageIdx]
-    const q = new URLSearchParams({
-      a: a.skin,
-      b: b.skin,
-      p1: a.archetype,
-      p2: b.archetype,
-      stage: st.id,
-      cpu: CPU,
-    })
-    window.location.assign(`${window.location.pathname}?${q.toString()}`)
-  }, [])
+    onLaunch(
+      matchupSearch({
+        a: a.skin,
+        b: b.skin,
+        p1: a.archetype,
+        p2: b.archetype,
+        stage: st.id,
+        cpu: CPU,
+      }),
+    )
+  }, [onLaunch])
 
   const move = useCallback(
     (dx: number, dy: number) => {

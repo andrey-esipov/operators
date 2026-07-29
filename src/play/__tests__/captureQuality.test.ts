@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest'
-import { forcedQuality, applyCaptureQuality, openCaptureSession, type AdaptiveEngine } from '../captureQuality'
+import { describe, it, expect, afterEach } from 'vitest'
+import { forcedQuality, applyCaptureQuality, openCaptureSession, installLabProbe, removeLabProbe, type AdaptiveEngine, type LabProbe } from '../captureQuality'
 import { QUALITY_ORDER, type QualityTier } from '../../three/types'
 
 // A stand-in for Engine that mirrors the two behaviours the capture path uses:
@@ -160,5 +160,55 @@ describe('captureQuality.openCaptureSession (reachability spy)', () => {
     expect(hooks.quality()).toBe('high')
     e.quality = 'low' // tier moves underfoot
     expect(hooks.quality()).toBe('low') // reader reflects it — a snapshot would not
+  })
+})
+
+// installLabProbe is the SAME call the `?lab=1` sandbox (ThreeLab → FightScene3D)
+// runs on mount. It fuses the freeze with the __LAB__ tier probe via
+// openCaptureSession, and — because FightScene3D is ALSO the shipped 3D renderer
+// (CombatScreen → FightStage, the default on any WebGL2 machine) — it is gated
+// behind the `capture` prop so it never runs on a buyer. Exercising it with a spy
+// proves the default freeze + the live getter + teardown without a GPU. The
+// residual it cannot reach — that the effect calls it under `capture` and NOT on
+// the shipped path — is gated structurally in captureCoverage.node.test.ts and
+// confirmed at runtime via window.__LAB__.quality() holding steady.
+describe('captureQuality.installLabProbe (the ?lab=1 capture handle)', () => {
+  const lab = () => (globalThis as unknown as { __LAB__?: LabProbe }).__LAB__
+  afterEach(() => removeLabProbe())
+
+  it('publishes nothing until installed (anti-vacuity control)', () => {
+    removeLabProbe()
+    expect(lab()).toBeUndefined()
+  })
+
+  it('freezes the tier by DEFAULT with no pin — the sandbox has no buyer to protect', () => {
+    const e = new SpyEngine()
+    installLabProbe(e, '?stage=hypergrowth') // no ?quality=
+    expect(e.adaptEnabled).toBe(false)
+    expect(lab()).toBeDefined()
+  })
+
+  it('__LAB__.quality() reads the LIVE tier, never a snapshot (the whole point of the probe)', () => {
+    const e = new SpyEngine()
+    installLabProbe(e, '')
+    e.quality = 'high'
+    expect(lab()!.quality()).toBe('high')
+    e.quality = 'low' // tier drifts underfoot
+    expect(lab()!.quality()).toBe('low') // reflects it — a captured value would report 'high' forever
+  })
+
+  it('gates the deviation: frozen by default, __LAB__.freezeQuality(false) opts back into adaptation', () => {
+    const e = new SpyEngine()
+    installLabProbe(e, '')
+    expect(e.adaptEnabled).toBe(false)
+    lab()!.freezeQuality(false)
+    expect(e.adaptEnabled).toBe(true)
+  })
+
+  it('removeLabProbe tears the handle down (route unmount leaves no global behind)', () => {
+    installLabProbe(new SpyEngine(), '')
+    expect(lab()).toBeDefined()
+    removeLabProbe()
+    expect(lab()).toBeUndefined()
   })
 })

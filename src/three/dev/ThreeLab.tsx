@@ -165,7 +165,7 @@ export function ThreeLab() {
 
   return (
     <div className="fixed inset-0" style={{ background: '#05030b' }}>
-      <FightScene3D state={state} onReady={onReady} />
+      <FightScene3D state={state} onReady={onReady} capture />
       {hud && (
         <div
           className="absolute left-3 top-3 z-50 text-[11px] leading-5"

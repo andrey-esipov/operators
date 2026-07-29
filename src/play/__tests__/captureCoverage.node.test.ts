@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import ts from 'typescript'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import {
   rel,
+  SRC,
   engineOwningModules,
   auditEngineModules,
   constructsAny,
@@ -77,11 +80,15 @@ function callsAny(src: string, names: readonly string[]): boolean {
   return found
 }
 
-// The freeze can be applied through either entry point: PlayableMatch/FightHarness
-// use the fused `openCaptureSession`, AttractMode + FightScene3D use bare
-// `applyCaptureQuality` (their probes live in a separate effect / a legacy hook
-// and cannot fuse). Both satisfy the invariant.
-const FREEZE_CALLS = ['openCaptureSession', 'applyCaptureQuality'] as const
+// The freeze is applied through one of three entry points, all of which reduce to
+// `Engine.setAdaptiveQuality(false)`: PlayableMatch/FightHarness use the fused
+// `openCaptureSession`; AttractMode uses bare `applyCaptureQuality`; FightScene3D
+// (the `?lab=1` sandbox path) uses `installLabProbe`, which wraps
+// `openCaptureSession` to fuse the freeze with the `window.__LAB__` tier probe.
+// Any of the three satisfies the invariant that the freeze mechanism is PRESENT;
+// whether FightScene3D's is correctly SCOPED to the sandbox (and not the shipped
+// buyer path) is a separate property, guarded by the prop-scope block below.
+const FREEZE_CALLS = ['openCaptureSession', 'applyCaptureQuality', 'installLabProbe'] as const
 
 // The gate's QUESTION, in the shape `auditEngineModules` expects: given an
 // engine-owning module's source, return the reasons it violates the freeze
@@ -113,6 +120,7 @@ describe('captureCoverage — detector self-checks (non-vacuity)', () => {
   it('the freeze detector counts a CALL, not a declaration or a comment', () => {
     expect(callsAny('openCaptureSession(e, s, { captureRoute: true })', FREEZE_CALLS)).toBe(true)
     expect(callsAny('applyCaptureQuality(e, s)', FREEZE_CALLS)).toBe(true)
+    expect(callsAny('installLabProbe(engine, window.location.search)', FREEZE_CALLS)).toBe(true)
     // A module that only DEFINES the function (captureQuality.ts) does not "call"
     // it, so it is never mistaken for a route that froze.
     expect(callsAny('export function applyCaptureQuality() {}', FREEZE_CALLS)).toBe(false)
@@ -187,5 +195,74 @@ describe('captureCoverage — scope of the invariant (documented, not blind)', (
     const withoutEffect = new Set(engineOwningModules({}).map(rel))
     expect(withoutEffect.has('three/fight/FightRenderer.ts')).toBe(true)
     expect(withEffect.has('three/fight/FightRenderer.ts')).toBe(false)
+  })
+})
+
+/** The `capture` prop on a `<FightScene3D>` element in a component's source:
+ *  'set' (present), 'none' (element present, no capture prop), or 'absent' (no
+ *  such element). AST over JsxOpeningElement/JsxSelfClosingElement, so a `capture`
+ *  in a comment or string cannot forge a 'set' — only a real JSX attribute counts.
+ *  This is the twin of `callsAny`: `callsAny` proves the freeze CALL is present in
+ *  the module; this proves the freeze is WIRED to the right seam via the prop. */
+function fightSceneCaptureProp(src: string): 'set' | 'none' | 'absent' {
+  let result: 'set' | 'none' | 'absent' = 'absent'
+  const visit = (n: ts.Node) => {
+    const tag = ts.isJsxOpeningElement(n) || ts.isJsxSelfClosingElement(n) ? n : null
+    if (tag && ts.isIdentifier(tag.tagName) && tag.tagName.text === 'FightScene3D') {
+      result = tag.attributes.properties.some(
+        (p) => ts.isJsxAttribute(p) && ts.isIdentifier(p.name) && p.name.text === 'capture',
+      )
+        ? 'set'
+        : 'none'
+    }
+    ts.forEachChild(n, visit)
+  }
+  visit(parse(src))
+  return result
+}
+
+describe('captureCoverage — the freeze is scoped to the sandbox, never the shipped renderer', () => {
+  // FightScene3D is SHARED: it is the shipped 3D renderer (CombatScreen →
+  // FightStage, the default on any WebGL2 machine) AND the `?lab=1` dev sandbox
+  // (ThreeLab). The freeze + `window.__LAB__` install are gated behind the
+  // `capture` prop so they run ONLY on the sandbox. 34167c6 called the freeze
+  // UNCONDITIONALLY inside FightScene3D on the false premise "no buyer is ever
+  // here" — which silently disabled adaptive quality for every 3D buyer and would
+  // have leaked a __LAB__ global onto a shipped page. This block is the guard that
+  // regression cannot return: THE INVARIANT above proves the freeze CALL is
+  // present; this proves it is wired to the sandbox seam and NOT the buyer seam.
+  // The module-level enumerator cannot see this — the freeze call is present in
+  // FightScene3D either way; only the PROP at the two call sites decides who runs
+  // it. So the property lives at the JSX call sites, checked here by AST.
+  const read = (p: string) => readFileSync(join(SRC, p), 'utf8')
+
+  it('self-check: the JSX capture-prop detector distinguishes set / none / absent (and ignores comments)', () => {
+    expect(fightSceneCaptureProp('const x = <FightScene3D state={s} capture />')).toBe('set')
+    expect(fightSceneCaptureProp('const x = <FightScene3D state={s} onReady={r} />')).toBe('none')
+    expect(fightSceneCaptureProp('const x = <div />')).toBe('absent')
+    // A `capture` in a trailing comment must not read as the prop being set.
+    expect(fightSceneCaptureProp('const x = <FightScene3D state={s} /> // capture')).toBe('none')
+  })
+
+  it('the SHIPPED seam (FightStage → the buyer 3D renderer) must NOT opt into capture', () => {
+    // If this reddens, a buyer just lost adaptive quality AND got a __LAB__ global
+    // on a shipped page — the exact 34167c6 regression. FightStage is the single
+    // seam CombatScreen mounts for the shipped 3D game.
+    expect(fightSceneCaptureProp(read('three/FightStage.tsx'))).toBe('none')
+  })
+
+  it('the SANDBOX seam (ThreeLab → ?lab=1) MUST opt into capture', () => {
+    // If this reddens, ?lab=1 captures drift through the adaptive tier again and
+    // window.__LAB__ never appears, so no capture tool can certify the tier held —
+    // the observability gap the coordinator and visual-critic both flagged.
+    expect(fightSceneCaptureProp(read('three/dev/ThreeLab.tsx'))).toBe('set')
+  })
+
+  it('FightScene3D installs the __LAB__ probe specifically (installLabProbe, not bare applyCaptureQuality)', () => {
+    // THE INVARIANT accepts ANY FREEZE_CALL, so reverting FightScene3D to
+    // `applyCaptureQuality` would still be green there while __LAB__ silently
+    // vanished (freeze without a probe = the observability gap all over again).
+    // Pin the __LAB__ path explicitly.
+    expect(callsAny(read('three/FightScene3D.tsx'), ['installLabProbe'])).toBe(true)
   })
 })

@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { Engine } from './core/Engine'
-import { applyCaptureQuality } from '../play/captureQuality'
+import { installLabProbe, removeLabProbe } from '../play/captureQuality'
 import { StageSubsystem } from './stage/StageSubsystem'
 import { FighterSubsystem } from './fighter/FighterSubsystem'
 import { LightRig } from './lighting/LightRig'
@@ -25,6 +25,14 @@ interface Props {
   timeScale?: number
   className?: string
   onReady?: (h: FightSceneHandle) => void
+  /**
+   * True ONLY on the `?lab=1` dev sandbox (ThreeLab). Freezes the tier and
+   * installs the `window.__LAB__` capture handle so a screenshot tool can prove
+   * the tier held. MUST stay false on the shipped path (CombatScreen →
+   * FightStage — the default renderer on any WebGL2 machine), or a real player
+   * loses adaptive-quality recovery and a `__LAB__` global leaks onto the page.
+   */
+  capture?: boolean
 }
 
 /**
@@ -34,7 +42,7 @@ interface Props {
  * loop outside React's render cycle so combat animation never contends with
  * state updates. Props are pushed into the engine imperatively.
  */
-export function FightScene3D({ state, events, timeScale = 1, className, onReady }: Props) {
+export function FightScene3D({ state, events, timeScale = 1, className, onReady, capture = false }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const engineRef = useRef<Engine | null>(null)
   const stateRef = useRef(state)
@@ -48,14 +56,17 @@ export function FightScene3D({ state, events, timeScale = 1, className, onReady 
 
     const engine = new Engine({ canvas, seed: 0xa11ce })
     engineRef.current = engine
-    // `?lab=1` is a dev/capture-only route (App.tsx: renderer sandbox; every
-    // tool that drives it self-declares its output inadmissible as shipped
-    // evidence). No buyer is ever here, so freeze the tier by default —
-    // otherwise legacy-battler captures drift through the adaptive tier exactly
-    // like the shipped routes did. `captureRoute` also freezes when unpinned,
-    // which the pin-only path would miss (measure-silhouette drives ?lab=1 with
-    // no &quality=).
-    applyCaptureQuality(engine, window.location.search, { captureRoute: true })
+    // This component is SHARED: it is the shipped 3D renderer (CombatScreen →
+    // FightStage, the default on any WebGL2 machine) AND the `?lab=1` dev
+    // sandbox (ThreeLab). Only the sandbox passes `capture`, so only the sandbox
+    // freezes the tier and publishes the `window.__LAB__` capture handle —
+    // otherwise sandbox captures would drift through the adaptive tier the way
+    // every reference shot once did. On the buyer path `capture` is false, so
+    // adaptive recovery is untouched and no `__LAB__` leaks onto a shipped page.
+    // (34167c6 called this unconditionally on the false premise that "no buyer is
+    // ever here"; buyers are here by default, and it silently disabled their
+    // adaptation. See installLabProbe.)
+    if (capture) installLabProbe(engine, window.location.search)
 
     const light = new LightRig()
     const getLight = () => light
@@ -102,6 +113,7 @@ export function FightScene3D({ state, events, timeScale = 1, className, onReady 
       ro.disconnect()
       window.removeEventListener('resize', resize)
       document.removeEventListener('visibilitychange', onVis)
+      if (capture) removeLabProbe()
       engine.dispose()
       engineRef.current = null
     }

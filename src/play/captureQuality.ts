@@ -142,3 +142,46 @@ export function openCaptureSession(
     quality: () => engine.quality,
   }
 }
+
+/** The `?lab=1` dev sandbox's capture handle, published on `window.__LAB__` so a
+ *  capture tool can read the tier the same way it reads `__PLAY__`/`__FIGHT__`. */
+export interface LabProbe {
+  /** Hold the tier still (frozen by default on the sandbox), or freezeQuality(false)
+   *  to opt one run back into adaptation. */
+  freezeQuality: (frozen?: boolean) => void
+  /** The live tier, read straight off the engine on every call — NOT a snapshot,
+   *  so a capture can assert the sandbox tier never drifted mid-window. */
+  quality: () => QualityTier
+}
+
+/**
+ * Install the `?lab=1` sandbox capture handle on `window.__LAB__`.
+ *
+ * `?lab=1` (ThreeLab → FightScene3D) is the ONLY caller. It is a dev sandbox
+ * where no buyer is ever present, so — like the other capture-only routes — it
+ * freezes the tier by default (`captureRoute`). The subtlety that bit us:
+ * FightScene3D is ALSO the shipped 3D renderer (CombatScreen → FightStage, the
+ * default on any WebGL2 machine), so this install is gated on the sandbox and
+ * MUST NOT run on the buyer path — or a player loses adaptive recovery and a
+ * `__LAB__` global leaks onto a shipped page.
+ *
+ * The handle is produced by `openCaptureSession`, so the freeze and the tier
+ * probe are born from the SAME call: the freeze cannot rot without also dropping
+ * the probe, exactly as `__FIGHT__`/`__PLAY__` are wired. `quality` reads
+ * `engine.quality` live on every call — a snapshot would compare equal to itself
+ * forever and vacuously certify a tier that had actually drifted.
+ *
+ * `globalThis` is `window` in the browser (so tools read `window.__LAB__`) and is
+ * defined under node, so the whole install is exercisable with a spy — no GPU.
+ */
+export function installLabProbe(engine: AdaptiveEngine, search: string): LabProbe {
+  const { freezeQuality, quality } = openCaptureSession(engine, search, { captureRoute: true })
+  const probe: LabProbe = { freezeQuality, quality }
+  ;(globalThis as unknown as { __LAB__?: LabProbe }).__LAB__ = probe
+  return probe
+}
+
+/** Remove the `?lab=1` capture handle (sandbox route unmount). */
+export function removeLabProbe(): void {
+  delete (globalThis as unknown as { __LAB__?: LabProbe }).__LAB__
+}

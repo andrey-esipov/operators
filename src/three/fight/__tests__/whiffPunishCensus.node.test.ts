@@ -344,6 +344,16 @@ describe('whiff-punish distance census (real director config)', () => {
     const genuineHole = inGateUnpun.filter((w) => w.oppFree).length
     const excused = inGateUnpun.length - genuineHole
 
+    // combat-feel's pre-registered A/B, computed on THIS director config. oppFree
+    // already means "in-range (<PUNISH_GATE) during the whiffer's recovery AND the
+    // punisher was in a neutral ACTIONABLE_STANCES state" -- exactly combat-feel's
+    // (in-range AND punisher-actionable) opportunity, independent of commit distance
+    // and of the eventual outcome. A = opportunities/all; B = converted/opportunities.
+    const oppFreeAll = dir.whiffs.filter((w) => w.oppFree)
+    const oppFreeConverted = oppFreeAll.filter((w) => w.punished).length
+    const cfA = oppFreeAll.length / dir.whiffs.length
+    const cfB = oppFreeAll.length ? oppFreeConverted / oppFreeAll.length : 0
+
     if (process.env.CENSUS_REPORT) {
       const report =
         `\n=== WHIFF-PUNISH CENSUS — REAL DIRECTOR CONFIG ===\n` +
@@ -376,6 +386,14 @@ describe('whiff-punish distance census (real director config)', () => {
         `${genuineHole} (${pct(genuineHole, inGateUnpun.length)}% of in-range-unpunished, ${pct(genuineHole, dir.whiffs.length)}% of ALL whiffs)\n` +
         `    EXCUSED (opponent itself committed / out of range in that window — no punish was on offer): ` +
         `${excused} (${pct(excused, inGateUnpun.length)}%)\n` +
+
+        `\n=== combat-feel PRE-REGISTERED METRIC (A/B) — this (director) config ===\n` +
+        `punisher-actionable = stance in {idle,walk-fwd,walk-back,crouch} (CONSERVATIVE lower bound:\n` +
+        `  also excludes dash/backdash/jump-rise/jump-fall/wakeup, not only attack/blockstun/hitstun/juggle/knockdown)\n` +
+        `A (opportunity share) = (in-range<${PUNISH_GATE} & actionable during recovery) / all whiffs = ` +
+        `${oppFreeAll.length}/${dir.whiffs.length} = ${(cfA * 100).toFixed(1)}%\n` +
+        `B (conversion)        = punished / opportunities = ${oppFreeConverted}/${oppFreeAll.length} = ` +
+        `${(cfB * 100).toFixed(1)}%  (baseline: hard punishChance 0.85 -> healthy B ~0.75-0.85, not 1.0)\n` +
 
         `\n=== WARDEN/WARDEN ZONER MIRROR — SEPARATE, LABELLED (the config the reel CANNOT show) ===\n` +
         `${wardenMirrorPairs().length} ordered pairs x ${SEEDS.length} seeds = ${mir.bouts} bouts\n` +

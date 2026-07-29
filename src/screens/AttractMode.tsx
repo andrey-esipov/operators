@@ -157,16 +157,19 @@ export function AttractMode({ onExit, capture = false }: Props) {
         renderer = new FightRenderer(canvas, { scenario: m.stage })
         await renderer.init()
         if (disposed) return renderer.dispose()
-        // AttractMode has TWO mounts (traced to the route table, not the import
-        // graph): the standalone `?attract=1` reel-capture route (App.tsx, passes
-        // `capture`) AND the customer FRONT DOOR (FrontDoor.tsx, bare `/`, mounts
-        // this reel after a 6 s idle as a live demo the buyer sees). Freeze the
-        // tier ONLY on the capture mount: there a still, reproducible tier is the
-        // default (every reel frame graded before this gate came off a drifting
-        // tier because nothing pinned it; captureRoute makes the still tier the
-        // default with no per-tool opt-in). On the front door `capture` is false,
-        // so adaptive quality stays on and a weak machine demotes to a live
-        // low-tier reel instead of the static fallback. This freeze was once
+        // AttractMode has THREE mounts (traced to the route table, not the import
+        // graph — a census enforced by captureCoverage's attractModeMountCensus so
+        // this list cannot silently drift): (1) the standalone `?attract=1`
+        // reel-capture route (App.tsx:212, passes `capture`); (2) the customer
+        // FRONT DOOR (FrontDoor.tsx:105, bare `/`, mounts this reel after a 6 s
+        // idle as a live demo the buyer sees); (3) the `?cards=1` legacy card
+        // game's in-menu preview (MainMenu.tsx:287). Freeze the tier ONLY on the
+        // capture mount (1): there a still, reproducible tier is the default
+        // (every reel frame graded before this gate came off a drifting tier
+        // because nothing pinned it; captureRoute makes the still tier the default
+        // with no per-tool opt-in). Mounts (2) and (3) pass no `capture`, so
+        // adaptive quality stays on — on the front door a weak machine demotes to a
+        // live low-tier reel instead of the static fallback. This freeze was once
         // UNCONDITIONAL, justified as "no buyer lands here" — a 34167c6-class bug:
         // the route table falsifies that claim (FrontDoor is reachable at bare
         // `/`), and freezing pinned the buyer's reel. Freeze-only: the __ATTRACT__

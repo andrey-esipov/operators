@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import ts from 'typescript'
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
   rel,
@@ -253,6 +253,49 @@ function freezeIsCaptureGated(src: string): boolean {
   return sawFreeze && !unguarded
 }
 
+/** Every `.tsx` under src/ except tests and the given file, walked from disk so a
+ *  new mount joins the census automatically instead of waiting to be hand-listed. */
+function tsxFilesUnder(dir: string, exclude: string): string[] {
+  const out: string[] = []
+  for (const e of readdirSync(dir, { withFileTypes: true })) {
+    const abs = join(dir, e.name)
+    if (e.isDirectory()) {
+      if (e.name === '__tests__' || e.name === 'node_modules') continue
+      out.push(...tsxFilesUnder(abs, exclude))
+    } else if (e.name.endsWith('.tsx') && !e.name.endsWith('.test.tsx') && abs !== exclude) {
+      out.push(abs)
+    }
+  }
+  return out
+}
+
+/** Census of every <AttractMode> mount in shipped src (the definition file itself
+ *  excluded), as { src-relative file, whether it passes `capture` }. Enumerated
+ *  from disk — NOT hand-listed — so a mount added ANYWHERE on any route is forced
+ *  into the set and must be classified here. This is the gate that makes the
+ *  off-by-one that reached AttractMode's own census comment ("two mounts" when
+ *  there are three) structurally impossible: a fourth mount reds by name, and a
+ *  mount that wrongly opts into the freeze (the 34167c6 class) reds by name. */
+function attractModeMountCensus(): Array<{ file: string; capture: boolean }> {
+  const def = join(SRC, 'screens/AttractMode.tsx')
+  const mounts: Array<{ file: string; capture: boolean }> = []
+  for (const abs of tsxFilesUnder(SRC, def)) {
+    const sf = parse(readFileSync(abs, 'utf8'))
+    const visit = (n: ts.Node) => {
+      const tag = ts.isJsxOpeningElement(n) || ts.isJsxSelfClosingElement(n) ? n : null
+      if (tag && ts.isIdentifier(tag.tagName) && tag.tagName.text === 'AttractMode') {
+        const capture = tag.attributes.properties.some(
+          (p) => ts.isJsxAttribute(p) && ts.isIdentifier(p.name) && p.name.text === 'capture',
+        )
+        mounts.push({ file: rel(abs), capture })
+      }
+      ts.forEachChild(n, visit)
+    }
+    visit(sf)
+  }
+  return mounts
+}
+
 describe('captureCoverage — the freeze is scoped to the capture sandbox, never the card-game consumer', () => {
   // FightScene3D is SHARED between two consumers, NEITHER of which is the shipped
   // fighter (that is PlayableMatch → FightRenderer; the front door routes to
@@ -346,5 +389,24 @@ describe('captureCoverage — the attract-reel freeze is scoped to the capture r
     // acts on it. Deleting the `if (capture)` guard re-freezes the buyer reel
     // while leaving every call-site test green — this is the guard against that.
     expect(freezeIsCaptureGated(read('screens/AttractMode.tsx'))).toBe(true)
+  })
+
+  it('CENSUS (enumerated from disk): exactly one mount freezes, and the full set is the three traced routes', () => {
+    const mounts = attractModeMountCensus()
+    const froze = mounts.filter((m) => m.capture).map((m) => m.file).sort()
+    const all = mounts.map((m) => m.file).sort()
+    // SAFETY: exactly one mount opts into the freeze, and it is the ?attract=1
+    // capture route. A new mount that wrongly passes `capture` freezes a
+    // non-capture surface (the 34167c6 class) and reddens here BY NAME.
+    expect(froze).toEqual(['App.tsx'])
+    // CENSUS: the exhaustive mount set, each traced to the route table —
+    //   App.tsx                ?attract=1 standalone reel-capture route  (freezes)
+    //   screens/FrontDoor.tsx  bare `/` front door, the buyer beat        (no freeze)
+    //   screens/MainMenu.tsx   ?cards=1 legacy card game in-menu preview  (no freeze)
+    // Walked from disk, so a mount added ANYWHERE forces itself into this list:
+    // the off-by-one that reached AttractMode's own comment ("two mounts") cannot
+    // silently recur. When a real fourth mount lands, name it here AND confirm its
+    // capture default is buyer-safe (false) unless it is a genuine capture route.
+    expect(all).toEqual(['App.tsx', 'screens/FrontDoor.tsx', 'screens/MainMenu.tsx'])
   })
 })

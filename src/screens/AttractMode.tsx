@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { FightRenderer } from '../three/fight/FightRenderer'
 import { loadFighterAtlas } from '../three/fight/loadFighterAtlas'
 import { getFighter } from '../data/fighters'
+import { applyCaptureQuality } from '../play/captureQuality'
 import { AttractDirector } from './attract/attractDirector'
 import './menu/menu.css'
 
@@ -145,6 +146,15 @@ export function AttractMode({ onExit }: Props) {
         renderer = new FightRenderer(canvas, { scenario: m.stage })
         await renderer.init()
         if (disposed) return renderer.dispose()
+        // `?attract=1` is the dev-only reel-capture route (the "Dev-only probe
+        // surface" noted above) — no buyer lands here, so freeze the tier by
+        // DEFAULT. Every reel frame ever graded came off a drifting tier because
+        // nothing pinned it; captureRoute makes the still tier the default with
+        // no per-tool opt-in. Freeze-only: the __ATTRACT__ probe is built in a
+        // SEPARATE effect below with no renderer handle, so it can't fuse the way
+        // __PLAY__/__FIGHT__ do — the captureCoverage node gate enforces that
+        // this call is present instead. See captureQuality.ts.
+        applyCaptureQuality(renderer.engine, window.location.search, { captureRoute: true })
         const [atlasA, atlasB] = await Promise.all([
           loadFighterAtlas(m.a.skin),
           loadFighterAtlas(m.b.skin),

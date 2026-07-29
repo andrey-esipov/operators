@@ -14,6 +14,24 @@
 // this makes the pin itself the intent: a URL that forces `?quality=` is asking
 // to measure THAT tier, so we freeze it. Normal play (no `?quality=`) is
 // untouched and keeps adaptive recovery.
+//
+// Two intents freeze the tier, chosen so the safe state never has to be
+// remembered by a tool author:
+//   1. A `?quality=` pin — "measure THIS tier" — freezes on ANY route, incl.
+//      the buyer-shared `?play=1`, because a pin is an explicit capture intent.
+//   2. A capture-ONLY route (`?fight=1`, `?attract=1`) freezes by DEFAULT, via
+//      the `captureRoute` option. These routes are dev/perf harnesses — App.tsx
+//      calls `?fight=1` "dev-only" and AttractMode calls itself a "Dev-only
+//      probe surface" — so no real buyer is ever on them and a still tier is
+//      simply the correct default.
+//
+// (2) is the resolution to "a knob whose safe state is opt-in IS the bug".
+// Only ~11 of ~100 tools pass `?quality=`, so 89 captured through a drifting
+// tier; asking each of them to remember a pin is the same forgotten-knob design
+// that failed 99/100. Instead, the two routes that exist SOLELY for capture make
+// freezing the default and gate the DEVIATION (`freezeQuality(false)`). Nothing
+// new to remember, no orphan flag, and `?play=1` stays pin-only so a real player
+// keeps adaptive recovery.
 
 import type { QualityTier } from '../three/types'
 import { QUALITY_ORDER } from '../three/types'
@@ -43,19 +61,48 @@ export interface AdaptiveEngine {
 }
 
 /**
- * Freeze the adaptive-quality loop when — and only when — the URL pins a valid
- * tier. Returns the pinned tier (freeze applied) or null (left adaptive).
- *
- * Called once at route init. Idempotent and side-effect-free unless a tier is
- * pinned, so a normal player's session behaves exactly as before.
+ * Options that widen the condition under which a capture session freezes.
  */
-export function applyCaptureQuality(engine: AdaptiveEngine, search: string): QualityTier | null {
-  const pinned = forcedQuality(search)
-  if (pinned) engine.setAdaptiveQuality(false)
-  return pinned
+export interface CaptureOpts {
+  /**
+   * Freeze even without a `?quality=` pin. Set true ONLY by routes that exist
+   * solely for a capture or dev harness — `?fight=1`, `?attract=1` — where no
+   * real buyer is ever present, so a still tier is the correct default and needs
+   * no per-tool opt-in. The buyer-shared route (`?play=1`) leaves this false and
+   * freezes only on an explicit pin, so a real player keeps adaptive recovery.
+   * This is the "make the safe state the default, gate the deviation" inversion
+   * applied per route: on a capture-only route, frozen IS the default and the
+   * deviation (`freezeQuality(false)`) is the thing a dev must ask for.
+   */
+  captureRoute?: boolean
 }
 
-/** The two capture-only probes a run installs on `window.__PLAY__`. */
+/**
+ * Freeze the adaptive-quality loop and return the tier now held frozen, or null
+ * if the session was left adaptive.
+ *
+ * Freezes when EITHER the URL pins a valid tier (`?quality=`, "measure this
+ * one") OR `opts.captureRoute` is set (a route that only ever hosts a capture).
+ * A pin also selects the tier; a bare capture route freezes at whatever
+ * `detectQuality` already picked. With neither, nothing happens and a normal
+ * player's session is byte-for-byte unchanged.
+ *
+ * Called once at route init. The return value is null iff the loop was left
+ * adaptive, which is exactly the buyer path.
+ */
+export function applyCaptureQuality(
+  engine: AdaptiveEngine,
+  search: string,
+  opts: CaptureOpts = {},
+): QualityTier | null {
+  const pinned = forcedQuality(search)
+  if (pinned === null && opts.captureRoute !== true) return null
+  engine.setAdaptiveQuality(false)
+  return pinned ?? engine.quality
+}
+
+/** The two capture-only probes a run installs on its route's dev handle
+ *  (`window.__PLAY__` for `?play=1`, `window.__FIGHT__` for `?fight=1`). */
 export interface CaptureHooks {
   /** Hold the tier still, or — with false — opt this one run back into the
    *  adaptive loop. The safe state (frozen) is the default; deviating from it
@@ -79,9 +126,17 @@ export interface CaptureHooks {
  * by coupling, not by a source grep. `openCaptureSession(spy, …)` is exactly
  * what the node gate exercises, so "capture mode ⇒ adaptEnabled === false" is
  * asserted on the real wiring the route runs, without a GPU.
+ *
+ * `opts` forwards to `applyCaptureQuality`: a capture-only route passes
+ * `{ captureRoute: true }` to freeze by default; `?play=1` passes nothing and
+ * freezes only on a pin.
  */
-export function openCaptureSession(engine: AdaptiveEngine, search: string): CaptureHooks {
-  applyCaptureQuality(engine, search)
+export function openCaptureSession(
+  engine: AdaptiveEngine,
+  search: string,
+  opts: CaptureOpts = {},
+): CaptureHooks {
+  applyCaptureQuality(engine, search, opts)
   return {
     freezeQuality: (frozen = true) => engine.setAdaptiveQuality(!frozen),
     quality: () => engine.quality,

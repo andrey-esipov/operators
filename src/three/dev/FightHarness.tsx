@@ -6,6 +6,7 @@ import { loadFighterAtlas } from '../fight/loadFighterAtlas'
 import { STAGE_ORDER } from '../stage/StageRegistry'
 import type { ScenarioId } from '../../types'
 import { getFighter } from '../../data/fighters'
+import { openCaptureSession } from '../../play/captureQuality'
 
 /**
  * Dev harness for the real-time fight renderer at `?fight=1`.
@@ -35,6 +36,13 @@ declare global {
   interface Window {
     __FIGHT__?: {
       ready: () => boolean
+      /** Hold the quality tier still for a capture (frozen by default on this
+       *  route), or freezeQuality(false) to opt back into adaptation. Fused with
+       *  the freeze at init; see captureQuality.ts. */
+      freezeQuality: (frozen?: boolean) => void
+      /** The live quality tier, so a capture can assert it never drifted between
+       *  window start and end. */
+      quality: () => string
     /** Freeze the rAF loop so stepFixed is the only clock (deterministic). */
     pause: () => void
     resume: () => void
@@ -108,6 +116,16 @@ export function FightHarness() {
       // canvas, and a second loop silently overdraws the live one.
       if (disposed) return renderer.dispose()
 
+      // `?fight=1` is a dev/capture-only route — App.tsx calls it "dev-only" and
+      // no buyer ever lands here — so freeze the tier by DEFAULT (captureRoute).
+      // Without this, Engine.maybeAdapt demotes pixelRatio/DOF/bloom the moment
+      // p90 crosses ~22.2 ms and every ?fight=1 capture — incl. measure-
+      // separation's A/B, which passes ?quality= only conditionally — is graded
+      // through a silently moving tier. The same call yields the freezeQuality/
+      // quality probes spread into __FIGHT__ below, so a capture can assert the
+      // tier held AND the freeze can't rot without also breaking the probe.
+      const capture = openCaptureSession(renderer.engine, window.location.search, { captureRoute: true })
+
       setStatus('loading sprites')
       const accentA = getFighter(aId)?.accent ?? '#E63946'
       const accentB = getFighter(bId)?.accent ?? '#4361EE'
@@ -136,6 +154,7 @@ export function FightHarness() {
         projCoverage: () => renderer!.projectileCoverage(),
         projCount: () => renderer!.projectileCount,
         superFreeze: () => renderer!.superFreezeState,
+        ...capture,
         renderer,
       }
       setStatus('running')

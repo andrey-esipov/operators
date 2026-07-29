@@ -52,6 +52,60 @@ describe('captureQuality.applyCaptureQuality (decision contract)', () => {
   })
 })
 
+// captureRoute is the resolution to "a knob whose safe state is opt-in IS the
+// bug": the two routes that exist SOLELY for capture (?fight=1, ?attract=1) pass
+// { captureRoute: true } and freeze WITHOUT a ?quality= pin, so the ~89 tools
+// that never pass a pin still measure a still tier. ?play=1 (buyer-shared)
+// passes nothing and stays pin-only. These assert the DIRECTION of the default
+// per route, not merely that a freeze can happen — the separation-vs-loudness
+// lesson: "they differ" is weaker than "they differ the way I intended".
+describe('captureQuality.captureRoute (freeze-by-default on capture-only routes)', () => {
+  it('freezes with NO pin when captureRoute is set (the ?fight=1 / ?attract=1 default)', () => {
+    const e = new SpyEngine()
+    const frozenAt = applyCaptureQuality(e, '?stage=crisis', { captureRoute: true })
+    expect(e.adaptEnabled).toBe(false) // froze despite no ?quality=
+    expect(frozenAt).toBe('ultra') // reports the detected tier it pinned (spy default)
+  })
+
+  it('does NOT freeze with no pin when captureRoute is absent (the ?play=1 buyer default)', () => {
+    // The anti-vacuity twin of the test above: if captureRoute silently defaulted
+    // to freezing, a real player on ?play=1 would lose adaptive recovery. This is
+    // the asymmetry the coordinator named — the direction you cannot trust (a
+    // buyer frozen) must fail CLOSED: stay adaptive unless asked otherwise.
+    const e = new SpyEngine()
+    expect(applyCaptureQuality(e, '?stage=crisis')).toBeNull()
+    expect(applyCaptureQuality(e, '?stage=crisis', {})).toBeNull()
+    expect(e.adaptEnabled).toBe(true)
+    expect(e.calls).toBe(0)
+  })
+
+  it('a pin still selects the TIER on a capture route (pin wins the tier, route wins the freeze)', () => {
+    const e = new SpyEngine()
+    expect(applyCaptureQuality(e, '?quality=low', { captureRoute: true })).toBe('low')
+    expect(e.adaptEnabled).toBe(false)
+  })
+
+  it('a bogus pin on a capture route still freezes at the detected tier (route forces it, bad pin ignored)', () => {
+    const e = new SpyEngine()
+    e.quality = 'high'
+    expect(applyCaptureQuality(e, '?quality=banana', { captureRoute: true })).toBe('high')
+    expect(e.adaptEnabled).toBe(false)
+  })
+
+  it('openCaptureSession forwards captureRoute (the exact wiring FightHarness runs)', () => {
+    // FightHarness calls openCaptureSession(engine, search, { captureRoute: true }).
+    // Prove the option reaches the freeze through the FUSED entry point, not only
+    // via bare applyCaptureQuality, and that the ?play=1 path is unaffected.
+    const frozen = new SpyEngine()
+    openCaptureSession(frozen, '?stage=crisis', { captureRoute: true })
+    expect(frozen.adaptEnabled).toBe(false)
+
+    const adaptive = new SpyEngine()
+    openCaptureSession(adaptive, '?stage=crisis')
+    expect(adaptive.adaptEnabled).toBe(true)
+  })
+})
+
 // The reachability gate. openCaptureSession is the SAME call the shipped route
 // runs (PlayableMatch.tsx): it both auto-freezes and produces the __PLAY__
 // freezeQuality/quality probes. Exercising it here proves "capture mode =>

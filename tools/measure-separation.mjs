@@ -173,6 +173,20 @@ const FLOORS = {
   lumContrast: Number(arg('minLum', '50')), //   |fighterLum - localBgLum|, /255
 }
 
+// FRAGILITY RATCHET (enforced in the assert block; full rationale there). This is
+// NOT a per-read FLOOR and mandates the keyline on no read — the two-path gate below
+// deliberately never requires a mechanism. It caps the COUNT of reads carried by the
+// KEYLINE ALONE (luminance below its floor): how many stage/fighter pairs have lost
+// value separation and now hang on the rim only. That is a FRAGILITY measure — "how
+// close are we to the saved-only-by-a-stickered-on-keyline failure this workstream
+// already fixed once" — so it ratchets DOWN: if keyline-only RISES past the high-water
+// mark, luminance separation eroded silently and the gate reddens. Default 27 = the
+// independent visual-critic v14 high-water; my own run-to-run measured 25/26/26 (±1
+// GPU/AA jitter on the marginal reads), so 27 also carries ~1 unit of noise headroom
+// and won't false-fail on jitter — a real regression moves several reads. Override
+// with --maxKeylineOnly for what-if runs and the mutation proof.
+const KEYLINE_ONLY_MAX = Number(arg('maxKeylineOnly', '27'))
+
 const CM = 3.4 / 180
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
@@ -523,6 +537,18 @@ try {
     console.log(`  Path B  luminance |contrast|   min/mean/max = ${stat(lums)}   (${nBelow(lums, FLOORS.lumContrast)}/${reads.length} below ${FLOORS.lumContrast})`)
     console.log(`  reported-only     edgeContrast min/mean/max = ${stat(edges)}   |  signed contrast min/mean/max = ${stat(signed)}`)
     console.log(`  carried by:  keyline-only ${viaA}  |  luminance-only ${viaB}  |  both ${viaBoth}  |  NEITHER ${viaNeither}`)
+    // FRAGILITY RATCHET — cap keyline-only reads (see KEYLINE_ONLY_MAX above). Unlike
+    // the per-read floors, this asserts on the MECHANISM MIX: it reddens when value
+    // separation erodes and MORE reads fall back to the rim alone — the one silent
+    // regression the two-path OR gate cannot catch (a read can decay from luminance-
+    // carried to keyline-only and the outcome gate stays green the whole way down,
+    // exactly as the min contrast slid 7.3 -> 4.4 across a commit with nothing red).
+    // The raw count prints whether or not it fires, so the number is never hidden
+    // behind a boolean — same discipline as the two-path distribution above.
+    const risen = viaA > KEYLINE_ONLY_MAX
+    console.log(`  fragility:   keyline-only ${viaA}/${reads.length} vs high-water ${KEYLINE_ONLY_MAX} — ${risen ? 'RISEN (value separation eroded)' : 'held'}`)
+    if (risen) fails.push(
+      `FRAGILITY: keyline-only ${viaA} exceeds high-water ${KEYLINE_ONLY_MAX} — ${viaA} of ${reads.length} reads now depend on the rim ALONE (value separation eroded). Lift BODY value (self-fill / additive shadow-lift / per-fighter reval); do NOT raise the rim — that re-creates the "stickered-on keyline" look this ratchet exists to prevent.`)
     if (fails.length) { console.log('FAIL:'); for (const f of fails) console.log('  ✗ ' + f); process.exit(1) }
     console.log(`PASS — all ${reads.length} reads clear at least one path (keyline: peak>=${FLOORS.rimPeakDelta} & rim>=${FLOORS.rimWidthPx}px, OR luminance: |contrast|>=${FLOORS.lumContrast})`)
   }

@@ -180,3 +180,46 @@ describe('separation: the gate covers EVERY stage (no single-member blind spot)'
     expect(GATE).toMatch(/rimWidthPx: Number\(arg\('minRim', '[0-9.]+'\)\)/)
   })
 })
+
+describe('separation: the fragility ratchet caps keyline-only reads (mechanism-mix erosion)', () => {
+  // The two-path OR gate above asserts the OUTCOME per read, which is correct — but by
+  // construction it cannot see a read DECAY from luminance-carried to keyline-only: the
+  // read still passes (the rim holds), so the gate stays green while value separation
+  // silently erodes toward the "saved only by a stickered-on keyline" failure that
+  // started this workstream. The ratchet closes that exact blind spot by gating the
+  // COUNT of keyline-only reads. It is a FRAGILITY measure, not a mechanism proxy: it
+  // never floors edgeContrast or requires the rim on any read — it only forbids the
+  // MIX from drifting further onto the rim than today's high-water.
+  it('authors a keyline-only ceiling with a live, positive default at the documented high-water', () => {
+    const m = GATE.match(/const KEYLINE_ONLY_MAX = Number\(arg\('maxKeylineOnly', '([0-9]+)'\)\)/)
+    expect(m, 'gate must declare KEYLINE_ONLY_MAX with a --maxKeylineOnly override').not.toBeNull()
+    const ceiling = Number(m![1])
+    // A 0 default would fire every run (decorative); a huge one would never fire.
+    // Bracket it around the measured 25-27 high-water so a fresh checkout enforces
+    // today's fragility, not 0/infinity.
+    expect(ceiling).toBeGreaterThanOrEqual(20)
+    expect(ceiling).toBeLessThanOrEqual(35)
+  })
+
+  it('CONSUMES the ceiling: keyline-only (viaA) is compared to it AND pushed to the fails[] the gate exits on', () => {
+    // Authored-but-never-consumed is this project's signature no-op. Tie the const to
+    // its enforcement: viaA must be computed, compared to the ceiling, and a breach
+    // must push onto the SAME fails[] whose length drives process.exit(1).
+    at(GATE, 'const viaA = reads.filter((r) => r.keyline && !r.lumen).length')
+    at(GATE, 'viaA > KEYLINE_ONLY_MAX')
+    expect(GATE).toMatch(/if \(risen\) fails\.push/)
+    // exit is still driven by fails.length AFTER the ratchet has had its chance to push
+    const push = at(GATE, 'if (risen) fails.push')
+    const exit = at(GATE, "if (fails.length) { console.log('FAIL:')")
+    expect(push).toBeLessThan(exit)
+    // raw count printed whether it fires or not — transparent number, no hidden boolean
+    at(GATE, 'fragility:   keyline-only ')
+  })
+
+  it('ratchets DOWN (reddens when keyline-only RISES), never inverted into a floor', () => {
+    // Strictly "viaA GREATER THAN ceiling": a fragility ratchet reddens when MORE reads
+    // fall onto the rim alone. A `<` would invert it into a floor that fails when value
+    // separation IMPROVES — the opposite of the intent.
+    at(GATE, 'const risen = viaA > KEYLINE_ONLY_MAX')
+  })
+})

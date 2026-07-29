@@ -6,9 +6,16 @@ import { ATLAS_COST_BYTES, HERO_ATLAS_COST_BYTES } from './atlasCosts.generated'
  * The reel loads two fighter atlases per bout and frees them (with the WebGL
  * context) before the next, so peak VRAM is one bout. But download is serial and
  * the FIRST bout is the one a buyer waits on before the shop-window fight
- * appears. `asset-delivery` measured the choosable roster's atlases spanning
- * ~0.66–5.75 MB each, so a purely random first pairing can serve the ~11.5 MB
- * worst case (spiegel + lenny) on a cold first visit.
+ * appears. That "a buyer waits on it" is ROUTE-TRACED, not inferred from an
+ * import edge (an import edge proves a surface CAN be reached, never that it IS):
+ * a bare `/` resolves through `decideRoute` (appRoute.ts) to 'frontdoor' → the
+ * `FrontDoor` shell mounts this reel after its title beat, and the opener-variant
+ * line in AttractMode (`segment === 0 ? firstBoutAtlasVariant()`) is UNCONDITIONAL
+ * — it runs on that shipped front-door mount, not only the `?attract=1` capture
+ * route — so the opener this module prices is the first live gameplay a cold
+ * visitor on the default URL actually downloads. `asset-delivery` measured the
+ * choosable roster's atlases spanning ~0.66–5.75 MB each, so a purely random first
+ * pairing can serve the ~11.5 MB worst case (spiegel + lenny) on a cold first visit.
  *
  * This bounds only the FIRST bout's combined download; bouts 2+ stay fully
  * random so every fighter still headlines. The bound is CONNECTION-AWARE and

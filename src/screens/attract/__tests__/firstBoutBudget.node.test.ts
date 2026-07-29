@@ -36,8 +36,10 @@
  *
  * MUTATION-PROVEN (see the task report for red/green transcripts): loosening the
  * SLOW target reddens the slow-4G bound; re-introducing a finite FAST byte cap
- * reddens the "heavy art can headline" assertion (the ratchet returning);
- * dropping the SLOW budget below the lightest pairing reddens the admit-≥1 guard.
+ * reddens the "heavy art can headline" assertion AND the new per-fighter coverage
+ * guard (the ratchet returning, now caught per fighter — the exact "an atlas grew"
+ * commit that used to re-roll silently); dropping the SLOW budget below the
+ * lightest pairing reddens the admit-≥1 guard.
  */
 
 import { describe, it, expect, vi, afterEach } from 'vitest'
@@ -244,4 +246,55 @@ describe('first-bout download — the shipped director honors the budget per con
     },
     30_000,
   )
+})
+
+describe('first-bout opener — every fighter keeps full shop-window coverage on the primary path', () => {
+  /** Distinct-archetype partners a skin CAN open against — the director never
+   *  shows a moveset mirror, so a skin's maximum coverage is the number of skins
+   *  of a different archetype (2 skins/archetype ⇒ 4 today). This is the exact
+   *  obligation the primary-path budget must honor for that skin. */
+  function distinctArchetypePartners(skin: string): number {
+    const arche = ROSTER.find((r) => r.skin === skin)!.archetype
+    return ROSTER.filter((r) => r.skin !== skin && r.archetype !== arche).length
+  }
+
+  it('the FAST / default budget admits EVERY fighter with ALL its partners — the ratchet cannot return per-fighter', () => {
+    // THE PROPERTY THE OLD FIXED CEILING SILENTLY BROKE. Under a fixed byte cap,
+    // as the art run made a fighter's atlas heavier its pairings crossed the line
+    // and it appeared in fewer openers — until our BEST art headlined LEAST. The
+    // existing FAST test proves SOME heavy pair headlines (aggregate); this proves
+    // the per-fighter obligation that the uncapped primary-path budget creates:
+    // on the connection class almost every buyer is on, NO fighter is demoted from
+    // the shop window, however heavy its atlas becomes. It reddens the instant a
+    // finite FAST cap re-enters and excludes ANY fighter's pairing — i.e. the exact
+    // commit ("chesky's atlas grew") that used to pass silently while re-rolling.
+    const budget = FAST_FIRST_BOUT_BUDGET_BYTES
+    const pairs = realOpenerPairs()
+    expect(pairs.length).toBeGreaterThanOrEqual(10) // vacuity: real openers exist
+
+    const partnersOf: Record<string, Set<string>> = {}
+    for (const r of ROSTER) partnersOf[r.skin] = new Set()
+    for (const p of pairs) {
+      if (p.bytes <= budget) {
+        partnersOf[p.a].add(p.b)
+        partnersOf[p.b].add(p.a)
+      }
+    }
+
+    let checked = 0
+    for (const r of ROSTER) {
+      const obligation = distinctArchetypePartners(r.skin)
+      expect(obligation, `${r.skin} has no distinct-archetype partner — roster/archetype shape broke`).toBeGreaterThan(0)
+      expect(
+        partnersOf[r.skin].size,
+        `${r.skin} can open with only ${partnersOf[r.skin].size}/${obligation} partners on the PRIMARY path — ` +
+          `a finite FAST byte cap has demoted a fighter from the shop window (its atlas got heavier and dropped ` +
+          `pairings). That is the ratchet the seconds-based budget exists to prevent.`,
+      ).toBe(obligation)
+      checked++
+    }
+    // Vacuity: every roster fighter was actually checked, not an empty set.
+    expect(checked).toBe(ROSTER.length)
+    expect(ROSTER.length).toBeGreaterThan(4)
+  })
 })

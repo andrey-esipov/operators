@@ -434,4 +434,39 @@ describe('app font delivery budget', () => {
     // files ever change, this and the per-family checks move together.
     expect(rfnCount).toBe(1)
   })
+
+  // The ONE licence-critical byte assertion. Press Start 2P is the only shipped
+  // face with a Reserved Font Name, and the SIL OFL FAQ (2.6 / the Webfonts &
+  // RFN paper) rules that a self-made `subset=latin` webfont is a Modified
+  // Version for which RFN restrictions apply — so a locally-subset Press Start
+  // 2P served as `font-family: "Press Start 2P"` would violate OFL clause 3.
+  // The only safe latin build is Google Fonts' OWN latin-subset woff2, shipped
+  // verbatim (we distribute Google's unmodified file, we don't author a subset).
+  // The coverage manifest's sha256 is regenerated FROM this file, so it cannot
+  // catch a swap — it would just re-hash the replacement. This pins the bytes to
+  // an INDEPENDENT known-good literal instead: the exact file Google's css2 API
+  // serves for the latin unicode-range at
+  //   https://fonts.gstatic.com/s/pressstart2p/v16/e3t4euO8T-267oIAQAu6jDQyK3nVivM.woff2
+  // (verified byte-identical on fetch: 12,512 B, sha256 afec8699…). If Google
+  // bumps the font version, replace the file with the NEW gstatic woff2 and
+  // update this pin FROM that fetch — never from a local pyftsubset, which is
+  // precisely the ~8 KB "optimisation" that re-introduces the RFN violation.
+  it('the sole RFN-bearing face is Google\'s verbatim latin woff2 (byte-identity pin)', () => {
+    const woff2 = resolve(REPO, 'public/fonts/PressStart2P-latin.woff2')
+    expect(existsSync(woff2), 'PressStart2P-latin.woff2 missing on disk').toBe(true)
+    const bytes = readFileSync(woff2)
+    // Vacuity: a real, non-empty file — not a zero-byte placeholder that would
+    // trivially "match" a pin computed over nothing.
+    expect(bytes.length, 'PressStart2P-latin.woff2 is empty').toBeGreaterThan(1000)
+    expect(bytes.length, 'PressStart2P-latin.woff2 size drifted from Google v16 latin').toBe(12_512)
+    const GOOGLE_V16_LATIN_SHA256 =
+      'afec86997fdaf54af1f59358fa2c1e2a0f1d04146edad18e5cd141d0384a7548'
+    const actual = createHash('sha256').update(bytes).digest('hex')
+    expect(
+      actual,
+      'PressStart2P-latin.woff2 is NOT Google\'s verbatim latin woff2 — a self-made ' +
+        'subset of an RFN font served as font-family:"Press Start 2P" violates OFL clause 3. ' +
+        'Ship the gstatic file verbatim (see comment above); do not pyftsubset it locally.',
+    ).toBe(GOOGLE_V16_LATIN_SHA256)
+  })
 })

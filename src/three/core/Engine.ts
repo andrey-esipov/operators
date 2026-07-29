@@ -247,7 +247,7 @@ export class Engine {
     this.timeScaleSnap = true
   }
 
-  setQuality(q: QualityTier) {
+  setQuality(q: QualityTier, fromAdaptor = false) {
     if (q === this._quality) return
     this._quality = q
     this.maxPixelRatio = pixelRatioFor(q)
@@ -255,9 +255,11 @@ export class Engine {
     this.renderer.shadowMap.enabled = qualityRank(q) >= 1
     for (const s of this.subsystems) s.setQuality?.(q)
     this.resize(this.width, this.height)
-    // Fresh window for the new tier so a burst of stale slow frames from the
-    // tier we just left can't immediately trigger another demotion.
-    this.adaptor.reset()
+    // An adaptor-initiated change already cleared its own window in `commit()`
+    // and must KEEP its ceiling + oscillation memory (that state is what makes a
+    // demotion reversible). Only a foreign caller — the dev knob — fully resets
+    // the controller, so it re-learns the forced tier as the new boot ceiling.
+    if (!fromAdaptor) this.adaptor.reset()
   }
 
   /** Disable runtime downgrades (used while capturing reference screenshots). */
@@ -402,7 +404,13 @@ export class Engine {
     // Measured -336ms in the lab. A negative dt runs every spring, timer and
     // integrator in the engine BACKWARDS -- camera modes never reach their end
     // and hitstop envelopes invert. Never let one reach a subsystem.
-    const rawDt = Math.max(0, Math.min(0.1, (now - this.lastTime) / 1000))
+    //
+    // `wallDtMs` keeps the UNCLAMPED delta for ONE consumer only: the quality
+    // adaptor, which must tell a genuinely slow frame apart from an unmeasurable
+    // gap (tab-restore/GC). Handing it the clamped value made a 10s restore and a
+    // 101ms hitch identical — both read as the worst case and floored the tier.
+    const wallDtMs = now - this.lastTime
+    const rawDt = Math.max(0, Math.min(0.1, wallDtMs / 1000))
     this.lastTime = now
     // Hitstop overrides the eased time scale while it's active. Measured in
     // unscaled wall time so the freeze can't stretch itself.
@@ -454,22 +462,27 @@ export class Engine {
 
     this.frameCount++
     this.avgFrameMs += (frameMs - this.avgFrameMs) * 0.05
-    this.runAdapt(now, rawDt * 1000)
+    this.runAdapt(now, wallDtMs)
   }
 
   /**
-   * Adaptive quality. Delegates the decision to the pure QualityAdaptor: if
-   * frame time stays above the 45fps line for ~windowMs we drop a tier, and a
-   * catastrophic reading (p90 above the 20fps line) drops STRAIGHT to the floor
-   * in one step. The controller's window is wall-clock, so — unlike the previous
-   * 90-frame warmup — reaction time no longer degrades as the frame rate falls.
-   * `rawDt` is already clamped upstream (tab-restore guard), so one pathological
-   * frame can't dominate the windowed p90.
+   * Adaptive quality. Delegates the whole decision to the pure QualityAdaptor,
+   * which demotes when the windowed p90 sits above the 45fps line (or jumps to
+   * the floor on a catastrophic read) AND promotes back up on a sustained healthy
+   * window, so a demotion is reversible rather than a one-way fuse.
+   *
+   * We pass the UNCLAMPED wall-clock frame time on purpose. The sim's 100ms dt
+   * clamp is load-bearing upstream, but it is NOT a measurement — it normalises a
+   * multi-second stall to exactly 100ms, which the old policy then scored as 2x
+   * catastrophic and used to floor the tier during the boot transient. The
+   * adaptor separates "slow" from "unmeasurable" itself (it discards samples at
+   * the discontinuity ceiling and excludes the boot grace), which it can only do
+   * if it sees the real delta.
    */
-  private runAdapt(now: number, frameMs: number) {
+  private runAdapt(now: number, wallDtMs: number) {
     if (!this.adaptEnabled) return
-    const action = this.adaptor.sample(now, frameMs, this._quality)
-    if (action.kind === 'demote') this.setQuality(action.to)
+    const action = this.adaptor.sample(now, wallDtMs, this._quality)
+    if (action.kind !== 'none') this.setQuality(action.to, true)
   }
 
   /** Force N frames synchronously — used by the screenshot harness. */

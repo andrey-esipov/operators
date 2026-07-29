@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import type { QualityTier } from '../../types'
-import { qualityRank } from '../../types'
+import { qualityRank, QUALITY_ORDER } from '../../types'
 import {
   QualityAdaptor,
   affordablePixelRatio,
@@ -28,31 +28,94 @@ import {
 //    NOT demoting, so a mutant that just always-demotes is caught, not rewarded.
 //    Without it, every "does it demote?" assertion is satisfiable by demote-always.
 //
-// Mutation-proved in the commit message: windowMs→90_000 reddens the reaction
-// bound; catastrophicMs→Infinity reddens the jump-to-floor; dropping the sqrt in
-// affordablePixelRatio reddens the Retina cap. Each restored byte-identical.
+// Mutation-proved (before→after, each restored byte-identical; full log in the
+// commit message):
+//   ratchet fix —
+//     bootGraceMs 1000→0            BOOT EXCLUSION goes red (boot stall scored → demote @1066ms)
+//     discontinuityMs 1000→1e9      lone 5s frame scored → catastrophic demote @7016ms
+//     `frameMs>=0` → `>=-1e12`      negative delta counted → spurious promote (0→1)
+//     promoteBelowMs 17.5→0         REVERSIBLE goes red (recovery never fires, 0 promotes)
+//     `locked` disabled             OSCILLATION CAP goes red (12 promotes vs bound 8)
+//   pre-existing (still bite) —
+//     windowMs 900→90_000           reaction bound red; catastrophicMs→Infinity un-floors the
+//     jump; dropping the sqrt in affordablePixelRatio reddens the Retina cap (1.109 vs <1.1).
 // ────────────────────────────────────────────────────────────────────────────
 
-interface Action { t: number; from: QualityTier; to: QualityTier; reason: string; reactionMs: number }
+interface Action { t: number; kind: 'demote' | 'promote'; from: QualityTier; to: QualityTier; reason?: string; reactionMs?: number }
 
 /**
  * Drive a fresh series of `fps` frames for `durationMs` of simulated time,
- * applying each demotion to the running tier. `frameMs` is clamped to 100ms to
- * mirror the Engine's tab-restore guard (`rawDt = min(0.1, …)`), so a 6fps
- * series feeds 100ms frames — exactly what the real adaptor sees.
+ * applying each demotion/promotion to the running tier. `frameMs` is the
+ * UNCLAMPED wall-clock delta — exactly what `Engine.frame` now hands the adaptor
+ * (`runAdapt(now, wallDtMs)`). The Engine still clamps `rawDt` to 100ms for the
+ * SIM, but the adaptor sees the true delta so it can tell a genuinely slow frame
+ * apart from an unmeasurable gap. A 6fps series therefore feeds 166.7ms frames,
+ * not the old 100ms clamp value.
  */
 function simulate(adaptor: QualityAdaptor, fps: number, durationMs: number, startTier: QualityTier) {
-  const frameMs = Math.min(100, 1000 / fps)
+  const frameMs = 1000 / fps
   let tier = startTier
   const actions: Action[] = []
   for (let t = 0; t <= durationMs + 1e-6; t += frameMs) {
     const a = adaptor.sample(t, frameMs, tier)
-    if (a.kind === 'demote') {
-      actions.push({ t: +t.toFixed(1), from: a.from, to: a.to, reason: a.reason, reactionMs: +a.reactionMs.toFixed(1) })
+    if (a.kind !== 'none') {
+      actions.push({ t: +t.toFixed(1), kind: a.kind, from: a.from, to: a.to, reason: (a as { reason?: string }).reason, reactionMs: +((a as { reactionMs?: number }).reactionMs ?? 0).toFixed(1) })
       tier = a.to
     }
   }
   return { tier, actions }
+}
+
+/**
+ * Drive an explicit list of [frameMs, count] segments back-to-back, tracking the
+ * running tier and every action. Lets a test compose a boot stall, a slow
+ * stretch and a healthy recovery in one continuous wall-clock timeline — which
+ * `simulate` (one fixed fps) can't express.
+ */
+function feed(adaptor: QualityAdaptor, segments: [number, number][], startTier: QualityTier) {
+  let tier = startTier
+  let t = 0
+  const actions: Action[] = []
+  for (const [frameMs, count] of segments) {
+    for (let i = 0; i < count; i++) {
+      t += frameMs
+      const a = adaptor.sample(t, frameMs, tier)
+      if (a.kind !== 'none') {
+        actions.push({ t: +t.toFixed(1), kind: a.kind, from: a.from, to: a.to, reason: (a as { reason?: string }).reason, reactionMs: +((a as { reactionMs?: number }).reactionMs ?? 0).toFixed(1) })
+        tier = a.to
+      }
+    }
+  }
+  return { tier, actions, endT: t }
+}
+
+/**
+ * Stress ONE tier boundary repeatedly: a slow burst (enough for one demotion)
+ * then a healthy burst (enough for one promotion), `cycles` times, after clearing
+ * the boot grace. Returns how many promotions fired — the oscillation-cap metric.
+ * With the cap, re-entry into a repeatedly-failing tier stops and the count stays
+ * small; without it, a promotion fires every cycle.
+ */
+function flap(adaptor: QualityAdaptor, cycles: number, startTier: QualityTier) {
+  let tier = startTier
+  let t = 0
+  let promotes = 0
+  let demotes = 0
+  const slowMs = 1000 / 30
+  const step = (ms: number, n: number) => {
+    for (let i = 0; i < n; i++) {
+      t += ms
+      const a = adaptor.sample(t, ms, tier)
+      if (a.kind === 'promote') { promotes++; tier = a.to }
+      else if (a.kind === 'demote') { demotes++; tier = a.to }
+    }
+  }
+  step(1000 / 60, 120) // clear the boot grace with health
+  for (let c = 0; c < cycles; c++) {
+    step(slowMs, 40)     // ~1.3s slow → one demotion
+    step(1000 / 60, 260) // ~4.3s healthy → one promotion (> promoteWindowMs)
+  }
+  return { tier, promotes, demotes }
 }
 
 describe('QualityAdaptor — demotion policy', () => {
@@ -75,7 +138,7 @@ describe('QualityAdaptor — demotion policy', () => {
     // 33.3ms is below 45fps but not catastrophic, so we step down conservatively
     // rather than dumping straight to the floor.
     const adaptor = new QualityAdaptor()
-    const { actions } = simulate(adaptor, 30, DEFAULT_ADAPT.windowMs * 1.5 + 5, 'ultra')
+    const { actions } = simulate(adaptor, 30, DEFAULT_ADAPT.bootGraceMs + DEFAULT_ADAPT.windowMs * 1.5 + 5, 'ultra')
     expect(actions.length).toBeGreaterThanOrEqual(1)
     expect(actions[0]).toMatchObject({ from: 'ultra', to: 'high', reason: 'slow' })
     // exactly one tier of movement in the first window
@@ -83,7 +146,7 @@ describe('QualityAdaptor — demotion policy', () => {
   })
 
   it('30fps eventually walks ultra→…→low, one tier at a time', () => {
-    const { tier, actions } = simulate(new QualityAdaptor(), 30, DEFAULT_ADAPT.windowMs * 5, 'ultra')
+    const { tier, actions } = simulate(new QualityAdaptor(), 30, DEFAULT_ADAPT.bootGraceMs + DEFAULT_ADAPT.windowMs * 5, 'ultra')
     expect(tier).toBe('low')
     // Every hop is a single tier — never a multi-tier jump on a merely-slow read.
     for (const a of actions) expect(qualityRank(a.from) - qualityRank(a.to)).toBe(1)
@@ -101,15 +164,18 @@ describe('QualityAdaptor — demotion policy', () => {
   })
 
   it('REGRESSION GUARD: reaction time is wall-clock-bounded, NOT frame-count-bounded', () => {
-    // The whole point of the fix. At 6fps the old 90-frame warmup could not
-    // react before 90×100ms = 9000ms (and 14940ms without the clamp). Assert the
-    // first demotion lands inside ~1 window (<2000ms) at BOTH 6fps and 60fps-worth
-    // of severity, so reaction time no longer degrades with how bad the drop is.
+    // The whole point of the original fix. At 6fps the old 90-frame warmup could
+    // not react before 90×frame = 9000ms+. Boot exclusion now adds a FIXED
+    // wall-clock offset (bootGraceMs) before the first decision — the SAME offset
+    // at every fps, which is itself the proof the delay is not frame-count-based.
+    // Past that, reactionMs (elapsed since the window armed) is ~one window
+    // regardless of fps, so a ~1-window bound reddens the old 90-frame logic hard.
     for (const fps of [6, 10, 20]) {
-      const { actions } = simulate(new QualityAdaptor(), fps, 3000, 'ultra')
+      const frameMs = 1000 / fps
+      const { actions } = simulate(new QualityAdaptor(), fps, 4000, 'ultra')
       expect(actions.length).toBeGreaterThanOrEqual(1)
-      expect(actions[0].t).toBeLessThan(2000)
-      expect(actions[0].reactionMs).toBeLessThan(2000)
+      expect(actions[0].reactionMs!).toBeLessThan(DEFAULT_ADAPT.windowMs + 3 * frameMs)
+      expect(actions[0].t).toBeLessThan(DEFAULT_ADAPT.bootGraceMs + DEFAULT_ADAPT.windowMs + 3 * frameMs)
     }
   })
 
@@ -129,10 +195,150 @@ describe('QualityAdaptor — demotion policy', () => {
   })
 
   it('enforces a cooldown: successive demotions are ≥ windowMs apart', () => {
-    const { actions } = simulate(new QualityAdaptor(), 30, DEFAULT_ADAPT.windowMs * 5, 'ultra')
+    const { actions } = simulate(new QualityAdaptor(), 30, DEFAULT_ADAPT.bootGraceMs + DEFAULT_ADAPT.windowMs * 5, 'ultra')
     for (let i = 1; i < actions.length; i++) {
       expect(actions[i].t - actions[i - 1].t).toBeGreaterThanOrEqual(DEFAULT_ADAPT.windowMs - 1e-3)
     }
+  })
+})
+
+// ────────────────────────────────────────────────────────────────────────────
+// The ratchet fix. The first cut of this controller shipped a one-way downward
+// fuse: a ~900ms boot stall (shader compile + atlas upload) read as catastrophic
+// and floored the tier at t≈1s, and there was NO promotion path, so sixty
+// seconds of locked 60fps on a 4090 never recovered a single tier. These gates
+// pin the three mechanisms that make it adaptation again — and each is
+// mutation-proved (see the run log in the commit message).
+//
+// WHY THE FAILURE MODE CANNOT SATISFY THEM:
+//  • `bootStallThenHealthy…` demotes NOTHING despite a solid slow boot stretch —
+//    a mutant that scores boot samples (bootGraceMs→0) emits a catastrophic
+//    demote and reddens it. A gate that only checked the FINAL tier would be
+//    fooled once promotion exists (it would recover), so this asserts NO demote
+//    action ever fired, which the promotion path cannot paper over.
+//  • `unmeasurableSampleNotCatastrophic` feeds a 5s frame among healthy ones;
+//    scoring it (discontinuityMs→∞) floors the tier. Discarding it is the only
+//    way the assertion holds.
+//  • `demotionIsReversible` FORCES a real post-boot collapse to the floor, then
+//    proves sustained health climbs all the way back to the boot tier — the
+//    property whose absence WAS the bug. Removing the promote branch
+//    (promoteBelowMs→0) leaves it pinned at the floor.
+//  • Anti-vacuity: `deadBandNeitherPromotesNorDemotes` proves promotion is not a
+//    disguised always-promote, and `promotionNeverExceedsBootTier` proves the
+//    detector's ceiling is respected. Without them a "does it recover?" assertion
+//    is satisfiable by promote-always.
+// ────────────────────────────────────────────────────────────────────────────
+describe('QualityAdaptor — recovery, validity & boot exclusion (the ratchet fix)', () => {
+  const fast = 1000 / 60 // 16.67ms — a healthy vsync-locked frame
+
+  it('BOOT EXCLUSION: a slow boot stall followed by sustained 60fps demotes NOTHING', () => {
+    // The reviewer's own repro, inverted. ~900ms of 6.7fps (the compile/upload
+    // transient) then 3s of locked 60fps. The boot stretch is discarded, so the
+    // tier is never touched. (Mutant bootGraceMs→0 scores the stall → a
+    // catastrophic demote appears and this reddens.)
+    const { tier, actions } = feed(new QualityAdaptor(), [
+      [150, 6],       // 6 frames × 150ms ≈ 900ms boot stall (shader compile)
+      [fast, 180],    // ~3s sustained healthy 60fps
+    ], 'ultra')
+    expect(actions).toEqual([])
+    expect(tier).toBe('ultra')
+  })
+
+  it('UNMEASURABLE ≠ CATASTROPHIC: a lone multi-second frame is discarded, not scored', () => {
+    // A 5s tab-restore/GC pause among healthy frames. Its wall-delta (5000ms) is
+    // unmeasurable, not slow — discarded, never scored. (Mutant discontinuityMs→∞
+    // scores it → the window collapses to that one giant sample → catastrophic
+    // demote to the floor, and this reddens.)
+    const { tier, actions } = feed(new QualityAdaptor(), [
+      [fast, 120],    // ~2s healthy, clears the boot grace
+      [5000, 1],      // one 5s frame — a pause, not sustained render load
+      [fast, 120],    // ~2s healthy again
+    ], 'ultra')
+    expect(actions.filter((a) => a.kind === 'demote')).toEqual([])
+    expect(tier).toBe('ultra')
+  })
+
+  it('UNMEASURABLE ≠ CATASTROPHIC: a negative frame delta is discarded and re-arms the promote window', () => {
+    // Model the real event faithfully: rAF `now` marches FORWARD, but the reported
+    // DELTA is negative because lastTime was left on the virtual step clock ahead
+    // of wall time (measured -336ms). If such a sample entered the window it would
+    // both corrupt the median AND fail to re-arm — so a promotion could fire on a
+    // window that never actually held sustained health. Discarding it re-arms the
+    // promote clock. (Mutant: widen the `frameMs >= 0` guard to admit negatives and
+    // the promote fires early → this reddens. The discontinuity test can't catch
+    // that mutation because it only exercises the upper half of the same guard.)
+    const a = new QualityAdaptor()
+    let t = 0
+    let tier: QualityTier = 'ultra'
+    let promotes = 0
+    const drive = (frameMs: number, n: number) => {
+      const adv = frameMs >= 0 ? frameMs : fast // a negative DELTA never rewinds `now`
+      for (let i = 0; i < n; i++) {
+        t += adv
+        const act = a.sample(t, frameMs, tier)
+        if (act.kind === 'promote') { promotes++; tier = act.to }
+        else if (act.kind === 'demote') tier = act.to
+      }
+    }
+    drive(fast, 90)      // clear the boot grace (healthy, no-op at ultra)
+    drive(1000 / 8, 60)  // ~7.5s @8fps → genuine collapse to the floor
+    expect(tier).toBe('low') // promotion is now structurally possible (ceiling 'ultra')
+    drive(fast, 150)     // ~2.5s healthy — approaches, but < promoteWindowMs(3000)
+    drive(-336, 1)       // the negative-delta frame
+    drive(fast, 40)      // only ~0.67s more health after it
+    // Correct: the negative re-armed the window, so 0.67s < 3000ms ⇒ NO promote.
+    // If it had been counted, ~3.2s of accumulated window would have promoted.
+    expect(promotes).toBe(0)
+    expect(tier).toBe('low')
+  })
+
+  it('REVERSIBLE: a post-boot collapse floors the tier, then sustained 60fps climbs back to the boot tier', () => {
+    // FORCE the exact defect scenario — a real sustained collapse that reaches
+    // the floor — then hold a long healthy window and prove every tier comes
+    // back. This is the property whose absence was the bug.
+    const { tier, actions } = feed(new QualityAdaptor(), [
+      [fast, 90],     // ~1.5s healthy — clear the boot grace cleanly
+      [1000 / 8, 60], // ~7.5s at 8fps — a genuine catastrophic collapse → floor
+      [fast, 1800],   // ~30s of locked 60fps — the "60s never recovers" window
+    ], 'ultra')
+    const demotes = actions.filter((a) => a.kind === 'demote')
+    const promotes = actions.filter((a) => a.kind === 'promote')
+    expect(demotes.length).toBeGreaterThanOrEqual(1)
+    expect(promotes.length).toBeGreaterThanOrEqual(1)
+    // Fully recovered to the boot tier — not stuck one below, not stuck at floor.
+    expect(tier).toBe('ultra')
+    // Recovery is a WALK: every promotion is a single tier, mirroring demotion.
+    for (const p of promotes) expect(qualityRank(p.to) - qualityRank(p.from)).toBe(1)
+  })
+
+  it('ANTI-VACUITY: a 50fps dead-band series neither promotes nor demotes', () => {
+    // 50fps = 20ms sits between the promote line (17.5) and the demote line
+    // (22.2). Even with headroom to promote (we sit at medium under an ultra
+    // ceiling), a merely-OK rate must NOT be read as an invitation to climb —
+    // otherwise "does it recover?" would be satisfiable by always-promote.
+    const a = new QualityAdaptor()
+    feed(a, [[fast, 90], [1000 / 8, 60]], 'ultra') // collapse ultra → low first
+    // now climb is possible (low, ceiling ultra); feed the dead band from 'low'
+    const { tier, actions } = feed(a, [[1000 / 50, 400]], 'low')
+    expect(actions).toEqual([])
+    expect(tier).toBe('low')
+  })
+
+  it('CEILING: promotion never climbs above the boot tier the detector chose', () => {
+    // Boot at 'high' and run absurdly healthy (120fps). Adaptation restores
+    // toward the boot choice but must never SECOND-GUESS it upward.
+    const { tier, actions } = simulate(new QualityAdaptor(), 120, 30_000, 'high')
+    expect(tier).toBe('high')
+    expect(actions.filter((a) => a.kind === 'promote')).toEqual([])
+  })
+
+  it('OSCILLATION CAP: a repeatedly-failing tier stops being re-entered, so it settles', () => {
+    // Alternate a slow burst (one demote) with a healthy burst (one promote) at
+    // the same boundary, many times. The cap stops promoting back into a tier
+    // that keeps failing, so the number of promotions is bounded far below the
+    // cycle count instead of flapping once per cycle forever.
+    const { promotes } = flap(new QualityAdaptor(), 12, 'ultra')
+    expect(promotes).toBeLessThanOrEqual(QUALITY_ORDER.length * DEFAULT_ADAPT.maxSlowDemotesPerTier)
   })
 })
 

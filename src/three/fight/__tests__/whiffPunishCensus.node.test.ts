@@ -56,14 +56,21 @@ const R = REACH_BONUS // 38 — the reach the AI's spacing gates are quoted agai
 const PUNISH_GATE = 120 + R // 158
 
 /**
- * combat-feel's reactability floor for the whiffed move's RECOVERY window. The AI
- * reads the opponent from an observation delayed by reactionFrames (hard = 8) and
- * its fastest punish startup is ~4f, so a recovery window shorter than ~12f is
- * genuinely UN-reactable: the o.inRecovery punish branch is never reached in time
- * and a human couldn't punish it either. Whiffs below this floor are CORRECT
- * non-punishes, not AI holes, and must be split OUT of the opportunity set before
- * conversion (B) is computed — otherwise a healthy AI is defamed for un-reactable
- * pokes. recovery >= REACTABLE_MIN is a genuine opportunity; recovery < it is not.
+ * combat-feel's reactability floor for the whiffed move's RECOVERY window — DERIVED
+ * from source, not estimated: reactionFrames(hard=8) + the whiff-punish route's
+ * fastest COMMITTED move = the cr.LK combo opener, startup 4 (ai.ts:513 -> startCombo
+ * -> comboRoute opener, uniform across all three fighters) = 12f. The startup-3 moves
+ * (st.LP/cr.LP/dp.P/throw.f) are NOT the punish opener — they are combo-internal links
+ * or the reversal/throw-tech branches; the metered super branch is slower still (Surge
+ * 11, plus a motion input). So a recovery window shorter than 12f is genuinely
+ * UN-reactable: the o.inRecovery punish branch cannot fire AND connect in time, and a
+ * human couldn't punish it either. Whiffs below this floor are CORRECT non-punishes,
+ * not AI holes, and must be split OUT of the opportunity set before conversion (B) is
+ * computed — otherwise a healthy AI is defamed for un-reactable pokes. recovery >=
+ * REACTABLE_MIN is a genuine opportunity; recovery < it is not. (Robustness: the
+ * measured recovery distribution has a clean gap across 8..11f, so this boundary is
+ * insensitive to the exact floor anywhere in [8,12] — Surge's 11 and cr.LK's 12
+ * partition the whiffs identically.)
  */
 const REACTABLE_MIN = 12
 
@@ -491,7 +498,7 @@ describe('whiff-punish distance census (real director config)', () => {
 
         `\n=== combat-feel 4-BUCKET REACTABILITY SPLIT — this (director) config ===\n` +
         `mutually-exclusive; the four counts sum to total whiffs (partition asserted). Only bucket 4 is a genuine missed opp.\n` +
-        `REACTABLE_MIN=${REACTABLE_MIN}f (reactionFrames hard=8 + fastest punish startup ~4). recovery = STATIC move-def\n` +
+        `REACTABLE_MIN=${REACTABLE_MIN}f = reactionFrames hard=8 + cr.LK punish-route opener startup 4 (DERIVED, uniform across fighters). recovery = STATIC move-def\n` +
         `frames.length-1-active[1] (outcome-independent: a punish cannot truncate it, so a real opp is never misfiled short).\n` +
         `  1 OUT-OF-RANGE       (never inside ${PUNISH_GATE} gate during recovery; safe spacing)        n=${String(db.outOfRange.length).padStart(5)} (${pct(db.outOfRange.length, dir.whiffs.length)}%)\n` +
         `  2 IN-RANGE, BUSY     (in gate but punisher never actionable in-gate; couldn't reach)     n=${String(db.busy.length).padStart(5)} (${pct(db.busy.length, dir.whiffs.length)}%)\n` +

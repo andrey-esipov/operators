@@ -369,6 +369,12 @@ describe('QualityAdaptor — recovery, validity & boot exclusion (the ratchet fi
 //    never reaches the cap and every recovery succeeds. Without decay the blips
 //    stack to a lock on the second one and the third recovery never fires — so a
 //    strict count of full recoveries reddens the mutant.
+//  • `aPauseIsNotCalm` locks the floor, then spends the capDecayMs interval inside
+//    a single 35s discontinuity frame followed by only ~5s of real health. The
+//    discard must RESTART the calm clock — a backgrounded tab is not proof of a
+//    machine that can hold the tier — so the lock holds. A mutant that drops the
+//    clock restart lets paused wall-time forgive the lock and the tier leaves the
+//    floor → this reddens.
 // ────────────────────────────────────────────────────────────────────────────
 describe('QualityAdaptor — oscillation-cap decay (the permanent-lock fix)', () => {
   const fast = 1000 / 60   // 16.67ms — healthy vsync-locked frame
@@ -434,6 +440,28 @@ describe('QualityAdaptor — oscillation-cap decay (the permanent-lock fix)', ()
     // All three round-trips completed: three demotes out of ultra, three back in.
     expect(actions.filter((a) => a.kind === 'demote' && a.from === 'ultra').length).toBe(3)
     expect(actions.filter((a) => a.kind === 'promote' && a.to === 'ultra').length).toBe(3)
+  })
+
+  it('A PAUSE IS NOT CALM: a discontinuity restarts the decay clock, so backgrounded time cannot forgive a lock', () => {
+    // Lock every tier (two walks to low), let a little healthy time pass — but far
+    // under capDecayMs — then feed ONE 35s discontinuity frame (a tab-restore /
+    // long GC pause) followed by only ~5s of health. The wall clock is now well
+    // past capDecayMs since the last demote, but that span was a PAUSE, not calm
+    // rendering: the discard must restart the calm clock, so the lock still holds
+    // and the tier stays pinned at the floor. (Mutant: drop the clock restart on
+    // the discontinuity branch → the paused wall-time counts as calm, the lock is
+    // forgiven and the tier climbs off the floor → this reddens.)
+    const { tier } = feed(new QualityAdaptor(), [
+      [fast, 90],     // boot
+      [slow, 170],    // walk ultra→low (counts → 1)
+      [fast, 780],    // recover to ultra (counts stay 1)
+      [slow, 170],    // walk to low AGAIN (counts → 2, every tier LOCKED)
+      [fast, 120],    // ~2s healthy — well under capDecayMs, no decay yet
+      [35000, 1],     // one 35s frame: a pause/tab-restore, discarded as unmeasurable
+      [fast, 300],    // ~5s health AFTER the pause — the only genuinely-calm span
+    ], 'ultra')
+    // Still pinned: only ~5s of real calm has elapsed since the pause, not 30s.
+    expect(tier).toBe('low')
   })
 })
 

@@ -343,8 +343,18 @@ const FRAG = /* glsl */ `
       if (aGm > 1e-4) {
         vec2 outward = -aGrad / aGm;                 // toward the edge, screen px
         vec2 stepUv = outward.x * dFdx(vUv) + outward.y * dFdy(vUv); // uv / screen px
-        float wpx = clamp(uKeylineWidthPx, 1.0, 7.0);
-        for (int k = 1; k <= 8; k++) {
+        // Width is authored as a FRACTION of buffer height (Fighter.ts:
+        // 0.0038 * viewportH), which is DPR-invariant in CSS px BY DESIGN. The
+        // ceiling here must therefore be large enough not to clip that fraction
+        // on a HiDPI buffer. The old 7.0 / k<=8 device-px ceilings were invisible
+        // on the 900p capture rig (wpx 6.84 < 7) but clamped the keyline on every
+        // taller retina display (e.g. 1080 logical x DPR2 -> wpx 8.2 -> capped to
+        // 7 -> the band THINS in CSS as resolution climbs -> the "cheap sizzling
+        // wire" tell). 24 keeps width proportional up to a ~6300px buffer (beyond
+        // any shipping display); the 1px march step is unchanged so DPR-1 output
+        // is byte-identical (the loop still breaks at ceil(wpx) via fk > wpx).
+        float wpx = clamp(uKeylineWidthPx, 1.0, 24.0);
+        for (int k = 1; k <= 24; k++) {
           float fk = float(k);
           if (fk > wpx) break;
           // If a sample this many px outward has fallen outside the silhouette,

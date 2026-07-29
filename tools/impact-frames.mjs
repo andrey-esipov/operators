@@ -396,13 +396,16 @@ async function measureRung(rung) {
   return { label: rung.label, target: rung.target, expectMove: rung.expectMove, shake: rung.shake, ...best }
 }
 
-rmDirSafe(OUT)
-mkdirSync(OUT, { recursive: true })
-
 const ONLY = arg('level', '')                       // run ONE rung (fast, for capture)
 const CAPTURE = process.argv.includes('--capture')  // freeze each verified rung + write a hero PNG
 const fullRun = !ONLY
 const rungs = ONLY ? LADDER.filter((r) => r.label === ONLY) : LADDER
+// A full run owns the whole output dir, so it starts clean. A single-rung capture
+// (--level X) only touches its OWN hero-<label>.png, so it must NOT wipe the dir —
+// otherwise iterating one level at a time would delete the heroes captured before
+// it. Each hero file is overwritten in place, so single-rung runs accumulate.
+if (fullRun) rmDirSafe(OUT)
+mkdirSync(OUT, { recursive: true })
 if (!rungs.length) {
   console.log(`no such rung '${ONLY}' — use one of: ${LADDER.map((r) => r.label).join(', ')}`)
   await browser.close(); process.exit(2)

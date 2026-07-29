@@ -72,13 +72,19 @@ function make(): { r: FightAudioReactor; s: SpySink } {
 // ─── flavorForHit ───────────────────────────────────────────────────────────
 
 describe('flavorForHit', () => {
-  it('routes light pokes to the light impact and heavier levels to heavy/crit', () => {
+  it('routes each weight class to its OWN distinct impact synth (not one heavy synth scaled)', () => {
     expect(flavorForHit('light').flavor).toBe('light')
-    expect(flavorForHit('medium').flavor).toBe('heavy')
+    expect(flavorForHit('medium').flavor).toBe('medium')
     expect(flavorForHit('heavy').flavor).toBe('heavy')
-    expect(flavorForHit('launcher').flavor).toBe('heavy')
-    expect(flavorForHit('sweep').flavor).toBe('heavy')
+    expect(flavorForHit('launcher').flavor).toBe('launcher')
+    expect(flavorForHit('sweep').flavor).toBe('sweep')
     expect(flavorForHit('crumple').flavor).toBe('crit')
+    // The five hit weights must map to FIVE DISTINCT flavours. The defect this
+    // replaced collapsed medium/heavy/sweep/launcher all onto 'heavy' — so this
+    // set-size guard is the non-blindness check: it reddens the moment any two
+    // weight classes are voiced by the same synth again.
+    const flavors = (['light', 'medium', 'heavy', 'launcher', 'sweep'] as const).map((l) => flavorForHit(l).flavor)
+    expect(new Set(flavors).size).toBe(5)
   })
 
   it('assigns rising intrinsic power with level', () => {

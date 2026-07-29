@@ -24,7 +24,10 @@ import {
 
 export type Flavor =
   | 'light'
+  | 'medium'
   | 'heavy'
+  | 'sweep'
+  | 'launcher'
   | 'crit'
   | 'combo'
   | 'ex'
@@ -436,6 +439,127 @@ function exSpec(p: number): HitSpec {
   }
 }
 
+function mediumSpec(p: number): HitSpec {
+  return {
+    // Loudness-calibrated so the PRE-master seat tracks the old heavy@0.55 that
+    // `medium` used to borrow; HIT_GAIN.medium then places it on the ladder
+    // exactly as before (see tools/measure-fight-audio.mjs, hit-medium window).
+    // A tight transient has a high crest factor, so it needs more gain than heavy
+    // to reach the same RMS without the sub — but stays clear of the clip ceiling.
+    gain: 3.2 * (0.85 + 0.3 * p),
+    // A FIRM mid punch. Same crack brightness as heavy (deliberately NOT brighter
+    // — a bright >2kHz transient would collide with the crit counter-hit read),
+    // but the heavy SUB is removed and the body is short: the missing low tail is
+    // the identity — it reads as the family's SHARPEST, most immediate snap.
+    crack: { level: 1.4, punch: 3.9, hp: 980, lp: 5200, attack: 0.0006, dur: 0.009, color: 'white' },
+    sizzle: { level: 0.2, hp: 1450, dur: 0.06, color: 'pink' },
+    body: { level: 1.5, f0: 152, f1: 62, dur: 0.15, type: 'sine', partial: 2.6, partialLevel: 0.28 },
+    bodyGrit: { level: 0.6, lp: 640, dur: 0.1 },
+    // A firm thump keeps 60–120Hz authority (so it stays a punch, and keeps the
+    // body needed for the loudness ladder) — but there is NO sub and NO ring, so
+    // the low tail is gone: shortest decay + sharpest attack in the family.
+    thump: { level: 1.0, f0: 82, dur: 0.09 },
+    texture: { level: 0.38, bp: 1200, q: 0.9, dur: 0.1, color: 'pink', spread: 0.9, haas: 0.007 },
+    drive: 0.26,
+    reverbSend: 0.22,
+  }
+}
+
+function sweepSpec(p: number): HitSpec {
+  return {
+    gain: 1.28 * (0.85 + 0.3 * p),
+    // A low SCYTHE — the DARKEST impact. A dull, low crack (lp-capped), NO sizzle
+    // air, and a deep body + big sub/thump. There is NO bodyGrit: `oneHit`'s grit
+    // bed carries a broadband white "debris air" layer stretched across the WHOLE
+    // body decay (bedDur = max(grit,body)), and with sweep's long body that bright
+    // bed is exactly what dragged the centroid UP. Removing it + a gentle `drive`
+    // (few harmonics off the big low oscillators) makes sweep the family's darkest
+    // and softest-attack — a low swell, not a snap — while the crack keeps just
+    // enough contact click to still read as a HIT, not a sub-bass drop.
+    crack: { level: 1.6, punch: 4.3, hp: 950, lp: 3400, attack: 0.0009, dur: 0.012, color: 'brown' },
+    body: { level: 1.3, f0: 104, f1: 40, dur: 0.28, type: 'sine', partial: 2.8, partialLevel: 0.32 },
+    sub: { level: 1.4, f0: 50, f1: 27, dur: 0.34 },
+    thump: { level: 1.5, f0: 72, dur: 0.15 },
+    texture: { level: 0.4, bp: 620, q: 0.9, dur: 0.16, color: 'brown', spread: 1.0, haas: 0.01 },
+    drive: 0.18,
+    reverbSend: 0.3,
+  }
+}
+
+function launcherSpec(p: number): HitSpec {
+  return {
+    gain: 1.38 * (0.85 + 0.3 * p),
+    // The uppercut that LIFTS — the AIRIEST (least low weight) and brightest of
+    // the family, and the only impact whose body pitch RISES (f0 120 → f1 190).
+    // Every other flavour's body sweeps DOWN, so the upward glide + a long, bright,
+    // ascending ring is the launcher's unmistakable signature: sending someone
+    // airborne. Small sub keeps it OFF the floor; the bright sizzle/ring/texture
+    // lift the centroid clear of heavy so the two never read as the same event.
+    crack: { level: 1.4, punch: 4.2, hp: 2600, lp: 9000, attack: 0.0005, dur: 0.007, color: 'blue' },
+    sizzle: { level: 0.75, hp: 3600, dur: 0.15, color: 'blue', spread: 0.9 },
+    body: { level: 1.0, f0: 120, f1: 190, dur: 0.2, type: 'sine', partial: 2.2, partialLevel: 0.24 },
+    bodyGrit: { level: 0.4, lp: 950, dur: 0.1 },
+    sub: { level: 0.78, f0: 58, f1: 40, dur: 0.22 },
+    texture: { level: 0.72, bp: 3800, q: 1.2, dur: 0.22, color: 'blue', spread: 0.95, haas: 0.009 },
+    ring: { level: 0.4, partials: [560, 950, 1400, 1900], dur: 0.36, type: 'sine', spread: 0.7 },
+    drive: 0.3,
+    reverbSend: 0.3,
+  }
+}
+
+/** The simple single-`HitSpec` flavours (composite flavours build sequences). */
+const SIMPLE_SPECS: Partial<Record<Flavor, (p: number) => HitSpec>> = {
+  light: lightSpec,
+  medium: mediumSpec,
+  heavy: heavySpec,
+  sweep: sweepSpec,
+  launcher: launcherSpec,
+  crit: critSpec,
+  ex: exSpec,
+}
+
+export interface FlavorFingerprint {
+  /** Energy-weighted centre frequency (Hz) across the layers — brightness. */
+  centroid: number
+  /** Fraction of layer weight below ~200Hz — body / low weight. */
+  low: number
+  /** Contact-transient weight vs the whole — attack sharpness / tightness. */
+  atk: number
+  /** Longest layer decay (s) — tail length. */
+  tail: number
+  /** True iff the body pitch RISES (f0 < f1) — the launcher's signature glide. */
+  bodyRising: boolean
+}
+
+/**
+ * A design-level timbre fingerprint computed directly from a flavour's `HitSpec`,
+ * so the unit suite (which has no `OfflineAudioContext`) can prove the weight
+ * classes are authored DISTINCT and hold their design invariants. This is a
+ * proxy for the render; tools/measure-impact-timbre.mjs proves the same on the
+ * actual rendered PCM. Throws for composite flavours (no single spec).
+ */
+export function flavorFingerprint(flavor: Flavor, power = 0.8): FlavorFingerprint {
+  const make = SIMPLE_SPECS[flavor]
+  if (!make) throw new Error(`flavorFingerprint: '${flavor}' is a composite flavour with no single HitSpec`)
+  const s = make(clamp(power, 0, 1))
+  const layers: Array<{ f: number; w: number; low: boolean; tail: number }> = []
+  layers.push({ f: s.crack.hp, w: s.crack.level * s.crack.punch, low: false, tail: s.crack.dur })
+  if (s.sizzle) layers.push({ f: s.sizzle.hp, w: s.sizzle.level, low: false, tail: s.sizzle.dur })
+  const bf = (s.body.f0 + s.body.f1) / 2
+  layers.push({ f: bf, w: s.body.level, low: bf < 200, tail: s.body.dur })
+  if (s.bodyGrit) { const gf = s.bodyGrit.lp * 0.6; layers.push({ f: gf, w: s.bodyGrit.level, low: gf < 200, tail: s.bodyGrit.dur }) }
+  if (s.sub) { const sf = (s.sub.f0 + s.sub.f1) / 2; layers.push({ f: sf, w: s.sub.level, low: true, tail: s.sub.dur }) }
+  if (s.thump) layers.push({ f: s.thump.f0, w: s.thump.level, low: s.thump.f0 < 200, tail: s.thump.dur })
+  layers.push({ f: s.texture.bp, w: s.texture.level, low: s.texture.bp < 200, tail: s.texture.dur })
+  if (s.ring) { const rf = s.ring.partials.reduce((a, b) => a + b, 0) / s.ring.partials.length; layers.push({ f: rf, w: s.ring.level, low: false, tail: s.ring.dur }) }
+  const wTot = layers.reduce((a, l) => a + l.w, 0) || 1
+  const centroid = layers.reduce((a, l) => a + l.f * l.w, 0) / wTot
+  const low = layers.reduce((a, l) => a + (l.low ? l.w : 0), 0) / wTot
+  const atk = (s.crack.level * s.crack.punch) / wTot
+  const tail = layers.reduce((a, l) => Math.max(a, l.tail), 0)
+  return { centroid, low, atk, tail, bodyRising: s.body.f1 > s.body.f0 }
+}
+
 const IMPACT_END_PAD = 0.05
 
 /**
@@ -464,8 +588,14 @@ export function renderImpact(
   switch (flavor) {
     case 'light':
       return oneHit(ctx, routing, when, scale(lightSpec(p), dmgK), pan, seed) + IMPACT_END_PAD
+    case 'medium':
+      return oneHit(ctx, routing, when, scale(mediumSpec(p), dmgK), pan, seed) + IMPACT_END_PAD
     case 'heavy':
       return oneHit(ctx, routing, when, scale(heavySpec(p), dmgK), pan, seed) + IMPACT_END_PAD
+    case 'sweep':
+      return oneHit(ctx, routing, when, scale(sweepSpec(p), dmgK), pan, seed) + IMPACT_END_PAD
+    case 'launcher':
+      return oneHit(ctx, routing, when, scale(launcherSpec(p), dmgK), pan, seed) + IMPACT_END_PAD
     case 'crit':
       return oneHit(ctx, routing, when, scale(critSpec(p), dmgK), pan, seed) + IMPACT_END_PAD
     case 'ex':

@@ -83,6 +83,14 @@ const FLATTEN_GAIN = 1.4
 class OfflineTimelineSink implements FightAudioSink {
   now = 0
   flatten = false
+  // When non-null, EVERY one-shot renders with this one constant seed instead of
+  // the per-event incrementing sequence. This holds the noise realisation fixed
+  // across events so a spectral difference between two hits is attributable ONLY
+  // to their synth spec, not to two different noise draws — the control a TIMBRE
+  // gate needs (two renders of the same flavour become byte-identical, so the
+  // measurement's own noise floor is provably ~0). Left null for loudness/wiring
+  // measurement, where per-event variation is wanted.
+  fixedSeed: number | null = null
   private seedN = 0
   private readonly ctx: BaseAudioContext
   private readonly routing: ImpactRouting
@@ -98,7 +106,8 @@ class OfflineTimelineSink implements FightAudioSink {
   // still gets its own noise. Both render passes replay from a fresh sink, so
   // the seed sequence — and thus the pre/post comparison — is identical.
   private fire(name: SoundName, opts?: ImpactOpts) {
-    renderSound(this.ctx, this.routing, this.now, name, { seed: 0x5eed + this.seedN++, ...opts })
+    const seed = this.fixedSeed ?? 0x5eed + this.seedN++
+    renderSound(this.ctx, this.routing, this.now, name, { seed, ...opts })
   }
   private flat(opts?: ImpactOpts): ImpactOpts { return this.flatten ? { ...opts, gain: FLATTEN_GAIN } : (opts ?? {}) }
   impact(flavor: Flavor, opts?: ImpactOpts) { this.fire(flavor, this.flat(opts)) }
@@ -172,7 +181,7 @@ async function renderDuckProbe(
 
 async function renderTimeline(
   script: TimelineItem[],
-  o: { stage?: StageId; sampleRate?: number; seconds?: number; dry?: boolean; mutate?: TimelineMutate; bypassMaster?: boolean } = {},
+  o: { stage?: StageId; sampleRate?: number; seconds?: number; dry?: boolean; mutate?: TimelineMutate; bypassMaster?: boolean; fixedSeed?: number } = {},
 ): Promise<RenderResult> {
   const sampleRate = o.sampleRate ?? 48000
   const stage = o.stage ?? 'hypergrowth'
@@ -204,6 +213,7 @@ async function renderTimeline(
 
   const sink = new OfflineTimelineSink(ctx, routing)
   sink.flatten = mutate === 'flatten'
+  if (o.fixedSeed !== undefined) sink.fixedSeed = o.fixedSeed
   const reactor = new FightAudioReactor(sink)
 
   for (const item of script) {
@@ -233,7 +243,7 @@ async function renderTimeline(
   sounds: ALL_SOUNDS,
   stages: STAGES,
   render: (name: SoundName, opts?: { stage?: StageId; dry?: boolean; opts?: import('./impacts').ImpactOpts }) => renderForMetrics(name, opts),
-  renderTimeline: (script: TimelineItem[], opts?: { stage?: StageId; sampleRate?: number; seconds?: number; dry?: boolean; mutate?: TimelineMutate; bypassMaster?: boolean }) => renderTimeline(script, opts),
+  renderTimeline: (script: TimelineItem[], opts?: { stage?: StageId; sampleRate?: number; seconds?: number; dry?: boolean; mutate?: TimelineMutate; bypassMaster?: boolean; fixedSeed?: number }) => renderTimeline(script, opts),
   renderDuckProbe: (opts?: { intensity?: number; duck?: boolean; sampleRate?: number; seconds?: number }) => renderDuckProbe(opts),
 }
 

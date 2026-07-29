@@ -104,17 +104,19 @@ function panOf(at: Vec2): number {
   return p < -1 ? -1 : p > 1 ? 1 : p
 }
 
-/** Base flavour + intrinsic power for a clean hit of each level. There is no
- *  dedicated "medium" synth, so medium/heavy/sweep/launcher all voice the
- *  `heavy` impact at rising power; the lightest pokes use `light`; a crumple —
- *  the heaviest stun — gets the sharp `crit` transient. */
+/** Base flavour + intrinsic power for a clean hit of each level. Each weight
+ *  class now voices its OWN synth: light/medium/heavy/sweep/launcher are
+ *  distinct impacts (bright-tight medium, dark-low sweep, bright rising-body
+ *  launcher — not one `heavy` synth at rising volume), and a crumple — the
+ *  heaviest stun — gets the sharp `crit` transient. Power still scales size
+ *  within each flavour; the reactor's HIT_GAIN trim carries the loudness ladder. */
 export function flavorForHit(level: HitLevel): { flavor: Flavor; power: number } {
   switch (level) {
     case 'light': return { flavor: 'light', power: 0.5 }
-    case 'medium': return { flavor: 'heavy', power: 0.55 }
+    case 'medium': return { flavor: 'medium', power: 0.55 }
     case 'heavy': return { flavor: 'heavy', power: 0.9 }
-    case 'launcher': return { flavor: 'heavy', power: 0.95 }
-    case 'sweep': return { flavor: 'heavy', power: 0.72 }
+    case 'launcher': return { flavor: 'launcher', power: 0.95 }
+    case 'sweep': return { flavor: 'sweep', power: 0.72 }
     case 'crumple': return { flavor: 'crit', power: 0.9 }
   }
 }

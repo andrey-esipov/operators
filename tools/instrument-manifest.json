@@ -130,6 +130,10 @@
       "app": "shipped-audio",
       "note": "SHIPPED fighter audio instrument (no card route/handle)."
     },
+    "measure-impact-timbre": {
+      "app": "shipped-audio",
+      "note": "SHIPPED fighter audio instrument (no card route/handle)."
+    },
     "_black": {
       "app": "analysis",
       "note": "Offline / route-agnostic: reads PNGs, atlases or JSON, or measures on a blank page. Not tied to either game."

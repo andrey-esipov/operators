@@ -18,7 +18,7 @@ export type SoundName =
   | 'whiff' | 'footstep' | 'cloth' | 'meterCharge'
   | 'superStinger' | 'victory' | 'defeat' | 'menuMove' | 'menuSelect'
 
-const IMPACT_FLAVORS: Flavor[] = ['light', 'heavy', 'crit', 'combo', 'ex', 'ult', 'signature', 'shatter', 'ko']
+const IMPACT_FLAVORS: Flavor[] = ['light', 'medium', 'heavy', 'sweep', 'launcher', 'crit', 'combo', 'ex', 'ult', 'signature', 'shatter', 'ko']
 
 /** Build a named sound at `when`; returns its end time. */
 export function renderSound(
@@ -84,6 +84,8 @@ function defaultDuration(name: SoundName): number {
     case 'signature': return 3.2
     case 'ko': return 3.0
     case 'shatter': return 1.6
+    case 'launcher': return 1.0
+    case 'sweep': return 1.0
     case 'combo': return 1.2
     case 'crit': return 1.2
     case 'heavy': return 1.0
@@ -96,7 +98,7 @@ function defaultDuration(name: SoundName): number {
 }
 
 export const ALL_SOUNDS: SoundName[] = [
-  'light', 'heavy', 'crit', 'combo', 'ex', 'ult', 'signature', 'shatter', 'ko',
+  'light', 'medium', 'heavy', 'sweep', 'launcher', 'crit', 'combo', 'ex', 'ult', 'signature', 'shatter', 'ko',
   'whiff', 'footstep', 'cloth', 'meterCharge', 'superStinger', 'victory', 'defeat',
   'menuMove', 'menuSelect',
 ]

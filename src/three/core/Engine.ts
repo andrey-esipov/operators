@@ -156,6 +156,17 @@ export class Engine {
     return this._quality
   }
 
+  /**
+   * Read-only telemetry: cost of frames the adaptor discarded from its demote
+   * decision because they were flagged scripted-transient (super freeze, KO /
+   * victory cinematic). Reachable ON PURPOSE and consumed by nothing here — it is
+   * the signal that a machine can't render supers (which no tier currently helps),
+   * surfaced rather than silently swallowed. See QualityAdaptor property 5.
+   */
+  transientCostReport() {
+    return this.adaptor.transientCostReport()
+  }
+
   /** Deterministic xorshift32. */
   readonly rng = (): number => {
     let x = this.rngState
@@ -481,7 +492,13 @@ export class Engine {
    */
   private runAdapt(now: number, wallDtMs: number) {
     if (!this.adaptEnabled) return
-    const action = this.adaptor.sample(now, wallDtMs, this._quality)
+    // A super freeze / KO / victory cinematic is a bounded scripted event whose
+    // frame cost the adaptor must EXCLUDE from its demote decision (it can't be
+    // reduced by demoting — see QualityAdaptor property 5). The signal rides the
+    // render state, refreshed this same frame by the sim advance in the subsystem
+    // update loop above, so it is current by the time we sample.
+    const isTransient = this.state?.scriptedTransient === true
+    const action = this.adaptor.sample(now, wallDtMs, this._quality, isTransient)
     if (action.kind !== 'none') this.setQuality(action.to, true)
   }
 

@@ -188,6 +188,18 @@ export type AdaptAction =
  *  4. WALL-CLOCK REACTION. The decision window is wall-clock, so reaction time
  *     does not degrade as fps falls (the previous 90-frame warmup took 15s at
  *     6fps). A catastrophic reading still drops straight to the floor in one step.
+ *
+ *  5. SCRIPTED-TRANSIENT EXCLUSION. A caller-supplied `isTransient` marks frames
+ *     rendered during a bounded, scripted event — a super freeze, a KO/victory
+ *     cinematic. Their cost is not evidence of a machine that can't keep up, and
+ *     (source-proven) our super/cinematic VFX reads NO quality tier, so a demote
+ *     cannot shave a millisecond off them: acting on it is PURE loss that then
+ *     rides the persistent Engine for the rest of the session. Such a frame is
+ *     DISCARDED from the decision exactly like a discontinuity — but, unlike a
+ *     discontinuity whose duration is meaningless, its cost is RECORDED in a
+ *     separate read-only channel (`transientCostReport`) so "supers cost N ms on
+ *     this hardware" stays a fact telemetry can surface. Excluded from the
+ *     DECISION, never from OBSERVABILITY.
  */
 export class QualityAdaptor {
   readonly cfg: AdaptConfig
@@ -205,6 +217,19 @@ export class QualityAdaptor {
    * the cap decays against. `null` means nothing is capped, so nothing to forgive.
    */
   private lastSlowDemoteAt: number | null = null
+  /**
+   * Read-only observability for scripted-transient frames (see property 5 and
+   * `sample`'s isTransient path). We DISCARD these from the demote decision, but
+   * their cost is real and worth surfacing — a machine on which supers cost 80ms
+   * is a fact someone may want to act on (e.g. build the per-tier super VFX that
+   * does not exist yet). Recorded here, exposed via `transientCostReport`, and
+   * NEVER read by any decision in this class. `transientSamples` is a bounded ring
+   * for a windowed p90; `transientMaxMs`/`transientCount` are lifetime totals that
+   * survive ring eviction.
+   */
+  private transientSamples: { t: number; ms: number }[] = []
+  private transientCount = 0
+  private transientMaxMs = 0
 
   constructor(cfg: Partial<AdaptConfig> = {}) {
     this.cfg = { ...DEFAULT_ADAPT, ...cfg }
@@ -218,9 +243,12 @@ export class QualityAdaptor {
     this.ceiling = null
     this.slowDemotes = {}
     this.lastSlowDemoteAt = null
+    this.transientSamples = []
+    this.transientCount = 0
+    this.transientMaxMs = 0
   }
 
-  sample(nowMs: number, frameMs: number, current: QualityTier): AdaptAction {
+  sample(nowMs: number, frameMs: number, current: QualityTier, isTransient = false): AdaptAction {
     if (this.ceiling == null) this.ceiling = current
     if (this.firstSampleAt == null) this.firstSampleAt = nowMs
 
@@ -233,6 +261,26 @@ export class QualityAdaptor {
       this.samples = []
       // A pause is not calm operation: restart the cap-decay clock so backgrounded
       // time can't be spent forgiving a lock (mirrors re-arming the window above).
+      if (this.lastSlowDemoteAt != null) this.lastSlowDemoteAt = nowMs
+      return { kind: 'none' }
+    }
+
+    // (1.5) Scripted-transient discard. A frame rendered during a bounded,
+    // scripted event — a super freeze, a KO/victory cinematic — is flagged by the
+    // caller via `isTransient`. Its cost is not evidence of sustained fill load,
+    // and (source-proven) our super/cinematic VFX reads no quality tier, so a
+    // demotion cannot reduce that cost by a single millisecond — acting on it is
+    // pure loss that, via the persistent Engine, then rides the rest of the
+    // session. So discard it from the DECISION exactly like a discontinuity
+    // (re-arm the window, drop the scored samples, restart the calm clock) — but
+    // RECORD its cost first: discarded from the decision is NOT unmeasured, and a
+    // machine where supers cost 80ms is a fact telemetry should be able to see.
+    // The discontinuity check above runs first, so a genuine pause that lands
+    // during a super is still treated as unmeasurable, not booked as super cost.
+    if (isTransient) {
+      this.recordTransient(nowMs, frameMs)
+      this.windowStart = nowMs
+      this.samples = []
       if (this.lastSlowDemoteAt != null) this.lastSlowDemoteAt = nowMs
       return { kind: 'none' }
     }
@@ -330,6 +378,34 @@ export class QualityAdaptor {
     const xs: number[] = []
     for (const s of this.samples) if (s.t >= sinceT) xs.push(s.ms)
     return percentile(xs, p)
+  }
+
+  private recordTransient(nowMs: number, frameMs: number): void {
+    this.transientCount++
+    if (frameMs > this.transientMaxMs) this.transientMaxMs = frameMs
+    this.transientSamples.push({ t: nowMs, ms: frameMs })
+    // Bounded ring — a handful of supers is ample for a windowed p90; the
+    // lifetime max/count are tracked separately so they survive eviction.
+    const CAP = 300
+    if (this.transientSamples.length > CAP) {
+      this.transientSamples.splice(0, this.transientSamples.length - CAP)
+    }
+  }
+
+  /**
+   * Read-only report of discarded scripted-transient frame cost. Telemetry can
+   * surface "supers cost N ms on this hardware" from this; NOTHING in this class
+   * reads it, by design — the cost is excluded from the DECISION but never from
+   * OBSERVABILITY. `p90Ms` is over the recent ring; `maxMs`/`count` are lifetime.
+   */
+  transientCostReport(): { count: number; maxMs: number; p90Ms: number; lastMs: number } {
+    const xs = this.transientSamples.map((s) => s.ms)
+    return {
+      count: this.transientCount,
+      maxMs: this.transientMaxMs,
+      p90Ms: percentile(xs, 0.9),
+      lastMs: xs.length ? xs[xs.length - 1] : 0,
+    }
   }
 }
 

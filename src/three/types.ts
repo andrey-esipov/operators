@@ -66,6 +66,17 @@ export interface FightRenderState {
    * Optional so preview/lab render states can omit it (treated as `false`).
    */
   celebrate?: boolean
+  /**
+   * True while a bounded, scripted event is on screen — a super freeze OR a
+   * `ko` | `round-end` | `match-end` celebration beat. The quality adaptor reads
+   * this to EXCLUDE such frames from its demote decision: their cost is not
+   * evidence of sustained fill load, and (source-proven) the super/cinematic VFX
+   * has no quality hook to reduce it, so demoting on it is pure loss. Distinct
+   * from `celebrate` (super freezes are transient but not a celebration) and from
+   * `cinematic` (a camera-ownership flag). Optional so preview/lab render states
+   * omit it (treated as `false` — adaptation behaves exactly as before).
+   */
+  scriptedTransient?: boolean
 }
 
 /** Impact strength buckets. Drives camera shake, particle counts, light pops. */

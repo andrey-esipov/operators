@@ -465,6 +465,119 @@ describe('QualityAdaptor — oscillation-cap decay (the permanent-lock fix)', ()
   })
 })
 
+// ────────────────────────────────────────────────────────────────────────────
+// SCRIPTED-TRANSIENT DISCARD (supers/cinematics excluded from the demote
+// decision, but their cost RECORDED — never swallowed).
+//
+// The money-moment defect: a super frame sits above the 45fps demote line for
+// most of a ~1s freeze, so the adaptor demotes MID-SUPER — and (source-proven)
+// the super VFX reads no quality tier, so that demotion buys ZERO frame-time
+// back and then rides the persistent Engine for the rest of the session. The fix
+// marks such frames `isTransient` and discards them from the DECISION, exactly
+// like a discontinuity — while RECORDING their cost so "supers cost N ms here"
+// stays a fact (`transientCostReport`), not a blind spot we built on purpose.
+//
+// Four-way mutation map (the source lever is the single line `if (isTransient)`
+// in sample(); each mutant restored byte-identical):
+//   A  capable machine + flagged super          ⇒ NO demote      (tier holds)
+//   B  SAME cost but UNFLAGGED (real slow play)  ⇒ STILL demotes  (scoped, not blanket)
+//   M1 flag-everything  `if (isTransient)`→`if (true)`   ⇒ B reds (real slow play stops demoting)
+//   M2 ignore-flag      `if (isTransient)`→`if (false)`  ⇒ A reds (the super demotes again)
+// B is the load-bearing half: it proves we did NOT build a suppression that
+// swallows a genuinely slow machine. Two observability tests then prove the cost
+// is recorded at full magnitude while moving no tier — discarded ≠ unmeasured.
+// ────────────────────────────────────────────────────────────────────────────
+describe('QualityAdaptor — scripted-transient discard (the mid-super demote fix)', () => {
+  const fast = 1000 / 60      // ~16.67ms — healthy
+  const superFrame = 1000 / 24 // ~41.67ms — a heavy but MEASURABLE super frame:
+                               // above demoteAboveMs (22.2), below catastrophicMs
+                               // (50), far below discontinuityMs (1000).
+
+  // Like `feed`, but each segment carries an explicit `isTransient` flag — the
+  // one boolean the Engine passes from the render state (super freeze / cinematic).
+  function feedFlagged(
+    adaptor: QualityAdaptor,
+    segments: [number, number, boolean][],
+    startTier: QualityTier,
+  ) {
+    let tier = startTier
+    let t = 0
+    const actions: Action[] = []
+    for (const [frameMs, count, transient] of segments) {
+      for (let i = 0; i < count; i++) {
+        t += frameMs
+        const a = adaptor.sample(t, frameMs, tier, transient)
+        if (a.kind !== 'none') {
+          actions.push({ t: +t.toFixed(1), kind: a.kind, from: a.from, to: a.to, reason: (a as { reason?: string }).reason })
+          tier = a.to
+        }
+      }
+    }
+    return { tier, actions, endT: t }
+  }
+
+  it('A — a FLAGGED super does not demote, even sustained well past a demote window', () => {
+    const a = new QualityAdaptor()
+    const { tier } = feedFlagged(a, [
+      [fast, 90, false],       // boot: clear grace + arm the window with health
+      [superFrame, 60, true],  // ~2.5s of >demote-line frames, FLAGGED as a super
+      [fast, 60, false],       // ~1s health after
+    ], 'ultra')
+    // Discarded from the DECISION: the super never enters the scored window, so a
+    // capable machine keeps its tier through the money moment. (M2 `if (false)`
+    // scores them → slow demote → tier leaves ultra → this reddens.)
+    expect(tier).toBe('ultra')
+  })
+
+  it('B — the SAME cost UNFLAGGED still demotes: the discard is scoped, not a blanket super exemption', () => {
+    const a = new QualityAdaptor()
+    const { tier, actions } = feedFlagged(a, [
+      [fast, 90, false],        // boot
+      [superFrame, 60, false],  // SAME frame cost, but UNFLAGGED — a genuinely slow machine
+    ], 'ultra')
+    // The controller MUST still protect framerate in real gameplay. This is the
+    // proof we didn't build a suppression that swallows a slow box. (M1 `if (true)`
+    // discards these too → no demote → this reddens.)
+    expect(actions.some((x) => x.kind === 'demote')).toBe(true)
+    expect(qualityRank(tier)).toBeLessThan(qualityRank('ultra'))
+    // …and nothing was mis-booked as transient cost — these were real frames.
+    expect(a.transientCostReport().count).toBe(0)
+  })
+
+  it('records the discarded super cost at full magnitude while moving no tier (discarded ≠ unmeasured)', () => {
+    const a = new QualityAdaptor()
+    const { tier } = feedFlagged(a, [
+      [fast, 90, false],
+      [superFrame, 60, true],
+      [fast, 30, false],
+    ], 'ultra')
+    expect(tier).toBe('ultra') // not acted upon
+    const report = a.transientCostReport()
+    expect(report.count).toBe(60)                 // every flagged frame observed
+    expect(report.maxMs).toBeCloseTo(superFrame, 5)
+    expect(report.p90Ms).toBeCloseTo(superFrame, 5)
+    expect(report.lastMs).toBeCloseTo(superFrame, 5)
+  })
+
+  it('discards even a catastrophic-magnitude super spike, yet still surfaces its cost', () => {
+    const a = new QualityAdaptor()
+    const spike = 80 // > catastrophicMs (50): UNFLAGGED this would jump STRAIGHT to the floor
+    const { tier } = feedFlagged(a, [
+      [fast, 90, false],
+      [spike, 40, true],  // ~3.2s of 80ms frames, FLAGGED
+      [fast, 60, false],
+    ], 'ultra')
+    // The discard covers the catastrophic branch too — a super that blows the
+    // budget entirely still must not floor the session.
+    expect(tier).toBe('ultra')
+    // But "this machine can't render supers" is exactly the fact we must NOT hide:
+    // record it so someone can act on it (e.g. build per-tier super VFX).
+    const report = a.transientCostReport()
+    expect(report.maxMs).toBe(80)
+    expect(report.count).toBe(40)
+  })
+})
+
 describe('affordablePixelRatio — fill-aware cap', () => {
   it('defuses the 1080p Retina catastrophe: caps well under 2.0 (near 1.0)', () => {
     const pr = affordablePixelRatio(1920, 1080, 2, 1.5)

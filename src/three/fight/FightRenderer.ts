@@ -26,6 +26,7 @@ import { buildAtlasTextures, type AtlasSource } from './AtlasTextures'
 import { FightCamera, type StageBounds } from './FightCamera'
 import { FightVfx } from './FightVfx'
 import { ProjectileLayer, type SuperFreezeView } from './ProjectileLayer'
+import { isScriptedTransient } from './scriptedTransient'
 import { simToWorld } from './worldScale'
 // Type-only: the reactor is a pure event→sink mapper with no Three or audio-
 // backend dependency, so importing its *type* costs nothing at runtime and
@@ -312,6 +313,10 @@ export class FightRenderer {
     if (this.renderStateObj) {
       const ph = this.latest.phase
       this.renderStateObj.celebrate = ph === 'ko' || ph === 'round-end' || ph === 'match-end'
+      // Adaptation signal (superset of celebrate — a super freeze is also a
+      // bounded scripted transient). The quality adaptor excludes these frames
+      // from its demote decision; see scriptedTransient.ts / QualityAdaptor.
+      this.renderStateObj.scriptedTransient = isScriptedTransient(ph, this.latest.superFreeze)
     }
     return { alpha: clamp(this._acc / DT, 0, 1), steps, simSteps }
   }
@@ -558,6 +563,7 @@ export class FightRenderer {
       round: 1,
       cinematic: false,
       celebrate: false,
+      scriptedTransient: false,
     }
   }
 }
@@ -587,6 +593,7 @@ function interpView(
     grounded: cur.grounded,
     globalFrame,
     reactionFrame,
+    low: cur.hitLow,
   }
 }
 

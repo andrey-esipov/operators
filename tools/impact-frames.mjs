@@ -464,9 +464,31 @@ async function captureHero(rung, gap) {
     if (window.__CONTACT__ < 0) return false
     window.__PLAY__.pause(); window.__PLAY__.step(off); return true
   }, PEAK_OFFSET)
-  await sleep(160)
-  let file = ''
+  // Wait for the frozen sim to actually CONSUME the stepped frames before grabbing,
+  // rather than a wall-clock guess: a fixed sleep raced the RAF step budget and, for a
+  // large --peak, could screenshot before the steps had run. stepsPending()==0 is the
+  // deterministic "we are exactly at contact+PEAK_OFFSET" signal; then a short paint
+  // settle so the compositor has the frozen frame on screen.
+  await page.waitForFunction(() => (window.__PLAY__?.stepsPending?.() ?? 0) === 0, { timeout: 3000 }).catch(() => {})
+  await sleep(120)
+  let file = '', cap = null
   if (got) {
+    // Capture-fidelity provenance, read from authoritative sim state at the frozen
+    // instant. A frozen grab of a REACTION stance (hurt/juggle/knockdown) only tells
+    // the truth if the victim is on a LIVE reaction frame, never the clamped last
+    // frame -- the "5-key hurt was invisible" corpse (AnimationDriver.ts:80-91).
+    // hitstop>0 here PROVES frame 0 (the impact pose): the renderer freezes the
+    // reaction clock for the whole hitstop (FightRenderer._tickReactions: `if
+    // (cur.hitstop > 0) continue`, advanced only on genuine sim steps, :297), and
+    // resolveFrame at reactionFrame 0 returns clip.frames[0] not [last]
+    // (reactionClip.test.ts:35-38). The corpse needs reactionFrame >= the clip's total
+    // ticks (hurt 18 / juggle 25 / knockdown 23) -- unreachable while the freeze holds.
+    // Recording it makes fidelity provable per hero, and reds if a future --peak steps
+    // past the freeze (hitstop 0) into the settled recovery tail.
+    cap = await page.evaluate(() => {
+      const s = window.__PLAY__?.state?.(); const v = s?.fighters?.[1]
+      return v ? { frame: s.frame, stance: v.stance, hitstop: s.hitstop } : null
+    })
     // Encode a body-fallback INTO the filename so a hero handed off without the
     // JSON still can't be misread as a distinct pose it doesn't show.
     const bs = bodyStatusFor(rung.target)
@@ -476,7 +498,7 @@ async function captureHero(rung, gap) {
     await page.screenshot({ path: file })
   }
   await page.evaluate(() => { window.__WATCH__ = false; window.__PLAY__.resume() })
-  return file
+  return { file, cap }
 }
 
 // ── Drive the ladder ─────────────────────────────────────────────────────────
@@ -484,7 +506,7 @@ const results = []
 for (const rung of rungs) {
   const r = await measureRung(rung)
   r.body = bodyStatusFor(rung.target)
-  if (CAPTURE && r.verified) r.heroFrame = await captureHero(rung, r.gapUsed)
+  if (CAPTURE && r.verified) { const h = await captureHero(rung, r.gapUsed); r.heroFrame = h.file; r.heroReaction = h.cap }
   results.push(r)
   await sleep(300)
 }
@@ -564,17 +586,26 @@ const maxMag = heavy && heavy.landed ? heavy.peakPx : 0
 const core = results.filter((r) => r.label !== 'crumple')
 const coreVerified = core.length > 0 && core.every((r) => r.verified)
 const crumpleVerified = !!(crumple && crumple.verified)
-const pass = fullRun ? (coreVerified && kickMutOk && levelGateOk && crumpleGateOk) : !!(results[0] && results[0].verified)
+// Capture fidelity: every hero we froze must sit on a LIVE reaction frame. hitstop>0
+// at the frozen instant == reactionFrame 0 is held (the impact pose), which cannot be
+// the clamped last-frame corpse (see captureHero + reactionClip.test.ts:35-38). Binds
+// the verdict ONLY on a --capture run; a plain audit grabs no heroes so it stays true.
+const heroesCaptured = results.filter((r) => r.heroReaction)
+const heroesLive = heroesCaptured.length === 0 || heroesCaptured.every((r) => r.heroReaction.hitstop > 0)
+const auditPass = fullRun ? (coreVerified && kickMutOk && levelGateOk && crumpleGateOk) : !!(results[0] && results[0].verified)
+const pass = auditPass && (!CAPTURE || heroesLive)
 
 const out = {
   build: SHA, viewport: { w: VW, h: VH }, query: QUERY, victim: VICTIM, peakOffset: PEAK_OFFSET, only: ONLY || null,
   rungs: results, mutatedHeavy: mutated, levelGate, crumpleGate, maxMag,
-  checks: { coreVerified, crumpleVerified, kickMutOk, levelGateOk, crumpleGateOk },
+  checks: { coreVerified, crumpleVerified, kickMutOk, levelGateOk, crumpleGateOk, heroesLive },
   verdict: pass
     ? (fullRun
-        ? `PASS: ${core.filter((r) => r.verified).length}/${core.length} core rungs verified their own level; all mutation gates bit`
-        : `PASS: rung '${ONLY}' verified its own level (${results[0].producedLevel})`)
-    : 'FAIL: see checks (a core rung did not verify its level, or a mutation gate did not bite)',
+        ? `PASS: ${core.filter((r) => r.verified).length}/${core.length} core rungs verified their own level; all mutation gates bit${CAPTURE ? `; ${heroesCaptured.length} hero(es) frozen on a live impact pose` : ''}`
+        : `PASS: rung '${ONLY}' verified its own level (${results[0].producedLevel})${CAPTURE ? '; hero frozen on a live impact pose' : ''}`)
+    : !auditPass
+      ? 'FAIL: see checks (a core rung did not verify its level, or a mutation gate did not bite)'
+      : 'FAIL: capture fidelity — a hero was frozen past the hitstop freeze (settled/clamped body); see hero-fidelity lines and --peak',
 }
 writeFileSync(`${OUT}/impact.json`, JSON.stringify(out, null, 2))
 
@@ -591,6 +622,18 @@ for (const r of results) {
     (r.heroFrame ? `  hero=${r.heroFrame}` : ''),
   )
 }
+// Capture-fidelity readout: PROVE each hero froze on a LIVE reaction frame, not a
+// clamped last-frame corpse. hitstop>0 at the frozen instant == reactionFrame 0 held
+// (the impact pose); see captureHero + reactionClip.test.ts:35-38.
+for (const r of heroesCaptured) {
+  const c = r.heroReaction
+  console.log(
+    `  hero-fidelity ${r.label.padEnd(8)} frozen@frame ${String(c.frame).padStart(4)} stance=${String(c.stance).padEnd(9)} hitstop=${String(c.hitstop).padStart(2)} -> ` +
+    (c.hitstop > 0
+      ? 'LIVE impact pose (reactionFrame 0 held by the hitstop freeze; not the clamped last-frame corpse)'
+      : '⚠️ hitstop=0 — stepped PAST the freeze into the recovery tail; body may read settled, re-check --peak'),
+  )
+}
 if (mutated) console.log(`  MUT-kick  off   heavy peakPx ${heavy.peakPx}->${mutated.peakPx}px via __MUT_NO_KICK__  (want <${(heavy.peakPx * 0.6).toFixed(2)}=0.60x; ok=${kickMutOk})`)
 if (levelGate) console.log(`  MUT-level      heavy rung driven with LIGHT input -> move=${levelGate.amId || '—'} producedLevel=${levelGate.producedLevel || '—'} wouldVerifyAsHeavy=${levelGate.wouldVerifyAsHeavy}  (want false; ok=${levelGateOk})`)
 if (crumpleGate) console.log(`  MUT-crumple    crumple seed truncated to single-QCF 236 -> move=${crumpleGate.amId || '—'} producedLevel=${crumpleGate.producedLevel || '—'} superSeen=${crumpleGate.superSeen} wouldVerifyAsCrumple=${crumpleGate.wouldVerifyAsCrumple}  (want false; ok=${crumpleGateOk})`)
@@ -599,7 +642,7 @@ if (crumple) {
   if (crumple.verified) console.log(`  crumple: REACHABLE — super.P landed (move=${crumple.amId}, superFreeze fired); level verified 'crumple'${crumple.heroFrame ? `, hero=${crumple.heroFrame}` : ''}`)
   else console.log(`  crumple: NOT verified this pass. crumple is SUPER-ONLY here; needs meter>=1000 (set) + a 236236+hp inside MOTION_WINDOW(12f). observed: move=${crumple.amId || '—'} producedLevel=${crumple.producedLevel || '—'} superSeen=${crumple.superSeen} landed=${crumple.landed}. Reported as the state it needs, not faked from a lesser hit.`)
 }
-console.log(`  checks: coreVerified=${coreVerified} crumpleVerified=${crumpleVerified} kickMutOk=${kickMutOk} levelGateOk=${levelGateOk} crumpleGateOk=${crumpleGateOk}`)
+console.log(`  checks: coreVerified=${coreVerified} crumpleVerified=${crumpleVerified} kickMutOk=${kickMutOk} levelGateOk=${levelGateOk} crumpleGateOk=${crumpleGateOk}${CAPTURE ? ` heroesLive=${heroesLive}` : ''}`)
 console.log(`  ${out.verdict}`)
 
 await browser.close()

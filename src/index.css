@@ -369,3 +369,26 @@ button {
 }
 /* Phone viewports get the same layout as desktop — the menu and combat
    UI scroll naturally; no nag banner. */
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Self-hosted brand fonts — SIL OFL 1.1. Subset to Google's "latin"
+   unicode-range (same glyphs the CDN served); licences + a sha256-pinned
+   coverage manifest live in public/fonts/. Rendered under the global
+   `-webkit-font-smoothing: none; image-rendering: pixelated`, so the subset
+   is byte-faithful to what shipped before. font-display: swap — never blank;
+   not preloaded (neither is a front-door first-paint font — see index.html).
+   ───────────────────────────────────────────────────────────────────────── */
+@font-face {
+  font-family: "Press Start 2P";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/PressStart2P-latin.woff2") format("woff2");
+}
+@font-face {
+  font-family: "VT323";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/VT323-latin.woff2") format("woff2");
+}

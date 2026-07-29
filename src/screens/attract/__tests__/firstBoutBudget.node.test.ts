@@ -36,7 +36,10 @@
  * checking nothing): real bytes are read from disk for every choosable skin; the
  * SLOW section proves every hero pairing is MATERIALLY lighter than its full
  * pairing (so "priced on hero" is not a no-op) and that every fighter opens with
- * all partners on slow (a per-fighter coverage floor + a concentration ceiling);
+ * all partners on slow, and applies OUR authored coverage envelope (a ≥25% per-
+ * fighter opener floor + a ≤50% concentration ceiling, justified at the constant)
+ * checked per fighter and BY NAME over the whole roster, with self-checks proving
+ * each half fires independently;
  * the director is driven on BOTH connection classes and proven to serve heavy art
  * on fast and rotate the whole pool on slow; and the shipped budget constants are
  * asserted so the gate cannot drift from the policy it guards.
@@ -45,8 +48,10 @@
  * SLOW target reddens the slow-4G bound; re-introducing a finite FAST byte cap
  * reddens the "heavy art can headline" assertion AND the per-fighter FAST coverage
  * guard; repricing the SLOW opener back onto the FULL atlas (or a hero==full
- * miswire) collapses SLOW coverage/concentration and reddens the shop-window
- * consequence guard — the exact inversion the hero tier removes.
+ * miswire) collapses SLOW coverage and reddens the per-fighter opener FLOOR by
+ * name (spiegel → 0%), the exact inversion the hero tier removes; and a synthetic
+ * one-fighter-dominant distribution reddens the CONCENTRATION CEILING by name with
+ * the floor still green (self-checks), so neither half is a one-directional no-op.
  */
 
 import { describe, it, expect, vi, afterEach } from 'vitest'
@@ -137,6 +142,46 @@ function distinctArchetypePartners(skin: string): number {
   const arche = ROSTER.find((r) => r.skin === skin)!.archetype
   return ROSTER.filter((r) => r.skin !== skin && r.archetype !== arche).length
 }
+
+/** Per-fighter coverage-envelope violations over a distribution of opener
+ *  appearances (skin → number of reels it opened in), against a floor and ceiling
+ *  on each fighter's SHARE of `totalReels`. Returns a human-named entry for every
+ *  violation. Iterates the FULL ROSTER — a fighter absent from `appearances`
+ *  scores 0 — so a shrunken or empty admitted pool reds by NAMING the starved
+ *  fighters instead of passing because the survivors happen to be balanced. Floor
+ *  and ceiling are SEPARATE entries, so each half is independently load-bearing:
+ *  starving a fighter reds the floor; concentrating on one reds the ceiling. */
+function coverageViolations(
+  appearances: Record<string, number>,
+  totalReels: number,
+  floor: number,
+  ceil: number,
+): string[] {
+  const out: string[] = []
+  for (const r of ROSTER) {
+    const frac = (appearances[r.skin] ?? 0) / totalReels
+    const pct = (frac * 100).toFixed(0)
+    if (frac < floor) out.push(`${r.skin} opens in ${pct}% of reels — below the ${(floor * 100).toFixed(0)}% coverage floor`)
+    if (frac > ceil) out.push(`${r.skin} opens in ${pct}% of reels — above the ${(ceil * 100).toFixed(0)}% concentration ceiling`)
+  }
+  return out
+}
+
+// AUTHORED COVERAGE ENVELOPE for the opener distribution. These are OUR
+// thresholds, pre-registered to catch a re-concentration regression — NOT a
+// figure from any published source or genre convention. Justification: the
+// admitted opener set is structurally uniform — every fighter opens against ALL
+// its distinct-archetype partners, so with 2 skins/archetype each sits in 4 of
+// the 12 admitted pairs = 33.3% of reels (measured min across the shipped fixed-
+// seed run is 31.3%, max 37.3%). The ≥25% FLOOR sits below that with real
+// headroom AND equals the least-covered fighter's share if the roster grows to 7
+// skins (a 3rd in one archetype ⇒ 4 of 16 non-mirror pairs), so legitimate roster
+// growth does not red it while a ~20%-relative coverage loss does. The ≤50%
+// CEILING is the anti-domination bound: the broken bimodal state put one fighter
+// in 100% of openers; 50% reddens that while the achieved 37.3% clears it. Both
+// are strict (exactly-25%/exactly-50% pass) and checked per fighter BY NAME.
+const OPENER_COVERAGE_FLOOR_FRAC = 0.25
+const OPENER_CONCENTRATION_CEIL_FRAC = 0.5
 
 // A pairing heavier than this only exists among the detailed atlases, so seeing
 // one open the reel proves our best art is not excluded (the ratchet is broken).
@@ -253,15 +298,16 @@ describe('first-bout download — real bytes & non-triviality (vacuity)', () => 
     expect(checked).toBe(ROSTER.length) // vacuity: every fighter really checked
     expect(ROSTER.length).toBeGreaterThan(4)
 
-    // CONCENTRATION CEILING: no fighter is in more than half the admitted openers.
-    // Uniform coverage puts each in 4/12 = 33%; the broken bimodal state put one
-    // fighter in 100%. 0.5 reddens that regression while leaving uniform coverage
-    // ample headroom.
-    const maxFrac = Math.max(...ROSTER.map((r) => appearances[r.skin])) / admitted.length
+    // AUTHORED COVERAGE ENVELOPE on the admitted set (deterministic: the director
+    // draws uniformly over `admitted`, so each fighter's share of reels is exactly
+    // its admitted-pair count / |admitted|). Assert the ≥25% floor and ≤50% ceiling
+    // per fighter and BY NAME, independently. Uniform coverage puts each at
+    // 4/12 = 33%; the broken bimodal state put one fighter at 100% and starved the
+    // rest — this reddens EITHER failure and says which fighter.
     expect(
-      maxFrac,
-      `one fighter is in ${(maxFrac * 100).toFixed(0)}% of SLOW openers (ceiling 50%) — the concentration inversion is back`,
-    ).toBeLessThanOrEqual(0.5)
+      coverageViolations(appearances, admitted.length, OPENER_COVERAGE_FLOOR_FRAC, OPENER_CONCENTRATION_CEIL_FRAC),
+      'SLOW admitted-set coverage envelope breached',
+    ).toEqual([])
   })
 
   it('prices this gate against the SHIPPED budget constants (no drift)', () => {
@@ -360,17 +406,19 @@ describe('first-bout download — the shipped director honors the budget per con
       }
       expect(tested).toBe(SEEDS)
       // THE INVERSION IS RESOLVED IN PRACTICE, not just in the static admitted set:
-      // across seeds EVERY fighter opens on slow — including spiegel, which the old
-      // full-priced budget excluded entirely — and none dominates. This is the
-      // director-level proof of the coverage/concentration property above.
-      for (const r of ROSTER) {
-        expect(appearances[r.skin], `${r.skin} NEVER opens on slow across ${SEEDS} seeds`).toBeGreaterThan(0)
-      }
-      const maxFrac = Math.max(...ROSTER.map((r) => appearances[r.skin])) / SEEDS
+      // across the shipped seed run every fighter opens on slow — including spiegel,
+      // which the old full-priced budget excluded entirely — and none dominates.
+      // Seeds are FIXED (1..SEEDS), so this distribution is deterministic, not a
+      // sampled estimate: measured spread is min 31.3% / max 37.3%, clearing the
+      // authored 25%/50% envelope with headroom. This upgrades the old `>0` liveness
+      // check to a real per-fighter coverage FLOOR and an independent concentration
+      // CEILING, each reddening BY NAME (see coverageViolations + its self-checks).
+      const totalAppearances = ROSTER.reduce((n, r) => n + appearances[r.skin], 0)
+      expect(totalAppearances, 'opener tally is empty — the seed loop counted nothing').toBe(2 * SEEDS)
       expect(
-        maxFrac,
-        `one fighter opens ${(maxFrac * 100).toFixed(0)}% of slow visits (ceiling 50%) — slow openers re-concentrated`,
-      ).toBeLessThanOrEqual(0.5)
+        coverageViolations(appearances, SEEDS, OPENER_COVERAGE_FLOOR_FRAC, OPENER_CONCENTRATION_CEIL_FRAC),
+        `SLOW director coverage envelope breached across ${SEEDS} seeds`,
+      ).toEqual([])
       // Vacuity: the slow path genuinely serves the reduced tier, not full atlases.
       expect(maxHeroBytes).toBeLessThan(HEAVY_OPENER_BYTES)
     },
@@ -417,5 +465,65 @@ describe('first-bout opener — every fighter keeps full shop-window coverage on
     // Vacuity: every roster fighter was actually checked, not an empty set.
     expect(checked).toBe(ROSTER.length)
     expect(ROSTER.length).toBeGreaterThan(4)
+  })
+})
+
+describe('first-bout opener — the coverage-envelope check is itself non-vacuous (self-checks)', () => {
+  // coverageViolations is the load-bearing assertion behind BOTH the structural and
+  // the director-driven coverage gates above. These self-checks prove it actually
+  // fires — in both directions, independently, and by name — rather than being a
+  // green no-op. Each feeds a synthetic distribution over the real ROSTER; totalReels
+  // is chosen so shares are exact. (Shares sum to 2.0 because every reel shows two
+  // fighters, which is why one fighter can exceed 50% while all others clear 25%.)
+  const FLOOR = OPENER_COVERAGE_FLOOR_FRAC
+  const CEIL = OPENER_CONCENTRATION_CEIL_FRAC
+  const skins = ROSTER.map((r) => r.skin)
+
+  it('passes a healthy uniform distribution (no false positive)', () => {
+    // 12 reels, each fighter in 4 ⇒ 33% each: inside [25%, 50%].
+    const d = Object.fromEntries(skins.map((s) => [s, 4]))
+    expect(coverageViolations(d, 12, FLOOR, CEIL)).toEqual([])
+  })
+
+  it('FLOOR fires by name on starved fighters while the ceiling stays green', () => {
+    // The reviewer's "admitted set shrank to two balanced pairings" case: four
+    // fighters at exactly 50%, two dropped to 0%. The survivors sit AT the ceiling
+    // (not over), so a ceiling-only gate would PASS this — the floor must catch the
+    // two absent fighters.
+    const d: Record<string, number> = {}
+    for (const s of skins) d[s] = 0
+    for (let i = 0; i < 4; i++) d[skins[i]] = 50 // 50% each — at the ceiling, not over
+    const starved = skins.slice(4)
+    const v = coverageViolations(d, 100, FLOOR, CEIL)
+    expect(v.length).toBe(starved.length)
+    for (const s of starved) {
+      expect(v.some((m) => m.startsWith(`${s} `) && m.includes('coverage floor'))).toBe(true)
+    }
+    expect(v.some((m) => m.includes('concentration ceiling'))).toBe(false) // ceiling independent & green
+  })
+
+  it('CEILING fires by name on a concentrated fighter while the floor stays green', () => {
+    // The independent-load-bearing case: one fighter over 50%, everyone else still
+    // above 25% (60 + 5×28 = 200 = 2×100). A floor-only gate would PASS this — the
+    // ceiling must catch the dominator.
+    const [hot, ...rest] = skins
+    const d: Record<string, number> = { [hot]: 60 }
+    for (const s of rest) d[s] = 28
+    const v = coverageViolations(d, 100, FLOOR, CEIL)
+    expect(v.length).toBe(1)
+    expect(v[0].startsWith(`${hot} `) && v[0].includes('concentration ceiling')).toBe(true)
+    expect(v.some((m) => m.includes('coverage floor'))).toBe(false) // floor independent & green
+  })
+
+  it('names EVERY violator, never collapsing to the first (both clauses can fire at once)', () => {
+    // A total collapse onto one fighter reds the ceiling for it AND the floor for the
+    // other five — proof the check enumerates the whole roster, not just the first miss.
+    const [hot, ...rest] = skins
+    const d: Record<string, number> = { [hot]: 100 }
+    for (const s of rest) d[s] = 0
+    const v = coverageViolations(d, 100, FLOOR, CEIL)
+    expect(v.some((m) => m.startsWith(`${hot} `) && m.includes('ceiling'))).toBe(true)
+    for (const s of rest) expect(v.some((m) => m.startsWith(`${s} `) && m.includes('floor'))).toBe(true)
+    expect(v.length).toBe(rest.length + 1)
   })
 })

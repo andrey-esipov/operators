@@ -1,3 +1,5 @@
+/// <reference path="./virtualAtlasCosts.d.ts" />
+import { ATLAS_COST_BYTES } from 'virtual:atlas-costs'
 /**
  * Attract-reel load-order policy — an ASSET concern, deliberately kept OUT of
  * the pure sim `AttractDirector`.
@@ -17,31 +19,25 @@
  * would require forcing the two light outliers together, which trades away
  * variety and first-impression art quality.
  *
- * WHY THESE NUMBERS CAN'T QUIETLY LIE: the values below are approximate
- * load-order HINTS, not a correctness input. The source of truth is the real
- * files on disk, gated in `atlasByteBudget.node.test.ts`; and `reelQuality`
- * re-prices the director's ACTUAL first pick against the REAL bytes on disk, so
- * if this table drifts from the shipped art the gate reddens rather than
- * silently shipping a heavy first load.
+ * WHY THESE NUMBERS CAN'T QUIETLY LIE: they are no longer hand-maintained. The
+ * costs are BAKED from the real files on disk at build time (see
+ * `virtual:atlas-costs` / scripts/atlasCostsPlugin.ts), so the byte the director
+ * prices an opener with IS the byte on disk — the same one `reelQuality` and
+ * `atlasByteBudget` gate. There is no literal to drift from the shipped art, and
+ * `atlasCostBake.node.test.ts` reddens if the bake is ever unwired.
  */
 
 const MB = 1024 * 1024
 
 /**
- * Approximate atlas download cost per choosable skin, in bytes (WebP on disk).
- * Sourced from the real files; kept here only to rank pairings for the first
- * bout. An unknown skin is treated as heavy (see {@link firstBoutCostBytes}) so
- * a newly-added fighter is never gambled onto the cold first load until someone
- * gives it a real cost.
+ * Per-skin atlas download cost in bytes, BAKED from the real files on disk at
+ * build time by scripts/atlasCostsPlugin.ts — there is no committed table to go
+ * stale (that was a real drift class: a hand-copied literal shadowing a binary
+ * the art run keeps growing). Keys are skin ids; a skin absent here (e.g. its
+ * atlas file is missing) is treated as heavy by {@link firstBoutCostBytes} and so
+ * excluded from the cold first bout rather than gambled onto it.
  */
-export const ATLAS_COST_BYTES: Readonly<Record<string, number>> = {
-  madhavan: 662420,
-  turley: 3373706,
-  chesky: 5116350,
-  doshi: 4935818,
-  spiegel: 5710006,
-  lenny: 5755142,
-}
+export { ATLAS_COST_BYTES }
 
 /** A skin with no known cost is assumed heavier than any real atlas, so it is
  *  excluded from the first bout rather than optimistically allowed onto it. */

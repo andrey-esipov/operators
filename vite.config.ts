@@ -1,9 +1,10 @@
 import { defineConfig, configDefaults } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import { atlasCostsPlugin } from './scripts/atlasCostsPlugin.ts'
 
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [react(), tailwindcss(), atlasCostsPlugin()],
   // allowedHosts: true required on dev server too so Replit's proxy
   // domain (*.repl.co / *.replit.dev) can reach Vite without hitting
   // "Blocked request. This host is not allowed."

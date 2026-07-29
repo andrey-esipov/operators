@@ -147,20 +147,40 @@ describe("hero opener decoupling — BAKE SEAM: combat-feel's real lenny rebake 
   // so the bytes need no real image data. Layout mirrors public/:
   // <root>/fighters/<skin>/{assets.json,atlas.webp,assets.hero.json,atlas.hero.webp}.
   function buildRealRoster(): { root: string; fightersDir: string } {
+    // `mkdtempSync` creates the temp dir up front, but everything after it can throw
+    // — e.g. a ROSTER skin absent from COMMITTED_FULL makes Buffer.alloc(undefined)
+    // throw. The caller's try/finally only owns cleanup once this RETURNS, so a throw
+    // here would strand a multi-MB temp dir under src/ (untracked, un-ignored, and a
+    // `git add` hazard that fires exactly when someone adds a fighter). Own the
+    // failure-path cleanup here so a half-built roster can never leak.
     const root = mkdtempSync(resolve(HERE, '.herofix-'))
-    const fightersDir = resolve(root, 'fighters')
-    for (const { skin } of ROSTER) {
-      const dir = resolve(fightersDir, skin)
-      mkdirSync(dir, { recursive: true })
-      writeFileSync(resolve(dir, 'atlas.webp'), Buffer.alloc(COMMITTED_FULL[skin]))
-      writeFileSync(resolve(dir, 'atlas.hero.webp'), Buffer.alloc(COMMITTED_HERO[skin]))
-      writeFileSync(resolve(dir, 'assets.json'), JSON.stringify({ atlas: `/fighters/${skin}/atlas.webp` }))
-      writeFileSync(
-        resolve(dir, 'assets.hero.json'),
-        JSON.stringify({ atlas: `/fighters/${skin}/atlas.hero.webp` }),
-      )
+    try {
+      const fightersDir = resolve(root, 'fighters')
+      for (const { skin } of ROSTER) {
+        const fullBytes = COMMITTED_FULL[skin]
+        const heroBytes = COMMITTED_HERO[skin]
+        if (fullBytes === undefined || heroBytes === undefined) {
+          throw new Error(
+            `heroOpenerDecoupling fixture: ROSTER skin '${skin}' has no committed ` +
+              `${fullBytes === undefined ? 'COMMITTED_FULL' : 'COMMITTED_HERO'} size. ` +
+              `Add it alongside the fighter so the fixture can model the real roster.`,
+          )
+        }
+        const dir = resolve(fightersDir, skin)
+        mkdirSync(dir, { recursive: true })
+        writeFileSync(resolve(dir, 'atlas.webp'), Buffer.alloc(fullBytes))
+        writeFileSync(resolve(dir, 'atlas.hero.webp'), Buffer.alloc(heroBytes))
+        writeFileSync(resolve(dir, 'assets.json'), JSON.stringify({ atlas: `/fighters/${skin}/atlas.webp` }))
+        writeFileSync(
+          resolve(dir, 'assets.hero.json'),
+          JSON.stringify({ atlas: `/fighters/${skin}/atlas.hero.webp` }),
+        )
+      }
+      return { root, fightersDir }
+    } catch (err) {
+      rmSync(root, { recursive: true, force: true })
+      throw err
     }
-    return { root, fightersDir }
   }
 
   it('the HERO cost map and the admitted slow-opener SET are byte-identical before and after lenny grows', () => {

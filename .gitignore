@@ -75,6 +75,12 @@ motion-strips/
 probe-out/
 dist-measure/
 
+# Temp roster trees built by node-typed fixtures (e.g. heroOpenerDecoupling) under
+# src/**/__tests__/. The fixtures clean up on throw, but ignore the prefix too so a
+# future leak — or a new fixture copying the mkdtemp shape — can never be swept in by
+# a `git add -A`/`git add src/`. These are multi-MB and materialise only on failure.
+.herofix-*
+
 # Scratch measurement probes. Convention: a leading underscore means throwaway.
 # Agents drop these to print one number and are supposed to delete them; when
 # they don't, they redden the shared gate or get committed by accident.

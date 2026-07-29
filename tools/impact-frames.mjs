@@ -140,15 +140,29 @@ const PEAK_OFFSET = Number(arg('peak', '3')) // frames past contact to the defor
 // the silent-mislabel this project keeps finding. This binds the atlas to the
 // capture — it reads the VICTIM skin's authored clips (source of truth on disk, per
 // run, NOT a hardcoded list) and refuses to hand off a fallback body as a distinct
-// pose. knockdown is on all 11 skins so sweep never falls back today, but the guard
-// checks it rather than assume. Default victim (b=lenny) HAS juggle -> no change.
+// pose. knockdown is on all 11 skins so the sweep arm never falls back on real art
+// today (--bodycheck with a synthetic knockdown-stripped atlas exercises it, so it is
+// proven live rather than presumed blind). Default victim (b=lenny) HAS juggle+knockdown
+// -> distinct, no change.
 const VICTIM = new URLSearchParams(QUERY).get('b') || ''
 const BODY_CLIP = { launcher: 'juggle', sweep: 'knockdown' } // others share the 'hurt' reel
-function victimClipSet(skin) {
-  try { return new Set(Object.keys(JSON.parse(readFileSync(`public/fighters/${skin}/assets.json`, 'utf8')).clips || {})) }
-  catch { return null }
+// Mirror AnimationDriver.firstClip's EXACT predicate (:47 `clip && clip.frames.length`):
+// a clip counts as authored only if the key EXISTS *and* its frames[] is non-empty. A key
+// with an empty frames[] falls through to `hurt` in the renderer, so the guard must treat
+// it as absent too -- otherwise it reads 'distinct' while the pixels render 'hurt', the
+// exact guard/renderer divergence this guard exists to kill (no skin ships an empty-frames
+// clip today, so this is correctness-by-construction, not a live bug -- but a guard that is
+// right by luck drifts). `skinOrPath` lets a self-test point at a synthetic atlas; real
+// runs pass the bare skin name.
+function victimClipSet(skinOrPath) {
+  const p = skinOrPath.includes('/') ? skinOrPath : `public/fighters/${skinOrPath}/assets.json`
+  try {
+    const clips = JSON.parse(readFileSync(p, 'utf8')).clips || {}
+    return new Set(Object.keys(clips).filter((k) => (clips[k]?.frames?.length ?? 0) > 0))
+  } catch { return null }
 }
-const VICTIM_CLIPS = victimClipSet(VICTIM)
+const VICTIM_ATLAS = arg('victimAtlas', '') // self-test override (synthetic atlas); real runs read the skin
+const VICTIM_CLIPS = victimClipSet(VICTIM_ATLAS || VICTIM)
 // -> { needs, kind: 'shared' (expected hurt reel) | 'distinct' (real pose present)
 //      | 'fallback' (should be distinct but the skin renders hurt) | 'unknown' }
 function bodyStatusFor(target) {
@@ -156,6 +170,22 @@ function bodyStatusFor(target) {
   if (!needs) return { needs: 'hurt', kind: 'shared' }
   if (!VICTIM_CLIPS) return { needs, kind: 'unknown' }
   return { needs, kind: VICTIM_CLIPS.has(needs) ? 'distinct' : 'fallback' }
+}
+
+// ── Self-test: fire the body-guard classifier on demand, no browser ──────────
+// The fallback arm is load-bearing for launcher (juggle authored on only 3/11 skins, so
+// turley et al. really do fall back to hurt) but NEVER fires for sweep on real art
+// (knockdown is 11/11). By the fleet rule a branch you cannot fire is presumed blind, so
+// this mode classifies every rung against VICTIM (or --victimAtlas <path>) and exits --
+// letting a synthetic atlas (empty-frames juggle, or a stripped knockdown) exercise BOTH
+// the frames-length predicate and the sweep-fallback arm with no GPU and no real match.
+if (process.argv.includes('--bodycheck')) {
+  console.log(`bodycheck victim=${VICTIM_ATLAS || VICTIM} clips=${VICTIM_CLIPS ? ([...VICTIM_CLIPS].sort().join(',') || '(none)') : 'UNREADABLE'}`)
+  for (const r of LADDER) {
+    const b = bodyStatusFor(r.target)
+    console.log(`  ${r.label.padEnd(9)} needs=${String(b.needs).padEnd(10)} body=${b.kind}`)
+  }
+  process.exit(0)
 }
 
 const browser = await chromium.launch({

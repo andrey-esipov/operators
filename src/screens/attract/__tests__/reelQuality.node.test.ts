@@ -2,59 +2,31 @@
  * Attract-reel QUALITY gate — the reel is the shop window, so this asserts the
  * OUTCOME a buyer sees, not the mechanism that produces it.
  *
- * Two independent things are gated:
+ * This gates DENSITY: the reel must stay dense with action and highlights. We
+ * drive the real {@link AttractDirector} — the shipped hard-tier, meter-primed
+ * config, the exact one that plays on the title screen — and require, PER SEED
+ * (never an average, because the customer gets one bout order, not the mean
+ * across seeds), floors on: contact fraction, supers/bout, bouts-that-show-a-
+ * super, and KOs/bout. Four floors, not one, so a regression that keeps jabs
+ * flowing but loses the supers (a meter or super-AI break) still reddens this —
+ * the failure mode "still busy, but boring" cannot satisfy the assertion.
  *
- *  1. DENSITY. The reel must stay dense with action and highlights. We drive the
- *     real {@link AttractDirector} — the shipped hard-tier, meter-primed config,
- *     the exact one that plays on the title screen — and require, PER SEED (never
- *     an average, because the customer gets one bout order, not the mean across
- *     seeds), floors on: contact fraction, supers/bout, bouts-that-show-a-super,
- *     and KOs/bout. Four floors, not one, so a regression that keeps jabs flowing
- *     but loses the supers (a meter or super-AI break) still reddens this — the
- *     failure mode "still busy, but boring" cannot satisfy the assertion.
- *
- *  2. FIRST-LOAD COST. The opener a cold first visit waits on must stay off the
- *     heaviest atlas pairing. We read the REAL bytes on disk (like
- *     atlasByteBudget) and price the director's ACTUAL first pick — so if the
- *     cost hint table in attractLoadCost ever drifts from the shipped art, this
- *     gate catches the real download, not the stale estimate.
+ * (The opener's first-LOAD cost — the download a cold visit waits on — is gated
+ * separately, in buyer-facing seconds, by firstBoutBudget.node.test.ts.)
  *
  * Anti-vacuity, because this project has a documented history of gates that pass
  * by asserting nothing: the classifier is proven to discriminate (a neutral
- * frame reads false, hit/hitstop/super/hitstun read true), a real sim is proven
- * to have advanced (non-zero sim frames), and the cost ceiling is proven
- * non-trivial (at least one real roster pairing actually exceeds it).
+ * frame reads false, hit/hitstop/super/hitstun read true) and a real sim is
+ * proven to have advanced (non-zero sim frames).
  *
  * Mutation-proven: forcing the contact classifier to `false` reddens the contact
- * floor; zeroing the director's `SUPER_PRIME` meter reddens the super floors;
- * disabling the first-bout cost filter reddens the first-load ceiling.
+ * floor; zeroing the director's `SUPER_PRIME` meter reddens the super floors.
  */
 
 import { describe, it, expect } from 'vitest'
-import { existsSync, readFileSync, statSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { AttractDirector } from '../attractDirector'
 import { measureReel, frameIsContact } from '../reelMetrics'
-import { FIRST_BOUT_COST_CEILING_BYTES } from '../attractLoadCost'
-import { ROSTER } from '../../../fighthud/select/roster'
 import type { FightState } from '../../../fight/types'
-
-const HERE = dirname(fileURLToPath(import.meta.url))
-// __tests__ → attract → screens → src → repo root, then /public.
-const PUBLIC_DIR = resolve(HERE, '../../../../public')
-
-/** Real on-disk atlas size for a skin, resolved through its manifest exactly as
- *  the shipping atlas gate does. 0 when the file is missing. */
-function realAtlasBytes(skin: string): number {
-  const manifestPath = resolve(PUBLIC_DIR, 'fighters', skin, 'assets.json')
-  if (!existsSync(manifestPath)) return 0
-  const atlasField =
-    (JSON.parse(readFileSync(manifestPath, 'utf-8')) as { atlas?: string }).atlas ??
-    `/fighters/${skin}/atlas.webp`
-  const diskPath = resolve(PUBLIC_DIR, atlasField.replace(/^\/+/, ''))
-  return existsSync(diskPath) ? statSync(diskPath).size : 0
-}
 
 // ── density floors ───────────────────────────────────────────────────────────
 // Observed across seeds: contact 0.70–0.72, supers/bout 3.0–4.0,
@@ -118,40 +90,5 @@ describe('attract reel — the contact classifier discriminates (not vacuous)', 
     expect(frameIsContact(neutral, [{ type: 'super-flash', who: 0, moveId: 'demo' }])).toBe(true)
     // A whiff is neutral spacing, not contact — the conservative direction.
     expect(frameIsContact(neutral, [{ type: 'whiff', at: { x: 0, y: 0 }, attacker: 0 }])).toBe(false)
-  })
-})
-
-describe('attract reel — the opener never serves the heaviest atlas load', () => {
-  it('has real atlas bytes for every choosable skin (vacuity)', () => {
-    for (const r of ROSTER) {
-      expect(realAtlasBytes(r.skin), `missing atlas for ${r.skin}`).toBeGreaterThan(0)
-    }
-  })
-
-  it('the first-bout ceiling actually excludes at least one real pairing (non-trivial)', () => {
-    let anyPairExceeds = false
-    for (let i = 0; i < ROSTER.length; i++) {
-      for (let j = i + 1; j < ROSTER.length; j++) {
-        const bytes = realAtlasBytes(ROSTER[i].skin) + realAtlasBytes(ROSTER[j].skin)
-        if (bytes > FIRST_BOUT_COST_CEILING_BYTES) anyPairExceeds = true
-      }
-    }
-    expect(anyPairExceeds).toBe(true)
-  })
-
-  it('every seed opens within the first-bout download ceiling (real bytes)', () => {
-    const SEED_COUNT = 200
-    let tested = 0
-    for (let seed = 1; seed <= SEED_COUNT; seed++) {
-      const dir = new AttractDirector({ seed })
-      const { a, b } = dir.matchup
-      const realBytes = realAtlasBytes(a.skin) + realAtlasBytes(b.skin)
-      expect(
-        realBytes,
-        `seed ${seed} opener ${a.skin}+${b.skin} = ${realBytes}B exceeds first-bout ceiling`,
-      ).toBeLessThanOrEqual(FIRST_BOUT_COST_CEILING_BYTES)
-      tested++
-    }
-    expect(tested).toBe(SEED_COUNT) // vacuity: we really priced openers
   })
 })

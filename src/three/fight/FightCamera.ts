@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { Spring3, Spring1, fbm1, clamp } from '../camera/CameraMath'
+import { Spring3, Spring1, fbm1, clamp, smoothstep } from '../camera/CameraMath'
 import { WORLD } from '../types'
 
 /**
@@ -32,7 +32,16 @@ export class FightCamera {
   private cam: THREE.PerspectiveCamera
   private pos = new Spring3()
   private look = new Spring3()
-  private dolly = new Spring1(0) // extra push-in, world units (negative = closer)
+  // Cinematic freeze push — the authored super / KO "shot". A dramatic beat
+  // (punchIn) latches cineTarget; update() drives `cine` (world units of extra
+  // dolly-in) with a wall-time ATTACK and a SIM-time RELEASE, so the push ramps
+  // in during the freeze, HOLDS across it, and eases out only as the world
+  // resumes. Replaces the old dolly impulse that decayed on wall time: measured,
+  // that gave a ~2.5% push that had bled out by mid-freeze (holdRatio ~0.57) and
+  // was identical for a jab, a super and a KO — i.e. the game's two most
+  // cinematic beats were framed like neutral poking.
+  private cine = 0
+  private cineTarget = 0
   // Impact kick — a directional camera SHOVE on contact, the thing that makes a
   // hit read as weight rather than two sprites overlapping. Modelled as a spring
   // impulse (kick the velocity, let it snap back) rather than the old decaying
@@ -65,6 +74,29 @@ export class FightCamera {
   private readonly KICK_SCALE = 26
   private readonly KICK_VMAX = 18
   private readonly KICK_MAX = 0.18
+
+  // Cinematic freeze-push tuning (the authored super / KO shot).
+  //   KNEE_LO/HI: smoothstep gate on the event weight punchIn() receives
+  //     (0.15 jab .. 0.5 heavy .. 0.6 super/launcher .. 0.7 crumple .. 0.8 KO).
+  //     Below ~0.3 the push is ~0, so ordinary pokes DON'T re-frame — the shot
+  //     is reserved for heavy hits, supers and KOs, and scales across them
+  //     (heavy ~7%, super ~11%, KO ~19% screen-fill). This is what makes the
+  //     move read as authored drama rather than a camera that lurches on jabs.
+  //   MAX: peak push-in (world units) at a full-weight KO. ~1.9u on the ~9.85u
+  //     rest distance is a ~19% screen-fill, squarely in the SF6/GGST band, and
+  //     is always clamped below by zKeep (update) so it can never crop a fighter.
+  //   TAU: wall-time attack time-constant. The push ramps in over ~150ms so the
+  //     freeze is AUTHORED (a visible push) rather than a hard snap.
+  //   RELEASE: sim-time decay of the latched target. Because sim frames don't
+  //     advance during the freeze, the target is HELD at full for the whole
+  //     freeze and only bleeds out (over ~0.35s) once the world resumes — the
+  //     exact sim-time trick the impact kick uses, and the fix for the measured
+  //     "freeze is nearly empty".
+  private readonly CINE_KNEE_LO = 0.3
+  private readonly CINE_KNEE_HI = 0.85
+  private readonly CINE_MAX = 1.9
+  private readonly CINE_TAU = 0.05
+  private readonly CINE_RELEASE = 5.4
 
   // Framing tuning (world units).
   //
@@ -174,10 +206,21 @@ export class FightCamera {
     this.kick.vel = clamp(this.kick.vel, -this.KICK_VMAX, this.KICK_VMAX)
   }
 
-  /** Momentary dolly-in impulse (super freeze, heavy hit). */
+  /**
+   * Latch an authored cinematic push-in for a dramatic beat (super freeze, KO,
+   * big hit). `amount` is the event weight FightVfx passes (0.15 jab .. 0.5 heavy
+   * .. 0.6 super .. 0.8 KO). A smoothstep gate means ordinary pokes barely push
+   * while heavy hits, supers and KOs get a real, screen-filling push that scales
+   * with weight. The envelope (ramp in during the freeze, hold across it, ease
+   * out after) is applied in update(); the latch only records the target.
+   */
   punchIn(amount: number) {
     if (import.meta.env.DEV && (globalThis as Record<string, unknown>).__MUT_NO_KICK__) return
-    this.dolly.kick(-Math.abs(amount))
+    // DEV mutation hook: silence ONLY the cinematic push (leaves the impact kick
+    // intact) so a probe can prove the freeze re-framing comes from THIS code.
+    if (import.meta.env.DEV && (globalThis as Record<string, unknown>).__MUT_NO_CINE__) return
+    const w = smoothstep(this.CINE_KNEE_LO, this.CINE_KNEE_HI, Math.abs(amount))
+    this.cineTarget = Math.max(this.cineTarget, w * this.CINE_MAX)
   }
 
   /**
@@ -281,9 +324,31 @@ export class FightCamera {
     const targetLook = this.tmpLook.set(camX, lookY, 0)
     this.pos.step(targetPos, 9.0, 1.0, dt)
     this.look.step(targetLook, 12.0, 1.0, dt)
-    // Ease the dolly impulse back to rest.
-    this.dolly.step(0, 11.0, 0.85, dt)
-    const camZ = z - punch + this.dolly.value
+
+    // --- Cinematic freeze push (the authored super / KO shot) ------------
+    // Two timescales make this a directed shot rather than a nudge:
+    //   ATTACK on WALL time (dt) — the push ramps IN even while the world is
+    //     frozen for impact, so the dramatic freeze is authored, not static.
+    //   HOLD/RELEASE on SIM time (kickDt) — the latched target is decayed on
+    //     genuine sim frames, which do NOT advance during the freeze, so the
+    //     push is held at full for the entire freeze and only bleeds out as the
+    //     world resumes. (Measured before this: the old wall-time dolly had
+    //     decayed to ~half by mid-freeze; the flashiest 260-340ms in the game
+    //     were framed like neutral.)
+    // The push freely eats the designed headroom / apron / side-margin — that IS
+    // a push-in — but is capped by zKeep so the pulled-in distance still contains
+    // both fighters' feet->head AND their horizontal spread with a little margin.
+    // It therefore obeys the same "never crop a fighter" invariant as the framing
+    // solve above; it only spends the empty margin the neutral frame reserves.
+    this.cineTarget = Math.max(0, this.cineTarget - this.CINE_RELEASE * Math.max(0, kickDt))
+    const RETAIN = 0.35
+    const zKeepX = (sep * 0.5 + this.marginX * RETAIN) / Math.max(1e-4, tanH)
+    const zKeepY = (f.topY + (headTop + this.footBot) * RETAIN) / (2 * Math.max(1e-4, tanV))
+    const zKeep = Math.max(this.minZ, zKeepX, zKeepY)
+    const cineCap = Math.max(0, z - punch - zKeep)
+    const cineAim = Math.min(this.cineTarget, cineCap)
+    this.cine += (cineAim - this.cine) * (1 - Math.exp(-Math.max(0, dt) / this.CINE_TAU))
+    const camZ = z - punch - this.cine
 
     // --- Hard containment guarantee (post-spring) ------------------------
     // The springs above give the operator mass, but a fast transition — a

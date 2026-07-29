@@ -37,6 +37,11 @@ declare global {
       dofDefeat: (on: boolean) => void
       hasDof: () => boolean
       sepDefeat: (on: boolean) => void
+      /** Current value of the reactive impact envelope (0..~1.7). Read-only QA
+       *  probe: measure-impact-punch reads this frame-by-frame on the shipped
+       *  route to prove a normal hit actually charges the screen-punch (it sat
+       *  pinned at 0 before FightVfx.punchPost was wired). */
+      impact: () => number
     }
     /** DEV mutation hook: force behind-fighter separation off (see the gate). */
     __MUT_SEP_BEHIND_OFF__?: boolean
@@ -340,6 +345,36 @@ export class PostPipeline implements Subsystem, RenderDriver {
     if (e.kind === 'shatter') this.impact = Math.max(this.impact, 1.15)
   }
 
+  /**
+   * Charge the reactive screen-punch from a FIGHT-ROUTE hit.
+   *
+   * {@link onEvent} is the card-game bus handler and the only thing that ever
+   * charged `impact` — but it never fires on the shipped `/` (`?play=1`) fighter.
+   * There the sim dispatches its own FightEvents straight to FightVfx, and
+   * FightRenderer leaves the optional `emitEngine` bridge undefined, so
+   * `engine.emit` (and therefore onEvent) is never called on a normal hit.
+   * Measured on the live route before this method existed: the impact envelope
+   * sat pinned at 0.0000 across 45 hits of every weight class, which means the
+   * bloom bump (`+ i * 0.5`), chromatic-aberration spike (`i * 0.0075`), contrast
+   * (`+ i * 0.18`), grain (`+ i * 0.03`) and anamorphic streak — all driven by
+   * `i = this.impact` in update() — were dead on the game people actually play.
+   * The designer's "aberration should live on impacts, not neutral" intent was
+   * defeated by dead wiring, not by tuning.
+   *
+   * FightVfx.hit()/ko() call this directly with a weight-mapped strength so the
+   * already-tuned reactive grade finally punches on contact. Kept as a thin,
+   * clamped setter that reuses onEvent's exact envelope caps, so every bit of the
+   * decay/curve tuning still lives in update() and there is one source of truth
+   * for "how hot can a punch get." A normal hit passes no `flash`: the full-frame
+   * exposure lift is reserved for the KO, because lifting the whole frame flattens
+   * both fighters into unreadable silhouettes (the anti-wash lesson).
+   */
+  impactPunch(strength: number, warm: number, flash = 0) {
+    this.impact = Math.min(1.7, this.impact + strength)
+    this.impactWarm = Math.max(-1, Math.min(1, warm))
+    if (flash > 0) this.flash = Math.min(0.32, this.flash + flash)
+  }
+
   update(dt: number, state: FightRenderState) {
     this.time += dt
 
@@ -368,6 +403,7 @@ export class PostPipeline implements Subsystem, RenderDriver {
         sepDefeat: (on: boolean) => {
           this.sepDefeat = on
         },
+        impact: () => this.impact,
       }
     }
 

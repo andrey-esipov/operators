@@ -32,17 +32,25 @@ interface HitTuning {
   core: number
   /** Peak of the victim's white impact strobe, 0..1, scaled with hit weight. */
   flash: number
+  /** Strength fed to PostPipeline.impactPunch — how hard this weight charges the
+   *  reactive screen grade (bloom + chromatic + contrast + grain + anamorphic).
+   *  Ascends with the hitstop ladder so a jab ticks the grade and a crumple
+   *  slams it. See the punchPost call in hit(). */
+  post: number
+  /** Warmth bias of that grade, -1..1. Strikes run warm (orange); the launcher
+   *  runs cool (the blue pop) mirroring its blue impact mark. */
+  warm: number
   hot: THREE.Color
   cool: THREE.Color
 }
 
 const HIT: Record<HitLevel, HitTuning> = {
-  light:   { count: 26, speed: 7,  size: 0.13, hitstopMs: 60,  hitstopScale: 0.14, shake: 0.10, push: 0.15, core: 1.0, flash: 0.55, hot: new THREE.Color(0xffffff), cool: new THREE.Color(0xffd27a) },
-  medium:  { count: 40, speed: 9,  size: 0.16, hitstopMs: 90,  hitstopScale: 0.09, shake: 0.16, push: 0.28, core: 1.3, flash: 0.72, hot: new THREE.Color(0xffffff), cool: new THREE.Color(0xffb04a) },
-  heavy:   { count: 64, speed: 12, size: 0.20, hitstopMs: 130, hitstopScale: 0.05, shake: 0.26, push: 0.5,  core: 1.7, flash: 0.9,  hot: new THREE.Color(0xfff4e0), cool: new THREE.Color(0xff7a2a) },
-  launcher:{ count: 72, speed: 13, size: 0.22, hitstopMs: 140, hitstopScale: 0.05, shake: 0.30, push: 0.6,  core: 1.8, flash: 1.0,  hot: new THREE.Color(0xffffff), cool: new THREE.Color(0x8ad2ff) },
-  sweep:   { count: 50, speed: 11, size: 0.19, hitstopMs: 110, hitstopScale: 0.06, shake: 0.22, push: 0.4,  core: 1.5, flash: 0.82, hot: new THREE.Color(0xfff0dd), cool: new THREE.Color(0xffa030) },
-  crumple: { count: 84, speed: 14, size: 0.24, hitstopMs: 170, hitstopScale: 0.03, shake: 0.36, push: 0.7,  core: 2.0, flash: 1.0,  hot: new THREE.Color(0xffffff), cool: new THREE.Color(0xff5a3c) },
+  light:   { count: 26, speed: 7,  size: 0.13, hitstopMs: 60,  hitstopScale: 0.14, shake: 0.10, push: 0.15, core: 1.0, flash: 0.55, post: 0.30, warm: 0.20, hot: new THREE.Color(0xffffff), cool: new THREE.Color(0xffd27a) },
+  medium:  { count: 40, speed: 9,  size: 0.16, hitstopMs: 90,  hitstopScale: 0.09, shake: 0.16, push: 0.28, core: 1.3, flash: 0.72, post: 0.36, warm: 0.20, hot: new THREE.Color(0xffffff), cool: new THREE.Color(0xffb04a) },
+  heavy:   { count: 64, speed: 12, size: 0.20, hitstopMs: 130, hitstopScale: 0.05, shake: 0.26, push: 0.5,  core: 1.7, flash: 0.9,  post: 0.44, warm: 0.35, hot: new THREE.Color(0xfff4e0), cool: new THREE.Color(0xff7a2a) },
+  launcher:{ count: 72, speed: 13, size: 0.22, hitstopMs: 140, hitstopScale: 0.05, shake: 0.30, push: 0.6,  core: 1.8, flash: 1.0,  post: 0.46, warm: -0.60, hot: new THREE.Color(0xffffff), cool: new THREE.Color(0x8ad2ff) },
+  sweep:   { count: 50, speed: 11, size: 0.19, hitstopMs: 110, hitstopScale: 0.06, shake: 0.22, push: 0.4,  core: 1.5, flash: 0.82, post: 0.40, warm: 0.30, hot: new THREE.Color(0xfff0dd), cool: new THREE.Color(0xffa030) },
+  crumple: { count: 84, speed: 14, size: 0.24, hitstopMs: 170, hitstopScale: 0.03, shake: 0.36, push: 0.7,  core: 2.0, flash: 1.0,  post: 0.52, warm: 0.45, hot: new THREE.Color(0xffffff), cool: new THREE.Color(0xff5a3c) },
 }
 
 /**
@@ -115,6 +123,11 @@ export interface FightVfxDeps {
   /** Emit a translated card-game event so the reused LightRig flash + floor
    *  impact + engine hitstop curve all fire from one place. */
   emitEngine?: (attacker: 0 | 1, target: 0 | 1, level: HitLevel, power: number, kind: 'hit' | 'ko') => void
+  /** Charge the reactive post grade (bloom + chromatic + contrast + grain +
+   *  anamorphic) on a hit. This is the shipped-route path: emitEngine is left
+   *  undefined by FightRenderer, so onEvent never fires and this is the ONLY way
+   *  a normal hit reaches PostPipeline.impact. See PostPipeline.impactPunch. */
+  punchPost?: (strength: number, warm: number, flash?: number) => void
 }
 
 export class FightVfx {
@@ -224,6 +237,17 @@ export class FightVfx {
     this.d.camera.addShake(t.shake, bd)
     this.d.camera.punchIn(t.push)
     this.d.fighters[target]?.triggerHitFlash(t.flash)
+    // Charge the reactive screen-punch (bloom + chromatic aberration + contrast +
+    // grain + anamorphic streak). On the shipped `?play=1` route this call is the
+    // ONLY thing that charges PostPipeline.impact: the sim's FightEvents are
+    // dispatched straight to this class and never reach the card-game engine bus,
+    // so onEvent — the effect's original charger — never fires. Measured live
+    // before this wire: impact sat at 0.0000 across 45 hits of every weight class,
+    // i.e. the entire reactive grade was dead on the game people actually play.
+    // Weight-scaled from the HIT ladder (light 0.30 → crumple 0.52), lightly
+    // modulated by combo power. No full-frame flash on a normal hit — that wash is
+    // reserved for the KO (see ko()), per the anti-white-orb lesson.
+    this.d.punchPost?.(t.post * (0.8 + power * 0.4), t.warm)
     this.d.emitEngine?.(attacker, target, level, power, 'hit')
   }
 
@@ -465,6 +489,14 @@ export class FightVfx {
     this.d.requestHitstop(340, 0.01)
     this.d.camera.addShake(0.5)
     this.d.camera.punchIn(0.8)
+    // The KO is the most-remembered single frame of the match; give it the full
+    // reactive punch plus the short warm exposure lift the card route's
+    // onEvent('ko') applied — both of which were dead on the shipped route for the
+    // same emitEngine reason as a normal hit. framing owns the KO *camera* move;
+    // this is only the post grade. flash stays in the punch-and-decay band
+    // (clamped to 0.32 in impactPunch) so it lands as a bright accent, not a
+    // whole-frame wash that would flatten the KO'd fighter into a silhouette.
+    this.d.punchPost?.(1.7, 0.6, 0.26)
     this.d.emitEngine?.(who === 0 ? 1 : 0, who, 'heavy', 1, 'ko')
   }
 

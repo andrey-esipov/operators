@@ -124,6 +124,11 @@ export class FightRenderer {
       fighters: this.fighters,
       camera: this.camera,
       requestHitstop: (ms, scale) => engine.requestHitstop(ms, scale),
+      // Cross-seam wire (FightRenderer is the shared construction point for the
+      // impact-vfx-owned FightVfx + PostPipeline): route a hit's reactive punch to
+      // the post grade. Without this the shipped route never charges impact — see
+      // PostPipeline.impactPunch and FightVfx.hit().
+      punchPost: (strength, warm, flash) => this.post.impactPunch(strength, warm, flash),
     })
 
     this.world = new FightWorld(this)

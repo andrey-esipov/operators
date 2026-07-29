@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { presenceFor } from '../ProjectileFx'
+import { presenceFor, SUPER_WORLD_DIM } from '../ProjectileFx'
 
 /**
  * The two ion-bolt buttons (lp = slow "wall", hp = fast "charged") spawn the
@@ -93,7 +93,10 @@ describe('presenceFor speed→strength ramp', () => {
     const superNoSpeed = presenceFor('super-beam')
     const superFast = presenceFor('super-beam', 12)
     expect(superFast).toEqual(superNoSpeed)
-    expect(superFast.worldDim).toBeCloseTo(0.6)
+    // worldDim reads the SHARED SUPER_WORLD_DIM constant (not a hand-copied
+    // literal that would drift when the dim is retuned) — sampled here just to
+    // confirm the authored profile passes through verbatim under a speed.
+    expect(superFast.worldDim).toBe(SUPER_WORLD_DIM)
     expect(superFast.spawnFlash).toBeCloseTo(5.5)
   })
 

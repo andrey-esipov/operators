@@ -414,6 +414,34 @@ const DEFAULT_PRESENCE: Presence = {
 }
 
 /**
+ * World-dim depth for the whole super (freeze charge AND travelling beam).
+ *
+ * MEASURED DEFECT (critic v12: the shipped super "reads FADED — a formless blue
+ * bloom orb over a DESATURATED world-dim"). The dim is a full-frustum quad that
+ * darkens ONLY the background (renderOrder 8, under the fighters at 10), so it is
+ * a pure spotlight. At the shipped 0.6 it over-crushed that background: measured
+ * on the `/` route at the true impact-frame set (1920×1080, warden Ion Storm), the
+ * held 60-frame freeze dropped background luma −31% (79→55) and — the part the
+ * critic's eye caught — saturation −26% (0.27→0.206). A spotlight that grey-washes
+ * the world it is meant to pop the super AGAINST reads "faded", not "powerful".
+ * Dropping to 0.45 recovers the freeze to luma −21% (→63) and saturation −15%
+ * (→0.23) — the world stays cinematically dimmed (a clear spotlight survives) but
+ * is no longer crushed to grey — while the super never clips (blown flat at 0.39%,
+ * = at-rest) and the beam still reads (travel maskPct 30%+, blueDom > 0). SF6, not
+ * GGST: legible and alive the whole way through, not a flashbulb over a dead stage.
+ *
+ * SINGLE SOURCE OF TRUTH. The freeze-dim (`SUPER.DIM_PEAK` in ProjectileLayer) and
+ * the travelling-beam-dim (this presence's `worldDim`) MUST be equal or the
+ * freeze→beam hand-off shows a visible step — a bug the atmosphere code's own
+ * comment documents as having shipped once. Two hand-tuned copies can silently
+ * drift; ONE exported constant that both read makes that drift unrepresentable
+ * (the required-agreement is enforced by construction, not by a test that someone
+ * must remember to keep). A gate then guards only the remaining freedom: the value
+ * staying below the over-fade ceiling.
+ */
+export const SUPER_WORLD_DIM = 0.45
+
+/**
  * Per-kind overrides. `super-beam` is dialled up across the board: a wider,
  * brighter core; a fat bright wake; a floor wash several times larger; a
  * travelling volume of light around the lance; a hard screen-scale spawn flash
@@ -438,12 +466,22 @@ const PRESENCE: Record<string, Partial<Presence>> = {
     spawnFlashOpacity: 0.85,
     impactScale: 2.7,
     impactOpacity: 1,
-    worldDim: 0.6,
+    worldDim: SUPER_WORLD_DIM,
     screenFlash: 0.5,
     strengthRamp: 0,
     beam: 1,
   },
 }
+
+/**
+ * Every kind with a per-kind presence override. Exported so a gate can iterate
+ * the WHOLE set and assert a house rule on each — e.g. no kind may over-fade the
+ * world — instead of spot-checking one member and leaving the next addition
+ * unguarded (the "validate one of a set, N go unchecked" shape this codebase has
+ * shipped repeatedly). presenceFor() folds each over DEFAULT_PRESENCE, so a kind
+ * absent here still resolves (to the default) — the gate reads through presenceFor.
+ */
+export const PRESENCE_KINDS: readonly string[] = Object.keys(PRESENCE)
 
 /**
  * Map a projectile's SPEED onto a 0..1 strength and push the profile that far

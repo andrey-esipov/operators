@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import type { Projectile } from '../../fight/types'
 import { STAGE_HALF_W, PROJECTILE_MARGIN, SUPER_FREEZE_FRAMES } from '../../fight/constants'
 import { simToWorld, cmYToWorld } from './worldScale'
-import { energyTint, flashTint, hotTint, makeGlowMesh, hotCoreTexture, beamColumnTexture, beamCrackleTexture, beamCrackleScroll, BEAM_CRACKLE_PERIOD, beamTint, coreQuadTint, presenceFor, clashing, type Presence } from './ProjectileFx'
+import { energyTint, flashTint, hotTint, makeGlowMesh, hotCoreTexture, beamColumnTexture, beamCrackleTexture, beamCrackleScroll, BEAM_CRACKLE_PERIOD, beamTint, coreQuadTint, presenceFor, clashing, SUPER_WORLD_DIM, type Presence } from './ProjectileFx'
 import {
   loadProjectileAtlas,
   type LoadedProjectile,
@@ -105,10 +105,11 @@ const OFFSTAGE_CM = STAGE_HALF_W + PROJECTILE_MARGIN
  * The beam then spawns on the first resumed frame and carries its own travel.
  */
 const SUPER = {
-  /** Peak of the world-dim held through the freeze. Matches super-beam's own
-   *  `presence.worldDim` (0.6) so the freeze dim hands off to the travelling
-   *  beam's dim with no visible step. */
-  DIM_PEAK: 0.6,
+  /** Peak of the world-dim held through the freeze. Reads the SHARED
+   *  `SUPER_WORLD_DIM` (0.45) that super-beam's own `presence.worldDim` also
+   *  reads, so the freeze dim hands off to the travelling beam's dim with no
+   *  visible step — the two can no longer drift because they are one constant. */
+  DIM_PEAK: SUPER_WORLD_DIM,
   /** Charge core/aura live on this z, just behind the owner (drawn before the
    *  fighter at renderOrder 10) so the halo frames the body instead of washing
    *  over it — the TASK-3 "never erase the fighter" rule, by construction. */

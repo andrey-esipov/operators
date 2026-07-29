@@ -342,6 +342,101 @@ describe('QualityAdaptor — recovery, validity & boot exclusion (the ratchet fi
   })
 })
 
+// ────────────────────────────────────────────────────────────────────────────
+// The cap DECAY. `slowDemotes` only ever climbs during adaptive play (reset()
+// fires solely on an EXTERNAL quality set — exactly when adaptation is off), and
+// the shipped Engine is a persistent shell that lives the whole session, so
+// without decay any two slow demotes per tier — from ANY cause: two supers, a GC
+// pause, an atlas decode, an alt-tab under discontinuityMs — pin the promote path
+// at the floor for the rest of the session, silently, with nothing flapping. The
+// cap is anti-FLAP memory, not a lifetime ceiling; capDecayMs of sustained CALM
+// (no slow demote from any tier) forgives one demote per tier.
+//
+// WHY THE FAILURE MODE CANNOT SATISFY THESE:
+//  • `permanentLockIsBroken` FORCES the real defect — two full slow-walks to the
+//    floor, so every crossed tier hits the cap — then proves a calm interval
+//    climbs all the way back, and that the climb could NOT have started until a
+//    full capDecayMs of calm had passed. Disabling decay (capDecayMs→∞) leaves it
+//    pinned at low and reddens both the recovery and the timing assertion.
+//  • `calmIsRequired` locks every tier with two full walks to the floor, then
+//    holds a calm window SHORTER than capDecayMs and proves the tier is still
+//    pinned at the floor — no decay, no promotion. A mutant that decays every
+//    frame (capDecayMs→0) forgives the locks inside that window and it climbs back
+//    to ultra → this reddens. It is the anti-flap direction, independent of the
+//    70s OSCILLATION CAP flap above.
+//  • `spacedTransientsDoNotAccumulate` fires three isolated blips each separated
+//    by more than capDecayMs; because each is forgiven before the next, the count
+//    never reaches the cap and every recovery succeeds. Without decay the blips
+//    stack to a lock on the second one and the third recovery never fires — so a
+//    strict count of full recoveries reddens the mutant.
+// ────────────────────────────────────────────────────────────────────────────
+describe('QualityAdaptor — oscillation-cap decay (the permanent-lock fix)', () => {
+  const fast = 1000 / 60   // 16.67ms — healthy vsync-locked frame
+  const slow = 1000 / 30   // 33.3ms — below the 45fps demote floor, not catastrophic
+
+  it('PERMANENT LOCK BROKEN: two slow-walks to the floor lock every tier, then sustained calm climbs back', () => {
+    // Walk ultra→low once (each tier demoted once, count 1), recover to ultra,
+    // then walk to low AGAIN (count 2 per tier — the cap is now hit on every
+    // tier). Under the old monotonic cap this is the permanent-low pin. A long
+    // calm window must decay the caps and let it fully recover.
+    const { tier, actions } = feed(new QualityAdaptor(), [
+      [fast, 90],     // ~1.5s boot grace, healthy
+      [slow, 170],    // ~5.7s @30fps: slow-walk ultra→high→medium→low (counts → 1)
+      [fast, 780],    // ~13s @60fps: recover low→…→ultra (counts stay 1)
+      [slow, 170],    // ~5.7s @30fps: slow-walk to low AGAIN (counts → 2, LOCKED)
+      [fast, 3000],   // ~50s @60fps: > capDecayMs, then the full climb back
+    ], 'ultra')
+    // Fully recovered — not pinned at the floor, not stuck one tier below.
+    expect(tier).toBe('ultra')
+    // The lock was real: the second walk bottomed out at low.
+    const lowDemotes = actions.filter((a) => a.kind === 'demote' && a.to === 'low')
+    expect(lowDemotes.length).toBeGreaterThanOrEqual(2)
+    // And the climb back could NOT have begun until a full decay interval of calm
+    // had elapsed since that bottom — proof it was the decay, not some faster path.
+    const bottom = lowDemotes[lowDemotes.length - 1].t
+    const backToUltra = actions.filter((a) => a.kind === 'promote' && a.to === 'ultra')
+    expect(backToUltra.length).toBeGreaterThanOrEqual(1)
+    expect(backToUltra[backToUltra.length - 1].t - bottom).toBeGreaterThanOrEqual(DEFAULT_ADAPT.capDecayMs)
+  })
+
+  it('CALM IS REQUIRED: a lock held by two walks survives a calm window shorter than capDecayMs', () => {
+    // Walk to the floor twice (every tier demoted twice → every tier locked),
+    // then hold calm for LESS than capDecayMs. No decay fires, so every promote
+    // stays capped and the tier is pinned at the floor — it cannot even take the
+    // first step back to medium. (Mutant capDecayMs→0 forgives the locks during
+    // this window and it climbs back to ultra → this reddens.) The long-calm
+    // recovery that SHOULD eventually happen is D1; this is the anti-flap half.
+    const { tier, actions } = feed(new QualityAdaptor(), [
+      [fast, 90],     // boot
+      [slow, 170],    // walk ultra→low (counts → 1)
+      [fast, 780],    // recover to ultra (counts stay 1)
+      [slow, 170],    // walk to low AGAIN (counts → 2, every tier LOCKED)
+      [fast, 900],    // ~15s calm — deliberately < capDecayMs(30s): no decay
+    ], 'ultra')
+    // Still pinned at the floor: the locks have not been forgiven.
+    expect(tier).toBe('low')
+    // Sanity that the two-walk setup was real — the mid recovery did reach ultra.
+    expect(actions.filter((a) => a.kind === 'promote' && a.to === 'ultra').length).toBe(1)
+  })
+
+  it('SPACED TRANSIENTS DO NOT ACCUMULATE: blips > capDecayMs apart never stack to a lock', () => {
+    // Three isolated slow blips, each followed by more than capDecayMs of health.
+    // Every blip is forgiven before the next, so the count never reaches the cap
+    // and all three recoveries succeed. (Mutant capDecayMs→∞ makes the count
+    // monotonic → the second blip locks ultra → the third recovery never fires.)
+    const { tier, actions } = feed(new QualityAdaptor(), [
+      [fast, 90],     // boot
+      [slow, 45], [fast, 2160],   // blip 1 + ~36s health (> capDecayMs): decays, recovers
+      [slow, 45], [fast, 2160],   // blip 2 + ~36s health
+      [slow, 45], [fast, 2160],   // blip 3 + ~36s health
+    ], 'ultra')
+    expect(tier).toBe('ultra')
+    // All three round-trips completed: three demotes out of ultra, three back in.
+    expect(actions.filter((a) => a.kind === 'demote' && a.from === 'ultra').length).toBe(3)
+    expect(actions.filter((a) => a.kind === 'promote' && a.to === 'ultra').length).toBe(3)
+  })
+})
+
 describe('affordablePixelRatio — fill-aware cap', () => {
   it('defuses the 1080p Retina catastrophe: caps well under 2.0 (near 1.0)', () => {
     const pr = affordablePixelRatio(1920, 1080, 2, 1.5)

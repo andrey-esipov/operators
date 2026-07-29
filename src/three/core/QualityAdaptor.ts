@@ -95,10 +95,31 @@ export interface AdaptConfig {
   discontinuityMs: number
   /**
    * Oscillation cap. After this many SLOW demotions FROM a tier, stop promoting
-   * back INTO it for the rest of the session, so a capability that sits right on
-   * a tier boundary converges to the stable lower tier instead of flapping.
+   * back INTO it — UNTIL `capDecayMs` of calm forgives one (see below), so it is
+   * an anti-flap memory, not a lifetime ceiling. A capability sitting right on a
+   * tier boundary converges to the stable lower tier instead of flapping.
    */
   maxSlowDemotesPerTier: number
+  /**
+   * Sustained-CALM interval (ms with no slow demote from ANY tier) after which one
+   * slow demote is forgiven from every tier's `maxSlowDemotesPerTier` count. The
+   * cap is anti-FLAP memory, but `slowDemotes` otherwise only ever climbs during
+   * adaptive play — `reset()` fires solely on an EXTERNAL quality set, which is
+   * exactly when adaptation is off — so across the persistent-Engine session
+   * lifetime any two slow demotes per tier (from ANY cause: a GC pause, an atlas
+   * decode, an alt-tab under `discontinuityMs`) would lock that tier forever and
+   * pin the session at the floor with no event and nothing flapping. Forgiving on
+   * sustained calm is the promote path's "sustained health is affirmative evidence
+   * the earlier demotes are stale" reasoning, one level up. OUR value (not an
+   * external spec): set well above a boundary-flap cycle — a promote needs
+   * `promoteWindowMs` of health plus a demote's `windowMs` of slow, ≈4s — so
+   * genuine continuous flapping keeps a demote inside every interval and never
+   * decays (still caps within two demotes), while an isolated transient minutes
+   * from the next is forgiven inside one session. The promote HEALTH gate still
+   * guards every actual promotion, so loosening the lock here can never force an
+   * unhealthy promote — it only permits a re-probe.
+   */
+  capDecayMs: number
 }
 
 export const DEFAULT_ADAPT: AdaptConfig = {
@@ -110,6 +131,7 @@ export const DEFAULT_ADAPT: AdaptConfig = {
   bootGraceMs: 1000,
   discontinuityMs: 1000,
   maxSlowDemotesPerTier: 2,
+  capDecayMs: 30000,
 }
 
 export type AdaptAction =
@@ -178,6 +200,11 @@ export class QualityAdaptor {
   private ceiling: QualityTier | null = null
   /** Per-tier count of SLOW demotions from that tier (oscillation-cap input). */
   private slowDemotes: Partial<Record<QualityTier, number>> = {}
+  /**
+   * Wall-clock time of the most recent SLOW demote from any tier — the calm clock
+   * the cap decays against. `null` means nothing is capped, so nothing to forgive.
+   */
+  private lastSlowDemoteAt: number | null = null
 
   constructor(cfg: Partial<AdaptConfig> = {}) {
     this.cfg = { ...DEFAULT_ADAPT, ...cfg }
@@ -190,6 +217,7 @@ export class QualityAdaptor {
     this.booted = false
     this.ceiling = null
     this.slowDemotes = {}
+    this.lastSlowDemoteAt = null
   }
 
   sample(nowMs: number, frameMs: number, current: QualityTier): AdaptAction {
@@ -203,6 +231,9 @@ export class QualityAdaptor {
     if (!(frameMs >= 0 && frameMs < this.cfg.discontinuityMs)) {
       this.windowStart = nowMs
       this.samples = []
+      // A pause is not calm operation: restart the cap-decay clock so backgrounded
+      // time can't be spent forgiving a lock (mirrors re-arming the window above).
+      if (this.lastSlowDemoteAt != null) this.lastSlowDemoteAt = nowMs
       return { kind: 'none' }
     }
 
@@ -214,6 +245,25 @@ export class QualityAdaptor {
       this.booted = true
       this.windowStart = nowMs
       this.samples = []
+    }
+
+    // (2.5) Oscillation-cap DECAY. `slowDemotes` is anti-flap memory that otherwise
+    // only ever climbs during adaptive play (reset() runs solely on an external
+    // quality set), so with the persistent Engine any two slow demotes per tier
+    // would lock the promote path for the whole session. After capDecayMs of CALM
+    // — no slow demote from ANY tier, the same "sustained evidence" the promote
+    // path trusts — forgive ONE demote per tier. Continuous flapping keeps a demote
+    // inside every interval, so it still caps; only genuine calm frees the lock. The
+    // promote HEALTH gate below still independently guards the actual promotion.
+    if (this.lastSlowDemoteAt != null && nowMs - this.lastSlowDemoteAt >= this.cfg.capDecayMs) {
+      let remaining = 0
+      for (const t of QUALITY_ORDER) {
+        const n = this.slowDemotes[t] ?? 0
+        if (n <= 0) continue
+        if (n - 1 <= 0) delete this.slowDemotes[t]
+        else { this.slowDemotes[t] = n - 1; remaining += n - 1 }
+      }
+      this.lastSlowDemoteAt = remaining > 0 ? nowMs : null
     }
 
     if (this.windowStart == null) this.windowStart = nowMs
@@ -235,6 +285,7 @@ export class QualityAdaptor {
         return { kind: 'demote', from: current, to: QUALITY_ORDER[0], p90, reason: 'catastrophic', reactionMs: elapsed }
       } else if (p90 > this.cfg.demoteAboveMs) {
         this.slowDemotes[current] = (this.slowDemotes[current] ?? 0) + 1
+        this.lastSlowDemoteAt = nowMs
         const to = QUALITY_ORDER[rank - 1]
         this.commit(nowMs)
         return { kind: 'demote', from: current, to, p90, reason: 'slow', reactionMs: elapsed }

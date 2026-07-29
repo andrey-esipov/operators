@@ -392,3 +392,72 @@ button {
   font-display: swap;
   src: url("/fonts/VT323-latin.woff2") format("woff2");
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Self-hosted UI/display fonts for the front door, character select and
+   victory ceremony — SIL OFL 1.1. These used to arrive via a render-blocking
+   Google Fonts `@import` in menu.css / select.css / ceremony.css (2 third-party
+   origins + FOUT on the FIRST screen a player sees; Anton renders the "OPERATORS" wordmark). They are now delivered from
+   THIS origin, so there is no third-party font request on any route.
+
+   Only the faces the app actually RENDERS ship here (audited over all three
+   stylesheets): Anton 400; Chakra Petch 400/600/700; Oswald 400–700 (one
+   Google variable file); Saira 400; Barlow Condensed 600. The old @imports
+   also declared Bebas Neue and Saira Condensed, but neither renders a single
+   pixel (Bebas Neue's var is never applied; Saira Condensed is only an
+   unreachable fallback behind Oswald) — they are dropped, not re-hosted.
+
+   Secondary faces are Google Fonts' own latin woff2 re-hosted verbatim
+   (byte-identical to what the browser fetched before → unchanged rendering;
+   their glyf-transform build is ~55% smaller than a local re-subset). See
+   public/fonts/*-OFL.txt + fonts.coverage.json.
+   ───────────────────────────────────────────────────────────────────────── */
+@font-face {
+  font-family: "Anton";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/Anton-400-latin.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Chakra Petch";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/ChakraPetch-400-latin.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Chakra Petch";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("/fonts/ChakraPetch-600-latin.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Chakra Petch";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/fonts/ChakraPetch-700-latin.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Oswald";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("/fonts/Oswald-var-latin.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Saira";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/Saira-400-latin.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Barlow Condensed";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("/fonts/BarlowCondensed-600-latin.woff2") format("woff2");
+}

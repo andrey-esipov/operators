@@ -18,7 +18,8 @@
  *     background always in motion.
  */
 
-@import url('https://fonts.googleapis.com/css2?family=Anton&family=Oswald:wght@400;500;600;700&family=Barlow+Condensed:ital,wght@0,600;0,700;1,700&display=swap');
+/* Fonts (Anton / Oswald / Barlow Condensed) are self-hosted from this origin —
+   @font-face lives in src/index.css (global), not a third-party @import. */
 
 /* ── Root, palette, type tokens ─────────────────────────────────────── */
 /* ── Locked-in VS event ─────────────────────────────────────────────── */

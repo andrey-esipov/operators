@@ -1,5 +1,6 @@
 /* stylelint-disable */
-@import url('https://fonts.googleapis.com/css2?family=Anton&family=Oswald:wght@400;500;600;700&family=Barlow+Condensed:ital,wght@0,600;0,700;1,500;1,600&display=swap');
+/* Fonts (Anton / Oswald / Barlow Condensed) are self-hosted from this origin —
+   @font-face lives in src/index.css (global), not a third-party @import. */
 
 /* Ceremony screens — kinetic keyframes + AAA type system.
    Owned by the ceremony agent. index.css is shared and off-limits, so every

@@ -5,7 +5,10 @@
    selection cursor with weight, cinematic background treatment.
    ───────────────────────────────────────────────────────────────────── */
 
-@import url('https://fonts.googleapis.com/css2?family=Anton&family=Bebas+Neue&family=Chakra+Petch:ital,wght@0,400;0,500;0,600;0,700;1,500;1,600;1,700&family=Oswald:wght@500;600;700&family=Saira+Condensed:wght@400;500;600;700;800&family=Saira:wght@400;500;600&display=swap');
+/* Fonts (Anton / Chakra Petch / Oswald / Saira) are self-hosted from this
+   origin — @font-face lives in src/index.css (global). No third-party @import:
+   it put 2 CDN origins + FOUT on the first screen a player sees. Bebas Neue and
+   Saira Condensed, once declared here, render zero pixels and were dropped. */
 
 /* Type + palette tokens for the shell. */
 .mm-root, .ss-root, .am-root {

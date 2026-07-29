@@ -21,13 +21,14 @@
     <meta name="twitter:title" content="OPERATORS — A Real-Time Pixel Fighter" />
     <meta name="twitter:description" content="Real-time 2D fighting: frame data, hitboxes, cancels, air juggles, throws, parries and supers. Built for #lennysbuildathon" />
     <meta name="twitter:image" content="https://operators.replit.app/menu/title-hero.png" />
-    <!-- Brand fonts (Press Start 2P, VT323) are self-hosted under SIL OFL 1.1 —
-         see public/fonts/. @font-face lives in the bundled stylesheet
-         (src/index.css); no third-party font origin on any route. Deliberately
-         NOT preloaded: neither font is painted on the front door (the title
-         renders in Anton/Chakra Petch via menu.css), so a preload here would
-         steal critical bandwidth from the entry chunk. They fetch lazily,
-         same-origin, at first use (the match HUD). -->
+    <!-- All fonts are self-hosted under SIL OFL 1.1 (see public/fonts/): the two
+         brand faces (Press Start 2P, VT323) plus the front-door / select /
+         ceremony UI faces (Anton, Chakra Petch, Oswald, Saira, Barlow Condensed).
+         @font-face lives in the bundled stylesheet (src/index.css), so there is
+         no third-party font origin on any route. Deliberately NOT preloaded:
+         each face fetches same-origin at first use, and a preload here would
+         steal critical bandwidth from the entry chunk. The gate that keeps this
+         true is src/screens/__tests__/fontDeliveryBudget.node.test.ts. -->
   </head>
   <body>
     <div id="root"></div>

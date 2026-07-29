@@ -4,12 +4,17 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>OPERATORS — Fight HUD Preview</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Saira:ital,wght@0,400;0,600;0,700;0,800;0,900;1,700;1,800;1,900&family=Chakra+Petch:wght@500;600;700&display=swap"
-      rel="stylesheet"
-    />
+    <!-- Fonts self-hosted from this origin (no third-party CDN). This is a
+         standalone preview of a superseded HUD design; the shipping in-game HUD
+         renders in Press Start 2P / VT323 (see src/three/hud/hud.css). Only the
+         app-rendered faces are hosted, so this page's heavier Saira weights /
+         italics synthesise from Saira 400 — acceptable for a dev preview. -->
+    <style>
+      @font-face { font-family: 'Saira'; font-style: normal; font-weight: 400; font-display: swap; src: url('/fonts/Saira-400-latin.woff2') format('woff2'); }
+      @font-face { font-family: 'Chakra Petch'; font-style: normal; font-weight: 400; font-display: swap; src: url('/fonts/ChakraPetch-400-latin.woff2') format('woff2'); }
+      @font-face { font-family: 'Chakra Petch'; font-style: normal; font-weight: 600; font-display: swap; src: url('/fonts/ChakraPetch-600-latin.woff2') format('woff2'); }
+      @font-face { font-family: 'Chakra Petch'; font-style: normal; font-weight: 700; font-display: swap; src: url('/fonts/ChakraPetch-700-latin.woff2') format('woff2'); }
+    </style>
     <style>
       html, body, #root { height: 100%; margin: 0; padding: 0; background: #05060c; overflow: hidden; }
       * { box-sizing: border-box; }

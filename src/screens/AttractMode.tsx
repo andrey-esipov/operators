@@ -9,6 +9,16 @@ import './menu/menu.css'
 
 interface Props {
   onExit: () => void
+  /**
+   * Freeze adaptive quality to a still, reproducible tier for capture. ONLY the
+   * standalone `?attract=1` reel-capture route (App.tsx, `route === 'attract'`)
+   * passes this. The customer FRONT DOOR (FrontDoor.tsx, bare `/`, which mounts
+   * the reel after a 6 s idle — buyer-reachable, traced to the route table) does
+   * NOT: it leaves adaptive quality ON so a weak machine demotes to a live
+   * low-tier reel instead of being pinned at the boot tier and forced to the
+   * static fallback. Default false is the buyer-safe path.
+   */
+  capture?: boolean
 }
 
 /**
@@ -81,7 +91,7 @@ function median(xs: number[]): number {
  * matches at once, so the reel stays inside the 512 MB atlas budget the
  * `atlasVramBudget` gate defends.
  */
-export function AttractMode({ onExit }: Props) {
+export function AttractMode({ onExit, capture = false }: Props) {
   const dirRef = useRef<AttractDirector | null>(null)
   if (dirRef.current === null) dirRef.current = new AttractDirector()
 
@@ -147,15 +157,26 @@ export function AttractMode({ onExit }: Props) {
         renderer = new FightRenderer(canvas, { scenario: m.stage })
         await renderer.init()
         if (disposed) return renderer.dispose()
-        // `?attract=1` is the dev-only reel-capture route (the "Dev-only probe
-        // surface" noted above) — no buyer lands here, so freeze the tier by
-        // DEFAULT. Every reel frame ever graded came off a drifting tier because
-        // nothing pinned it; captureRoute makes the still tier the default with
-        // no per-tool opt-in. Freeze-only: the __ATTRACT__ probe is built in a
-        // SEPARATE effect below with no renderer handle, so it can't fuse the way
-        // __PLAY__/__FIGHT__ do — the captureCoverage node gate enforces that
-        // this call is present instead. See captureQuality.ts.
-        applyCaptureQuality(renderer.engine, window.location.search, { captureRoute: true })
+        // AttractMode has TWO mounts (traced to the route table, not the import
+        // graph): the standalone `?attract=1` reel-capture route (App.tsx, passes
+        // `capture`) AND the customer FRONT DOOR (FrontDoor.tsx, bare `/`, mounts
+        // this reel after a 6 s idle as a live demo the buyer sees). Freeze the
+        // tier ONLY on the capture mount: there a still, reproducible tier is the
+        // default (every reel frame graded before this gate came off a drifting
+        // tier because nothing pinned it; captureRoute makes the still tier the
+        // default with no per-tool opt-in). On the front door `capture` is false,
+        // so adaptive quality stays on and a weak machine demotes to a live
+        // low-tier reel instead of the static fallback. This freeze was once
+        // UNCONDITIONAL, justified as "no buyer lands here" — a 34167c6-class bug:
+        // the route table falsifies that claim (FrontDoor is reachable at bare
+        // `/`), and freezing pinned the buyer's reel. Freeze-only: the __ATTRACT__
+        // probe is built in a SEPARATE effect below with no renderer handle, so it
+        // can't fuse the way __PLAY__/__FIGHT__ do — the captureCoverage node gate
+        // enforces this call is present, and its scope block enforces only the
+        // capture mount opts in. See captureQuality.ts.
+        if (capture) {
+          applyCaptureQuality(renderer.engine, window.location.search, { captureRoute: true })
+        }
         // The OPENER (bout 1, segment 0) is the one download a cold visitor waits
         // on. On a reported-slow link it is served the reduced HERO atlas so its
         // cost is decoupled from full-art growth (see attractLoadCost.ts); bouts
@@ -198,7 +219,7 @@ export function AttractMode({ onExit }: Props) {
       ro.disconnect()
       renderer?.dispose()
     }
-  }, [segment, degraded])
+  }, [segment, degraded, capture])
 
   // One persistent rAF loop for the whole mount (survives segment swaps): it
   // asks the director when to cut, measures frame rate, and publishes the probe.

@@ -206,7 +206,10 @@ export function App() {
   if (route === 'attract') {
     return (
       <Suspense fallback={<BootCard label="Loading attract reel" />}>
-        <AttractMode onExit={() => navigate(SELECT_SEARCH)} />
+        {/* Standalone `?attract=1` is the dev/capture reel route: pass `capture`
+            so the tier is frozen for reproducible grades. The buyer front door
+            (FrontDoor) mounts the same reel WITHOUT `capture` — see AttractMode. */}
+        <AttractMode onExit={() => navigate(SELECT_SEARCH)} capture />
       </Suspense>
     )
   }

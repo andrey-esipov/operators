@@ -204,11 +204,11 @@ describe('captureCoverage — scope of the invariant (documented, not blind)', (
  *  in a comment or string cannot forge a 'set' — only a real JSX attribute counts.
  *  This is the twin of `callsAny`: `callsAny` proves the freeze CALL is present in
  *  the module; this proves the freeze is WIRED to the right seam via the prop. */
-function fightSceneCaptureProp(src: string): 'set' | 'none' | 'absent' {
+function captureProp(src: string, tagName: string): 'set' | 'none' | 'absent' {
   let result: 'set' | 'none' | 'absent' = 'absent'
   const visit = (n: ts.Node) => {
     const tag = ts.isJsxOpeningElement(n) || ts.isJsxSelfClosingElement(n) ? n : null
-    if (tag && ts.isIdentifier(tag.tagName) && tag.tagName.text === 'FightScene3D') {
+    if (tag && ts.isIdentifier(tag.tagName) && tag.tagName.text === tagName) {
       result = tag.attributes.properties.some(
         (p) => ts.isJsxAttribute(p) && ts.isIdentifier(p.name) && p.name.text === 'capture',
       )
@@ -219,6 +219,38 @@ function fightSceneCaptureProp(src: string): 'set' | 'none' | 'absent' {
   }
   visit(parse(src))
   return result
+}
+const fightSceneCaptureProp = (src: string) => captureProp(src, 'FightScene3D')
+const attractModeCaptureProp = (src: string) => captureProp(src, 'AttractMode')
+
+/** True iff EVERY `applyCaptureQuality` call in the source sits inside an `if`
+ *  whose condition references `capture` — i.e. the freeze can never run
+ *  unconditionally. This is the load-bearing half the call-site scope gate cannot
+ *  see: the props decide who PASSES `capture`; this decides the component RESPECTS
+ *  it. Without it, deleting the `if (capture)` guard re-freezes the buyer reel
+ *  while every call-site test stays green. Manual ancestry so a nested `if` still
+ *  counts; `captureRoute` etc. cannot false-match (word-boundary regex). */
+function freezeIsCaptureGated(src: string): boolean {
+  const sf = parse(src)
+  let sawFreeze = false
+  let unguarded = false
+  const mentionsCapture = (e: ts.Expression) => /(^|[^.\w])capture([^.\w]|$)/.test(e.getText(sf))
+  const visit = (n: ts.Node, guarded: boolean) => {
+    if (ts.isIfStatement(n)) {
+      const thenGuarded = guarded || mentionsCapture(n.expression)
+      visit(n.expression, guarded)
+      visit(n.thenStatement, thenGuarded)
+      if (n.elseStatement) visit(n.elseStatement, guarded)
+      return
+    }
+    if (ts.isCallExpression(n) && ts.isIdentifier(n.expression) && n.expression.text === 'applyCaptureQuality') {
+      sawFreeze = true
+      if (!guarded) unguarded = true
+    }
+    ts.forEachChild(n, (c) => visit(c, guarded))
+  }
+  visit(sf, false)
+  return sawFreeze && !unguarded
 }
 
 describe('captureCoverage — the freeze is scoped to the capture sandbox, never the card-game consumer', () => {
@@ -268,5 +300,51 @@ describe('captureCoverage — the freeze is scoped to the capture sandbox, never
     // vanished (freeze without a probe = the observability gap all over again).
     // Pin the __LAB__ path explicitly.
     expect(callsAny(read('three/FightScene3D.tsx'), ['installLabProbe'])).toBe(true)
+  })
+})
+
+describe('captureCoverage — the attract-reel freeze is scoped to the capture route, never the buyer front door', () => {
+  // AttractMode is SHARED between two mounts, established by tracing to the route
+  // table (not the import graph): (a) the standalone `?attract=1` reel-capture
+  // route (App.tsx, `route === 'attract'`), a dev/capture surface, and (b) the
+  // customer FRONT DOOR (FrontDoor.tsx), reached at bare `/` (route ===
+  // 'frontdoor', appRoute.ts) — the case the customer actually hits — which
+  // mounts the reel after a 6 s idle as a live demo. addbd38 froze the tier
+  // UNCONDITIONALLY inside AttractMode on the premise "no buyer lands here"; the
+  // route table falsifies that, and the freeze pinned the buyer's front-door reel
+  // to the boot tier (a weak machine could not demote and was forced to the
+  // static fallback) — the 34167c6 over-freeze, one layer down. The freeze is now
+  // gated behind the `capture` prop. THE INVARIANT proves the freeze CALL is
+  // present; this block proves only the capture mount is WIRED to it AND that
+  // AttractMode actually respects the prop.
+  const read = (p: string) => readFileSync(join(SRC, p), 'utf8')
+
+  it('self-check: the detector reads the capture prop on <AttractMode> (and ignores comments)', () => {
+    expect(attractModeCaptureProp('const x = <AttractMode onExit={f} capture />')).toBe('set')
+    expect(attractModeCaptureProp('const x = <AttractMode onExit={f} />')).toBe('none')
+    expect(attractModeCaptureProp('const x = <div />')).toBe('absent')
+    // A `capture` in a trailing comment must not read as the prop being set.
+    expect(attractModeCaptureProp('const x = <AttractMode onExit={f} /> // capture')).toBe('none')
+  })
+
+  it('the BUYER seam (FrontDoor, bare `/` front door) must NOT opt into capture', () => {
+    // If this reddens, a buyer idling on the title just lost adaptive quality on
+    // the attract reel — pinned to the boot tier, forced to the static fallback on
+    // a weak machine. FrontDoor is reached at bare `/` (route === 'frontdoor'),
+    // the case the customer actually hits.
+    expect(attractModeCaptureProp(read('screens/FrontDoor.tsx'))).toBe('none')
+  })
+
+  it('the CAPTURE seam (App.tsx `?attract=1` standalone) MUST opt into capture', () => {
+    // If this reddens, `?attract=1` reel captures drift through the adaptive tier
+    // again — the defect the freeze exists to close.
+    expect(attractModeCaptureProp(read('App.tsx'))).toBe('set')
+  })
+
+  it('AttractMode RESPECTS the prop: its freeze is guarded by `capture`, never unconditional', () => {
+    // The call-site tests above prove who PASSES capture; this proves AttractMode
+    // acts on it. Deleting the `if (capture)` guard re-freezes the buyer reel
+    // while leaving every call-site test green — this is the guard against that.
+    expect(freezeIsCaptureGated(read('screens/AttractMode.tsx'))).toBe(true)
   })
 })

@@ -481,6 +481,17 @@ export class Engine {
       else mat?.dispose()
     })
     this.renderer.dispose()
+    // `renderer.dispose()` frees three's tracked resources (programs, render
+    // targets, render lists) but leaves the WebGL context — and the textures and
+    // buffers uploaded into it — for non-deterministic browser GC. That is why a
+    // full-page navigation was, in this codebase, the only deterministic way to
+    // free a scene's VRAM before the next one loaded. Forcing the context loss
+    // here reclaims that VRAM synchronously at dispose, so dispose-before-mount
+    // (the keyed-canvas bout rotation, and the client-side boot transitions this
+    // unblocks) stays inside the atlas VRAM budget without throwing the document
+    // away. No `webglcontextlost` listener reacts to this — it is a pure free —
+    // and `forceContextLoss` is a no-op if WEBGL_lose_context is unavailable.
+    this.renderer.forceContextLoss()
   }
 }
 

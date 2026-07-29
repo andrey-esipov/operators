@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import ts from 'typescript'
-import { readFileSync, readdirSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import {
+  rel,
+  engineOwningModules,
+  auditEngineModules,
+  constructsAny,
+  type ModulePredicate,
+} from '../../__tests__/engineModules'
 
 /**
  * COVERAGE gate: every route that constructs the capture renderer must apply
@@ -20,15 +24,18 @@ import { fileURLToPath } from 'node:url'
  * requires each to reference the freeze. A new route auto-joins the enumerated
  * set and is auto-required to freeze, with no edit to this test.
  *
- * REUSE, NOT FORK (the consolidation is real, and named): this is the same
- * canonical set framing's shellNav disposal gate walks. framing is mid-extraction
- * of that walker into `src/__tests__/engineModules` — but at this commit that
- * module is uncommitted working-tree WIP, not in HEAD, so importing it would
- * make this gate fail the clean-worktree run (module-not-found). Depending on an
- * uncommitted file is the one thing worse than a duplicated 20-line walker. Once
- * `engineModules` lands in HEAD, both this gate and shellNav should import its
- * enumerator and delete their local copies. The delivery report flags this to be
- * sequenced with framing.
+ * REUSE, NOT FORK (now real, and the coordinator's central ask): the ENUMERATOR
+ * — "every shipped module that constructs `new Engine`/`new FightRenderer` in a
+ * `useEffect`" — is framing's shared `src/__tests__/engineModules`, the same list
+ * its shellNav disposal gate walks. One list, two questions: shellNav asks "does
+ * it DISPOSE the engine on unmount?"; this gate asks "does it FREEZE capture
+ * quality?" — both via `auditEngineModules(predicate, { requireEffect: true })`.
+ * A new engine route auto-joins the list and is auto-required by BOTH, with no
+ * edit to either test. This gate carried a private copy of the walker while
+ * engineModules was uncommitted WIP; that copy is deleted now that the shared
+ * module is in HEAD, closing the "two lists that silently drift" defect this gate
+ * exists to prevent. What stays local is the QUESTION — `callsAny(FREEZE_CALLS)`
+ * — because the list is shared but the freeze predicate is ours alone.
  *
  * PROXY AND ITS LIMIT (named on purpose): this asserts the freeze call is
  * PRESENT in each route module's source. It does NOT assert React runs the
@@ -47,34 +54,16 @@ import { fileURLToPath } from 'node:url'
  * below redden if the detectors go blind. Restores byte-identical to green.
  */
 
-const HERE = dirname(fileURLToPath(import.meta.url))
-const SRC = resolve(HERE, '..', '..') // src/
-const rel = (abs: string) => abs.slice(SRC.length + 1).replaceAll('\\', '/')
-
 /** Parse a source string as TSX so JSX routes parse without a program. */
 function parse(src: string): ts.SourceFile {
   return ts.createSourceFile('m.tsx', src, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
 }
 
-/** True iff the source contains a `new <name>(…)` construction — an AST
- *  NewExpression whose callee is exactly `name`. A comment or string that says
- *  "new FightRenderer(" is trivia / a StringLiteral, never a NewExpression, so
- *  it is ignored. */
-function constructs(src: string, name: string): boolean {
-  let found = false
-  const visit = (n: ts.Node) => {
-    if (ts.isNewExpression(n) && ts.isIdentifier(n.expression) && n.expression.text === name) {
-      found = true
-    }
-    ts.forEachChild(n, visit)
-  }
-  visit(parse(src))
-  return found
-}
-
 /** True iff the source CALLS any of `names` — an AST CallExpression whose callee
  *  is one of the identifiers. A function *declaration* named the same, or a
- *  mention in a comment, is not a CallExpression and does not count. */
+ *  mention in a comment, is not a CallExpression and does not count. This is this
+ *  gate's QUESTION and stays local: the enumerated LIST is shared (framing's
+ *  `engineModules`), but the freeze predicate is ours. */
 function callsAny(src: string, names: readonly string[]): boolean {
   const set = new Set(names)
   let found = false
@@ -88,39 +77,27 @@ function callsAny(src: string, names: readonly string[]): boolean {
   return found
 }
 
-/** Every shipped `.ts`/`.tsx` under a dir — excludes `__tests__/` and
- *  `*.test.*` / `*.probe.*`, which are not shipped modules. */
-function shippedSourceUnder(dir: string): string[] {
-  const out: string[] = []
-  for (const ent of readdirSync(dir, { withFileTypes: true })) {
-    const p = resolve(dir, ent.name)
-    if (ent.isDirectory()) {
-      if (ent.name === '__tests__' || ent.name === 'node_modules') continue
-      out.push(...shippedSourceUnder(p))
-    } else if (/\.(ts|tsx)$/.test(ent.name) && !/\.(test|probe)\./.test(ent.name)) {
-      out.push(p)
-    }
-  }
-  return out
-}
-
 // The freeze can be applied through either entry point: PlayableMatch/FightHarness
 // use the fused `openCaptureSession`, AttractMode + FightScene3D use bare
 // `applyCaptureQuality` (their probes live in a separate effect / a legacy hook
 // and cannot fuse). Both satisfy the invariant.
 const FREEZE_CALLS = ['openCaptureSession', 'applyCaptureQuality'] as const
 
-// An engine-owning COMPONENT constructs `new Engine` or `new FightRenderer` AND
-// runs a `useEffect` — i.e. a React component that mounts the renderer in an
-// effect. The `useEffect` call is exactly what separates these routes from the
-// shared `FightRenderer` class (which constructs `new Engine` in its constructor,
-// not an effect, and has no URL to read) — see the scope block below.
-function isEngineComponent(src: string): boolean {
-  return (constructs(src, 'Engine') || constructs(src, 'FightRenderer')) && callsAny(src, ['useEffect'])
-}
+// The gate's QUESTION, in the shape `auditEngineModules` expects: given an
+// engine-owning module's source, return the reasons it violates the freeze
+// obligation ([] = compliant). shellNav passes a DISPOSAL predicate to the same
+// enumerator; this passes a FREEZE predicate. One list, two questions.
+const freezeViolations: ModulePredicate = (src) =>
+  callsAny(src, FREEZE_CALLS)
+    ? []
+    : ['constructs an engine in an effect but never applies a capture-quality freeze']
 
-const FILES = shippedSourceUnder(SRC)
-const CAPTURE_ROUTES = FILES.filter((f) => isEngineComponent(readFileSync(f, 'utf8')))
+// The engine-owning COMPONENTS: shipped modules that construct `new Engine` or
+// `new FightRenderer` AND reference `useEffect`, from framing's shared enumerator.
+// `requireEffect` is exactly what separates these effect-mounted route components
+// from the shared `FightRenderer` class (ctor construction, no effect, no URL) —
+// proven on the real files in the scope block below.
+const CAPTURE_ROUTES = engineOwningModules({ requireEffect: true })
 
 // The four engine-owning components that MUST freeze, by hand, so a blind
 // enumerator (one that silently found nothing) cannot pass by returning an empty
@@ -133,13 +110,6 @@ const KNOWN_ROUTES = [
 ] as const
 
 describe('captureCoverage — detector self-checks (non-vacuity)', () => {
-  it('the construction detector sees a real `new FightRenderer(` / `new Engine(` and ignores comments/strings', () => {
-    expect(constructs('const r = new FightRenderer(canvas, {})', 'FightRenderer')).toBe(true)
-    expect(constructs('const e = new Engine({ canvas })', 'Engine')).toBe(true)
-    expect(constructs('// new FightRenderer(canvas)\nconst x = 1', 'FightRenderer')).toBe(false)
-    expect(constructs('const s = "new FightRenderer("', 'FightRenderer')).toBe(false)
-  })
-
   it('the freeze detector counts a CALL, not a declaration or a comment', () => {
     expect(callsAny('openCaptureSession(e, s, { captureRoute: true })', FREEZE_CALLS)).toBe(true)
     expect(callsAny('applyCaptureQuality(e, s)', FREEZE_CALLS)).toBe(true)
@@ -149,12 +119,20 @@ describe('captureCoverage — detector self-checks (non-vacuity)', () => {
     expect(callsAny('// openCaptureSession(e, s)', FREEZE_CALLS)).toBe(false)
   })
 
-  it('a route that builds the renderer but never freezes IS an offender (the invariant can fire)', () => {
-    // If this synthetic module were not both (a) enumerated and (b) flagged, the
-    // real `offenders === []` assertion below would be vacuous.
+  it('the shared construction detector sees a real `new FightRenderer(` / `new Engine(` and ignores comments/strings', () => {
+    // `constructsAny` is framing's, imported — a light guard that MY non-vacuity
+    // still holds if its semantics ever drift (framing tests it too; cheap here).
+    expect(constructsAny('const r = new FightRenderer(canvas, {})', ['FightRenderer'])).toBe(true)
+    expect(constructsAny('const e = new Engine({ canvas })', ['Engine'])).toBe(true)
+    expect(constructsAny('// new FightRenderer(canvas)\nconst x = 1', ['FightRenderer'])).toBe(false)
+    expect(constructsAny('const s = "new FightRenderer("', ['FightRenderer'])).toBe(false)
+  })
+
+  it('the freeze predicate CAN fire — an engine route that never freezes is an offender (else the invariant is vacuous)', () => {
     const bad = 'import { FightRenderer } from "x"\nconst r = new FightRenderer(c)\n// never freezes'
-    expect(constructs(bad, 'FightRenderer')).toBe(true)
-    expect(callsAny(bad, FREEZE_CALLS)).toBe(false)
+    expect(freezeViolations(bad, 'bad.tsx')).not.toEqual([])
+    const good = 'const r = new FightRenderer(c)\nopenCaptureSession(e, s, { captureRoute: true })'
+    expect(freezeViolations(good, 'good.tsx')).toEqual([])
   })
 })
 
@@ -171,9 +149,9 @@ describe('captureCoverage — every capture route freezes', () => {
   })
 
   it('THE INVARIANT: every engine-owning component references a freeze call', () => {
-    const offenders = CAPTURE_ROUTES.filter(
-      (f) => !callsAny(readFileSync(f, 'utf8'), FREEZE_CALLS),
-    ).map(rel)
+    // Dogfoods the shared `auditEngineModules` seam: ONE enumerated list, this
+    // gate's freeze question — the same call shape shellNav uses for disposal.
+    const offenders = auditEngineModules(freezeViolations, { requireEffect: true })
     // Naming the offending files is the whole point — a bare boolean would make
     // the failure a scavenger hunt.
     expect(offenders).toEqual([])
@@ -183,28 +161,31 @@ describe('captureCoverage — every capture route freezes', () => {
 describe('captureCoverage — scope of the invariant (documented, not blind)', () => {
   it('includes FightScene3D (a real `?lab=1` capture surface) but excludes the shared renderer class', () => {
     // FightScene3D constructs `new Engine` DIRECTLY in a useEffect — the `?lab=1`
-    // dev/legacy surface that 10 capture tools drive (they self-declare their
+    // dev/legacy surface that ~11 capture tools drive (they self-declare their
     // output inadmissible as SHIPPED evidence, but it still renders and drifts, so
-    // it must freeze too). It IS an engine-owning component and is required below.
+    // it must freeze too). It IS an engine-owning component and is required above.
     //
     // `three/fight/FightRenderer.ts` also constructs `new Engine`, but in its
     // CONSTRUCTOR, not a useEffect — it is the shared renderer the routes mount,
-    // freed by its callers, with no URL to read. The useEffect filter excludes it.
-    // This is a NARROWING of a detector that can see more, not a blind spot: the
-    // raw construction detector finds BOTH; only the component (with an effect) is
-    // required to freeze.
-    const rawEngine = FILES.filter((f) => constructs(readFileSync(f, 'utf8'), 'Engine')).map(rel)
+    // freed by its callers, with no URL to read. The requireEffect filter excludes
+    // it. This is a NARROWING of a detector that can see more, not a blind spot:
+    // the raw (no-effect) enumeration finds BOTH; only the effect-mounted
+    // components are required to freeze.
+    const rawEngine = engineOwningModules({ ctors: ['Engine'] }).map(rel)
     expect(rawEngine).toContain('three/FightScene3D.tsx')
     expect(rawEngine).toContain('three/fight/FightRenderer.ts')
     expect(CAPTURE_ROUTES.map(rel)).toContain('three/FightScene3D.tsx')
     expect(CAPTURE_ROUTES.map(rel)).not.toContain('three/fight/FightRenderer.ts')
   })
 
-  it('the useEffect filter is what draws that line (isEngineComponent self-check)', () => {
-    // A component mounts the engine in an effect; the class builds it in a ctor.
-    expect(isEngineComponent('const e = new Engine(c)\nuseEffect(() => {}, [])')).toBe(true)
-    expect(isEngineComponent('class R { constructor() { this.e = new Engine(c) } }')).toBe(false)
-    // And a component with an effect but no engine is not falsely pulled in.
-    expect(isEngineComponent('useEffect(() => { doThing() }, [])')).toBe(false)
+  it('the requireEffect filter is what draws that line, on the real shipped files', () => {
+    // With the effect filter the shared FightRenderer class (ctor construction, no
+    // effect) drops out; without it, it is present. Proven on shipped source, not
+    // synthetic strings — a stronger check than a hand-written fixture, and it
+    // exercises framing's enumerator the way both gates actually call it.
+    const withEffect = new Set(engineOwningModules({ requireEffect: true }).map(rel))
+    const withoutEffect = new Set(engineOwningModules({}).map(rel))
+    expect(withoutEffect.has('three/fight/FightRenderer.ts')).toBe(true)
+    expect(withEffect.has('three/fight/FightRenderer.ts')).toBe(false)
   })
 })

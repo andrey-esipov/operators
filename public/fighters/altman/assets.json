@@ -1,6 +1,6 @@
 {
   "id": "altman",
-  "atlas": "/fighters/altman/atlas.png",
+  "atlas": "/fighters/altman/atlas.webp",
   "frames": [
     {
       "name": "idle-1",

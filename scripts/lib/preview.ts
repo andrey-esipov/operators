@@ -104,7 +104,7 @@ export async function clipFilmstrip(
 /**
  * A self-contained page that plays every clip off the packed atlas. The atlas
  * is referenced by relative path so the file works dropped next to
- * atlas.png/assets.json. Each frame is drawn with its anchor on a fixed
+ * atlas.webp/assets.json. Each frame is drawn with its anchor on a fixed
  * baseline, exactly as the renderer will, so what you see here is what the
  * game will show.
  */

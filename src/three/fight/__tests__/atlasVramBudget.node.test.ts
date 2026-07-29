@@ -45,21 +45,33 @@ const PER_FIGHTER_BUDGET_MB = 256
 const PER_MATCH_BUDGET_MB = 512
 const MATCH_FIGHTERS = 2
 
-/** Read width/height from a PNG's IHDR without decoding pixels (sync, no deps). */
-function pngSize(path: string): { w: number; h: number } {
+/**
+ * Read canvas width/height from a WebP's VP8X (extended) header — no decode, no
+ * deps, mirroring the old sync `pngSize`. The roster now ships WebP (a ~5.3x
+ * download cut over PNG); every fighter atlas is VP8X because it carries an ALPH
+ * chunk for the silhouette alpha the whole art pipeline leans on, so a non-VP8X
+ * file here is unexpected and throws loudly rather than silently miscomputing
+ * VRAM. Dimensions are format-independent, so the numbers this gate checks are
+ * identical to the pre-WebP PNG era — WebP is a download win, not a VRAM one.
+ */
+function webpSize(path: string): { w: number; h: number } {
   const buf = readFileSync(path)
-  // 8-byte signature; IHDR chunk length(4)+type(4) then width(4 BE)@16 height@20.
-  if (buf.readUInt32BE(0) !== 0x89504e47) throw new Error(`not a PNG: ${path}`)
-  return { w: buf.readUInt32BE(16), h: buf.readUInt32BE(20) }
+  if (buf.toString('ascii', 0, 4) !== 'RIFF' || buf.toString('ascii', 8, 12) !== 'WEBP')
+    throw new Error(`not a WebP: ${path}`)
+  const fourcc = buf.toString('ascii', 12, 16)
+  if (fourcc !== 'VP8X') throw new Error(`unsupported WebP sub-format "${fourcc}": ${path}`)
+  // VP8X payload: flags(1) + reserved(3), then 24-bit LE canvas width-1 @24 and
+  // height-1 @27.
+  return { w: buf.readUIntLE(24, 3) + 1, h: buf.readUIntLE(27, 3) + 1 }
 }
 
 interface Atlas { id: string; w: number; h: number; mb: number }
 
 function loadAtlases(): Atlas[] {
   return readdirSync(FIGHTERS_DIR)
-    .filter((id) => existsSync(resolve(FIGHTERS_DIR, id, 'atlas.png')))
+    .filter((id) => existsSync(resolve(FIGHTERS_DIR, id, 'atlas.webp')))
     .map((id) => {
-      const { w, h } = pngSize(resolve(FIGHTERS_DIR, id, 'atlas.png'))
+      const { w, h } = webpSize(resolve(FIGHTERS_DIR, id, 'atlas.webp'))
       return { id, w, h, mb: residentBytesForAtlas(w, h) / MB }
     })
     .sort((a, b) => b.mb - a.mb)

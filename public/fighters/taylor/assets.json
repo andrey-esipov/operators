@@ -1,6 +1,6 @@
 {
   "id": "taylor",
-  "atlas": "/fighters/taylor/atlas.png",
+  "atlas": "/fighters/taylor/atlas.webp",
   "frames": [
     {
       "name": "idle-1",

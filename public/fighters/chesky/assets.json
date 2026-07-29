@@ -1,6 +1,6 @@
 {
   "id": "chesky",
-  "atlas": "/fighters/chesky/atlas.png",
+  "atlas": "/fighters/chesky/atlas.webp",
   "frames": [
     {
       "name": "idle-1",

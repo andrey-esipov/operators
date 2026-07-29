@@ -44,7 +44,7 @@ export interface RosterEntry {
   archetype: ArchetypeId
 }
 
-/** The choosable roster. skin ids all have `/fighters/<id>/atlas.png`. */
+/** The choosable roster. skin ids all have `/fighters/<id>/atlas.webp`. */
 export const ROSTER: RosterEntry[] = [
   { skin: 'chesky', name: 'Brian Chesky', shortName: 'CHESKY', accent: '#E63946', archetype: 'operator' },
   { skin: 'spiegel', name: 'Evan Spiegel', shortName: 'SPIEGEL', accent: '#FCBF49', archetype: 'vanguard' },

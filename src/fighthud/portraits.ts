@@ -1,7 +1,7 @@
 /**
  * Portrait loader — owned by src/fighthud/**.
  *
- * The roster fighters ship a packed sprite atlas (`/fighters/<id>/atlas.png`)
+ * The roster fighters ship a packed sprite atlas (`/fighters/<id>/atlas.webp`)
  * described by `assets.json` (named frames + pixel rects). There is no separate
  * portrait art, so we crop an idle frame's head/upper body straight out of the
  * atlas. This keeps all the atlas math in the HUD layer and needs nothing from
@@ -90,7 +90,7 @@ export function loadPortrait(rosterId: string): Promise<PortraitInfo | null> {
       const json = (await res.json()) as AssetsJson
       const frame = pickFrame(json.frames)
       if (!frame) return null
-      const atlas = json.atlas || `/fighters/${rosterId}/atlas.png`
+      const atlas = json.atlas || `/fighters/${rosterId}/atlas.webp`
       return { atlas, rect: frame.rect }
     } catch {
       return null
@@ -108,7 +108,7 @@ const imgCache = new Map<string, Promise<void>>()
 /**
  * Warm a portrait all the way to a decoded image, not just resolved metadata.
  *
- * `loadPortrait` only fetches the tiny `assets.json`; the actual `atlas.png` is
+ * `loadPortrait` only fetches the tiny `assets.json`; the actual `atlas.webp` is
  * still fetched lazily when an `<img>` first mounts. On a grid that means cells
  * pop in one-by-one and, worse, a capture taken mid-load photographs black
  * boxes (the select screen's documented load race). Preloading every roster
@@ -202,7 +202,7 @@ export function loadFighterAtlas(rosterId: string): Promise<FighterAtlas | null>
         if (h > refH) refH = h
       }
       if (refH <= 0) refH = frames[0]?.rect.h || 1
-      return { atlas: json.atlas || `/fighters/${rosterId}/atlas.png`, frames, idle, refH }
+      return { atlas: json.atlas || `/fighters/${rosterId}/atlas.webp`, frames, idle, refH }
     } catch {
       return null
     }

@@ -1,6 +1,6 @@
 {
   "id": "turley",
-  "atlas": "/fighters/turley/atlas.png",
+  "atlas": "/fighters/turley/atlas.webp",
   "frames": [
     {
       "name": "idle-1",

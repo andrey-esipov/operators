@@ -1,6 +1,6 @@
 {
   "id": "cagan",
-  "atlas": "/fighters/cagan/atlas.png",
+  "atlas": "/fighters/cagan/atlas.webp",
   "frames": [
     {
       "name": "idle-1",

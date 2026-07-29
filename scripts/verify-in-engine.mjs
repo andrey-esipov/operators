@@ -103,7 +103,7 @@ async function injectReal(page, side, id, accent) {
       return r.json()
     })
     const img = new Image()
-    img.src = `/fighters/${id}/atlas.png`
+    img.src = `/fighters/${id}/atlas.webp`
     await img.decode()
     if (!img.naturalWidth) throw new Error('atlas decoded to 0px')
     await window.__FIGHT__.renderer.setFighterAssets(side, assets, img, accent)

@@ -341,7 +341,7 @@ export async function generateFighter(
   }
 
   // Pack the atlas and prove the anchors survived the trim.
-  const atlasHref = `/fighters/${id}/atlas.png`
+  const atlasHref = `/fighters/${id}/atlas.webp`
   // Kick clips are laid out from this skin's archetype move timing so the
   // contact cel sits on the active window by construction (undefined for
   // unplayable card-art skins, which fall back to the static kick clips).
@@ -352,7 +352,13 @@ export async function generateFighter(
   const anchorCheck = await assertAnchorsPreserved(atlas, assets, 1.5 * SCALE)
   if (!anchorCheck.ok) log(`  ANCHOR WARNINGS:\n    ${anchorCheck.report.join('\n    ')}`)
 
-  fs.writeFileSync(path.join(outDir, 'atlas.png'), atlas)
+  // Ship WebP, not PNG: `-q 95 -alpha_q 100 -m 6`-equivalent (alphaQuality 100 is
+  // libwebp's LOSSLESS alpha mode, so the silhouette/keyline edge is bit-exact),
+  // a ~5.3x download cut with no VRAM change. Matches the roster's committed
+  // atlases and the atlasByteBudget/atlasVramBudget gates, which read atlas.webp.
+  await import('sharp').then((m) =>
+    m.default(atlas).webp({ quality: 95, alphaQuality: 100, effort: 6 }).toFile(path.join(outDir, 'atlas.webp')),
+  )
   fs.writeFileSync(path.join(outDir, 'assets.json'), JSON.stringify(assets, null, 2))
 
   // Review artefacts.
@@ -378,7 +384,7 @@ export async function generateFighter(
   log(`  wrote ${anims} animated previews`)
   // The preview lives beside the atlas; reference it relatively so the folder
   // is portable.
-  fs.writeFileSync(path.join(reviewDir, 'preview.html'), previewHtml(assets, '../atlas.png'))
+  fs.writeFileSync(path.join(reviewDir, 'preview.html'), previewHtml(assets, '../atlas.webp'))
 
   const summary: FighterSummary = {
     id,
@@ -415,7 +421,7 @@ async function main() {
   const offline = process.argv.includes('--offline')
   const s = await generateFighter(id, { force, offline })
   printSummary(s)
-  console.log(`\nwrote public/fighters/${id}/{atlas.png, assets.json, review/}`)
+  console.log(`\nwrote public/fighters/${id}/{atlas.webp, assets.json, review/}`)
 }
 
 // Only run as a CLI, not when imported by the batch driver.

@@ -149,7 +149,7 @@ async function main() {
       { name: STANCE_FRAME, buf: await reg(stanceSeg, 1), origin: ORIGIN },
       { name: 'mp-active', buf: goodReg, origin: ORIGIN },
     ]
-    const { atlas, assets } = await packAtlas(id, `/fighters/${id}/atlas.png`, frames, 180)
+    const { atlas, assets } = await packAtlas(id, `/fighters/${id}/atlas.webp`, frames, 180)
     const good = await assertAnchorsPreserved(atlas, assets)
     check('honest anchors', false, !good.ok, `report=[${good.report.join('|')}]`)
 

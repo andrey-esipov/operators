@@ -1,6 +1,6 @@
 {
   "id": "catwu",
-  "atlas": "/fighters/catwu/atlas.png",
+  "atlas": "/fighters/catwu/atlas.webp",
   "frames": [
     {
       "name": "idle-1",

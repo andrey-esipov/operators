@@ -1,6 +1,6 @@
 {
   "id": "spiegel",
-  "atlas": "/fighters/spiegel/atlas.png",
+  "atlas": "/fighters/spiegel/atlas.webp",
   "frames": [
     {
       "name": "idle-1",

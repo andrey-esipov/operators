@@ -1,6 +1,6 @@
 {
   "id": "lenny",
-  "atlas": "/fighters/lenny/atlas.png",
+  "atlas": "/fighters/lenny/atlas.webp",
   "frames": [
     {
       "name": "idle-1",

@@ -1,6 +1,6 @@
 {
   "id": "madhavan",
-  "atlas": "/fighters/madhavan/atlas.png",
+  "atlas": "/fighters/madhavan/atlas.webp",
   "frames": [
     {
       "name": "idle-1",

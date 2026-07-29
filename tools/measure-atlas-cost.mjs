@@ -46,7 +46,7 @@ const ids =
     ? process.argv.slice(2)
     : fs
         .readdirSync(path.join(PUB, 'fighters'))
-        .filter((d) => fs.existsSync(path.join(PUB, 'fighters', d, 'atlas.png')))
+        .filter((d) => fs.existsSync(path.join(PUB, 'fighters', d, 'atlas.webp')))
 
 const srv = await serve()
 const port = srv.address().port
@@ -114,7 +114,7 @@ for (const id of ids) {
     for (let i = 3; i < px.length; i += 4) if (px[i] > 16 && px[i] < 240) partial++
     URL.revokeObjectURL(objUrl)
     return { w, h, decodeMs, readMs, wireBytes: blob.size, partial, total: w * h }
-  }, `http://localhost:${port}/fighters/${id}/atlas.png`)
+  }, `http://localhost:${port}/fighters/${id}/atlas.webp`)
   rows.push({ id, ...r })
   console.error(`  measured ${id}`)
 }

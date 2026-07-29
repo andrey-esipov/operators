@@ -51,7 +51,7 @@ export async function loadFighterAtlas(id: string): Promise<LoadedAtlas> {
     const assets = (await res.json()) as FighterAssets
     if (!assets?.frames?.length || !assets?.clips) throw new Error('manifest is not an atlas')
 
-    const atlas = await loadImage(assets.atlas ?? `/fighters/${id}/atlas.png`)
+    const atlas = await loadImage(assets.atlas ?? `/fighters/${id}/atlas.webp`)
     return { assets, atlas, real: true }
   } catch (err) {
     console.warn(

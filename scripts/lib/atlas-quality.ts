@@ -3,7 +3,7 @@
  *
  * The existing edge probes (scripts/lib/keyline.ts, scripts/lib/edge-aa.ts) run
  * on synthetic discs or on frames RE-DERIVED from the raws. Neither reads what
- * actually ships: `public/fighters/<id>/atlas.png`. A future bad pass — or a
+ * actually ships: `public/fighters/<id>/atlas.webp`. A future bad pass — or a
  * re-export — can corrupt the committed atlas without any of those probes
  * noticing, because they never open the file. This probe closes that gap: it
  * measures the committed artifact, frame by frame, at native 1:1.
@@ -55,11 +55,11 @@ export interface LoadedAtlas {
   frames: AtlasFrame[]
 }
 
-/** Read a fighter's committed atlas.png + manifest into raw RGBA, once. */
+/** Read a fighter's committed atlas.webp + manifest into raw RGBA, once. */
 export async function loadCommittedAtlas(id: string, root = '.'): Promise<LoadedAtlas> {
   const dir = path.join(root, 'public', 'fighters', id)
   const assets = JSON.parse(fs.readFileSync(path.join(dir, 'assets.json'), 'utf-8'))
-  const { data, info } = await sharp(path.join(dir, 'atlas.png'))
+  const { data, info } = await sharp(path.join(dir, 'atlas.webp'))
     .ensureAlpha()
     .raw()
     .toBuffer({ resolveWithObject: true })

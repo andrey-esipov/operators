@@ -1,6 +1,6 @@
 {
   "id": "annie",
-  "atlas": "/fighters/annie/atlas.png",
+  "atlas": "/fighters/annie/atlas.webp",
   "frames": [
     {
       "name": "idle-1",

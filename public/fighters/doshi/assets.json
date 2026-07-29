@@ -1,6 +1,6 @@
 {
   "id": "doshi",
-  "atlas": "/fighters/doshi/atlas.png",
+  "atlas": "/fighters/doshi/atlas.webp",
   "frames": [
     {
       "name": "idle-1",

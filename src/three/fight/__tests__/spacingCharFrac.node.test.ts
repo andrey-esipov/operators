@@ -584,6 +584,78 @@ describe('spacing → charFrac distribution + launcher/sweep/crumple kick', () =
     }
     lines.push('')
 
+    // -----------------------------------------------------------------------
+    // FOLLOW-UP — warden/warden per-beat split, to test the critic's
+    // PRE-REGISTERED falsifier (committed blind, before this data existed):
+    //   "if warden super p50 < 45%, 'push-in saves supers' is false → escalate."
+    // Emitted RAW and left to fall — deliberately NOT converted into an
+    // expect(super>=45%): tuning a gate toward a pre-registered number is the
+    // masquerade this project bans, and the coordinator asked to let it fall.
+    // Same cinematic WITH-push matrix frames, restricted to the zoner mirror.
+    // Size stats are over IN-FRAME frames only (rule 1: never measure a subject
+    // that left the crop); the total/in-frame split rides alongside so a low
+    // containment rate can't masquerade as a real charFrac.
+    // -----------------------------------------------------------------------
+    const wFrames = perPair.find((p) => p.name === 'warden/warden')?.frames ?? []
+    lines.push('=== FOLLOW-UP: warden/warden per-beat split (zoner mirror, WITH cine push, in-frame) ===')
+    lines.push('  beat        total   in-frame  charFrac(push) p50/p90/p99/min      %<40%   %<35%   ctrl p50')
+    for (const bt of BEATS) {
+      const all = wFrames.filter((r) => r.beat === bt)
+      const seen = all.filter((r) => r.contained)
+      if (!seen.length) { lines.push(`  ${bt.padEnd(9)}  ${String(all.length).padStart(6)}   (none in-frame)`); continue }
+      const cf = cfOf(seen)
+      const ct = ctrlOf(seen)
+      lines.push(
+        `  ${bt.padEnd(9)}  ${String(all.length).padStart(6)}  ${pctStr(seen.length / all.length).padStart(7)}   ` +
+        `${pctStr(pct(cf, 0.5))}/${pctStr(pct(cf, 0.9))}/${pctStr(pct(cf, 0.99))}/${pctStr(minA(cf))}`.padEnd(26) + '   ' +
+        `${pctStr(fracBelow(cf, 0.40)).padStart(5)}   ${pctStr(fracBelow(cf, 0.35)).padStart(5)}   ${pctStr(pct(ct, 0.5)).padStart(5)}`,
+      )
+    }
+
+    const wSuperAll = wFrames.filter((r) => r.beat === 'super')
+    const wSuperSeen = wSuperAll.filter((r) => r.contained)
+    const wSuperP50 = pct(cfOf(wSuperSeen), 0.5)
+    const wKoSeen = wFrames.filter((r) => r.beat === 'ko' && r.contained)
+    const enoughSupers = wSuperSeen.length >= 20 // below this the p50 is noise, not a verdict
+    lines.push('')
+    lines.push(
+      `  > FALSIFIER (critic, pre-registered blind): warden super p50 = ${pctStr(wSuperP50)} ` +
+      `over ${wSuperSeen.length}/${wSuperAll.length} in-frame super frames — ` +
+      `${!enoughSupers ? 'INSUFFICIENT (n<20): cannot adjudicate from this matrix alone'
+        : wSuperP50 >= 0.45 ? 'PASS (>=45%): push-in-saves-supers survives its own falsifier'
+        : 'FALSIFIED (<45%): escalate per the committed criterion'}`,
+    )
+    lines.push(`    (warden KO p50 = ${pctStr(pct(cfOf(wKoSeen), 0.5))} over ${wKoSeen.length} in-frame KO frames)`)
+
+    const wSmall = wFrames.filter((r) => r.cfPushed < 0.35 && r.contained)
+    const wParts = BEATS.map((bt) => `${bt}=${pctStr(wSmall.filter((r) => r.beat === bt).length / Math.max(1, wSmall.length))}`)
+    lines.push(`  warden sub-35% composition (${wSmall.length} in-frame frames): ${wParts.join('  ')}`)
+
+    // The coordinator's sharpest worry: does the beat classifier tag 'super'
+    // frames BEFORE punchIn ramps in, so the split measures a push that hasn't
+    // fired? Prove it can't hide by measuring held-vs-live ON SUPERS ONLY:
+    // 'super' is read from move.id starting 'super' (the whole move, not one
+    // flash frame), so we sample the entire ramp→peak→bleed curve; if the push
+    // were absent the held and live medians would coincide. held > live is
+    // positive proof the cine push is present on super frames (the capture path
+    // holds its peak; live bleeds it). Aggregated over SEEDS @ hard for volume.
+    const wardenSuper = (heldMode: boolean): number[] => {
+      const out: number[] = []
+      for (const seed of SEEDS) {
+        out.push(...runFight(seed, 'hard', 'hard', 'warden', 'warden', 20000, true, heldMode)
+          .frames.filter((r) => r.beat === 'super' && r.contained).map((r) => r.cfPushed))
+      }
+      return out
+    }
+    const wsLive = wardenSuper(false)
+    const wsHeld = wardenSuper(true)
+    lines.push(
+      `  warden super push-timing check: live p50 ${pctStr(pct(wsLive, 0.5))} (${wsLive.length} fr) ` +
+      `-> capture-held p50 ${pctStr(pct(wsHeld, 0.5))} (${wsHeld.length} fr)  ` +
+      `[held > live => push IS firing on supers; live merely bleeds it]`,
+    )
+    lines.push('')
+
     // ---- Built-in mutation proof that the freeze-push is APPLIED and material:
     // the SAME fight, cine ON vs cine OFF (the code's own __MUT_NO_CINE__ hook,
     // which nulls camera.punchIn's dolly and leaves the impact kick intact). ON
@@ -734,5 +806,20 @@ describe('spacing → charFrac distribution + launcher/sweep/crumple kick', () =
     expect(wm.n).toBeGreaterThan(20)
     expect(wm.held).toBeGreaterThan(wm.live + 0.01) // warden mirror: hold lifts the money shot
     expect(sm.held).toBeGreaterThan(sm.live + 0.02) // shoto mirror: hold punches in hard
+
+    // (9) FOLLOW-UP anti-vacuity (the critic's pre-registered warden-super
+    //     falsifier). The zoner mirror throws ZERO supers in CPU sim — warden's
+    //     Ion Storm (super.storm) is an AI combo-tail, and the zoning mirror
+    //     rarely lands the combo that fires it — so a super p50 is genuinely
+    //     unmeasurable here. We therefore assert the beat that ACTUALLY carries
+    //     warden's small-frame money shot (the KO) is measured and non-vacuous,
+    //     and DELIBERATELY assert no super threshold: rendering a verdict on <20
+    //     super frames would be the exact "checked 0" lie rule 1 bans (the report
+    //     prints INSUFFICIENT instead). If a future roster change makes the zoner
+    //     mirror throw real supers, the report surfaces them; nothing here fakes
+    //     a green. These guard the numbers the write-up rests on and can fail:
+    //     drop the warden pairing and both collapse.
+    expect(wFrames.length).toBeGreaterThan(1000) // the zoner mirror actually ran
+    expect(wKoSeen.length).toBeGreaterThan(100)  // its KO money shot is measured (~2588 seen), not empty
   })
 })

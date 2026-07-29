@@ -454,6 +454,19 @@ describe('whiff-punish distance census (real director config)', () => {
     const db = bucketize(dir.whiffs)
     const bucket4Punished = db.reactable.filter((w) => w.punished).length
     const crudeInRange = db.busy.length + db.unreactable.length + db.reactable.length // 2+3+4
+    // Outcome split per bucket — every bucket count is the TOTAL of that situation
+    // (punished + unpunished), NOT an unpunished-only count. B is a conversion, so it
+    // needs the numerator (punished) over the whole bucket, which is what these give.
+    const punishedIn = (arr: Whiff[]) => arr.filter((w) => w.punished).length
+    const outc = (arr: Whiff[]) => {
+      const p = punishedIn(arr)
+      return `punished=${String(p).padStart(4)} unpunished=${String(arr.length - p).padStart(4)}`
+    }
+    // Crude B over buckets 3+4 (= the whole actionable opportunity set oppFree, before
+    // the reactability filter) vs B4 over bucket 4 alone — so the filter's effect is
+    // visible: it drops the sub-REACTABLE_MIN whiffs out of the denominator.
+    const b34 = db.unreactable.length + db.reactable.length
+    const b34Punished = punishedIn(db.unreactable) + bucket4Punished
 
     if (process.env.CENSUS_REPORT) {
       const report =
@@ -500,13 +513,15 @@ describe('whiff-punish distance census (real director config)', () => {
         `mutually-exclusive; the four counts sum to total whiffs (partition asserted). Only bucket 4 is a genuine missed opp.\n` +
         `REACTABLE_MIN=${REACTABLE_MIN}f = reactionFrames hard=8 + cr.LK punish-route opener startup 4 (DERIVED, uniform across fighters). recovery = STATIC move-def\n` +
         `frames.length-1-active[1] (outcome-independent: a punish cannot truncate it, so a real opp is never misfiled short).\n` +
-        `  1 OUT-OF-RANGE       (never inside ${PUNISH_GATE} gate during recovery; safe spacing)        n=${String(db.outOfRange.length).padStart(5)} (${pct(db.outOfRange.length, dir.whiffs.length)}%)\n` +
-        `  2 IN-RANGE, BUSY     (in gate but punisher never actionable in-gate; couldn't reach)     n=${String(db.busy.length).padStart(5)} (${pct(db.busy.length, dir.whiffs.length)}%)\n` +
-        `  3 IN-RANGE, UNREACTABLE (opp free but recovery <${REACTABLE_MIN}f; correct non-punish)          n=${String(db.unreactable.length).padStart(5)} (${pct(db.unreactable.length, dir.whiffs.length)}%)\n` +
-        `  4 IN-RANGE, REACTABLE   (opp free AND recovery >=${REACTABLE_MIN}f; GENUINE opportunities)      n=${String(db.reactable.length).padStart(5)} (${pct(db.reactable.length, dir.whiffs.length)}%)\n` +
+        `  1 OUT-OF-RANGE       (never inside ${PUNISH_GATE} gate during recovery; safe spacing)        n=${String(db.outOfRange.length).padStart(5)} (${pct(db.outOfRange.length, dir.whiffs.length)}%)  [${outc(db.outOfRange)}]\n` +
+        `  2 IN-RANGE, BUSY     (in gate but punisher never actionable in-gate; couldn't reach)     n=${String(db.busy.length).padStart(5)} (${pct(db.busy.length, dir.whiffs.length)}%)  [${outc(db.busy)}]\n` +
+        `  3 IN-RANGE, UNREACTABLE (opp free but recovery <${REACTABLE_MIN}f; correct non-punish)          n=${String(db.unreactable.length).padStart(5)} (${pct(db.unreactable.length, dir.whiffs.length)}%)  [${outc(db.unreactable)}]\n` +
+        `  4 IN-RANGE, REACTABLE   (opp free AND recovery >=${REACTABLE_MIN}f; GENUINE opportunities)      n=${String(db.reactable.length).padStart(5)} (${pct(db.reactable.length, dir.whiffs.length)}%)  [${outc(db.reactable)}]\n` +
         `  sum = ${db.outOfRange.length + db.busy.length + db.unreactable.length + db.reactable.length} (must equal ${dir.whiffs.length})\n` +
-        `  B4 (conversion over bucket 4 ONLY) = punished/${db.reactable.length} = ${bucket4Punished}/${db.reactable.length} = ${pct(bucket4Punished, db.reactable.length)}%\n` +
+        `  B4 (conversion over bucket 4 ONLY) = punished/total = ${bucket4Punished}/${db.reactable.length} = ${pct(bucket4Punished, db.reactable.length)}%\n` +
         `     (combat-feel baseline ~0.85; pre-registered falsifier: real punish HOLE <=> B4 < 0.60 on bucket 4)\n` +
+        `  crude B over buckets 3+4 (= oppFree, pre-reactability-filter) = ${b34Punished}/${b34} = ${pct(b34Punished, b34)}% ` +
+        `-> the ${REACTABLE_MIN}f filter drops ${db.unreactable.length} whiffs (${punishedIn(db.unreactable)} punished) and lifts it to B4=${pct(bucket4Punished, db.reactable.length)}%\n` +
         `  crude A (buckets 2+3+4)/total = in-range share = ${crudeInRange}/${dir.whiffs.length} = ${pct(crudeInRange, dir.whiffs.length)}%\n` +
         `  my earlier A (buckets 3+4 = in-range & actionable)/total = ${db.unreactable.length + db.reactable.length}/${dir.whiffs.length} = ` +
         `${pct(db.unreactable.length + db.reactable.length, dir.whiffs.length)}% (must match the A/B block above: ${oppFreeAll.length})\n` +

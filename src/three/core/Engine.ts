@@ -525,8 +525,8 @@ export class Engine {
 // `Engine.effectivePixelRatio` clamps them further to a fill budget for the
 // current viewport (see QualityAdaptor.affordablePixelRatio). ultra/high top out
 // at 1.5 — 2.0 is never right for a fill-bound renderer, where doubling the
-// ratio quadruples the pixel count (measured 4x frame-time swing at 1080p). Most
-// shipped WebGL titles clamp here and spend the pixels on post instead.
+// ratio quadruples the pixel count — a 4x FILL swing that, being superlinear,
+// costs even more frame time. Our call: clamp here and spend the budget on post.
 function pixelRatioFor(q: QualityTier): number {
   switch (q) {
     case 'low': return 1

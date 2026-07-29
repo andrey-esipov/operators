@@ -62,7 +62,7 @@ export interface AdaptConfig {
    * 60fps frame time (16.7ms) ON PURPOSE: vsync caps observable headroom, so a
    * fully healthy app on a 60Hz panel reports ~16.7ms and NOTHING faster. A
    * promote line below that could never fire, and recovery would be impossible on
-   * the exact hardware most buyers own. p50 (not p90) keeps the decision robust
+   * any vsync-locked 60Hz display. p50 (not p90) keeps the decision robust
    * to vsync tail jitter; the anti-flap job is done by `maxSlowDemotesPerTier`,
    * not by a wide dead-band the vsync ceiling won't allow.
    */

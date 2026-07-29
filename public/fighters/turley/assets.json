@@ -1503,6 +1503,62 @@
         5
       ],
       "loop": false
+    },
+    "crouch": {
+      "frames": [
+        11
+      ],
+      "durations": [
+        8
+      ],
+      "loop": true
+    },
+    "block": {
+      "frames": [
+        31
+      ],
+      "durations": [
+        6
+      ],
+      "loop": true
+    },
+    "dash": {
+      "frames": [
+        15
+      ],
+      "durations": [
+        10
+      ],
+      "loop": false
+    },
+    "backdash": {
+      "frames": [
+        16
+      ],
+      "durations": [
+        10
+      ],
+      "loop": false
+    },
+    "jump-rise": {
+      "frames": [
+        12,
+        13
+      ],
+      "durations": [
+        6,
+        8
+      ],
+      "loop": false
+    },
+    "jump-fall": {
+      "frames": [
+        14
+      ],
+      "durations": [
+        8
+      ],
+      "loop": false
     }
   },
   "heightCm": 180

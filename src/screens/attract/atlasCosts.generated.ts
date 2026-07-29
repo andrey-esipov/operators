@@ -9,12 +9,12 @@ export const ATLAS_COST_BYTES: Readonly<Record<string, number>> = Object.freeze(
   "cagan": 750052,
   "catwu": 626190,
   "chesky": 5040682,
-  "doshi": 4935818,
-  "lenny": 5755142,
+  "doshi": 5311018,
+  "lenny": 6017834,
   "madhavan": 662420,
   "spiegel": 5710006,
   "taylor": 617354,
-  "turley": 3373706,
+  "turley": 3711940,
 })
 
 // Reduced "hero" opener-atlas sizes. On a reported-slow link the attract

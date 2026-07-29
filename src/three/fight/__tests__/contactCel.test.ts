@@ -396,14 +396,51 @@ describe('the super is bespoke art, not recycled fireball/uppercut cels (visual-
     expect(broken.map((r) => r.skin), `broken super rollover:\n  ${detail.join('\n  ')}`).toEqual([])
   })
 
-  // Progress + vacuity guard. At least one skin must have rolled over to the
-  // bespoke super, else every skin is recycled — either the art was never wired
-  // or a revert flipped them all back, the exact silent regression this gate
-  // exists to catch. As later stages generate skins this climbs toward
-  // ROSTER.length; it must never fall to 0.
-  it('at least one playable skin ships the bespoke super (not a vacuous all-recycled pass)', () => {
-    const bespoke = superRows.filter((r) => r.isBespoke).map((r) => r.skin)
-    expect(bespoke.length, `bespoke-super skins: ${bespoke.join(', ') || '(none — super fix absent!)'}`).toBeGreaterThan(0)
+  // Progress guard, RE-BASELINED to the exact set of faces that ship bespoke
+  // super art, because a lone `bespoke.length > 0` is the one-member-of-a-set
+  // blindness this file exists to kill: it stayed green while chesky alone was
+  // bespoke and five faces silently ran the recycled trio. Pinning the WHOLE set
+  // makes both failure modes red — a regression that drops a face back to
+  // recycled (set shrinks) AND a premature/incorrect roll-over of a face that
+  // must not have this super yet (set grows).
+  //
+  // The set is exactly the energy-projection archetypes: operator's Palm Barrage
+  // (super.P) and warden's Ion Storm (super.storm), redrawn from each skin's own
+  // stance — chesky + lenny (operator), doshi + turley (warden). The two vanguard
+  // faces (spiegel, madhavan) are deliberately absent: Backbreaker is a command
+  // GRAB, not a projectile, so wiring them to the projection arc would draw a
+  // grappler firing a fireball. They stay coherently recycled until a bespoke
+  // grab-super shape exists. Update this list (with art) when that lands; never
+  // shrink it silently.
+  const ENERGY_SUPER_SKINS = ['chesky', 'doshi', 'lenny', 'turley']
+  it('exactly the energy-projection faces ship the bespoke super (whole-set pin, not one member)', () => {
+    const bespoke = superRows.filter((r) => r.isBespoke).map((r) => r.skin).sort()
+    expect(
+      bespoke,
+      `bespoke-super skins drifted from the expected energy-projection set (a drop = regression, an add = a face wired to a super it must not have yet)`,
+    ).toEqual([...ENERGY_SUPER_SKINS].sort())
+    // Anti-vacuity: the pinned set is non-empty, so an all-recycled revert (every
+    // face flipped back at once) still reddens here, not just at the diff.
+    expect(bespoke.length).toBeGreaterThan(0)
+  })
+
+  // Archetype-correctness, stated as the DURABLE structural rule independent of
+  // which faces have shipped art yet: the bespoke arc is an energy PROJECTION,
+  // valid only for operator (Palm Barrage) and warden (Ion Storm). No vanguard
+  // skin may ever be wired to it — that is the specific "fireball from a
+  // grappler" over-reach the deferral above guards against. The exact-set pin
+  // would also catch it today, but this keeps the rule true even as the set
+  // grows, and it is the assertion a future grappler-super author must
+  // consciously confront rather than silently satisfy.
+  it('no vanguard skin is wired to the energy-projection super (Backbreaker is a grab, not a projectile)', () => {
+    const wrongArch = superRows.filter((r) => r.isBespoke && r.archetype === 'vanguard').map((r) => r.skin)
+    expect(wrongArch, `vanguard skins wrongly wired to the projection super: ${wrongArch.join(', ')}`).toEqual([])
+    // Dual side: every face we DO expect bespoke is an energy-projection archetype.
+    const wrongExpected = ENERGY_SUPER_SKINS.filter((skin) => {
+      const a = ROSTER.find((e) => e.skin === skin)?.archetype
+      return a !== 'operator' && a !== 'warden'
+    })
+    expect(wrongExpected, `expected-bespoke skins that are NOT energy-projection archetypes: ${wrongExpected.join(', ')}`).toEqual([])
   })
 
   it('audited every choosable fighter against a real manifest (not a vacuous subset)', () => {

@@ -305,12 +305,23 @@ describe('the super is bespoke art, not recycled fireball/uppercut cels (visual-
   const RECYCLED = ['special-fireball-charge', 'special-uppercut', 'special-fireball-release']
   const BESPOKE = ['super-charge', 'super-charge-peak', 'super-release', 'super-release-2', 'super-recovery', 'super-recovery-2']
   const BESPOKE_ACTIVE = 'super-release'
+  // The vanguard grappler shares move-id super.P with operator's Palm Barrage, but
+  // its super is a command GRAB (Backbreaker), so it derives a SEPARATE bespoke arc
+  // — clutch → catch → lift → slam — selected purely by cel-presence in
+  // deriveAttackClip. A projection or card skin legitimately has NO grab cels, so
+  // the projection/card predicates below all compose `noGrab`; the positive grab
+  // case (a skin that HAS super-grab-catch → the grab arc) is the routing test (1d).
+  const GRAB_BESPOKE = ['super-grab-startup', 'super-grab-reach', 'super-grab-catch', 'super-grab-lift', 'super-grab-slam', 'super-grab-recovery']
+  const GRAB_ACTIVE = 'super-grab-catch'
+  const noGrab = (c: string): boolean => !c.startsWith('super-grab')
 
   // (1) SOURCE lock — both energy supers derive the bespoke arc from their own
-  //     timing, and neither carries any recycled cel through.
+  //     timing, and neither carries any recycled cel through. `noGrab` marks these
+  //     as projection skins (no grab cels), so super.P resolves to the projection
+  //     shape rather than the grab shape.
   it('deriveAttackClip builds the bespoke super arc from timing (Palm Barrage + Ion Storm)', () => {
-    const palm = deriveAttackClip('super.P', { startup: 6, active: 8, recovery: 30 }, () => true)
-    const storm = deriveAttackClip('super.storm', { startup: 8, active: 3, recovery: 34 }, () => true)
+    const palm = deriveAttackClip('super.P', { startup: 6, active: 8, recovery: 30 }, noGrab)
+    const storm = deriveAttackClip('super.storm', { startup: 8, active: 3, recovery: 34 }, noGrab)
     expect(palm?.frames).toEqual(BESPOKE)
     expect(storm?.frames).toEqual(BESPOKE)
     // Density floor, held to the same metric the roster is scored by
@@ -332,12 +343,12 @@ describe('the super is bespoke art, not recycled fireball/uppercut cels (visual-
   //      retimes an un-generated skin's super. It must NOT drop to null (clip
   //      dropped) nor leak a bespoke cel.
   it('a playable skin missing the bespoke contact cel rolls over to the recycled arc, same timing', () => {
-    const bail = deriveAttackClip('super.P', { startup: 6, active: 8, recovery: 30 }, (c) => c !== BESPOKE_ACTIVE)
+    const bail = deriveAttackClip('super.P', { startup: 6, active: 8, recovery: 30 }, (c) => c !== BESPOKE_ACTIVE && noGrab(c))
     expect(bail?.frames).toEqual(RECYCLED)
     expect(bail?.durations).toEqual([6, 8, 30])
     for (const b of BESPOKE) expect(bail?.frames ?? []).not.toContain(b)
     // warden's Ion Storm rolls over at its OWN timing, not the palm's.
-    const storm = deriveAttackClip('super.storm', { startup: 8, active: 3, recovery: 34 }, (c) => c !== BESPOKE_ACTIVE)
+    const storm = deriveAttackClip('super.storm', { startup: 8, active: 3, recovery: 34 }, (c) => c !== BESPOKE_ACTIVE && noGrab(c))
     expect(storm?.frames).toEqual(RECYCLED)
     expect(storm?.durations).toEqual([8, 3, 34])
   })
@@ -346,9 +357,33 @@ describe('the super is bespoke art, not recycled fireball/uppercut cels (visual-
   //      so it bails ALL the way to the static CLIPS.super const — the last-ditch
   //      recycled clip — rather than dropping the super entirely.
   it('card art lacking even the recycled contact cel bails to the static CLIPS.super', () => {
-    const cardHas = (c: string) => c !== BESPOKE_ACTIVE && c !== 'special-uppercut'
+    const cardHas = (c: string) => c !== BESPOKE_ACTIVE && c !== 'special-uppercut' && noGrab(c)
     expect(deriveAttackClip('super.P', { startup: 6, active: 8, recovery: 30 }, cardHas)).toBeNull()
     expect(CLIPS.super.frames).toEqual(RECYCLED)
+  })
+
+  // (1d) GRAB routing — the archetype disambiguator, and the POSITIVE member of the
+  //      routing set. A skin that HAS generated the grab contact cel derives the
+  //      command-grab arc (clutch → catch → lift → slam), NEVER the energy-projection
+  //      arc: a vanguard's Backbreaker must not draw a fireball. Tests (1)–(1c) are
+  //      the negative members (projection/absent → projectile/recycled), so BOTH
+  //      sides of the routing are pinned — not one member of the set.
+  it('a skin with the grab contact cel derives the command-grab super arc, not the projection arc', () => {
+    const hasGrab = (c: string): boolean => c.startsWith('super-grab')
+    const grab = deriveAttackClip('super.P', { startup: 6, active: 8, recovery: 30 }, hasGrab)
+    expect(grab?.frames).toEqual(GRAB_BESPOKE)
+    // Same unique-frame density floor the projection super clears (SF3:3S floor 6).
+    expect(new Set(grab?.frames).size).toBeGreaterThanOrEqual(6)
+    // Carries NOTHING from the projection arc or the recycled stitch — the exact
+    // "grappler blasting a fireball" incoherence this routing exists to prevent.
+    for (const b of BESPOKE) expect(grab?.frames ?? []).not.toContain(b)
+    for (const r of RECYCLED) expect(grab?.frames ?? []).not.toContain(r)
+    // A vanguard that has NOT generated grab cels rolls over to the recycled arc
+    // (byte-identical to its pre-grab manifest), never the projection bespoke arc:
+    // only super-grab-catch presence flips super.P to the grab shape.
+    const ungenerated = deriveAttackClip('super.P', { startup: 6, active: 8, recovery: 30 }, (c) => c !== BESPOKE_ACTIVE && noGrab(c))
+    expect(ungenerated?.frames).toEqual(RECYCLED)
+    for (const g of GRAB_BESPOKE) expect(ungenerated?.frames ?? []).not.toContain(g)
   })
 
   // (2) SHIPPED-REALITY rollover invariant across the whole playable roster.
@@ -441,6 +476,52 @@ describe('the super is bespoke art, not recycled fireball/uppercut cels (visual-
       return a !== 'operator' && a !== 'warden'
     })
     expect(wrongExpected, `expected-bespoke skins that are NOT energy-projection archetypes: ${wrongExpected.join(', ')}`).toEqual([])
+  })
+
+  // Shipped-reality controls for the GRAB routing — the mirror of the projection
+  // guards above. Today NO skin has generated grab cels, so the violator sets are
+  // empty, which is exactly the vacuous-pass shape this file exists to kill; each
+  // rule is therefore a PURE function exercised on a synthetic violator too, so a
+  // green here means "the guard is watching", not "there was nothing to check".
+  // These are the pre-registered assertions a future vanguard-super author meets.
+  it('grab and projection super cels are mutually exclusive per skin, and grab cels imply a vanguard skin', () => {
+    const atlasNamesOf = (skin: string): string[] => SKINS[skin]?.frames.map((f) => f.name) ?? []
+    const hasBothContactSets = (names: string[]): boolean => names.includes(BESPOKE_ACTIVE) && names.includes(GRAB_ACTIVE)
+    const grabImpliesVanguard = (arch: string, names: string[]): boolean => !names.includes(GRAB_ACTIVE) || arch === 'vanguard'
+
+    // (a) XOR across the real roster — no skin's atlas carries BOTH contact cels.
+    const bothViolators = ROSTER.filter((e) => hasBothContactSets(atlasNamesOf(e.skin))).map((e) => e.skin)
+    expect(bothViolators, `skins carrying BOTH super contact cel-sets (projection+grab): ${bothViolators.join(', ')}`).toEqual([])
+    // (b) grab ⇒ vanguard across the real roster — no operator/warden skin may
+    //     carry super-grab-catch (a projection archetype drawn mid-throw).
+    const grabNonVanguard = ROSTER.filter((e) => atlasNamesOf(e.skin).includes(GRAB_ACTIVE) && e.archetype !== 'vanguard').map((e) => e.skin)
+    expect(grabNonVanguard, `non-vanguard skins carrying grab super cels: ${grabNonVanguard.join(', ')}`).toEqual([])
+
+    // Anti-vacuity: both rules MUST reject a synthetic violator, or the empty
+    // real-roster verdicts above are lying harnesses by construction.
+    expect(hasBothContactSets([BESPOKE_ACTIVE, GRAB_ACTIVE])).toBe(true)
+    expect(hasBothContactSets([BESPOKE_ACTIVE])).toBe(false)
+    expect(grabImpliesVanguard('operator', [GRAB_ACTIVE])).toBe(false)
+    expect(grabImpliesVanguard('warden', [GRAB_ACTIVE])).toBe(false)
+    expect(grabImpliesVanguard('vanguard', [GRAB_ACTIVE])).toBe(true)
+
+    // (c) byte-identical TODAY — committing the grab shape flipped ZERO manifests.
+    //     Derive each skin's super from its REAL frames and assert no grab cel
+    //     appears: the routing flips only on super-grab-catch presence, which no
+    //     shipped skin has yet, so every skin's super clip is unchanged.
+    let derivedCount = 0
+    for (const entry of ROSTER) {
+      const names = new Set(atlasNamesOf(entry.skin))
+      if (names.size === 0) continue
+      const clip = deriveAttackClip(superIdFor(entry.archetype), { startup: 6, active: 8, recovery: 30 }, (n) => names.has(n))
+      for (const g of GRAB_BESPOKE) {
+        expect(clip?.frames ?? [], `${entry.skin} unexpectedly routes its super to a grab cel`).not.toContain(g)
+      }
+      derivedCount++
+    }
+    // Not one member of the set: prove the loop actually derived EVERY roster skin,
+    // so a green above cannot mean "the loop body never ran".
+    expect(derivedCount).toBe(ROSTER.length)
   })
 
   it('audited every choosable fighter against a real manifest (not a vacuous subset)', () => {

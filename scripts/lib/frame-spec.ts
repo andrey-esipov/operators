@@ -439,6 +439,89 @@ export const FRAMES: FrameSpec[] = [
       'rebalancing evenly onto both feet as the last wisps of energy fade — one beat before returning to idle.',
   },
 
+  // ── Super (command grab) ───────────────────────────────────────────────────
+  // Bespoke keys for the GRAPPLER super — the vanguard's Backbreaker (id super.P,
+  // guard:'throw'). It shares the move-id super.P with operator's Palm Barrage but
+  // is a command GRAB, not a projectile: it must NEVER borrow the super-charge/
+  // super-release energy-projection cels or it would draw a grappler blasting a
+  // fireball (the exact incoherence the note on ATTACK_SHAPES.super warns of). Six
+  // keys mirror the projection arc's 2/1/3 startup/active/recovery shape so both
+  // supers lay out on the same timing envelope, but every pose is a THROW: hands
+  // CLUTCH and GRIP, never open-palm blast, and there is no energy anywhere in the
+  // frame. super-grab-reach is the held-through-freeze peak (the grab's analogue of
+  // super-charge-peak) — the dominant on-screen pose for the whole super freeze, so
+  // it carries the shot on its own. Routing is by cel-presence (see
+  // deriveAttackClip): a skin that has generated super-grab-catch does its super as
+  // a grab; every other skin keeps the projection shape (which rolls over to the
+  // recycled arc until its own bespoke cels exist), so committing these keys is
+  // byte-identical for the whole current roster until a vanguard atlas gains them.
+  {
+    name: 'super-grab-startup',
+    heightRatio: 0.98,
+    aspect: [0.75, 1.25],
+    pose:
+      'the lunging entry of a command-grab super — a heavy grappler exploding forward off a deeply braced back leg, ' +
+      'BOTH arms sweeping wide open and low to seize the opponent, hands spread and CLUTCHING (fingers splayed to ' +
+      'grab, never open-palm blasting), torso driven forward behind the reach, weight loaded to clamp down. A ' +
+      'committed lunging SEIZE, unmistakably a throw and not a projectile — no energy gathered in front, no orb, no ' +
+      'blast; the whole read is a powerhouse closing distance to grab, the bold silhouette of wide clutching arms ' +
+      'and a driving low stance carrying the pose on its own.',
+  },
+  {
+    name: 'super-grab-reach',
+    heightRatio: 0.98,
+    aspect: [0.85, 1.4],
+    pose:
+      'the fully-committed CLUTCH of a command-grab super at the instant before contact — the pose HELD on screen ' +
+      'through the long super freeze, so it must carry the shot on its own. Both arms thrust to full extension, ' +
+      'hands wide and CLAMPING shut on empty air an instant before they close on the opponent, the whole body a ' +
+      'coiled powerhouse lunge off the exploded back leg, torso low and driving in, head up and eyes locked on the ' +
+      'target. It reads INSTANTLY as a grappler about to grab and destroy — pure grabbing body language and ' +
+      'SILHOUETTE, wide clutching hands and a heavy driving stance — with NO energy anywhere: not a blast, not a ' +
+      'fireball, a throw.',
+  },
+  {
+    name: 'super-grab-catch',
+    heightRatio: 0.95,
+    aspect: [0.7, 1.15],
+    pose:
+      'the seize of a command-grab super CONNECTING — both hands clamp shut and lock onto the opponent, arms tensed ' +
+      'and hauling them in, the grappler\u2019s whole frame braced and rooted over bent knees to take the weight, ' +
+      'shoulders and back coiling to lift. The contact pose of a throw: hands GRIPPING, not blasting; the power is ' +
+      'in the clamp and the braced legs, the money-moment where the grab lands and the opponent is caught. No ' +
+      'energy, no projectile — the raw physical catch reads on its own even as a silhouette.',
+  },
+  {
+    name: 'super-grab-lift',
+    heightRatio: 1.04,
+    aspect: [0.55, 1.35],
+    pose:
+      'the lift of a command-grab super — the grappler HAULING the seized opponent up and overhead, both arms ' +
+      'driving upward at full power, back arched and legs exploding from bent to straight to hoist the weight high, ' +
+      'the tallest and most vertical beat of the throw. Pure heaving physical effort — hands gripping and lifting, ' +
+      'the whole body a rising column of force — the wind-up to the slam, no energy or projectile anywhere.',
+  },
+  {
+    name: 'super-grab-slam',
+    heightRatio: 0.9,
+    aspect: [0.95, 0.95],
+    pose:
+      'the SLAM of a command-grab super — the grappler driving the seized opponent down with everything, arms ' +
+      'hurling them earthward across a thrust-out knee or into the ground, torso folding forward and down over a ' +
+      'wide low braced stance, the peak-impact money-shot of a Backbreaker. The most violent, widest, lowest beat: ' +
+      'a whole-body downward spike of force, hands still gripping as they drive the opponent down. Physical ' +
+      'devastation, no energy, no blast — the throw\u2019s destructive climax.',
+  },
+  {
+    name: 'super-grab-recovery',
+    heightRatio: 0.99,
+    aspect: [0.42, 0.95],
+    pose:
+      'the recovery of a command-grab super — the slam fully spent, the grappler rising back up out of the deep ' +
+      'folded follow-through toward an upright neutral guard, arms drawing back in and unclenching, weight ' +
+      'rebalancing onto both feet as the powerhouse settles — one beat before returning to idle.',
+  },
+
   // ── Hit reactions ────────────────────────────────────────────────────────
   {
     name: 'hit-high',
@@ -1010,11 +1093,13 @@ const ATTACK_SHAPES = {
   // CORRECT FOR the two energy-projection supers only: operator's Palm Barrage
   // (super.P) and warden's Ion Storm (super.storm) both DERIVED_ATTACKS-map to
   // `super`. The vanguard grappler's Backbreaker is ALSO id `super.P` but is a
-  // command grab, not a projectile — it must route to a separate grab/slam
-  // shape (archetype-keyed) with its own cels BEFORE any vanguard skin is
-  // generated, or a full-roster gen would draw a grappler blasting a fireball.
-  // Until that shape+cels land, vanguard skins have no `super-release` cel and
-  // stay on the recycled fallback, so nothing ships wrong in the meantime.
+  // command grab, not a projectile, so it must NOT draw this projection arc. It
+  // now routes to the sibling `superGrab` shape below, disambiguated by
+  // cel-presence in deriveAttackClip (a skin that generated `super-grab-catch`
+  // does its super as a grab; everyone else keeps this projection shape). A
+  // vanguard skin that has NOT yet generated grab cels has neither `super-grab-catch`
+  // nor `super-release`, so it stays on THIS shape's recycled fallback — byte-identical
+  // to its pre-grab manifest — and nothing ships a grappler blasting a fireball.
   super: {
     startup: ['super-charge', 'super-charge-peak'], active: 'super-release', recovery: ['super-release-2', 'super-recovery', 'super-recovery-2'], neutral: STANCE_FRAME,
     // Un-generated skins derive the OLD recycled arc (fireball-charge → uppercut
@@ -1027,6 +1112,21 @@ const ATTACK_SHAPES = {
     // only chesky is regenerated in this batch, so it must reproduce the recycled
     // clip exactly for the other five.)
     fallback: shapeFrom(SUPER, 'special-uppercut'),
+  },
+  // The GRAPPLER super — vanguard's Backbreaker (super.P, guard:'throw'). Same
+  // 2/1/3 startup/active/recovery layout as `super` so both lay out on the same
+  // timing envelope, but every cel is a THROW (clutch → catch → lift → slam), never
+  // an energy blast. Selected over `super` purely by cel-presence in
+  // deriveAttackClip: `super.P`/`super.storm` route HERE when (and only when) the
+  // skin has generated `super-grab-catch`. In the real pipeline a generated skin
+  // carries the grab contact cel XOR the projection contact cel, never both, so the
+  // routing is unambiguous; contactCel.test.ts pins that XOR and that grab cels imply
+  // a vanguard skin. No `fallback` is needed: this shape is only ever selected when
+  // the skin HAS `super-grab-catch` (the routing predicate), so the has-gate in
+  // deriveAttackClip never fires for it — a vanguard WITHOUT grab cels routes to
+  // `super` above and rolls over via THAT shape's recycled fallback, unchanged.
+  superGrab: {
+    startup: ['super-grab-startup', 'super-grab-reach'], active: 'super-grab-catch', recovery: ['super-grab-lift', 'super-grab-slam', 'super-grab-recovery'], neutral: STANCE_FRAME,
   },
 } satisfies Record<string, AttackShape>
 
@@ -1056,6 +1156,26 @@ export const DERIVED_ATTACKS: Record<string, AttackShapeKey> = {
 }
 
 /**
+ * The energy-projection super (`super`) and the grappler command-grab super
+ * (`superGrab`) share the move-id `super.P` — operator's Palm Barrage vs
+ * vanguard's Backbreaker — so the move-id alone cannot say which shape to draw.
+ * Disambiguate by the skin's OWN cels: a skin that has generated the grab contact
+ * cel (`super-grab-catch`) does its super as a grab, everyone else keeps the
+ * projection shape. In the real pipeline a generated skin carries the grab contact
+ * cel XOR the projection contact cel (never both), so this is unambiguous;
+ * contactCel.test.ts pins that XOR, that grab cels imply a vanguard skin, and that
+ * NO shipped skin routes to grab today (so committing this is byte-identical for
+ * the whole current roster). A skin with no super cels at all keeps the base key
+ * and rolls over to that shape's recycled fallback.
+ */
+export const GRAB_SUPER_CONTACT = 'super-grab-catch'
+function resolveAttackShapeKey(moveId: string, has?: (cel: string) => boolean): AttackShapeKey | undefined {
+  const key = DERIVED_ATTACKS[moveId]
+  if (key === 'super' && has && has(GRAB_SUPER_CONTACT)) return 'superGrab'
+  return key
+}
+
+/**
  * The timing-derived clip for a move-id, or null when the move-id is not a
  * derived attack (the caller then falls back to the static CLIPS entry). `has`,
  * when given, is the skin's available-cel predicate: if the skin never generated
@@ -1067,7 +1187,7 @@ export function deriveAttackClip(
   t: MoveTiming,
   has?: (cel: string) => boolean,
 ): ClipSpec | null {
-  const key = DERIVED_ATTACKS[moveId]
+  const key = resolveAttackShapeKey(moveId, has)
   if (!key) return null
   const shape: AttackShape = ATTACK_SHAPES[key]
   if (has && !has(shape.active)) {

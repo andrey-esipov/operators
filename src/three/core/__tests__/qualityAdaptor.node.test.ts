@@ -576,6 +576,31 @@ describe('QualityAdaptor — scripted-transient discard (the mid-super demote fi
     expect(report.maxMs).toBe(80)
     expect(report.count).toBe(40)
   })
+
+  it('a PAUSE during a super is UNMEASURABLE, not super cost — discontinuity must win over the transient discard', () => {
+    // Gates the ordering the class comment (property 5 / sample block 1.5) only
+    // ASSERTS: block (1) discontinuity runs BEFORE block (1.5) transient. A
+    // discontinuity-magnitude frame (GC pause, alt-tab, shader stall) that happens
+    // to land while a super is flagged must be treated as unmeasurable — NOT
+    // booked as "what a super costs." If the two blocks are ever reordered (the
+    // obvious refactor: hoist the cheap boolean check up front), the pause gets
+    // recorded and silently poisons transientCostReport — the ONE channel that
+    // answers "can this machine render supers at all," which nothing else can see.
+    // The telemetry built to catch a silent failure would itself fail silently.
+    const a = new QualityAdaptor()
+    const pause = 1500 // >= discontinuityMs (1000): unmeasurable by definition
+
+    // Non-vacuity: a MEASURABLE flagged super frame IS recorded (recording works)...
+    a.sample(100, superFrame, 'ultra', true)
+    expect(a.transientCostReport().count, 'a measurable flagged frame must be recorded').toBe(1)
+
+    // ...but a discontinuity-magnitude flagged frame must leave the count UNCHANGED:
+    // caught by the validity/discontinuity guard first, discarded unrecorded.
+    a.sample(100 + pause, pause, 'ultra', true)
+    const report = a.transientCostReport()
+    expect(report.count, 'a pause flagged transient must NOT be booked as super cost').toBe(1)
+    expect(report.maxMs, 'the unmeasurable pause must not inflate the recorded super max').toBe(superFrame)
+  })
 })
 
 describe('affordablePixelRatio — fill-aware cap', () => {

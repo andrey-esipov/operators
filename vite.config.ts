@@ -53,6 +53,18 @@ export default defineConfig({
     //    gate over code that no longer exists, or stay green over code that was
     //    since broken. A gate that reports on a different revision than the one
     //    you are about to ship is a lying harness by construction.
+    //
+    //    That hazard then materialised in a form the list above did not cover.
+    //    `.sprite-gen/_scratch/` (the sprite generator's working dir, NOT the
+    //    already-excluded `.sprite-probe/`) held two stale snapshots of
+    //    contactCel.test.ts — 452 and 415 lines against the real file's 533 —
+    //    left behind by an agent's mutation run. vitest collected both, they
+    //    failed to resolve their relative imports, and a clean tree reported
+    //    "2 failed | 102 passed (104)" with zero failing assertions. Being
+    //    gitignored does not help: vitest's include globs do not read
+    //    .gitignore, so ignored scratch is exactly the scratch that goes
+    //    unnoticed. `_scratch` is excluded by name anywhere in the tree so the
+    //    next generator that invents its own directory is covered by default.
     // 3. Timeouts are a LIVENESS backstop, not a performance threshold.
     //
     //    This block previously set no timeout at all, so the whole suite ran on
@@ -81,6 +93,8 @@ export default defineConfig({
       ...configDefaults.exclude,
       '**/_*.probe.test.ts',
       '**/.sprite-probe/**',
+      '**/.sprite-gen/**',
+      '**/_scratch/**',
       '**/_critic-*/**',
       '**/_calib-*/**',
       '**/_r2-*/**',

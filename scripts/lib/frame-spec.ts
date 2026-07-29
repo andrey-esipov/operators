@@ -836,7 +836,7 @@ export const TWEENS: TweenSpec[] = [
   // Neutral-game density. Crouch and block get a subtle morph inbetween — small,
   // continuous motion where the flow-morph is clean. Dash, the jump arc and the
   // get-up are large pose changes that double-image under morph, so they keyframe
-  // instead (distinct AI poses, hard cuts) — the SF/Tekken way for fast actions.
+  // instead (distinct AI poses, hard cuts), which read cleaner than a doubled tween.
   { name: 'tw-cr-c2', from: 'crouch', to: 'crouch-2', t: 0.5 },
   { name: 'tw-ba-bs', from: 'block-absorb', to: 'block-stand', t: 0.5 },
 ]

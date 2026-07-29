@@ -281,7 +281,7 @@ describe('every playable skin ships a breathing idle clip (art-deficit #9 tripwi
 // freeze walks the startup cels then HOLDS the last one for the ~54-frame
 // remainder (sim.advanceSuperOwner caps move.frame at active[0]-1), so whatever
 // sits last in startup is the dominant thing on screen for the whole freeze — the
-// single longest, most-watched phase of the most-watched move. A lone super-charge
+// single longest on-screen phase of the super — the ~54-frame hold above. A lone super-charge
 // held an empty wind-up there; super-charge-peak is the authored "gathering power"
 // pose that now fills it. operator's Palm Barrage (super.P) and warden's Ion Storm
 // (super.storm) share the arc because both are energy-projection supers redrawn

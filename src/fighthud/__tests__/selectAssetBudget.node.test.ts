@@ -2,8 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { existsSync, statSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { STAGES } from '../select/roster'
+import { STAGES, ROSTER } from '../select/roster'
 import { stageThumb, stageFull } from '../select/stageAssets'
+import { fighterPortrait, fighterAtlas } from '../select/portraitAssets'
 
 /**
  * Select-screen asset-weight gate. The v10 critic measured that the stage phase
@@ -42,6 +43,16 @@ const PER_THUMB_MAX = 300 * KB // a display-sized ribbon plate, generously
 const EAGER_RIBBON_BUDGET = 1.5 * MB // all 8 thumbs at once; ~10× under the 15 MB regression
 const PER_FULL_MAX = 3 * MB // an on-hover full render must stay reasonable
 const THUMB_SHARE_MAX = 0.2 // thumbs must be a real downscale: < 20% of the full payload
+
+// Fighter portraits — the same size contract, one screen over. The select grid
+// used to crop its still straight out of the multi-MB sprite atlas, so painting
+// the 6-fighter roster eagerly pulled all six full atlases: 23.90 MB post-WebP
+// (127 MB before). The fix points the grid at the small pre-baked VS stills
+// (portrait.png, see select/portraitAssets.ts) and pulls the atlas only on
+// demand for the animated hero. These budgets keep that contract honest.
+const PER_PORTRAIT_MAX = 2 * MB // a pre-baked VS still, generously (max shipped: doshi 1.25 MB)
+const EAGER_ROSTER_BUDGET = 8 * MB // all 6 stills at once; ~3× under the 23.90 MB regression, headroom over the 5.06 MB achieved
+const PORTRAIT_SHARE_MAX = 0.35 // stills must be a real downscale: < 35% of the atlas payload (achieved 21%)
 
 /** Disk path for a `/…`-rooted public URL. */
 function diskPath(publicUrl: string): string {
@@ -106,6 +117,101 @@ describe('select stage asset weight', () => {
         b,
         `${s.id} full render ${(b / MB).toFixed(2)} MB exceeds ${(PER_FULL_MAX / MB).toFixed(2)} MB`,
       ).toBeLessThanOrEqual(PER_FULL_MAX)
+    }
+  })
+})
+
+/**
+ * Select-screen fighter-portrait weight gate. Sibling of the stage gate above,
+ * for the same regression on the roster grid: the grid cropped its portrait
+ * straight out of the multi-MB sprite atlas, so painting all six fighters pulled
+ * every full atlas — 23.90 MB post-WebP, ~127 MB before — before a button was
+ * pressed. That is three quarters of the game's entire 32 MB footprint spent on
+ * a menu the player hasn't chosen anything in yet.
+ *
+ * The fix (select/portraitAssets.ts + portraits.ts loadSelectCrop): the grid
+ * draws the small pre-baked VS still (portrait.png, ~0.3–1.3 MB), and the full
+ * atlas is pulled on demand only for the one animated hero, never six-at-once.
+ *
+ * WHY THIS CAN'T LIE (each budget is tied to the REAL path the grid renders):
+ *  - The eager total sums fighterPortrait(skin) for the *actual* ROSTER — the
+ *    same function loadSelectCrop resolves the grid image element from. Repoint
+ *    fighterPortrait() back at the atlas and this sums 23.90 MB > 8 MB → red,
+ *    even though every file still exists.
+ *  - "stills are a real downscale, not the atlas" asserts each still weighs a
+ *    fraction of the atlas, so aliasing the still to the atlas path reddens even
+ *    if the byte budget were loosened.
+ *  - ROSTER is asserted non-empty (> 8 checks would be a lie here — the roster is
+ *    six — so the guard is `> 4`, tripped the instant the list is trimmed to
+ *    nothing) BEFORE any budget sums, so none can go vacuously green by measuring
+ *    zero fighters (this project's single most common failure mode).
+ *
+ * Mutation-proven: change fighterPortrait() to return fighterAtlas(id) and both
+ * "eager roster payload within budget" and "stills are real downscales" go red;
+ * point it at a missing file and "ships a pre-baked still for every fighter"
+ * goes red. Restore and all green. (Exact red/green output in the agent report.)
+ */
+describe('select fighter portrait weight', () => {
+  it('finds the roster it is meant to gate', () => {
+    // Vacuity guard: if ROSTER is empty every budget below is trivially green.
+    // The roster is six, so `> 4` fails loudly the moment the list is gutted —
+    // a gate that checks zero fighters and passes is this project's #1 defect.
+    expect(ROSTER.length).toBeGreaterThan(4)
+  })
+
+  it('ships a pre-baked still for every roster fighter', () => {
+    for (const r of ROSTER) {
+      const p = diskPath(fighterPortrait(r.skin))
+      expect(existsSync(p), `missing VS still for ${r.skin}: ${fighterPortrait(r.skin)}`).toBe(true)
+    }
+  })
+
+  it('keeps every VS still display-sized', () => {
+    for (const r of ROSTER) {
+      const b = bytes(fighterPortrait(r.skin))
+      expect(
+        b,
+        `${r.skin} still ${(b / KB).toFixed(0)} KB exceeds ${(PER_PORTRAIT_MAX / KB).toFixed(0)} KB`,
+      ).toBeLessThanOrEqual(PER_PORTRAIT_MAX)
+    }
+  })
+
+  it('keeps the eager roster-grid payload within budget', () => {
+    // The headline number: the grid shows all six stills the moment the screen
+    // opens (preloadVsPortrait warms exactly these), so this sum is what a buyer
+    // downloads before choosing. Repointing fighterPortrait() at the atlas sums
+    // 23.90 MB.
+    const total = ROSTER.reduce((sum, r) => sum + bytes(fighterPortrait(r.skin)), 0)
+    expect(
+      total,
+      `eager roster grid = ${(total / MB).toFixed(2)} MB exceeds ${(EAGER_ROSTER_BUDGET / MB).toFixed(2)} MB`,
+    ).toBeLessThanOrEqual(EAGER_ROSTER_BUDGET)
+  })
+
+  it('serves stills that are real downscales of the full atlases', () => {
+    const stillTotal = ROSTER.reduce((sum, r) => sum + bytes(fighterPortrait(r.skin)), 0)
+    const atlasTotal = ROSTER.reduce((sum, r) => sum + bytes(fighterAtlas(r.skin)), 0)
+    for (const r of ROSTER) {
+      expect(fighterPortrait(r.skin), `${r.skin} still aliases the atlas`).not.toBe(fighterAtlas(r.skin))
+    }
+    expect(
+      stillTotal / atlasTotal,
+      `stills are ${((stillTotal / atlasTotal) * 100).toFixed(0)}% of the atlas payload — not a real downscale`,
+    ).toBeLessThan(PORTRAIT_SHARE_MAX)
+  })
+
+  it('keeps each on-demand atlas within a sane per-fighter ceiling', () => {
+    // The atlas is still pulled on demand for the animated hero (one at a time).
+    // This is not the blocking menu cost, but it must exist and stay bounded so a
+    // hover never streams a runaway file.
+    for (const r of ROSTER) {
+      const p = diskPath(fighterAtlas(r.skin))
+      expect(existsSync(p), `missing atlas for ${r.skin}`).toBe(true)
+      const b = bytes(fighterAtlas(r.skin))
+      expect(
+        b,
+        `${r.skin} atlas ${(b / MB).toFixed(2)} MB exceeds ${(PER_FULL_MAX * 4 / MB).toFixed(2)} MB`,
+      ).toBeLessThanOrEqual(PER_FULL_MAX * 4)
     }
   })
 })

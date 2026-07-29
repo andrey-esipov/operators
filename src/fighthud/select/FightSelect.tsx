@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Word } from '../Announcements'
-import { loadPortrait, preloadPortrait, type PortraitInfo } from '../portraits'
+import { loadSelectCrop, preloadVsPortrait, type SelectCrop } from '../portraits'
 import { HeroRender } from './HeroRender'
 import { stageThumb, stageFull } from './stageAssets'
 import { Sfx } from '../../lib/audio'
@@ -88,8 +88,11 @@ function preloadStages() {
   }
 }
 
-/** Cover-crop an atlas frame into a fixed box — the same trick Portrait.tsx uses
- *  for the HUD, but sized for the larger select art (head + torso). */
+/** Cover-crop a fighter still into a fixed box — the same trick Portrait.tsx uses
+ *  for the HUD, but sized for the larger select art (head + torso). Prefers the
+ *  small pre-baked VS still (smooth-scaled) and falls back to an atlas frame
+ *  crop (pixelated); `loadSelectCrop` picks, so the grid never pulls a full atlas
+ *  just to paint a cell (see select/portraitAssets.ts). */
 function AtlasCrop({
   skin,
   w,
@@ -105,12 +108,12 @@ function AtlasCrop({
   sideTrim?: number
   accent: string
 }) {
-  const [info, setInfo] = useState<PortraitInfo | null>(null)
+  const [info, setInfo] = useState<SelectCrop | null>(null)
   const alive = useRef(true)
   useEffect(() => {
     alive.current = true
     setInfo(null)
-    loadPortrait(skin).then((p) => {
+    loadSelectCrop(skin).then((p) => {
       if (alive.current) setInfo(p)
     })
     return () => {
@@ -121,10 +124,10 @@ function AtlasCrop({
   if (!info) {
     // Accent-tinted shimmer, never a dead black box: the load race used to
     // photograph as black squares (SPIEGEL/DOSHI/LENNY). A mid-load frame now
-    // reads as "art incoming", and preloadPortrait() usually beats first paint.
+    // reads as "art incoming", and preloadVsPortrait() usually beats first paint.
     return <span className="fsel-crop fsel-crop-loading" style={{ width: w, height: h, ['--accent' as string]: accent }} aria-hidden />
   }
-  const { rect, atlas } = info
+  const { rect, image, smooth } = info
   const cropX = rect.x + rect.w * sideTrim
   const cropW = rect.w * (1 - sideTrim * 2)
   const cropH = rect.h * topFraction
@@ -133,7 +136,7 @@ function AtlasCrop({
   return (
     <span className="fsel-crop fsel-crop-in" style={{ width: w, height: h }}>
       <img
-        src={atlas}
+        src={image}
         alt=""
         draggable={false}
         style={{
@@ -142,7 +145,7 @@ function AtlasCrop({
           left: 0,
           transformOrigin: '0 0',
           transform: `translate(${offsetX}px, 0px) scale(${scale}) translate(${-cropX}px, ${-rect.y}px)`,
-          imageRendering: 'pixelated',
+          imageRendering: smooth ? 'auto' : 'pixelated',
           maxWidth: 'none',
         }}
       />
@@ -260,11 +263,15 @@ export function FightSelect() {
     timers.current = []
   }, [])
 
-  // Warm every roster atlas up front so the grid paints all at once instead of
+  // Warm every roster still up front so the grid paints all at once instead of
   // popping in one-by-one — and so a capture can't photograph the load race.
+  // These are the small pre-baked VS stills (~0.3–1.3 MB each), NOT the multi-MB
+  // sprite atlases: the grid only draws a still, and the animated hero pulls its
+  // atlas on demand (HeroRender), one fighter at a time. selectAssetBudget.node
+  // .test.ts holds this eager payload to a budget.
   useEffect(() => {
     let live = true
-    Promise.all(ROSTER.map((r) => preloadPortrait(r.skin))).then(() => {
+    Promise.all(ROSTER.map((r) => preloadVsPortrait(r.skin))).then(() => {
       if (live) setPortraitsReady(true)
     })
     // Warm the real stage images too so the stage grid + big preview are ready

@@ -13,6 +13,7 @@
  */
 
 import { FIGHTERS } from '../data/fighters'
+import { fighterAtlas, fighterPortrait, fighterPortraitMeta } from './select/portraitAssets'
 
 /**
  * Resolve a roster atlas id from a fighter's display name.
@@ -90,7 +91,7 @@ export function loadPortrait(rosterId: string): Promise<PortraitInfo | null> {
       const json = (await res.json()) as AssetsJson
       const frame = pickFrame(json.frames)
       if (!frame) return null
-      const atlas = json.atlas || `/fighters/${rosterId}/atlas.webp`
+      const atlas = json.atlas || fighterAtlas(rosterId)
       return { atlas, rect: frame.rect }
     } catch {
       return null
@@ -129,6 +130,101 @@ export function preloadPortrait(rosterId: string): Promise<void> {
       img.src = info.atlas
     })
     imgCache.set(info.atlas, warm)
+    return warm
+  })
+}
+
+/* ── Select-screen VS portrait (small, pre-baked) ──────────────────────────
+ *
+ * The roster grid + podium show a fighter *still*, and cropping that still out
+ * of the multi-MB sprite atlas is what made the select screen eagerly pull all
+ * six full atlases (~24 MB post-WebP) just to paint a menu. tools/bake-vs-
+ * portraits.mjs already bakes a small dedicated still (portrait.png, ~0.3–1.3 MB)
+ * for exactly this surface; these loaders finally consume it. A fighter that
+ * ships no baked still falls back to the atlas crop, so the grid always paints.
+ * The animated HeroRender still pulls the full atlas on demand — one fighter at
+ * a time — so the atlas is never fetched six-at-once up front.
+ */
+
+export interface VsPortraitInfo {
+  /** URL of the pre-baked still. */
+  image: string
+  /** Native pixel dims of the still. */
+  w: number
+  h: number
+}
+
+const vsCache = new Map<string, Promise<VsPortraitInfo | null>>()
+
+/**
+ * Resolve a fighter's pre-baked VS still. Resolves `null` (never rejects) when a
+ * fighter ships none — a missing/!ok `portrait.json` or one without dims — so the
+ * caller falls back to an atlas crop. Only the tiny sidecar is fetched here; the
+ * still itself is warmed by `preloadVsPortrait` / mounted by the grid `<img>`.
+ */
+export function loadVsPortrait(rosterId: string): Promise<VsPortraitInfo | null> {
+  const hit = vsCache.get(rosterId)
+  if (hit) return hit
+  const p = (async (): Promise<VsPortraitInfo | null> => {
+    try {
+      const res = await fetch(fighterPortraitMeta(rosterId))
+      if (!res.ok) return null
+      const pj = (await res.json()) as { w?: number; h?: number }
+      if (!pj.w || !pj.h) return null
+      return { image: fighterPortrait(rosterId), w: pj.w, h: pj.h }
+    } catch {
+      return null
+    }
+  })()
+  vsCache.set(rosterId, p)
+  return p
+}
+
+export interface SelectCrop {
+  /** URL of the image the grid cell draws. */
+  image: string
+  /** Region of `image`, in its own pixels, to frame. */
+  rect: { x: number; y: number; w: number; h: number }
+  /** Smooth-scale a supersampled still; keep the native atlas frame pixelated. */
+  smooth: boolean
+}
+
+/**
+ * Resolve what a select-grid cell should draw: the small pre-baked VS still when
+ * the fighter ships one (smooth-scaled — it is a 2× supersample meant to be
+ * *minified*), else the idle-frame crop straight out of the atlas (pixelated), so
+ * the grid still paints for an un-baked fighter. The frame is bbox-tight in both
+ * cases (portrait.json bakes the trimmed idle frame), so the caller's crop math
+ * frames identically either way.
+ */
+export async function loadSelectCrop(rosterId: string): Promise<SelectCrop | null> {
+  const vs = await loadVsPortrait(rosterId)
+  if (vs) return { image: vs.image, rect: { x: 0, y: 0, w: vs.w, h: vs.h }, smooth: true }
+  const pf = await loadPortrait(rosterId)
+  return pf ? { image: pf.atlas, rect: pf.rect, smooth: false } : null
+}
+
+const vsImgCache = new Map<string, Promise<void>>()
+
+/**
+ * Warm the grid's images up front so it paints at once instead of popping in
+ * one-by-one (the documented load race). Warms the small VS still when present,
+ * else falls back to `preloadPortrait` (the atlas crop) so an un-baked fighter
+ * still preloads. Resolves (never rejects) so callers can `Promise.all(...)`.
+ */
+export function preloadVsPortrait(rosterId: string): Promise<void> {
+  return loadVsPortrait(rosterId).then((vs) => {
+    if (!vs) return preloadPortrait(rosterId)
+    if (typeof Image === 'undefined') return
+    const cached = vsImgCache.get(vs.image)
+    if (cached) return cached
+    const warm = new Promise<void>((resolve) => {
+      const img = new Image()
+      img.onload = () => resolve()
+      img.onerror = () => resolve()
+      img.src = vs.image
+    })
+    vsImgCache.set(vs.image, warm)
     return warm
   })
 }
@@ -202,7 +298,7 @@ export function loadFighterAtlas(rosterId: string): Promise<FighterAtlas | null>
         if (h > refH) refH = h
       }
       if (refH <= 0) refH = frames[0]?.rect.h || 1
-      return { atlas: json.atlas || `/fighters/${rosterId}/atlas.webp`, frames, idle, refH }
+      return { atlas: json.atlas || fighterAtlas(rosterId), frames, idle, refH }
     } catch {
       return null
     }

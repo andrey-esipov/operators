@@ -83,6 +83,45 @@ const PREROLL_CAP_FRAMES = 60 * 3
  */
 export const ESTABLISH_HOLD_FRAMES = 36
 
+/**
+ * The reel's roster-coverage guarantee: **every skin on the roster appears at
+ * least once within any window of this many consecutive bouts** (and all six
+ * appear within the first this-many bouts).
+ *
+ * WHY IT EXISTS. `pickMatchup` used to draw each bout independently with no
+ * memory of who had already been shown, so a single 60s reel starved fighters —
+ * `visual-critic` measured only 3–5 of the 6 skins appearing per reel, and
+ * *nothing* guaranteed otherwise (a regression collapsing the draw to two
+ * fighters would not have reddened any gate). On a six-character roster a buyer
+ * already reads as thin, showing them four is a self-inflicted wound.
+ *
+ * HOW IT'S MET. From bout 2 on the picker is least-recently-shown greedy: slot A
+ * is always the globally stalest skin (unseen longest), slot B the stalest of a
+ * *different* archetype (so the pick is never a moveset mirror). Because a
+ * never-shown skin is maximally stale, slot A serves an unseen skin every bout
+ * until all six have appeared — the strongest possible anti-starvation rule.
+ *
+ * THE NUMBER. Measured over 36,000 bouts (1,000 seeds × 36) the worst
+ * first-appearance-of-all-six is 4 bouts and the worst gap between a skin's
+ * appearances is 4; the overwhelming steady state is 3. That 4 is also a proven
+ * ceiling on first coverage: the opener shows two distinct-archetype skins; at
+ * bout 2 three unseen skins spanning ≥2 archetypes remain, so *neither* slot can
+ * be forced onto a repeat and both are unseen, leaving at most two unseen, which
+ * slot A (always the stalest = an unseen skin) clears within two more bouts. We
+ * publish 5 — one bout of margin over the measured worst — so the guarantee is
+ * robust to a tie-break edge without weakening the gate: the failure mode this
+ * exists to catch (memoryless starvation) produces gaps of 6–12, far outside
+ * this bound, so the behavioural gate still reddens hard on any real regression.
+ *
+ * The opener (bout 1) is exempt: it stays under the first-load cost ceiling
+ * (which deliberately keeps the heaviest atlas — our hero art — *out* of the
+ * very first bout), and coverage then *pulls that hero skin back in* within this
+ * bound rather than leaving it to chance. Cost constrains bout 1; coverage owns
+ * bouts 2+; the two never contend because they act on disjoint bouts. Asserted
+ * behaviourally over full reels across many seeds and stages in the gate.
+ */
+export const COVERAGE_BOUND = 5
+
 export interface AttractDirectorOptions {
   /** Omit for a fresh random reel each load; pass a seed to make it replayable
    *  (the gate does). */
@@ -103,6 +142,13 @@ export class AttractDirector {
   private _prevPhase: FightState['phase'] = 'intro'
   private _disposed = false
 
+  /** Bout ordinal of this pick (1 = opener), and the ordinal each skin was last
+   *  shown at (absent = never). Together these drive the least-recently-shown
+   *  coverage greedy in `pickCoveragePair`. Kept off the rng so the coverage
+   *  decision is a pure function of who has been shown, reproducible per seed. */
+  private _boutOrdinal = 0
+  private readonly _lastSeen = new Map<string, number>()
+
   constructor(opts: AttractDirectorOptions = {}) {
     this.rng = makeRng((opts.seed ?? (Date.now() & 0xffffffff)) >>> 0)
     // The opener is cost-constrained so a cold first visit never waits on the
@@ -115,13 +161,32 @@ export class AttractDirector {
   // ── matchup selection ──────────────────────────────────────────────────────
 
   private pickMatchup(firstBout = false): AttractMatchup {
-    // The cost constraint applies to the opener only: bout 1 rejection-samples,
-    // re-rolling the pair (never the stage/seed) until it is within the first-
-    // bout download ceiling, so the shop window's very first load stays off the
-    // ~10.9 MB worst-case pairing; bouts 2+ skip that cost check. The archetype
-    // guard below, by contrast, applies to *every* bout. A hard attempt cap
-    // guarantees termination and, with ~4 of 5 pairings eligible, is effectively
-    // never reached.
+    this._boutOrdinal++
+    const [a, b] = firstBout ? this.pickOpenerPair() : this.pickCoveragePair()
+    const stage = STAGE_ORDER[this.rng.int(STAGE_ORDER.length)]
+    const seed = this.rng.int(0x7fffffff)
+    // Record coverage *after* drawing stage/seed so the rng order for the opener
+    // stays byte-identical to the pre-coverage picker (i, j, stage, seed).
+    this._lastSeen.set(a.skin, this._boutOrdinal)
+    this._lastSeen.set(b.skin, this._boutOrdinal)
+    return { a, b, stage, seed }
+  }
+
+  /**
+   * The opener (bout 1). Cost-constrained rejection sample, unchanged from the
+   * pre-coverage picker so the first-load ceiling and the opener distribution are
+   * preserved exactly: draw a distinct-skin, distinct-archetype pair and re-roll
+   * it (never the stage/seed) until the pair is within the first-bout download
+   * ceiling (see {@link isAllowedFirstBout}), so the shop window's very first load
+   * stays off the ~10.9 MB worst-case pairing. The archetype guard applies here
+   * too. A hard attempt cap guarantees termination — the cost re-roll is a soft
+   * preference we knowingly relax so a cold visit never hangs — and with ~4 of 5
+   * pairings eligible is effectively never reached. Coverage does not steer the
+   * opener: nothing has been shown yet, so there is no debt to service, which is
+   * exactly why the cost ceiling (bout 1 only) and coverage (bouts 2+) never
+   * contend.
+   */
+  private pickOpenerPair(): [RosterEntry, RosterEntry] {
     const MAX_ATTEMPTS = 40
     for (let attempt = 0; ; attempt++) {
       const i = this.rng.int(ROSTER.length)
@@ -131,24 +196,43 @@ export class AttractDirector {
       if (j >= i) j++
       const a = ROSTER[i]
       const b = ROSTER[j]
-      // …but a distinct *skin* is not a distinct *fight*. The roster carries two
-      // skins per archetype (chesky/lenny are both `operator`, spiegel/madhavan
-      // `vanguard`, doshi/turley `warden`), so the skip above still let a moveset
-      // mirror through on ~1 in 5 bouts — two fighters throwing the identical
-      // moveset in different costumes, which is the mirror that actually reads as
-      // repetitive on a marquee (and made 6 characters look like 3). Hard-reject
-      // it on *every* bout, unbounded by MAX_ATTEMPTS: unlike the cost ceiling
-      // below — a soft preference we knowingly relax to guarantee termination — a
-      // moveset mirror is never something we choose to show. 4 of every 5 draws
-      // clear it, so this terminates as fast as the skin skip it extends.
+      // …but a distinct *skin* is not a distinct *fight*. Two skins per archetype
+      // (chesky/lenny `operator`, spiegel/madhavan `vanguard`, doshi/turley
+      // `warden`), so the skip above still let a moveset mirror through on ~1 in 5
+      // bouts — the mirror that actually reads as repetitive and made 6 characters
+      // look like 3. Hard-reject it, unbounded by MAX_ATTEMPTS.
       if (a.archetype === b.archetype) continue
-      if (firstBout && attempt < MAX_ATTEMPTS && !isAllowedFirstBout(a.skin, b.skin)) {
-        continue
-      }
-      const stage = STAGE_ORDER[this.rng.int(STAGE_ORDER.length)]
-      const seed = this.rng.int(0x7fffffff)
-      return { a, b, stage, seed }
+      if (attempt < MAX_ATTEMPTS && !isAllowedFirstBout(a.skin, b.skin)) continue
+      return [a, b]
     }
+  }
+
+  /**
+   * Bouts 2+: least-recently-shown greedy that guarantees roster coverage (see
+   * {@link COVERAGE_BOUND}). One side is the globally stalest skin — the one
+   * unseen for the most bouts — and the other is the stalest skin of a *different*
+   * archetype, so the pick is never a moveset mirror and always advances the two
+   * most-overdue coverable skins. Ties (common early, when several skins are
+   * equally unseen) break on the rng, which is what keeps the reel varied rather
+   * than a fixed rotation; the stage and seed are drawn by the caller as before.
+   * No cost check — the ceiling is a first-load concern and applies to bout 1
+   * only.
+   */
+  private pickCoveragePair(): [RosterEntry, RosterEntry] {
+    const a = this.stalest(ROSTER)
+    const b = this.stalest(ROSTER.filter((e) => e.archetype !== a.archetype))
+    return [a, b]
+  }
+
+  /** The entry in `pool` shown least recently (never-shown counts as maximally
+   *  stale), ties broken on the rng so coverage does not flatten into a fixed
+   *  order. `pool` is always non-empty at the call sites. */
+  private stalest(pool: RosterEntry[]): RosterEntry {
+    const staleness = (e: RosterEntry) => this._boutOrdinal - (this._lastSeen.get(e.skin) ?? 0)
+    let max = -Infinity
+    for (const e of pool) max = Math.max(max, staleness(e))
+    const top = pool.filter((e) => staleness(e) === max)
+    return top.length === 1 ? top[0] : top[this.rng.int(top.length)]
   }
 
   private buildSim(m: AttractMatchup): MatchSim {

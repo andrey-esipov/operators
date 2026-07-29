@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { AttractDirector, ESTABLISH_HOLD_FRAMES } from '../attractDirector'
+import { AttractDirector, ESTABLISH_HOLD_FRAMES, COVERAGE_BOUND } from '../attractDirector'
 import { ROSTER } from '../../../fighthud/select/roster'
 import { INTRO_FRAMES } from '../../../fight/constants'
 
@@ -219,6 +219,85 @@ describe('attract director — never a moveset (archetype) mirror', () => {
     // bouts hold a short intro stand-off; the rest fast-forward to the first
     // exchange — see the entry gate below): a heavy distributional draw, so it
     // gets headroom past vitest's 5s default on a saturated box.
+  }, 30_000)
+})
+
+/**
+ * The exact sequence of skin pairings a reel produces over `bouts` bouts, one
+ * `[skinA, skinB]` per bout. Matchup *selection* is independent of how each bout
+ * is fought — the sim gets its own `m.seed`-derived rng, so the director's rng
+ * only advances inside `pickMatchup` — so rotating directly yields the identical
+ * sequence a viewer would see, without paying to step ~15k frames per reel.
+ */
+function reelSkins(seed: number, bouts: number): string[][] {
+  const dir = new AttractDirector({ seed })
+  const seq: string[][] = [[dir.matchup.a.skin, dir.matchup.b.skin]]
+  for (let bout = 2; bout <= bouts; bout++) {
+    dir.rotate()
+    seq.push([dir.matchup.a.skin, dir.matchup.b.skin])
+  }
+  dir.dispose()
+  return seq
+}
+
+describe('attract director — guarantees roster coverage', () => {
+  // Coverage is a property of *which skins* the picker selects. The stage is a
+  // separate, independent rng draw that never feeds skin selection, so one sweep
+  // of seeds exercises the coverage greedy fully (each seed also rolls its own
+  // stage sequence in passing). A dozen seeds so the greedy's rng tie-breaks —
+  // it picks *among* equally-stale skins — are exercised across many orderings,
+  // not one. Reads the matchup sequence directly, since coverage lives in the
+  // selection, not the fight.
+  const SEEDS = Array.from({ length: 12 }, (_, k) => (0x1234 + k * 0x9e3779b1) >>> 0)
+  const BOUTS = 18
+
+  it(`shows all six skins in every ${COVERAGE_BOUND}-bout window — none starved at the start, middle or end of a reel`, () => {
+    const rosterSkins = ROSTER.map((e) => e.skin)
+
+    // Vacuity 0 — the roster really is six distinct skins, so "all six per
+    // window" is a non-trivial ask (a 2-skin roster would pass this blind).
+    expect(new Set(rosterSkins).size).toBe(6)
+    // …and the reel is long enough to hold several disjoint windows, so the
+    // sweep below is not just re-checking the opening bouts.
+    expect(BOUTS).toBeGreaterThan(COVERAGE_BOUND * 2)
+
+    let reelsChecked = 0
+    let windowsChecked = 0
+    for (const seed of SEEDS) {
+      const seq = reelSkins(seed, BOUTS)
+
+      // Vacuity 1 — this reel genuinely ran all BOUTS bouts (a director that
+      // stopped rotating would shrink this and make the window sweep vacuous).
+      expect(seq.length).toBe(BOUTS)
+      // Vacuity 2 — every pairing is two *distinct* skins (a degenerate picker
+      // returning one skin twice must not be able to "cover" by accident).
+      for (const [a, b] of seq) expect(a).not.toBe(b)
+
+      // The claim: slide a COVERAGE_BOUND-wide window across the whole reel; every
+      // window contains all six skins. This is exactly the guarantee documented on
+      // COVERAGE_BOUND, and checking *every* window — not just the first — closes
+      // the start, middle and end uniformly: a skin shown once and then starved at
+      // the tail fails a late window, which a "first appearance" check would miss.
+      // The memoryless draw this replaced leaves ≥1 skin out of some window on
+      // essentially every reel (the mutation proof), gaps of 6–12 bouts.
+      for (let start = 0; start + COVERAGE_BOUND <= seq.length; start++) {
+        const window = new Set(seq.slice(start, start + COVERAGE_BOUND).flat())
+        const missing = rosterSkins.filter((k) => !window.has(k))
+        expect(
+          missing,
+          `seed 0x${seed.toString(16)} bouts ${start + 1}–${start + COVERAGE_BOUND} missing [${missing.join(', ')}]`,
+        ).toEqual([])
+        windowsChecked++
+      }
+      reelsChecked++
+    }
+
+    // Vacuity 3 — we actually swept the expected number of windows across every
+    // seed, so a silently-empty loop can't green this.
+    expect(reelsChecked).toBe(SEEDS.length)
+    expect(windowsChecked).toBe(SEEDS.length * (BOUTS - COVERAGE_BOUND + 1))
+    // 12 directors rotated through 18 bouts each with no sim stepping: cheap, but
+    // still constructs ~216 MatchSims, so it gets headroom past the 5s default.
   }, 30_000)
 })
 

@@ -55,6 +55,18 @@ const R = REACH_BONUS // 38 — the reach the AI's spacing gates are quoted agai
 /** The punish gate the whole question turns on: o.inRecovery && dist < 120 + R. */
 const PUNISH_GATE = 120 + R // 158
 
+/**
+ * combat-feel's reactability floor for the whiffed move's RECOVERY window. The AI
+ * reads the opponent from an observation delayed by reactionFrames (hard = 8) and
+ * its fastest punish startup is ~4f, so a recovery window shorter than ~12f is
+ * genuinely UN-reactable: the o.inRecovery punish branch is never reached in time
+ * and a human couldn't punish it either. Whiffs below this floor are CORRECT
+ * non-punishes, not AI holes, and must be split OUT of the opportunity set before
+ * conversion (B) is computed — otherwise a healthy AI is defamed for un-reactable
+ * pokes. recovery >= REACTABLE_MIN is a genuine opportunity; recovery < it is not.
+ */
+const REACTABLE_MIN = 12
+
 /** Mechanic-anchored distance bands, by their UPPER bound (pos.x units). */
 const BANDS: Array<{ hi: number; label: string }> = [
   { hi: 95 + R, label: `<${95 + R}  BnB-combo punish (o.dist<95+R -> full route)` },
@@ -79,6 +91,20 @@ interface Whiff {
    *  out of range is correctly-unpunishable footsies, NOT an AI hole; this flag
    *  is what separates the two so the unpunished share can't defame the AI. */
   oppFree: boolean
+  /** Was the whiffer inside the 120+R gate at ANY frame of its recovery (the dist
+   *  gate ALONE, regardless of whether the punisher happened to be free)? This is
+   *  the superset of oppFree that separates combat-feel's bucket 1 (OUT-OF-RANGE —
+   *  never in gate, safe spacing) from bucket 2 (IN-RANGE but the punisher was busy
+   *  the whole window). oppFree ⟹ inRange, so the four buckets partition cleanly. */
+  inRange: boolean
+  /** Static recovery length of the whiffed move: frames.length-1-active[1], the
+   *  count of frames strictly after the active window in the move's own clock.
+   *  combat-feel's reactability split reads this against REACTABLE_MIN. Deliberately
+   *  STATIC (from the move def) not observed: a whiff that gets punished has its
+   *  live recovery TRUNCATED by the punish, so an observed length would misfile a
+   *  real opportunity as "too short to react" — the static window is the one the AI
+   *  actually had on offer, independent of whether it cashed it. */
+  recovery: number
   atkArch: ArchetypeId
 }
 
@@ -108,7 +134,11 @@ interface Pending {
   atkArch: ArchetypeId
   /** Frame index (in the whiffer's move clock) after which it is in recovery. */
   activeEnd: number
+  /** Static recovery length of the whiffed move (frames.length-1-active[1]). */
+  recovery: number
   oppFree: boolean
+  /** Set once the whiffer is seen inside the 120+R gate during its recovery. */
+  inRange: boolean
 }
 
 /**
@@ -151,7 +181,7 @@ function runBout(
   const resolve = (k: 0 | 1, punished: boolean) => {
     const p = pending[k]
     if (!p) return
-    whiffs.push({ dist: p.dist, minDist: p.minDist, punished, oppFree: p.oppFree, atkArch: p.atkArch })
+    whiffs.push({ dist: p.dist, minDist: p.minDist, punished, oppFree: p.oppFree, inRange: p.inRange, recovery: p.recovery, atkArch: p.atkArch })
     pending[k] = null
   }
 
@@ -172,8 +202,12 @@ function runBout(
       // the exact predicate the AI's o.inRecovery punish gate reads — count the
       // opponent as a free punisher if it is actionable AND inside the gate.
       const inRecovery = !!self.move && self.move.frame > p.activeEnd
-      if (inRecovery && d < PUNISH_GATE && ACTIONABLE_STANCES.has(opp.stance)) {
-        p.oppFree = true
+      if (inRecovery && d < PUNISH_GATE) {
+        // In-gate during recovery (bucket-1 vs bucket-2 boundary), tracked apart
+        // from whether the punisher was FREE — oppFree keeps the stricter (also
+        // actionable) predicate the AI's gate reads, byte-identically to before.
+        p.inRange = true
+        if (ACTIONABLE_STANCES.has(opp.stance)) p.oppFree = true
       }
       const st = self.stance
       if (PUNISHED_STANCES.has(st)) {
@@ -195,7 +229,13 @@ function runBout(
         // No def -> never mark in-recovery (activeEnd=Inf), which keeps oppFree
         // false: a conservative default that cannot inflate the "genuine hole".
         const activeEnd = mv ? mv.active[1] : Infinity
-        pending[k] = { dist: d, minDist: d, atkArch: arch[k], activeEnd, oppFree: false }
+        // Static recovery window: frames strictly after the active window, in the
+        // move's own clock. No def (mv undefined) -> 0, which files the whiff as
+        // unreactable and keeps it out of the opportunity set — the same
+        // conservative default as activeEnd=Inf, so a missing def can never inflate
+        // the genuine-hole count.
+        const recovery = mv ? mv.frames.length - 1 - mv.active[1] : 0
+        pending[k] = { dist: d, minDist: d, atkArch: arch[k], activeEnd, recovery, oppFree: false, inRange: false }
       } else if (e.type === 'super-flash') {
         superFlashes++
         superByArch[arch[e.who]]++
@@ -304,6 +344,51 @@ function fineHistogram(whiffs: Whiff[], key: 'dist' | 'minDist'): string {
   return lines.join('\n')
 }
 
+/**
+ * combat-feel's four MUTUALLY-EXCLUSIVE whiff buckets. Every whiff lands in exactly
+ * one, so the counts sum to whiffs.length (asserted below — a drifting sum is a
+ * bucketing bug, the instrument policing itself). Only bucket 4 — in-range, punisher
+ * actionable, AND a reactable-length recovery — is a genuine missed-punish
+ * opportunity, and conversion B is computed over bucket 4 alone. Buckets 1-3 are all
+ * CORRECT non-punishes (safe spacing / busy punisher / un-reactable window), so no
+ * amount of them is an AI defect.
+ */
+interface Buckets {
+  outOfRange: Whiff[] // 1: never in the gate during recovery — safe spacing
+  busy: Whiff[] // 2: in gate, but the punisher was never actionable in-gate
+  unreactable: Whiff[] // 3: opportunity, but recovery < REACTABLE_MIN — un-reactable
+  reactable: Whiff[] // 4: opportunity AND recovery >= REACTABLE_MIN — GENUINE opps
+}
+
+function bucketize(whiffs: Whiff[]): Buckets {
+  const b: Buckets = { outOfRange: [], busy: [], unreactable: [], reactable: [] }
+  for (const w of whiffs) {
+    if (!w.inRange) b.outOfRange.push(w)
+    else if (!w.oppFree) b.busy.push(w)
+    else if (w.recovery < REACTABLE_MIN) b.unreactable.push(w)
+    else b.reactable.push(w)
+  }
+  return b
+}
+
+/** Per-frame recovery-length histogram of a whiff set, so combat-feel can SEE the
+ *  distribution around the REACTABLE_MIN cut and re-thread the threshold itself
+ *  rather than trust a single hardcoded boundary. */
+function recoveryHistogram(whiffs: Whiff[]): string {
+  const bins = new Map<number, number>()
+  for (const w of whiffs) bins.set(w.recovery, (bins.get(w.recovery) ?? 0) + 1)
+  const keys = [...bins.keys()].sort((a, b) => a - b)
+  const maxN = Math.max(1, ...bins.values())
+  return keys
+    .map((k) => {
+      const n = bins.get(k) ?? 0
+      const bar = '#'.repeat(Math.round((n / maxN) * 30))
+      const mark = k < REACTABLE_MIN ? ' <- unreactable (<REACTABLE_MIN)' : ''
+      return `    recovery=${String(k).padStart(3)}f  n=${String(n).padStart(5)}  ${bar}${mark}`
+    })
+    .join('\n')
+}
+
 describe('whiff-punish distance census (real director config)', () => {
   it('censuses whiff distances on the director config and proves it is not the mirror', { timeout: 180000 }, () => {
     const SEEDS = [12345, 1, 2, 3, 7, 11, 19, 23, 31, 41, 53, 67, 79, 97, 101, 127]
@@ -354,6 +439,15 @@ describe('whiff-punish distance census (real director config)', () => {
     const cfA = oppFreeAll.length / dir.whiffs.length
     const cfB = oppFreeAll.length ? oppFreeConverted / oppFreeAll.length : 0
 
+    // combat-feel's 4-bucket REACTABILITY refinement — changes the B denominator by
+    // splitting the actionable opportunity set (oppFree) into un-reactable (recovery
+    // < REACTABLE_MIN, a correct non-punish) and reactable (>=, the genuine opps).
+    // Report-only; the partition itself is gated below. B4 is conversion over
+    // bucket 4 ONLY, the number combat-feel pre-registered its falsifier against.
+    const db = bucketize(dir.whiffs)
+    const bucket4Punished = db.reactable.filter((w) => w.punished).length
+    const crudeInRange = db.busy.length + db.unreactable.length + db.reactable.length // 2+3+4
+
     if (process.env.CENSUS_REPORT) {
       const report =
         `\n=== WHIFF-PUNISH CENSUS — REAL DIRECTOR CONFIG ===\n` +
@@ -394,6 +488,23 @@ describe('whiff-punish distance census (real director config)', () => {
         `${oppFreeAll.length}/${dir.whiffs.length} = ${(cfA * 100).toFixed(1)}%\n` +
         `B (conversion)        = punished / opportunities = ${oppFreeConverted}/${oppFreeAll.length} = ` +
         `${(cfB * 100).toFixed(1)}%  (baseline: hard punishChance 0.85 -> healthy B ~0.75-0.85, not 1.0)\n` +
+
+        `\n=== combat-feel 4-BUCKET REACTABILITY SPLIT — this (director) config ===\n` +
+        `mutually-exclusive; the four counts sum to total whiffs (partition asserted). Only bucket 4 is a genuine missed opp.\n` +
+        `REACTABLE_MIN=${REACTABLE_MIN}f (reactionFrames hard=8 + fastest punish startup ~4). recovery = STATIC move-def\n` +
+        `frames.length-1-active[1] (outcome-independent: a punish cannot truncate it, so a real opp is never misfiled short).\n` +
+        `  1 OUT-OF-RANGE       (never inside ${PUNISH_GATE} gate during recovery; safe spacing)        n=${String(db.outOfRange.length).padStart(5)} (${pct(db.outOfRange.length, dir.whiffs.length)}%)\n` +
+        `  2 IN-RANGE, BUSY     (in gate but punisher never actionable in-gate; couldn't reach)     n=${String(db.busy.length).padStart(5)} (${pct(db.busy.length, dir.whiffs.length)}%)\n` +
+        `  3 IN-RANGE, UNREACTABLE (opp free but recovery <${REACTABLE_MIN}f; correct non-punish)          n=${String(db.unreactable.length).padStart(5)} (${pct(db.unreactable.length, dir.whiffs.length)}%)\n` +
+        `  4 IN-RANGE, REACTABLE   (opp free AND recovery >=${REACTABLE_MIN}f; GENUINE opportunities)      n=${String(db.reactable.length).padStart(5)} (${pct(db.reactable.length, dir.whiffs.length)}%)\n` +
+        `  sum = ${db.outOfRange.length + db.busy.length + db.unreactable.length + db.reactable.length} (must equal ${dir.whiffs.length})\n` +
+        `  B4 (conversion over bucket 4 ONLY) = punished/${db.reactable.length} = ${bucket4Punished}/${db.reactable.length} = ${pct(bucket4Punished, db.reactable.length)}%\n` +
+        `     (combat-feel baseline ~0.85; pre-registered falsifier: real punish HOLE <=> B4 < 0.60 on bucket 4)\n` +
+        `  crude A (buckets 2+3+4)/total = in-range share = ${crudeInRange}/${dir.whiffs.length} = ${pct(crudeInRange, dir.whiffs.length)}%\n` +
+        `  my earlier A (buckets 3+4 = in-range & actionable)/total = ${db.unreactable.length + db.reactable.length}/${dir.whiffs.length} = ` +
+        `${pct(db.unreactable.length + db.reactable.length, dir.whiffs.length)}% (must match the A/B block above: ${oppFreeAll.length})\n` +
+        `  recovery-length distribution of the actionable opportunity set (buckets 3+4), so the ${REACTABLE_MIN}f cut is legible:\n` +
+        recoveryHistogram(oppFreeAll) + `\n` +
 
         `\n=== WARDEN/WARDEN ZONER MIRROR — SEPARATE, LABELLED (the config the reel CANNOT show) ===\n` +
         `${wardenMirrorPairs().length} ordered pairs x ${SEEDS.length} seeds = ${mir.bouts} bouts\n` +
@@ -443,5 +554,40 @@ describe('whiff-punish distance census (real director config)', () => {
     //    degenerate instrument that can't answer the question).
     expect(inGateCommit.length).toBeGreaterThan(0)
     expect(dir.whiffs.length - inGateCommit.length).toBeGreaterThan(0)
+
+    // 5. combat-feel's 4 buckets are a valid PARTITION — every whiff lands in
+    //    exactly one, so the four counts sum to the whole. A drifting sum is a
+    //    double-count or a dropped whiff: the bucketing logic policing itself. This
+    //    is a gate that can actually FAIL (flip a `<` to `<=` boundary or drop the
+    //    else-if chain and the sum breaks) — not a verdict on B4.
+    const parts = bucketize(dir.whiffs)
+    expect(
+      parts.outOfRange.length + parts.busy.length + parts.unreactable.length + parts.reactable.length,
+    ).toBe(dir.whiffs.length)
+
+    // 6. The split is non-degenerate: bucket 4 (the reactable opportunity set) AND
+    //    the union of the excused buckets are BOTH populated. Empty bucket 4 => B is
+    //    a vacuous 0/0; empty excused side => the reactability filter is measuring
+    //    nothing. Both must exist for the instrument to answer combat-feel's question.
+    expect(parts.reactable.length).toBeGreaterThan(0)
+    expect(parts.outOfRange.length + parts.busy.length + parts.unreactable.length).toBeGreaterThan(0)
+
+    // 7. Buckets 3+4 are EXACTLY the actionable opportunity set (oppFree) — the
+    //    reactability filter only re-partitions oppFree, it must neither gain nor
+    //    lose a whiff from it. If this drifts, a non-opportunity has leaked into the
+    //    B denominator (or a real one dropped out): a lying-denominator bug that
+    //    would inflate or deflate B4 on whiffs the AI never had a shot at.
+    expect(parts.unreactable.length + parts.reactable.length).toBe(oppFreeAll.length)
+    expect(parts.reactable.every((w) => w.oppFree && w.recovery >= REACTABLE_MIN)).toBe(true)
+    expect(parts.unreactable.every((w) => w.oppFree && w.recovery < REACTABLE_MIN)).toBe(true)
+    // oppFree ⟹ inRange, so no oppFree whiff may sit in the out-of-range bucket.
+    expect(parts.outOfRange.every((w) => !w.oppFree)).toBe(true)
+
+    // 8. Recovery length is a real, finite, non-negative measurement on every whiff
+    //    (a whiff with a NaN/negative recovery would be a lying row — the failure
+    //    this instrument exists to prevent, in the new column).
+    expect(dir.whiffs.every((w) => Number.isFinite(w.recovery) && w.recovery >= 0)).toBe(true)
+    // inRange is the superset of oppFree it is defined to be, on every whiff.
+    expect(dir.whiffs.every((w) => !w.oppFree || w.inRange)).toBe(true)
   })
 })

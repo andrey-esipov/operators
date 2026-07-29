@@ -17,6 +17,7 @@
  */
 import { chromium } from 'playwright-core'
 import { writeFileSync } from 'node:fs'
+console.error('\u26A0\uFE0F  [instrument-routing] tools/verify-color.mjs drives the LEGACY CARD BATTLER (?lab=1 / __OPS3D__ → FightScene3D + VfxSubsystem), NOT the shipped fighter. Its numbers are INADMISSIBLE as shipped-fighter evidence. Provenance: tools/instrument-manifest.json.')
 const port = process.argv[2] || '5210'
 const tag = process.argv[3] || 'fixed'
 const browser = await chromium.launch({

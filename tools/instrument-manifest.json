@@ -1,0 +1,394 @@
+{
+  "_doc": "Instrument routing classifier for tools/*.mjs. This repo ships TWO games behind one dev server: the SHIPPED 2D fighter (?fight=1/__FIGHT__, ?play=1/__PLAY__ — FightRenderer + FightVfx/ProjectileLayer) and a LEGACY card battler (?lab=1/__OPS3D__ — FightScene3D+VfxSubsystem; and __game turn-based combat UI). A metric gathered from a card route is inadmissible as evidence about the fighter. Enforced by src/__tests__/instrumentRouting.node.test.ts.",
+  "_cardTokens": {
+    "routeOrHandle": [
+      "lab=1",
+      "cards=1",
+      "__OPS3D__"
+    ],
+    "cardCombatUI": [
+      "combat-turn-prompt",
+      "MoveCard",
+      "castMove"
+    ],
+    "_note": "Presence of any of these in a tool’s CODE (comments ignored) marks it as touching the card battler. window.__game / startMatch alone is NOT a card token — it is the shared app store; the renderer depends on the route."
+  },
+  "_buckets": {
+    "card-lab": "CARD BATTLER via ?lab=1 / __OPS3D__ (ThreeLab → FightScene3D + VfxSubsystem). Inadmissible as shipped-fighter evidence.",
+    "card-ui": "CARD BATTLER combat UI via __game store + turn-based rail (.combat-turn-prompt / MoveCard / castMove). Inadmissible as shipped-fighter evidence.",
+    "dual": "Default route is the SHIPPED fighter (--route fight, __FIGHT__); the card lab is reachable only via --route lab. Puppet cmds (hit/pose/...) error unless --route lab.",
+    "meta": "Route/infra verifier: legitimately names EVERY route (incl. card) because verifying routing is its job. Exempt from the card-token purity rule.",
+    "stranded": "Boots bare `/` + pokes the __game store; the front door (e149691) makes bare `/` the title card, so this now grabs the title. Not admissible until given an explicit route.",
+    "generic": "Capture/probe util whose URL is supplied by the caller (no hardcoded game). Safe by construction only if the caller passes a shipped route.",
+    "shipped-audio": "SHIPPED fighter audio instrument (no card route/handle).",
+    "analysis": "Offline / route-agnostic: reads PNGs, atlases or JSON, or measures on a blank page. Not tied to either game.",
+    "shipped-ui": "SHIPPED React shell: menu / character-select / stage-select / ceremony / HUD / attract. Real product, not the card game.",
+    "shipped-fight": "SHIPPED fighter via ?fight=1 / __FIGHT__ (deterministic FightHarness → FightRenderer + FightVfx / ProjectileLayer).",
+    "shipped-play": "SHIPPED fighter via ?play=1 / matchup params / __PLAY__ (live PlayableMatch → FightRenderer + FightVfx / ProjectileLayer)."
+  },
+  "_rules": {
+    "shippedBuckets": [
+      "shipped-fight",
+      "shipped-play",
+      "shipped-ui",
+      "shipped-audio"
+    ],
+    "allowedToContainCardTokens": [
+      "card-lab",
+      "card-ui",
+      "dual",
+      "meta"
+    ],
+    "invariant": "Every tool whose bucket is NOT in allowedToContainCardTokens must contain ZERO card tokens in code. card-lab must contain a route/handle card token. The dual tool must default to a shipped route."
+  },
+  "tools": {
+    "bench-stages": {
+      "app": "card-lab",
+      "note": "CARD BATTLER via ?lab=1 / __OPS3D__ (ThreeLab → FightScene3D + VfxSubsystem). Inadmissible as shipped-fighter evidence."
+    },
+    "capture-frames": {
+      "app": "card-lab",
+      "note": "CARD BATTLER via ?lab=1 / __OPS3D__ (ThreeLab → FightScene3D + VfxSubsystem). Inadmissible as shipped-fighter evidence."
+    },
+    "find-blowout-source": {
+      "app": "card-lab",
+      "note": "CARD BATTLER via ?lab=1 / __OPS3D__ (ThreeLab → FightScene3D + VfxSubsystem). Inadmissible as shipped-fighter evidence."
+    },
+    "find-nan-source": {
+      "app": "card-lab",
+      "note": "CARD BATTLER via ?lab=1 / __OPS3D__ (ThreeLab → FightScene3D + VfxSubsystem). Inadmissible as shipped-fighter evidence."
+    },
+    "id-planes": {
+      "app": "card-lab",
+      "note": "CARD BATTLER via ?lab=1 / __OPS3D__ (ThreeLab → FightScene3D + VfxSubsystem). Inadmissible as shipped-fighter evidence."
+    },
+    "measure-impact": {
+      "app": "card-lab",
+      "note": "CARD BATTLER via ?lab=1 / __OPS3D__ (ThreeLab → FightScene3D + VfxSubsystem). Inadmissible as shipped-fighter evidence."
+    },
+    "measure-silhouette": {
+      "app": "card-lab",
+      "note": "CARD BATTLER via ?lab=1 / __OPS3D__ (ThreeLab → FightScene3D + VfxSubsystem). Inadmissible as shipped-fighter evidence."
+    },
+    "probe-camera": {
+      "app": "card-lab",
+      "note": "CARD BATTLER via ?lab=1 / __OPS3D__ (ThreeLab → FightScene3D + VfxSubsystem). Inadmissible as shipped-fighter evidence."
+    },
+    "verify-color": {
+      "app": "card-lab",
+      "note": "CARD BATTLER via ?lab=1 / __OPS3D__ (ThreeLab → FightScene3D + VfxSubsystem). Inadmissible as shipped-fighter evidence."
+    },
+    "combat-shots": {
+      "app": "card-ui",
+      "note": "CARD BATTLER combat UI via __game store + turn-based rail (.combat-turn-prompt / MoveCard / castMove). Inadmissible as shipped-fighter evidence."
+    },
+    "hud-probe": {
+      "app": "card-ui",
+      "note": "CARD BATTLER combat UI via __game store + turn-based rail (.combat-turn-prompt / MoveCard / castMove). Inadmissible as shipped-fighter evidence."
+    },
+    "probe-cards": {
+      "app": "card-ui",
+      "note": "CARD BATTLER combat UI via __game store + turn-based rail (.combat-turn-prompt / MoveCard / castMove). Inadmissible as shipped-fighter evidence."
+    },
+    "shot": {
+      "app": "dual",
+      "note": "Default route is the SHIPPED fighter (--route fight, __FIGHT__); the card lab is reachable only via --route lab. Puppet cmds (hit/pose/...) error unless --route lab."
+    },
+    "verify-routes": {
+      "app": "meta",
+      "note": "Route/infra verifier: legitimately names EVERY route (incl. card) because verifying routing is its job. Exempt from the card-token purity rule."
+    },
+    "trail-shot": {
+      "app": "stranded",
+      "note": "Boots bare `/` + pokes the __game store; the front door (e149691) makes bare `/` the title card, so this now grabs the title. Not admissible until given an explicit route."
+    },
+    "hud-capture": {
+      "app": "generic",
+      "note": "Capture/probe util whose URL is supplied by the caller (no hardcoded game). Safe by construction only if the caller passes a shipped route."
+    },
+    "probe-hud-cleanliness": {
+      "app": "generic",
+      "note": "Capture/probe util whose URL is supplied by the caller (no hardcoded game). Safe by construction only if the caller passes a shipped route."
+    },
+    "audio-probe": {
+      "app": "shipped-audio",
+      "note": "SHIPPED fighter audio instrument (no card route/handle)."
+    },
+    "measure-audio": {
+      "app": "shipped-audio",
+      "note": "SHIPPED fighter audio instrument (no card route/handle)."
+    },
+    "measure-duck": {
+      "app": "shipped-audio",
+      "note": "SHIPPED fighter audio instrument (no card route/handle)."
+    },
+    "measure-fight-audio": {
+      "app": "shipped-audio",
+      "note": "SHIPPED fighter audio instrument (no card route/handle)."
+    },
+    "_black": {
+      "app": "analysis",
+      "note": "Offline / route-agnostic: reads PNGs, atlases or JSON, or measures on a blank page. Not tied to either game."
+    },
+    "_blackmap": {
+      "app": "analysis",
+      "note": "Offline / route-agnostic: reads PNGs, atlases or JSON, or measures on a blank page. Not tied to either game."
+    },
+    "_blackmask": {
+      "app": "analysis",
+      "note": "Offline / route-agnostic: reads PNGs, atlases or JSON, or measures on a blank page. Not tied to either game."
+    },
+    "_curve2": {
+      "app": "analysis",
+      "note": "Offline / route-agnostic: reads PNGs, atlases or JSON, or measures on a blank page. Not tied to either game."
+    },
+    "critic-prep": {
+      "app": "analysis",
+      "note": "Offline / route-agnostic: reads PNGs, atlases or JSON, or measures on a blank page. Not tied to either game."
+    },
+    "diag-crop": {
+      "app": "analysis",
+      "note": "Offline / route-agnostic: reads PNGs, atlases or JSON, or measures on a blank page. Not tied to either game."
+    },
+    "diag-diff": {
+      "app": "analysis",
+      "note": "Offline / route-agnostic: reads PNGs, atlases or JSON, or measures on a blank page. Not tied to either game."
+    },
+    "diag-profile": {
+      "app": "analysis",
+      "note": "Offline / route-agnostic: reads PNGs, atlases or JSON, or measures on a blank page. Not tied to either game."
+    },
+    "diag-rect": {
+      "app": "analysis",
+      "note": "Offline / route-agnostic: reads PNGs, atlases or JSON, or measures on a blank page. Not tied to either game."
+    },
+    "diag-rect2": {
+      "app": "analysis",
+      "note": "Offline / route-agnostic: reads PNGs, atlases or JSON, or measures on a blank page. Not tied to either game."
+    },
+    "frame-data": {
+      "app": "analysis",
+      "note": "Offline / route-agnostic: reads PNGs, atlases or JSON, or measures on a blank page. Not tied to either game."
+    },
+    "juggle-capacity": {
+      "app": "analysis",
+      "note": "Offline / route-agnostic: reads PNGs, atlases or JSON, or measures on a blank page. Not tied to either game."
+    },
+    "measure-atlas-cost": {
+      "app": "analysis",
+      "note": "Offline / route-agnostic: reads PNGs, atlases or JSON, or measures on a blank page. Not tied to either game."
+    },
+    "measure-super": {
+      "app": "analysis",
+      "note": "Offline / route-agnostic: reads PNGs, atlases or JSON, or measures on a blank page. Not tied to either game."
+    },
+    "montage": {
+      "app": "analysis",
+      "note": "Offline / route-agnostic: reads PNGs, atlases or JSON, or measures on a blank page. Not tied to either game."
+    },
+    "select-fill": {
+      "app": "analysis",
+      "note": "Offline / route-agnostic: reads PNGs, atlases or JSON, or measures on a blank page. Not tied to either game."
+    },
+    "sprite-craft": {
+      "app": "analysis",
+      "note": "Offline / route-agnostic: reads PNGs, atlases or JSON, or measures on a blank page. Not tied to either game."
+    },
+    "bar-ratio-candidates": {
+      "app": "shipped-ui",
+      "note": "SHIPPED React shell: menu / character-select / stage-select / ceremony / HUD / attract. Real product, not the card game."
+    },
+    "ceremony-shots": {
+      "app": "shipped-ui",
+      "note": "SHIPPED React shell: menu / character-select / stage-select / ceremony / HUD / attract. Real product, not the card game."
+    },
+    "fighthud-probe": {
+      "app": "shipped-ui",
+      "note": "SHIPPED React shell: menu / character-select / stage-select / ceremony / HUD / attract. Real product, not the card game."
+    },
+    "filmstrip-select-vs": {
+      "app": "shipped-ui",
+      "note": "SHIPPED React shell: menu / character-select / stage-select / ceremony / HUD / attract. Real product, not the card game."
+    },
+    "probe-ceremony": {
+      "app": "shipped-ui",
+      "note": "SHIPPED React shell: menu / character-select / stage-select / ceremony / HUD / attract. Real product, not the card game."
+    },
+    "probe-ceremony-native": {
+      "app": "shipped-ui",
+      "note": "SHIPPED React shell: menu / character-select / stage-select / ceremony / HUD / attract. Real product, not the card game."
+    },
+    "probe-confetti": {
+      "app": "shipped-ui",
+      "note": "SHIPPED React shell: menu / character-select / stage-select / ceremony / HUD / attract. Real product, not the card game."
+    },
+    "probe-counter": {
+      "app": "shipped-ui",
+      "note": "SHIPPED React shell: menu / character-select / stage-select / ceremony / HUD / attract. Real product, not the card game."
+    },
+    "probe-overflow": {
+      "app": "shipped-ui",
+      "note": "SHIPPED React shell: menu / character-select / stage-select / ceremony / HUD / attract. Real product, not the card game."
+    },
+    "probe-select-vs": {
+      "app": "shipped-ui",
+      "note": "SHIPPED React shell: menu / character-select / stage-select / ceremony / HUD / attract. Real product, not the card game."
+    },
+    "probe-shell": {
+      "app": "shipped-ui",
+      "note": "SHIPPED React shell: menu / character-select / stage-select / ceremony / HUD / attract. Real product, not the card game."
+    },
+    "select-shot": {
+      "app": "shipped-ui",
+      "note": "SHIPPED React shell: menu / character-select / stage-select / ceremony / HUD / attract. Real product, not the card game."
+    },
+    "shell-shots": {
+      "app": "shipped-ui",
+      "note": "SHIPPED React shell: menu / character-select / stage-select / ceremony / HUD / attract. Real product, not the card game."
+    },
+    "verify-select-stable": {
+      "app": "shipped-ui",
+      "note": "SHIPPED React shell: menu / character-select / stage-select / ceremony / HUD / attract. Real product, not the card game."
+    },
+    "diag-bisect": {
+      "app": "shipped-fight",
+      "note": "SHIPPED fighter via ?fight=1 / __FIGHT__ (deterministic FightHarness → FightRenderer + FightVfx / ProjectileLayer)."
+    },
+    "diag-botdump": {
+      "app": "shipped-fight",
+      "note": "SHIPPED fighter via ?fight=1 / __FIGHT__ (deterministic FightHarness → FightRenderer + FightVfx / ProjectileLayer)."
+    },
+    "diag-containment": {
+      "app": "shipped-fight",
+      "note": "SHIPPED fighter via ?fight=1 / __FIGHT__ (deterministic FightHarness → FightRenderer + FightVfx / ProjectileLayer)."
+    },
+    "diag-post": {
+      "app": "shipped-fight",
+      "note": "SHIPPED fighter via ?fight=1 / __FIGHT__ (deterministic FightHarness → FightRenderer + FightVfx / ProjectileLayer)."
+    },
+    "fight-shots": {
+      "app": "shipped-fight",
+      "note": "SHIPPED fighter via ?fight=1 / __FIGHT__ (deterministic FightHarness → FightRenderer + FightVfx / ProjectileLayer)."
+    },
+    "juggle-burst": {
+      "app": "shipped-fight",
+      "note": "SHIPPED fighter via ?fight=1 / __FIGHT__ (deterministic FightHarness → FightRenderer + FightVfx / ProjectileLayer)."
+    },
+    "measure-separation": {
+      "app": "shipped-fight",
+      "note": "SHIPPED fighter via ?fight=1 / __FIGHT__ (deterministic FightHarness → FightRenderer + FightVfx / ProjectileLayer)."
+    },
+    "measure-shadow": {
+      "app": "shipped-fight",
+      "note": "SHIPPED fighter via ?fight=1 / __FIGHT__ (deterministic FightHarness → FightRenderer + FightVfx / ProjectileLayer)."
+    },
+    "measure-spark-pixel": {
+      "app": "shipped-fight",
+      "note": "SHIPPED fighter via ?fight=1 / __FIGHT__ (deterministic FightHarness → FightRenderer + FightVfx / ProjectileLayer)."
+    },
+    "proj-envelope": {
+      "app": "shipped-fight",
+      "note": "SHIPPED fighter via ?fight=1 / __FIGHT__ (deterministic FightHarness → FightRenderer + FightVfx / ProjectileLayer)."
+    },
+    "proj-isolate": {
+      "app": "shipped-fight",
+      "note": "SHIPPED fighter via ?fight=1 / __FIGHT__ (deterministic FightHarness → FightRenderer + FightVfx / ProjectileLayer)."
+    },
+    "super-envelope": {
+      "app": "shipped-fight",
+      "note": "SHIPPED fighter via ?fight=1 / __FIGHT__ (deterministic FightHarness → FightRenderer + FightVfx / ProjectileLayer)."
+    },
+    "super-strip": {
+      "app": "shipped-fight",
+      "note": "SHIPPED fighter via ?fight=1 / __FIGHT__ (deterministic FightHarness → FightRenderer + FightVfx / ProjectileLayer)."
+    },
+    "verify-probe": {
+      "app": "shipped-fight",
+      "note": "SHIPPED fighter via ?fight=1 / __FIGHT__ (deterministic FightHarness → FightRenderer + FightVfx / ProjectileLayer)."
+    },
+    "busy-shot": {
+      "app": "shipped-play",
+      "note": "SHIPPED fighter via ?play=1 / matchup params / __PLAY__ (live PlayableMatch → FightRenderer + FightVfx / ProjectileLayer)."
+    },
+    "dof-look": {
+      "app": "shipped-play",
+      "note": "SHIPPED fighter via ?play=1 / matchup params / __PLAY__ (live PlayableMatch → FightRenderer + FightVfx / ProjectileLayer)."
+    },
+    "impact-frames": {
+      "app": "shipped-play",
+      "note": "SHIPPED fighter via ?play=1 / matchup params / __PLAY__ (live PlayableMatch → FightRenderer + FightVfx / ProjectileLayer)."
+    },
+    "juggle-census": {
+      "app": "shipped-play",
+      "note": "SHIPPED fighter via ?play=1 / matchup params / __PLAY__ (live PlayableMatch → FightRenderer + FightVfx / ProjectileLayer)."
+    },
+    "measure-difficulty": {
+      "app": "shipped-play",
+      "note": "SHIPPED fighter via ?play=1 / matchup params / __PLAY__ (live PlayableMatch → FightRenderer + FightVfx / ProjectileLayer)."
+    },
+    "motion-strip": {
+      "app": "shipped-play",
+      "note": "SHIPPED fighter via ?play=1 / matchup params / __PLAY__ (live PlayableMatch → FightRenderer + FightVfx / ProjectileLayer)."
+    },
+    "play-combo": {
+      "app": "shipped-play",
+      "note": "SHIPPED fighter via ?play=1 / matchup params / __PLAY__ (live PlayableMatch → FightRenderer + FightVfx / ProjectileLayer)."
+    },
+    "play-ko": {
+      "app": "shipped-play",
+      "note": "SHIPPED fighter via ?play=1 / matchup params / __PLAY__ (live PlayableMatch → FightRenderer + FightVfx / ProjectileLayer)."
+    },
+    "play-shots": {
+      "app": "shipped-play",
+      "note": "SHIPPED fighter via ?play=1 / matchup params / __PLAY__ (live PlayableMatch → FightRenderer + FightVfx / ProjectileLayer)."
+    },
+    "probe-dof": {
+      "app": "shipped-play",
+      "note": "SHIPPED fighter via ?play=1 / matchup params / __PLAY__ (live PlayableMatch → FightRenderer + FightVfx / ProjectileLayer)."
+    },
+    "probe-facade": {
+      "app": "shipped-play",
+      "note": "SHIPPED fighter via ?play=1 / matchup params / __PLAY__ (live PlayableMatch → FightRenderer + FightVfx / ProjectileLayer)."
+    },
+    "probe-occluder": {
+      "app": "shipped-play",
+      "note": "SHIPPED fighter via ?play=1 / matchup params / __PLAY__ (live PlayableMatch → FightRenderer + FightVfx / ProjectileLayer)."
+    },
+    "probe-pillars": {
+      "app": "shipped-play",
+      "note": "SHIPPED fighter via ?play=1 / matchup params / __PLAY__ (live PlayableMatch → FightRenderer + FightVfx / ProjectileLayer)."
+    },
+    "probe-portraits": {
+      "app": "shipped-play",
+      "note": "SHIPPED fighter via ?play=1 / matchup params / __PLAY__ (live PlayableMatch → FightRenderer + FightVfx / ProjectileLayer)."
+    },
+    "reaction-probe": {
+      "app": "shipped-play",
+      "note": "SHIPPED fighter via ?play=1 / matchup params / __PLAY__ (live PlayableMatch → FightRenderer + FightVfx / ProjectileLayer)."
+    },
+    "smoke-combat": {
+      "app": "shipped-play",
+      "note": "SHIPPED fighter via ?play=1 / matchup params / __PLAY__ (live PlayableMatch → FightRenderer + FightVfx / ProjectileLayer)."
+    },
+    "sprite-crops": {
+      "app": "shipped-play",
+      "note": "SHIPPED fighter via ?play=1 / matchup params / __PLAY__ (live PlayableMatch → FightRenderer + FightVfx / ProjectileLayer)."
+    },
+    "stage-shot": {
+      "app": "shipped-play",
+      "note": "SHIPPED fighter via ?play=1 / matchup params / __PLAY__ (live PlayableMatch → FightRenderer + FightVfx / ProjectileLayer)."
+    },
+    "verify-control-hint": {
+      "app": "shipped-play",
+      "note": "SHIPPED fighter via ?play=1 / matchup params / __PLAY__ (live PlayableMatch → FightRenderer + FightVfx / ProjectileLayer)."
+    },
+    "verify-playable": {
+      "app": "shipped-play",
+      "note": "SHIPPED fighter via ?play=1 / matchup params / __PLAY__ (live PlayableMatch → FightRenderer + FightVfx / ProjectileLayer)."
+    },
+    "warden-super": {
+      "app": "shipped-play",
+      "note": "SHIPPED fighter via ?play=1 / matchup params / __PLAY__ (live PlayableMatch → FightRenderer + FightVfx / ProjectileLayer)."
+    }
+  }
+}

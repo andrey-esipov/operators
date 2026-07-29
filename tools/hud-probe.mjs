@@ -10,6 +10,7 @@
 // turn prompt owned by CombatScreen. The MoveCard deck is owned by another
 // agent and is intentionally excluded.
 import { chromium } from 'playwright-core'
+console.error('\u26A0\uFE0F  [instrument-routing] tools/hud-probe.mjs drives the LEGACY CARD BATTLER combat UI (__game turn-based rail / .combat-turn-prompt), NOT the shipped fighter. Its numbers are INADMISSIBLE as shipped-fighter evidence. Provenance: tools/instrument-manifest.json.')
 
 const arg = (n, d) => {
   const i = process.argv.indexOf(`--${n}`)

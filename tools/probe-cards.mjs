@@ -6,6 +6,7 @@
 //   4. No rail element resolves to a system-default font family.
 // Run from the repo root: node tools/probe-cards.mjs --port 5311
 import { chromium } from 'playwright-core'
+console.error('\u26A0\uFE0F  [instrument-routing] tools/probe-cards.mjs drives the LEGACY CARD BATTLER combat UI (__game turn-based rail / .combat-turn-prompt), NOT the shipped fighter. Its numbers are INADMISSIBLE as shipped-fighter evidence. Provenance: tools/instrument-manifest.json.')
 
 const PORT = process.argv.includes('--port')
   ? process.argv[process.argv.indexOf('--port') + 1]

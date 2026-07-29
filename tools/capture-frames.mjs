@@ -22,6 +22,7 @@
  */
 import { chromium } from 'playwright-core'
 import { mkdirSync } from 'node:fs'
+console.error('\u26A0\uFE0F  [instrument-routing] tools/capture-frames.mjs drives the LEGACY CARD BATTLER (?lab=1 / __OPS3D__ → FightScene3D + VfxSubsystem), NOT the shipped fighter. Its numbers are INADMISSIBLE as shipped-fighter evidence. Provenance: tools/instrument-manifest.json.')
 
 const arg = (k, d) => { const i = process.argv.indexOf(`--${k}`); return i > 0 ? process.argv[i + 1] : d }
 const port = arg('port', '5173')

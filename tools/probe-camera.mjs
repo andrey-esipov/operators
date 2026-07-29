@@ -9,6 +9,7 @@
 // timeScale and debugHold every chunk, per stage. Whichever number misbehaves
 // names the cause; no bisecting required.
 import { chromium } from 'playwright-core'
+console.error('\u26A0\uFE0F  [instrument-routing] tools/probe-camera.mjs drives the LEGACY CARD BATTLER (?lab=1 / __OPS3D__ → FightScene3D + VfxSubsystem), NOT the shipped fighter. Its numbers are INADMISSIBLE as shipped-fighter evidence. Provenance: tools/instrument-manifest.json.')
 
 const arg = (n, d) => {
   const i = process.argv.indexOf(`--${n}`)

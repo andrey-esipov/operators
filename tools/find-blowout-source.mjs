@@ -19,6 +19,7 @@
  * where shipped fighting games sit at the peak of a heavy hit.
  */
 import { chromium } from 'playwright-core'
+console.error('\u26A0\uFE0F  [instrument-routing] tools/find-blowout-source.mjs drives the LEGACY CARD BATTLER (?lab=1 / __OPS3D__ → FightScene3D + VfxSubsystem), NOT the shipped fighter. Its numbers are INADMISSIBLE as shipped-fighter evidence. Provenance: tools/instrument-manifest.json.')
 
 const argv = process.argv.slice(2)
 const arg = (n, d) => {

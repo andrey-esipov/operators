@@ -4,6 +4,7 @@
 // move deck are all showing values the sim actually produced.
 import { chromium } from 'playwright-core'
 import { mkdirSync } from 'node:fs'
+console.error('\u26A0\uFE0F  [instrument-routing] tools/combat-shots.mjs drives the LEGACY CARD BATTLER combat UI (__game turn-based rail / .combat-turn-prompt), NOT the shipped fighter. Its numbers are INADMISSIBLE as shipped-fighter evidence. Provenance: tools/instrument-manifest.json.')
 
 const arg = (n, d) => {
   const i = process.argv.indexOf(`--${n}`)

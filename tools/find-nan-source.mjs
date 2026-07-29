@@ -20,6 +20,7 @@
  * defect. Under ~2% with band [-1,-1] is just genuinely dark pixels.
  */
 import { chromium } from 'playwright-core'
+console.error('\u26A0\uFE0F  [instrument-routing] tools/find-nan-source.mjs drives the LEGACY CARD BATTLER (?lab=1 / __OPS3D__ → FightScene3D + VfxSubsystem), NOT the shipped fighter. Its numbers are INADMISSIBLE as shipped-fighter evidence. Provenance: tools/instrument-manifest.json.')
 
 const argv = process.argv.slice(2)
 const arg = (n, d) => {

@@ -19,6 +19,7 @@
  *   node tools/bench-stages.mjs --width 2560 --height 1440   # stress
  */
 import { chromium } from 'playwright-core'
+console.error('\u26A0\uFE0F  [instrument-routing] tools/bench-stages.mjs drives the LEGACY CARD BATTLER (?lab=1 / __OPS3D__ → FightScene3D + VfxSubsystem), NOT the shipped fighter. Its numbers are INADMISSIBLE as shipped-fighter evidence. Provenance: tools/instrument-manifest.json.')
 
 const argv = process.argv.slice(2)
 const arg = (n, d) => {

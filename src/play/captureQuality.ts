@@ -157,13 +157,14 @@ export interface LabProbe {
 /**
  * Install the `?lab=1` sandbox capture handle on `window.__LAB__`.
  *
- * `?lab=1` (ThreeLab → FightScene3D) is the ONLY caller. It is a dev sandbox
- * where no buyer is ever present, so — like the other capture-only routes — it
+ * `?lab=1` (ThreeLab → FightScene3D) is the ONLY caller. It is a capture/measure
+ * sandbox where no human plays, so — like the other capture-only routes — it
  * freezes the tier by default (`captureRoute`). The subtlety that bit us:
- * FightScene3D is ALSO the shipped 3D renderer (CombatScreen → FightStage, the
- * default on any WebGL2 machine), so this install is gated on the sandbox and
- * MUST NOT run on the buyer path — or a player loses adaptive recovery and a
- * `__LAB__` global leaks onto a shipped page.
+ * FightScene3D is SHARED with FightStage ← CombatScreen (reached only via
+ * `route === 'cards'`, the legacy card game — NOT the shipped fighter, which is
+ * PlayableMatch → FightRenderer and never mounts FightScene3D). So this install
+ * is gated on the sandbox and MUST NOT run on the interactive card-game route —
+ * or a player loses adaptive recovery and a `__LAB__` global leaks onto that page.
  *
  * The handle is produced by `openCaptureSession`, so the freeze and the tier
  * probe are born from the SAME call: the freeze cannot rot without also dropping

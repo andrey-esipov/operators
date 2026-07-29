@@ -221,19 +221,22 @@ function fightSceneCaptureProp(src: string): 'set' | 'none' | 'absent' {
   return result
 }
 
-describe('captureCoverage — the freeze is scoped to the sandbox, never the shipped renderer', () => {
-  // FightScene3D is SHARED: it is the shipped 3D renderer (CombatScreen →
-  // FightStage, the default on any WebGL2 machine) AND the `?lab=1` dev sandbox
-  // (ThreeLab). The freeze + `window.__LAB__` install are gated behind the
-  // `capture` prop so they run ONLY on the sandbox. 34167c6 called the freeze
-  // UNCONDITIONALLY inside FightScene3D on the false premise "no buyer is ever
-  // here" — which silently disabled adaptive quality for every 3D buyer and would
-  // have leaked a __LAB__ global onto a shipped page. This block is the guard that
-  // regression cannot return: THE INVARIANT above proves the freeze CALL is
-  // present; this proves it is wired to the sandbox seam and NOT the buyer seam.
-  // The module-level enumerator cannot see this — the freeze call is present in
-  // FightScene3D either way; only the PROP at the two call sites decides who runs
-  // it. So the property lives at the JSX call sites, checked here by AST.
+describe('captureCoverage — the freeze is scoped to the capture sandbox, never the card-game consumer', () => {
+  // FightScene3D is SHARED between two consumers, NEITHER of which is the shipped
+  // fighter (that is PlayableMatch → FightRenderer; the front door routes to
+  // `?play=1`, never here — appRoute.ts / instrumentRouting). It backs (a) the
+  // `?lab=1` capture/measure sandbox (ThreeLab) and (b) FightStage ← CombatScreen,
+  // reached only via `route === 'cards'` (the legacy card game). The freeze +
+  // `window.__LAB__` install are gated behind the `capture` prop so they run ONLY
+  // on the sandbox. 34167c6 called the freeze UNCONDITIONALLY inside FightScene3D
+  // on the false premise "no buyer is ever here" — which froze the interactive
+  // card-game route too and would have leaked a __LAB__ global onto its page. This
+  // block is the guard that regression cannot return: THE INVARIANT above proves
+  // the freeze CALL is present; this proves it is wired to the sandbox seam and
+  // NOT the card-game seam. The module-level enumerator cannot see this — the
+  // freeze call is present in FightScene3D either way; only the PROP at the two
+  // call sites decides who runs it. So the property lives at the JSX call sites,
+  // checked here by AST.
   const read = (p: string) => readFileSync(join(SRC, p), 'utf8')
 
   it('self-check: the JSX capture-prop detector distinguishes set / none / absent (and ignores comments)', () => {
@@ -244,10 +247,11 @@ describe('captureCoverage — the freeze is scoped to the sandbox, never the shi
     expect(fightSceneCaptureProp('const x = <FightScene3D state={s} /> // capture')).toBe('none')
   })
 
-  it('the SHIPPED seam (FightStage → the buyer 3D renderer) must NOT opt into capture', () => {
-    // If this reddens, a buyer just lost adaptive quality AND got a __LAB__ global
-    // on a shipped page — the exact 34167c6 regression. FightStage is the single
-    // seam CombatScreen mounts for the shipped 3D game.
+  it('the CARD-GAME seam (FightStage ← CombatScreen, route=cards) must NOT opt into capture', () => {
+    // If this reddens, an interactive card-game player just lost adaptive quality
+    // AND got a __LAB__ global on their page — the exact 34167c6 over-freeze.
+    // FightStage is the single seam CombatScreen mounts, and CombatScreen is
+    // reached only via `route === 'cards'` (App.tsx), never the shipped fighter.
     expect(fightSceneCaptureProp(read('three/FightStage.tsx'))).toBe('none')
   })
 

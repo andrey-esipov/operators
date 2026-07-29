@@ -165,13 +165,15 @@ describe('captureQuality.openCaptureSession (reachability spy)', () => {
 
 // installLabProbe is the SAME call the `?lab=1` sandbox (ThreeLab → FightScene3D)
 // runs on mount. It fuses the freeze with the __LAB__ tier probe via
-// openCaptureSession, and — because FightScene3D is ALSO the shipped 3D renderer
-// (CombatScreen → FightStage, the default on any WebGL2 machine) — it is gated
-// behind the `capture` prop so it never runs on a buyer. Exercising it with a spy
-// proves the default freeze + the live getter + teardown without a GPU. The
-// residual it cannot reach — that the effect calls it under `capture` and NOT on
-// the shipped path — is gated structurally in captureCoverage.node.test.ts and
-// confirmed at runtime via window.__LAB__.quality() holding steady.
+// openCaptureSession, and — because FightScene3D is SHARED with FightStage ←
+// CombatScreen (the legacy card game, `route === 'cards'`; NOT the shipped
+// fighter, which is PlayableMatch → FightRenderer) — it is gated behind the
+// `capture` prop so it never runs on the interactive card-game route. Exercising
+// it with a spy proves the default freeze + the live getter + teardown without a
+// GPU. The residual it cannot reach — that the effect calls it under `capture`
+// and NOT on the card-game route — is gated structurally in
+// captureCoverage.node.test.ts and confirmed at runtime via
+// window.__LAB__.quality() holding steady.
 describe('captureQuality.installLabProbe (the ?lab=1 capture handle)', () => {
   const lab = () => (globalThis as unknown as { __LAB__?: LabProbe }).__LAB__
   afterEach(() => removeLabProbe())

@@ -36,6 +36,14 @@ const FightSelect = lazy(() =>
   import('./fighthud/select/FightSelect').then((m) => ({ default: m.FightSelect })),
 )
 
+/** The live CPU-vs-CPU attract reel at `?attract=1`, standalone. The same
+ *  component is the menu's idle reel; this route is the direct entry the perf
+ *  harness drives and a way to link straight to the demo. Lazy, so the fight
+ *  renderer it pulls in never weighs down the capture routes or a bare match. */
+const AttractMode = lazy(() =>
+  import('./screens/AttractMode').then((m) => ({ default: m.AttractMode })),
+)
+
 function isLabRoute(): boolean {
   if (typeof window === 'undefined') return false
   return new URLSearchParams(window.location.search).get('lab') === '1'
@@ -67,11 +75,18 @@ function isSelectRoute(): boolean {
   return new URLSearchParams(window.location.search).get('select') === '1'
 }
 
+/** The live attract reel at `?attract=1`. A distinct query no capture tool
+ *  uses, so it can't be confused with a bare-`/` match or a `?fight=1` harness. */
+function isAttractRoute(): boolean {
+  if (typeof window === 'undefined') return false
+  return new URLSearchParams(window.location.search).get('attract') === '1'
+}
+
 /** The fighter is the game, so it owns `/`. The dev routes above are tested
  *  first and still win; `?play=1` keeps working for tools that hardcode it. */
 function isPlayRoute(): boolean {
   if (typeof window === 'undefined') return false
-  return !isCardsRoute() && !isSelectRoute()
+  return !isCardsRoute() && !isSelectRoute() && !isAttractRoute()
 }
 
 export function App() {
@@ -83,6 +98,7 @@ export function App() {
   const [fight] = useState(isFightRoute)
   const [hud] = useState(isHudRoute)
   const [select] = useState(isSelectRoute)
+  const [attract] = useState(isAttractRoute)
   const [play] = useState(isPlayRoute)
 
   // Arcade boot gate. Shown once per page load before anything else. The
@@ -187,6 +203,14 @@ export function App() {
     return (
       <Suspense fallback={<div style={{ color: '#fff', padding: 24 }}>loading select…</div>}>
         <FightSelect />
+      </Suspense>
+    )
+  }
+
+  if (attract) {
+    return (
+      <Suspense fallback={<div style={{ color: '#fff', padding: 24 }}>loading attract…</div>}>
+        <AttractMode onExit={() => { window.location.search = 'select=1' }} />
       </Suspense>
     )
   }

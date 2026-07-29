@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { Engine } from './core/Engine'
+import { applyCaptureQuality } from '../play/captureQuality'
 import { StageSubsystem } from './stage/StageSubsystem'
 import { FighterSubsystem } from './fighter/FighterSubsystem'
 import { LightRig } from './lighting/LightRig'
@@ -47,6 +48,14 @@ export function FightScene3D({ state, events, timeScale = 1, className, onReady 
 
     const engine = new Engine({ canvas, seed: 0xa11ce })
     engineRef.current = engine
+    // `?lab=1` is a dev/capture-only route (App.tsx: renderer sandbox; every
+    // tool that drives it self-declares its output inadmissible as shipped
+    // evidence). No buyer is ever here, so freeze the tier by default —
+    // otherwise legacy-battler captures drift through the adaptive tier exactly
+    // like the shipped routes did. `captureRoute` also freezes when unpinned,
+    // which the pin-only path would miss (measure-silhouette drives ?lab=1 with
+    // no &quality=).
+    applyCaptureQuality(engine, window.location.search, { captureRoute: true })
 
     const light = new LightRig()
     const getLight = () => light

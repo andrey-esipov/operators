@@ -191,14 +191,17 @@ export type AdaptAction =
  *
  *  5. SCRIPTED-TRANSIENT EXCLUSION. A caller-supplied `isTransient` marks frames
  *     rendered during a bounded, scripted event — a super freeze, a KO/victory
- *     cinematic. Their cost is not evidence of a machine that can't keep up, and
- *     (source-proven) our super/cinematic VFX reads NO quality tier, so a demote
- *     cannot shave a millisecond off them: acting on it is PURE loss that then
- *     rides the persistent Engine for the rest of the session. Such a frame is
- *     DISCARDED from the decision exactly like a discontinuity — but, unlike a
- *     discontinuity whose duration is meaningless, its cost is RECORDED in a
- *     separate read-only channel (`transientCostReport`) so "supers cost N ms on
- *     this hardware" stays a fact telemetry can surface. Excluded from the
+ *     cinematic. Their cost is not evidence of a machine that can't keep up. A
+ *     demote cannot reduce the super's OWN VFX cost (tier-invariant: the sole
+ *     `particleBudget` consumer is StageSubsystem), only the base scene beneath
+ *     it — and whether THAT materially helps is UNMEASURED. The load-bearing
+ *     reason to discard is not a performance claim but that a bounded scripted
+ *     event is no evidence of sustained load, while acting on it pins session
+ *     quality via the persistent Engine. Such a frame is DISCARDED from the
+ *     decision exactly like a discontinuity — but, unlike a discontinuity whose
+ *     duration is meaningless, its cost is RECORDED in a separate read-only
+ *     channel (`transientCostReport`) so "supers cost N ms on this hardware"
+ *     stays a fact telemetry can surface. Excluded from the
  *     DECISION, never from OBSERVABILITY.
  */
 export class QualityAdaptor {
@@ -267,14 +270,18 @@ export class QualityAdaptor {
 
     // (1.5) Scripted-transient discard. A frame rendered during a bounded,
     // scripted event — a super freeze, a KO/victory cinematic — is flagged by the
-    // caller via `isTransient`. Its cost is not evidence of sustained fill load,
-    // and (source-proven) our super/cinematic VFX reads no quality tier, so a
-    // demotion cannot reduce that cost by a single millisecond — acting on it is
-    // pure loss that, via the persistent Engine, then rides the rest of the
-    // session. So discard it from the DECISION exactly like a discontinuity
-    // (re-arm the window, drop the scored samples, restart the calm clock) — but
-    // RECORD its cost first: discarded from the decision is NOT unmeasured, and a
-    // machine where supers cost 80ms is a fact telemetry should be able to see.
+    // caller via `isTransient`. A demote cannot reduce the super's OWN VFX cost
+    // (tier-invariant: `particleBudget`'s sole consumer is StageSubsystem, and
+    // ProjectileFx/ProjectileLayer read no tier), only the base scene drawn
+    // beneath it (shadows, SSAO, crowd, particles, AA — all tier-scaled); whether
+    // THAT materially helps is UNMEASURED. The load-bearing reason to discard is
+    // not that performance claim but that a bounded scripted event is no evidence
+    // of sustained fill load, while acting on it pins session quality via the
+    // persistent Engine. So discard it from the DECISION exactly like a
+    // discontinuity (re-arm the window, drop the scored samples, restart the calm
+    // clock) — but RECORD its cost first: discarded from the decision is NOT
+    // unmeasured, and a machine where supers cost 80ms is a fact telemetry should
+    // be able to see.
     // The discontinuity check above runs first, so a genuine pause that lands
     // during a super is still treated as unmeasurable, not booked as super cost.
     if (isTransient) {

@@ -1,0 +1,119 @@
+/*
+ * Boot holding card — the frame shown while a route's heavy chunk (the ~272 KB
+ * three.js fight renderer) or its atlases are still downloading.
+ *
+ * It is deliberately self-contained: it is often the *first painted frame* on a
+ * cold load, before menu.css or the brand fonts have arrived, so every value
+ * here stands alone (the `--mm-*` tokens are used only as an optional harmony,
+ * each with a literal fallback). No canvas, no WebGL, no images — it paints
+ * instantly and costs zero VRAM, which is the whole point of showing it instead
+ * of mounting the renderer's fallback behind a dev div.
+ */
+
+.boot-card {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(20px, 4vh, 40px);
+  /* Not the flat #07050E the critic measured as "near-black": a faint violet
+     lift off-centre gives the frame depth so it reads as a designed hold, not a
+     dead buffer. */
+  background:
+    radial-gradient(120% 90% at 50% 34%, #17102b 0%, #0b0716 46%, #07050e 100%);
+  color: var(--mm-ink, #f5f0ff);
+  font-family: var(--mm-ui, 'Chakra Petch', system-ui, sans-serif);
+  overflow: hidden;
+  z-index: 40;
+}
+
+.boot-card__brand {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+.boot-card__mark {
+  font-family: var(--mm-display, 'Anton', 'Arial Narrow', system-ui, sans-serif);
+  font-weight: 400;
+  /* Solid ink — no gradient fill on the wordmark. */
+  color: var(--mm-ink, #f5f0ff);
+  font-size: clamp(38px, 8vw, 76px);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  line-height: 0.9;
+  text-shadow: 0 0 22px rgba(162, 75, 255, 0.35);
+}
+
+/* A thin scanning beam under the wordmark — a decorative bar, not a card border.
+   Sweeps left→right to signal "working" without a spinner cliché. */
+.boot-card__beam {
+  width: min(58vw, 340px);
+  height: 2px;
+  border-radius: 2px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--mm-cyan, #37d0ff) 20%,
+    var(--mm-magenta, #ff2e88) 80%,
+    transparent 100%
+  );
+  background-size: 220% 100%;
+  opacity: 0.85;
+  animation: boot-beam 1.6s ease-in-out infinite;
+}
+
+.boot-card__status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.boot-card__dots {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.boot-card__dots i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--mm-amber, #ffc23d);
+  opacity: 0.35;
+  animation: boot-dot 1.1s ease-in-out infinite;
+}
+
+.boot-card__dots i:nth-child(2) { animation-delay: 0.18s; }
+.boot-card__dots i:nth-child(3) { animation-delay: 0.36s; }
+
+.boot-card__label {
+  font-family: var(--mm-ui, 'Chakra Petch', system-ui, sans-serif);
+  font-weight: 700;
+  font-size: clamp(11px, 1.5vw, 13px);
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--mm-dim, #b7a6d8);
+}
+
+@keyframes boot-beam {
+  0%   { background-position: 120% 0; }
+  100% { background-position: -120% 0; }
+}
+
+@keyframes boot-dot {
+  0%, 100% { opacity: 0.3; transform: translateY(0); }
+  50%      { opacity: 1;   transform: translateY(-2px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .boot-card__beam,
+  .boot-card__dots i {
+    animation: none;
+  }
+  .boot-card__beam { opacity: 0.7; }
+  .boot-card__dots i { opacity: 0.7; }
+}

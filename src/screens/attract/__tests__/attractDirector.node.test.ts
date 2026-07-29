@@ -97,4 +97,61 @@ describe('attract director — the title-screen demo fight', () => {
     expect(dir.exitPending).toBe(true)
     expect(dir.stepsTaken).toBe(before)
   })
+
+  // ── teardown safety ─────────────────────────────────────────────────────────
+  // The shell tears the reel down at a seam by disposing the director and
+  // stopping its renderer's rAF. But a browser can fire an already-scheduled rAF
+  // during that same frame, and React StrictMode (dev) disposes a ref-held
+  // director on its simulated unmount then remounts. Both can call `step()` on a
+  // director whose sim has had its CPU drivers disposed. `visual-critic` filed a
+  // "15× dir.step() teardown error storm on every attract→select exit, rAF firing
+  // post-dispose" against exactly this. A disposed director must therefore be
+  // inert: not throw, not advance, not touch the disposed sim.
+  describe('is inert after dispose (the teardown-storm guard)', () => {
+    it('step() after dispose() does not throw, advance, or emit events', () => {
+      const dir = new AttractDirector({ seed: SEED })
+      // Vacuity: it was genuinely live and stepping before we disposed it, so
+      // "inert after dispose" is a real transition and not a director that never
+      // ran. A no-op mount would leave stepsTaken at 0 and make the assertion
+      // below vacuously true.
+      for (let i = 0; i < 300; i++) dir.step()
+      const steps = dir.stepsTaken
+      expect(steps).toBeGreaterThan(0)
+
+      dir.dispose()
+
+      // The load-bearing assertion. Without the disposed-guard in `step()`, this
+      // call advances the counter and steps a sim whose drivers are disposed —
+      // the exact post-dispose churn the critic caught. With the guard it is a
+      // no-op that returns the last state with no events.
+      const res = expectNoThrow(() => dir.step())
+      expect(dir.stepsTaken).toBe(steps)
+      expect(res.events).toEqual([])
+      expect(res.state).toBe(dir.current)
+
+      // Still inert after many further post-dispose ticks (a browser can fire
+      // more than one stale rAF): the counter never moves again.
+      for (let i = 0; i < 50; i++) dir.step()
+      expect(dir.stepsTaken).toBe(steps)
+    })
+
+    it('dispose() is idempotent — a double teardown is harmless', () => {
+      const dir = new AttractDirector({ seed: SEED })
+      for (let i = 0; i < 60; i++) dir.step()
+      expectNoThrow(() => dir.dispose())
+      // A second dispose (StrictMode unmount + a real unmount, or two seams
+      // racing) must not double-dispose the underlying sim/drivers.
+      expectNoThrow(() => dir.dispose())
+    })
+  })
 })
+
+/** Run a fn, failing the test with its error rather than letting it throw out of
+ *  the assertion so the message names what threw. Returns the fn's result. */
+function expectNoThrow<T>(fn: () => T): T {
+  try {
+    return fn()
+  } catch (e) {
+    expect.fail(`expected no throw, got: ${e instanceof Error ? e.message : String(e)}`)
+  }
+}

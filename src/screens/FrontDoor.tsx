@@ -1,5 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
 import { StartScreen } from './StartScreen'
+import { BootCard } from './boot/BootCard'
 
 /**
  * The live attract reel is the heavy part of the front door — it pulls in the
@@ -100,7 +101,7 @@ export function FrontDoor({ onPlay }: Props) {
   }
 
   return (
-    <Suspense fallback={<div style={{ color: '#fff', padding: 24 }}>loading attract…</div>}>
+    <Suspense fallback={<BootCard label="Loading attract reel" />}>
       <AttractMode onExit={onPlay} />
     </Suspense>
   )

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { FightRenderer } from '../three/fight/FightRenderer'
 import { loadFighterAtlas } from '../three/fight/loadFighterAtlas'
+import { getFighter } from '../data/fighters'
 import { AttractDirector } from './attract/attractDirector'
 import './menu/menu.css'
 
@@ -149,8 +150,8 @@ export function AttractMode({ onExit }: Props) {
           loadFighterAtlas(m.b.skin),
         ])
         if (disposed) return renderer.dispose()
-        await renderer.setFighterAssets(0, atlasA.assets, atlasA.atlas, m.a.accent)
-        await renderer.setFighterAssets(1, atlasB.assets, atlasB.atlas, m.b.accent)
+        await renderer.setFighterAssets(0, atlasA.assets, atlasA.atlas, m.a.accent, getFighter(m.a.skin)?.reval)
+        await renderer.setFighterAssets(1, atlasB.assets, atlasB.atlas, m.b.accent, getFighter(m.b.skin)?.reval)
         if (disposed) return renderer.dispose()
         renderer.setInitialState(dir.initialState)
         // The engine's internal rAF calls this once per frame. The director owns
@@ -239,8 +240,20 @@ export function AttractMode({ onExit }: Props) {
     }
   }, [degraded])
 
+  // Dispose the director on unmount — and null the ref so it is rebuilt live on
+  // the next mount. React StrictMode (dev) mounts → unmounts → remounts, running
+  // this cleanup between the two renders; without the null, the remount at line
+  // 83 would see a non-null ref and reuse a director whose sim is already
+  // disposed, leaving the reel driving a torn-down sim (now inert by guard, so
+  // it would sit frozen). Nulling it means the remount constructs a fresh, live
+  // director. This cleanup runs after the segment effect's (renderer dispose)
+  // and the rAF effect's (cancel), so the sim is torn down only once nothing can
+  // still call `step()` on it.
   useEffect(() => {
-    return () => dirRef.current?.dispose()
+    return () => {
+      dirRef.current?.dispose()
+      dirRef.current = null
+    }
   }, [])
 
   if (degraded) {

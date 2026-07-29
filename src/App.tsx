@@ -5,6 +5,7 @@ import { MainMenu } from './screens/MainMenu'
 import { StartScreen } from './screens/StartScreen'
 import { SCREENS, prefetchScreen } from './screens/registry'
 import { ScreenSkeleton } from './components/ScreenSkeleton'
+import { BootCard } from './screens/boot/BootCard'
 import { StoryCutscene } from './components/StoryCutscene'
 import { attachQuoteBankSync, loadQuoteBank } from './lib/persist'
 import { decideRoute } from './appRoute'
@@ -171,7 +172,7 @@ export function App() {
 
   if (route === 'select') {
     return (
-      <Suspense fallback={<div style={{ color: '#fff', padding: 24 }}>loading select…</div>}>
+      <Suspense fallback={<BootCard label="Loading roster" />}>
         <FightSelect />
       </Suspense>
     )
@@ -179,7 +180,7 @@ export function App() {
 
   if (route === 'attract') {
     return (
-      <Suspense fallback={<div style={{ color: '#fff', padding: 24 }}>loading attract…</div>}>
+      <Suspense fallback={<BootCard label="Loading attract reel" />}>
         <AttractMode onExit={() => { window.location.search = 'select=1' }} />
       </Suspense>
     )
@@ -187,7 +188,7 @@ export function App() {
 
   if (route === 'play') {
     return (
-      <Suspense fallback={<div style={{ color: '#fff', padding: 24 }}>loading match…</div>}>
+      <Suspense fallback={<BootCard label="Entering match" />}>
         <PlayableMatch />
       </Suspense>
     )
@@ -199,7 +200,7 @@ export function App() {
     // the human select screen, which writes an explicit matchup and lands back
     // on the `play` route above.
     return (
-      <Suspense fallback={<div style={{ color: '#fff', padding: 24 }}>loading…</div>}>
+      <Suspense fallback={<BootCard />}>
         <FrontDoor onPlay={() => { window.location.search = 'select=1' }} />
       </Suspense>
     )

@@ -77,6 +77,7 @@ export class AttractDirector {
   private _wantsRotate = false
   private _exitPending = false
   private _prevPhase: FightState['phase'] = 'intro'
+  private _disposed = false
 
   constructor(opts: AttractDirectorOptions = {}) {
     this.rng = makeRng((opts.seed ?? (Date.now() & 0xffffffff)) >>> 0)
@@ -170,6 +171,16 @@ export class AttractDirector {
    * separate scripted timeline. Returns the `StepResult` the renderer draws.
    */
   step(): StepResult {
+    // A disposed director is inert. The shell tears the reel down at a seam by
+    // disposing the director *and* stopping its renderer's rAF, but a browser
+    // fires one or more already-scheduled rAF callbacks during that same frame,
+    // and React StrictMode's mount→unmount→remount disposes a ref-held director
+    // between renders. Either way a live rAF can call `step()` on a director
+    // whose sim has already had its CPU drivers disposed. Advancing here would
+    // step a disposed sim (and increment the vacuity counter the gate reads),
+    // so a disposed director returns its last state with no events and does not
+    // advance — the reel is provably frozen, not churning torn-down resources.
+    if (this._disposed) return { state: this.sim.current, events: [] }
     const res = this.sim.step()
     this._stepsTaken++
     this._segmentFrames++
@@ -229,6 +240,8 @@ export class AttractDirector {
   }
 
   dispose(): void {
+    if (this._disposed) return
+    this._disposed = true
     this.sim.dispose()
   }
 }

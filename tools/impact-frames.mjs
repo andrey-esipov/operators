@@ -259,9 +259,9 @@ await sleep(200)
 
 // Pin the two fighters point-blank with the dummy deeply stunned, so it neither
 // walks nor retaliates and the only camera motion is what our own hit produces.
-async function stage(gap) {
+async function stage(gap, vStance = 'idle') {
   await waitReady() // guard against a transient __PLAY__ teardown between passes
-  await page.evaluate((g) => {
+  await page.evaluate(({ g, vStance }) => {
     const s = window.__PLAY__?.state?.()
     if (!s) return
     const [me, foe] = s.fighters
@@ -275,7 +275,15 @@ async function stage(gap) {
     me.meter = 2000 // MAX_METER — the crumple rung's super needs meter to come out
     foe.pos.x = g / 2; foe.facing = -1; foe.stunRemaining = 600; foe.health = 1000
     foe.meter = 0
-  }, gap)
+    // Victim stance for this pass. Default 'idle' (the weight ladder). The hit-low cell
+    // pins 'crouch': the dummy controller emits only neutral (MatchSim.ts:51) so it can't
+    // be steered down, but a STUNNED fighter skips the movement/stance update (canAct
+    // false, sim.ts:342), so a forced 'crouch' survives to applyHit, which reads it for
+    // `D.hitLow = D.stance==='crouch'` (combat.ts:480) then overwrites the stun with the
+    // hit's own hitstun (:483). hitLow is cleared here so no stale flag leaks pass-to-pass.
+    foe.stance = vStance
+    foe.hitLow = false
+  }, { g: gap, vStance })
 }
 
 // Perform a rung's input. Normals and specials go through real DOM keys, consumed
@@ -323,8 +331,8 @@ async function doInput(inp) {
 // sampling through the hit. Each sample carries the fixed-point NDC + the sim's
 // hitstop/HP/defender-x AND the authoritative reaction readouts (attacker move.id,
 // defender stance/vel.y/grounded, superFreeze) the level verification needs.
-async function firePass(rung, gap) {
-  await stage(gap)
+async function firePass(rung, gap, vStance = 'idle') {
+  await stage(gap, vStance)
   await sleep(1300) // FULL camera settle — no dolly/zoom/kick motion left
   await page.evaluate(() => {
     window.__SAMP__ = []
@@ -345,13 +353,14 @@ async function firePass(rung, gap) {
         hp: Math.round(D.health), gx: Math.round(D.pos.x),
         am: A.move ? A.move.id : '', st: D.stance,
         vy: +D.vel.y.toFixed(2), gr: D.grounded ? 1 : 0, sf: s.superFreeze || 0,
+        hl: D.hitLow ? 1 : 0,
       })
       if (++n < 240) requestAnimationFrame(tick)
     }
     requestAnimationFrame(tick)
   })
   await sleep(300) // ~18 still baseline frames
-  await stage(gap) // re-pin the instant before firing so nothing has drifted
+  await stage(gap, vStance) // re-pin the instant before firing so nothing has drifted
   await doInput(rung.input)
   // A motion super burns SUPER_FREEZE frames before its damage travels, so give
   // it a longer tail than a normal's instant contact.
@@ -412,6 +421,7 @@ function analyse(samp) {
   const superSeen = samp.some((r) => r.sf > 0)
   const reactionLevel = launched ? 'launcher' : knocked ? 'sweep' : superSeen ? 'crumple' : 'hitstun-normal'
   const contactStance = contact >= 0 ? samp[contact].st : ''
+  const hitLowAtContact = contact >= 0 ? !!samp[contact].hl : false
 
   return {
     landed, contactIdx: contact, samples: samp.length, maxHitstop,
@@ -424,7 +434,7 @@ function analyse(samp) {
     trackPeakPx: +trackPeakPx.toFixed(2),
     ratio: +(peakPx / Math.max(0.01, baselinePx)).toFixed(1),
     // authoritative level readouts
-    amId, producedLevel: moveLevel, reactionLevel, superSeen, contactStance,
+    amId, producedLevel: moveLevel, reactionLevel, superSeen, contactStance, hitLowAtContact,
   }
 }
 
@@ -459,13 +469,14 @@ async function measureRung(rung) {
 
 const ONLY = arg('level', '')                       // run ONE rung (fast, for capture)
 const CAPTURE = process.argv.includes('--capture')  // freeze each verified rung + write a hero PNG
+const HITLOW = process.argv.includes('--hitlow')    // capture the orthogonal hit-low crouch cell, then exit
 const fullRun = !ONLY
 const rungs = ONLY ? LADDER.filter((r) => r.label === ONLY) : LADDER
 // A full run owns the whole output dir, so it starts clean. A single-rung capture
 // (--level X) only touches its OWN hero-<label>.png, so it must NOT wipe the dir —
 // otherwise iterating one level at a time would delete the heroes captured before
 // it. Each hero file is overwritten in place, so single-rung runs accumulate.
-if (fullRun) rmDirSafe(OUT)
+if (fullRun && !HITLOW) rmDirSafe(OUT) // hit-low ADDS a cell; it must not wipe the weight-ladder heroes
 mkdirSync(OUT, { recursive: true })
 if (!rungs.length) {
   console.log(`no such rung '${ONLY}' — use one of: ${LADDER.map((r) => r.label).join(', ')}`)
@@ -477,8 +488,9 @@ if (!rungs.length) {
 // EXACTLY on the money frame (contact + PEAK_OFFSET) rather than hoping a live
 // grab catches the ~7-frame transient. This tool writes the PNG and never reads
 // its bytes back (the context hazard is real).
-async function captureHero(rung, gap) {
-  await stage(gap); await sleep(1200); await stage(gap)
+async function captureHero(rung, gap, opts = {}) {
+  const vStance = opts.victimStance ?? 'idle'
+  await stage(gap, vStance); await sleep(1200); await stage(gap, vStance)
   await page.evaluate(() => {
     window.__CONTACT__ = -1; window.__WATCH__ = true; let n = 0
     const tick = () => {
@@ -517,18 +529,139 @@ async function captureHero(rung, gap) {
     // past the freeze (hitstop 0) into the settled recovery tail.
     cap = await page.evaluate(() => {
       const s = window.__PLAY__?.state?.(); const v = s?.fighters?.[1]
-      return v ? { frame: s.frame, stance: v.stance, hitstop: s.hitstop } : null
+      return v ? { frame: s.frame, stance: v.stance, hitstop: s.hitstop, hitLow: !!v.hitLow } : null
     })
-    // Encode a body-fallback INTO the filename so a hero handed off without the
-    // JSON still can't be misread as a distinct pose it doesn't show.
-    const bs = bodyStatusFor(rung.target)
-    const tag = bs.kind === 'fallback' ? '-HURTFALLBACK' : bs.kind === 'unknown' ? '-BODYUNVERIFIED' : ''
-    if (tag) console.log(`  ⚠️  ${rung.label}: victim '${VICTIM}' ${bs.kind === 'fallback' ? `has no '${bs.needs}' clip — this body is the shared HURT reel, NOT a ${rung.target} pose` : `atlas unreadable — body pose UNVERIFIED`}. Writing '${tag.slice(1)}' into the name so the label can't lie.`)
-    file = `${OUT}/hero-${rung.label}${tag}.png`
+    if (opts.file) {
+      // The hit-low cell computes its own verified filename (including the provisional
+      // single-held-frame tag) from the atlas + authoritative hitLow, so take it as given.
+      file = opts.file
+    } else {
+      // Encode a body-fallback INTO the filename so a hero handed off without the
+      // JSON still can't be misread as a distinct pose it doesn't show.
+      const bs = bodyStatusFor(rung.target)
+      const tag = bs.kind === 'fallback' ? '-HURTFALLBACK' : bs.kind === 'unknown' ? '-BODYUNVERIFIED' : ''
+      if (tag) console.log(`  ⚠️  ${rung.label}: victim '${VICTIM}' ${bs.kind === 'fallback' ? `has no '${bs.needs}' clip — this body is the shared HURT reel, NOT a ${rung.target} pose` : `atlas unreadable — body pose UNVERIFIED`}. Writing '${tag.slice(1)}' into the name so the label can't lie.`)
+      file = `${OUT}/hero-${rung.label}${tag}.png`
+    }
     await page.screenshot({ path: file })
   }
   await page.evaluate(() => { window.__WATCH__ = false; window.__PLAY__.resume() })
   return { file, cap }
+}
+
+// ── hit-low crouch cell (orthogonal stance axis; --hitlow) ────────────────────
+// Coordinator GO: capture the hit-low reaction on the warm harness. hit-low is NOT a
+// weight rung — it is a STANCE variant of the SAME 'hitstun' state. A crouching victim
+// struck by a grounded normal renders the atlas 'hit-low' pose instead of the shared
+// 'hurt' reel (combat.ts:480 sets D.hitLow = stance==='crouch'; FightRenderer.ts:596
+// threads it to clipCandidates('hitstun', …, low) -> ['hit-low','hurt','hit','idle'],
+// AnimationDriver.ts:30/47). So this cell sits OUTSIDE the launcher/sweep body-guard,
+// and earns its own anti-lying discipline (the same rule the guard enforces on bodies):
+//  (1) LIVE double-lock — the crouch cell must resolve hitLow===true at the frozen
+//      instant AND the standing A/B (same move) must resolve hitLow===false. If both
+//      matched, the flag would gate nothing and the cell would be a lie -> FAIL. This
+//      A/B *is* the built-in mutation: the failure mode (flag ignored) cannot pass.
+//  (2) CLIP cross-check — mirror the renderer's OWN selection predicate against the
+//      victim atlas on disk (first candidate key with frames>0 wins; AnimationDriver
+//      firstClip :47), so the filename cannot claim a pose the pixels don't show. On
+//      lenny that is hit-low[36] (crouch) vs hurt[35] (stand); frame0 must differ.
+//  (3) PROVISIONAL tag — hit-low ships as ONE authored frame today (generator clamp;
+//      asset-delivery chasing the 1f-vs-12f-spec shortfall). The back-out test is
+//      precisely whether that single held frame reads badly, so the filename carries
+//      -HELD1F and the JSON says why. Label a held pose a pose, never an animation.
+if (HITLOW) {
+  const atlasPath = `public/fighters/${VICTIM}/assets.json`
+  let hlClips = {}
+  try { hlClips = JSON.parse(readFileSync(atlasPath, 'utf8')).clips || {} } catch {}
+  const framesOf = (k) => (hlClips[k]?.frames?.length ? hlClips[k].frames : null)
+  // Mirror clipCandidates('hitstun', …, low) + firstClip: first candidate that EXISTS
+  // with frames>0 wins, and frames[0] is the rendered index. Same read the body-guard
+  // uses; no __PLAY__ accessor exposes the rendered index, so this proves the label.
+  const hitstunClip = (low) => {
+    for (const k of (low ? ['hit-low', 'hurt', 'hit', 'idle'] : ['hurt', 'hit', 'idle'])) {
+      const f = framesOf(k); if (f) return { key: k, frame0: f[0] }
+    }
+    return { key: '(none)', frame0: -1 }
+  }
+  const lowSel = hitstunClip(true)   // lenny: { key:'hit-low', frame0:36 }
+  const stdSel = hitstunClip(false)  // lenny: { key:'hurt',    frame0:35 }
+  const lowSingleFrame = (framesOf(lowSel.key)?.length ?? 0) === 1
+
+  // Probe: a GROUNDED normal from the attacker that lands its OWN grounded level on a
+  // CROUCHING victim AND drives the low path (hitLowAtContact). Excludes cr.HP/cr.HK —
+  // they route to launcher/sweep and skip the low branch. Standing-visual first; the
+  // first move that lands with hitLow=true is REUSED for the standing A/B, so the only
+  // variable between the two cells is the victim's stance.
+  const HL_CANDS = [
+    { move: 'st.HP', input: { button: 'KeyO' },               gaps: [110, 104, 98] },
+    { move: 'st.MP', input: { button: 'KeyI' },               gaps: [104, 98, 92] },
+    { move: 'cr.MP', input: { down: 'KeyS', button: 'KeyI' }, gaps: [100, 94, 88] },
+    { move: 'st.LP', input: { button: 'KeyU' },               gaps: [98, 92, 86] },
+    { move: 'cr.LP', input: { down: 'KeyS', button: 'KeyU' }, gaps: [96, 90, 84] },
+  ]
+  const okGrounded = (m) => m.landed && ['light', 'medium', 'heavy'].includes(m.producedLevel) && m.reactionLevel === 'hitstun-normal'
+  console.log(`\n── hit-low crouch cell ──  victim=${VICTIM}`)
+  console.log(`   atlas select:  low -> ${lowSel.key}[${lowSel.frame0}]   stand -> ${stdSel.key}[${stdSel.frame0}]   lowSingleFrame=${lowSingleFrame}`)
+  let chosen = null
+  for (const c of HL_CANDS) {
+    for (const gap of c.gaps) {
+      const m = analyse(await firePass({ input: c.input }, gap, 'crouch'))
+      const hit = okGrounded(m) && m.hitLowAtContact === true
+      console.log(`   probe ${c.move.padEnd(5)} gap=${String(gap).padEnd(3)} -> landed=${m.landed ? 1 : 0} lvl=${(m.producedLevel || '-').padEnd(6)} react=${(m.reactionLevel || '-').padEnd(14)} hitLow=${m.hitLowAtContact ? 1 : 0}${hit ? '   ✓ CROUCH-LOW' : ''}`)
+      if (hit) { chosen = { ...c, gap }; break }
+      await sleep(200)
+    }
+    if (chosen) break
+  }
+
+  const hl = { victim: VICTIM, atlasPath, lowSel, stdSel, lowSingleFrame }
+  if (!chosen) {
+    // No grounded normal drove the low path on a croucher: the mechanic did not
+    // reproduce. FAIL loudly rather than emit a mislabeled 'hurt' as 'hit-low'.
+    hl.verdict = 'FAIL'
+    hl.reason = 'no grounded normal landed on the crouching victim with hitLow=true'
+    writeFileSync(`${OUT}/hitlow.json`, JSON.stringify(hl, null, 2))
+    console.log(`\n❌ hit-low FAIL: ${hl.reason} — no cell written (refusing to mislabel a hurt reel as hit-low).`)
+    await browser.close()
+    process.exit(1)
+  }
+
+  // Standing A/B with the SAME move: must land and resolve hitLow=false (shared hurt
+  // reel). This is the mutation built INTO the cell — if standing ALSO produced
+  // hitLow=true the flag would gate nothing.
+  const crouchHero = await captureHero({ input: chosen.input, target: 'hitstun', label: 'hitlow-crouch' }, chosen.gap, { victimStance: 'crouch', file: `${OUT}/hero-hitlow-crouch${lowSingleFrame ? '-HELD1F' : ''}.png` })
+  const standHero = await captureHero({ input: chosen.input, target: 'hitstun', label: 'hitlow-stand' }, chosen.gap, { victimStance: 'idle', file: `${OUT}/hero-hitlow-stand.png` })
+
+  // Verdict — three independent locks, all must hold.
+  const crouchLive = !!crouchHero.cap && crouchHero.cap.hitstop > 0 && crouchHero.cap.hitLow === true
+  const standLive = !!standHero.cap && standHero.cap.hitstop > 0 && standHero.cap.hitLow === false
+  const clipDistinct = lowSel.key === 'hit-low' && lowSel.frame0 !== stdSel.frame0
+  const hlPass = crouchLive && standLive && clipDistinct
+
+  Object.assign(hl, {
+    move: chosen.move, gap: chosen.gap,
+    crouch: { file: crouchHero.file, cap: crouchHero.cap, rendersClip: lowSel.key, rendersFrame: lowSel.frame0 },
+    stand: { file: standHero.file, cap: standHero.cap, rendersClip: stdSel.key, rendersFrame: stdSel.frame0 },
+    locks: { crouchLive, standLive, clipDistinct },
+    provisional: lowSingleFrame,
+    caveat: lowSingleFrame
+      ? 'hit-low ships as a SINGLE held frame today (generator 1f-vs-12f-spec clamp; asset-delivery chasing). This cell is a held POSE, not an animation. Back-out test = whether the one held frame reads badly. Filename carries -HELD1F.'
+      : 'hit-low renders multiple frames on this skin.',
+    axis: 'stance (crouch) — orthogonal to the light/medium/heavy/sweep/launcher/crumple weight ladder; same underlying hitstun sim state',
+    verdict: hlPass ? 'PASS' : 'FAIL',
+  })
+  writeFileSync(`${OUT}/hitlow.json`, JSON.stringify(hl, null, 2))
+
+  console.log(`\n── hit-low result ──`)
+  console.log(`   move          ${chosen.move} @ gap ${chosen.gap}  (same move drives BOTH cells)`)
+  console.log(`   CROUCH  ${crouchHero.file}`)
+  console.log(`           hitstop=${crouchHero.cap?.hitstop} hitLow=${crouchHero.cap?.hitLow}  renders ${lowSel.key}[${lowSel.frame0}]`)
+  console.log(`   STAND   ${standHero.file}`)
+  console.log(`           hitstop=${standHero.cap?.hitstop} hitLow=${standHero.cap?.hitLow}  renders ${stdSel.key}[${stdSel.frame0}]`)
+  console.log(`   locks   crouchLive=${crouchLive} standLive=${standLive} clipDistinct=${clipDistinct}   provisional(1frame)=${lowSingleFrame}`)
+  console.log(`\n${hlPass ? '✅ hit-low PASS' : '❌ hit-low FAIL'} — crouch hitLow=true→${lowSel.key}[${lowSel.frame0}], stand hitLow=false→${stdSel.key}[${stdSel.frame0}]`)
+  await browser.close()
+  process.exit(hlPass ? 0 : 1)
 }
 
 // ── Drive the ladder ─────────────────────────────────────────────────────────

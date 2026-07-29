@@ -42,6 +42,10 @@
     "invariant": "Every tool whose bucket is NOT in allowedToContainCardTokens must contain ZERO card tokens in code. card-lab must contain a route/handle card token. The dual tool must default to a shipped route."
   },
   "tools": {
+    "attract-census": {
+      "app": "shipped-ui",
+      "note": "SHIPPED attract reel (src/screens/attract). Drives the PURE AttractDirector frame-for-frame in node — no browser, no renderer, no route — and censuses the fraction of SIM frames that are money shots (super/KO/heavy) vs footsies. Output is screen-time COMPOSITION and is load-invariant (a fraction of simulated frames, identical on an idle or saturated box); it is NOT fps. Card-clean: imports only the reel director + the shipped fighter sim. Run with `npx tsx`; `--selftest` is the mutation guard."
+    },
     "bench-stages": {
       "app": "card-lab",
       "note": "CARD BATTLER via ?lab=1 / __OPS3D__ (ThreeLab → FightScene3D + VfxSubsystem). Inadmissible as shipped-fighter evidence."

@@ -92,3 +92,5 @@ spark-pixel-mutant/
 /_*.png
 /spark-pixel*.png
 .hud-agent/
+.fg-shots/
+.fg-boards/

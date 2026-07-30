@@ -9,6 +9,7 @@ import {
 } from '../types'
 import type { ScenarioId } from '../../types'
 import { stageConfig } from './StageRegistry'
+import { measureForegroundSpan, type ForegroundSpan } from './foregroundSpan'
 import type { LightRig } from '../lighting/LightRig'
 import { flagsFor } from '../core/QualityManager'
 import { ReflectiveFloor, type FloorLook } from './ReflectiveFloor'
@@ -31,6 +32,11 @@ declare global {
       /** Dev/QA: hide the foreground framing occluders (used by the occluder
        *  probe to difference a frame with and without them). */
       setForegroundVisible: (v: boolean) => void
+      /** Dev/QA: retune the foreground occluders live — `lum` multiplies the
+       *  lit slab colours (rim-light accents are left alone), `scale` shrinks
+       *  the whole frame group. Lets a blind variant sweep run without a
+       *  rebuild between arms. */
+      setForegroundLook: (o: { lum: number }) => void
       /** Dev/QA: hide the whole mid-ground build, leaving the painted cyclorama
        *  and the floor. Lets a probe measure how much of the painting the
        *  procedural set is actually covering, with nothing else changed. */
@@ -48,6 +54,14 @@ declare global {
        *  the downed fighter — instead of the loose two-fighter coverage union —
        *  so it measures occlusion of the fighter's silhouette, not the framing. */
       project: (x: number, y: number, z: number) => [number, number]
+      /** Dev/QA: foreground-occluder geometry as screen-space bbox unions.
+       *  `coverage` is the share of frame they eat; `overlapP1`/`overlapP2` is
+       *  the share of each fighter's NEUTRAL body box they cross, which is the
+       *  number that actually tracks the defect — an occluder beside a fighter
+       *  frames, one on top of a fighter obstructs. Deterministic: no time
+       *  term, so unlike a shown-vs-hidden pixel diff it cannot pick up scene
+       *  animation. */
+      foregroundCoverage: () => ForegroundSpan
       /** Dev/QA: scale the whole light rig (1 = normal, 0 = dark). The decal
        *  light-coupling probe dims the rig and watches which surfaces move: a
        *  lit painted decal darkens with it, an unlit `toneMapped:false` sticker
@@ -465,6 +479,33 @@ export class StageSubsystem implements Subsystem {
           setForegroundVisible: (v: boolean) => {
             if (this.build) this.build.foreground.visible = v
           },
+          // Brightness-only. A `scale` lever lived here and was REMOVED after it
+          // invalidated two arms of a five-arm blind ranking: Object3D.scale on
+          // the parent group scales child POSITIONS too, so "shrink the
+          // occluders by 0.7" actually dragged the edge pylons from x=+-3.25,
+          // z=4.8 to x=+-2.28, z=3.36 -- inward onto the fighters and nearer the
+          // lens, i.e. LARGER in screen space. Both critics duly ranked those
+          // arms last and described pillars covering the fighters; they were
+          // reading the bug correctly. Shipping a "fixed" version nobody has
+          // validated would be worse than shipping none, and the blind data says
+          // brightness and silhouette are the levers that matter anyway.
+          setForegroundLook: (o: { lum: number }) => {
+            const fg = this.build?.foreground
+            if (!fg) return
+            fg.traverse((n) => {
+              const m = n as THREE.Mesh
+              if (!m.isMesh) return
+              const mat = m.material as THREE.Material
+              // Accents are additive MeshBasicMaterial rim strips — the read
+              // that says "authored framing". Scaling them with the slabs
+              // would confound the very variable this sweep is isolating.
+              if ((mat as THREE.MeshBasicMaterial).isMeshBasicMaterial) return
+              const std = mat as THREE.MeshStandardMaterial
+              if (!std.color) return
+              const base = (m.userData.baseCol ??= std.color.getHex())
+              std.color.setHex(base as number).multiplyScalar(o.lum)
+            })
+          },
           setBuildVisible: (v: boolean) => {
             if (this.build) this.build.root.visible = v
           },
@@ -484,6 +525,22 @@ export class StageSubsystem implements Subsystem {
             const v = new THREE.Vector3(x, y, z).project(cam)
             return [v.x, v.y]
           },
+          // Foreground occlusion against the fighters at neutral spacing.
+          //
+          // The metric itself lives in `foregroundSpan.ts` because the
+          // load-invariant gate calls the SAME function with the neutral
+          // camera. Two copies would give two numbers that drift, which is
+          // exactly the class the shared engine-module enumerator closed.
+          //
+          // Deliberately GEOMETRIC, not a pixel diff. The obvious probe --
+          // screenshot with the foreground shown, screenshot with it hidden,
+          // count changed pixels -- is a lying instrument here, and it lied to
+          // me: it reported a 41-point coverage change on a stage whose art I
+          // had not touched. Everything else in the scene (idle breathing,
+          // ticker crawls, EKG traces, ambient dust) also moves between the two
+          // captures, and pause() freezes the sim, not the renderer, so there
+          // is no way to still them. Projection has no time term at all.
+          foregroundCoverage: () => measureForegroundSpan(this.build?.foreground, this.ctx.camera),
           setLightScale: (s: number) => {
             this.getLightRig()?.debugSetLightScale(s)
           },

@@ -198,8 +198,24 @@ export function foreground(b: StageBuild, style: OverheadStyle, cfg: StageConfig
   // subsystem re-anchors the whole group to the live camera each frame.
   b.beginForeground()
   try {
-  const dark = new THREE.Color(cfg.structure).multiplyScalar(0.72).getHex()
-  const darker = new THREE.Color(cfg.structure).multiplyScalar(0.52).getHex()
+  // Occluder albedo. These were 0.72/0.52 and read as "featureless black
+  // silhouettes" to three independent blind critics. A five-arm blind ranking
+  // (ctrl / hidden / brighter / smaller / brighter+smaller, labels shuffled, key
+  // sealed outside the repo) was scored by three critics on three model
+  // families; the two whose reports survived verification ranked the BRIGHTER
+  // arm first, unanimously, on all four stages. The ratio between the two tones
+  // is preserved so the tonal separation the styles below rely on is unchanged.
+  //
+  // Why brightness is a real lever here and texture is NOT: these surfaces are
+  // already textured (structureMat -> the 'paintedMetal' bakery preset), and
+  // measured local gradient energy inside the eroded occluder interior is
+  // 0.69-1.16x the painted scene's. The detail was always present -- albedo is
+  // MULTIPLIED by it, so at a near-black base the variation spans ~2 of 255
+  // levels and is invisible while remaining measurable. Same mechanism the
+  // fighter shadow-lift work hit: an albedo-multiplied signal vanishes exactly
+  // where the surface is darkest. Adding texture here would have bought nothing.
+  const dark = new THREE.Color(cfg.structure).multiplyScalar(1.05).getHex()
+  const darker = new THREE.Color(cfg.structure).multiplyScalar(0.78).getHex()
   const Z = 4.8   // edge-pylon depth (in-frame, moderate bokeh)
   const ZC = 6.4  // corner-mass depth (closer, heavy bokeh)
 
@@ -244,13 +260,24 @@ export function foreground(b: StageBuild, style: OverheadStyle, cfg: StageConfig
       break
     }
     case 'server': {
-      // rack uprights both edges with cable bundles + a low blade-server mass
-      box(0.55, 5.2, 0.6, -3.25, 2.1, Z, darker)
-      box(0.55, 5.2, 0.6, 3.25, 2.1, Z, darker)
-      accent(0.09, 4.6, -2.98, 2.1, Z, cfg.trim, 0.5)
-      accent(0.09, 4.6, 2.98, 2.1, Z, cfg.trim, 0.5)
-      for (let i = 0; i < 4; i++) { accent(0.5, 0.05, -3.25, 0.6 + i * 1.1, Z, 0x59d8ff, 0.4); accent(0.5, 0.05, 3.25, 0.6 + i * 1.1, Z, 0x59d8ff, 0.4) }
-      box(2.4, 1.4, 1.4, 2.5, 0.4, ZC, dark, 0, 0.12)
+      // rack uprights both edges with cable bundles + a low blade-server mass.
+      //
+      // This style measured the WORST occluder coverage of the four stages
+      // sampled -- 33% of the frame, against 13% on the lightest -- from two
+      // unbroken 0.55x5.2 slabs plus a 2.4-wide corner mass. Racks are the one
+      // subject where the fix is also the truth: a real rack is a stack of
+      // discrete units with gaps, not a monolith. Segmenting buys the broken
+      // profile the critics asked for AND drops coverage, and the cyan unit
+      // accents (which all three reports singled out as the part that reads as
+      // authored) now sit in the gaps where they belong.
+      for (const sx of [-1, 1]) {
+        for (let i = 0; i < 4; i++) {
+          box(0.44, 1.02, 0.56, sx * 3.52, 0.62 + i * 1.24, Z, darker)
+        }
+        accent(0.08, 4.4, sx * 3.27, 2.1, Z, cfg.trim, 0.5)
+        for (let i = 0; i < 4; i++) accent(0.4, 0.05, sx * 3.52, 0.6 + i * 1.24, Z, 0x59d8ff, 0.4)
+      }
+      box(1.7, 1.05, 1.4, 3.0, 0.34, ZC, dark, 0, 0.12)
       break
     }
     case 'gold': {
@@ -292,23 +319,57 @@ export function foreground(b: StageBuild, style: OverheadStyle, cfg: StageConfig
       break
     }
     case 'yard': {
-      // chain-link fence posts + a dock bollard corner mass
-      for (const x of [-3.3, -2.7, -2.1]) cyl(0.08, 5.0, x, 2.2, Z, darker)
+      // Chain-link fence posts + a dock bollard corner mass.
+      //
+      // The posts were three identical 5.0-tall cylinders at x = -3.3/-2.7/-2.1
+      // while P1 stands at x = -2.55. The innermost ran the FULL height of his
+      // body -- 56 of 56 rows -- and the 1:1 frame shows a black pole straight
+      // down Chesky's arm and torso. Measured vertical span was 100% where
+      // every other stage on the roster tops out at 17.9%.
+      //
+      // The defect is SHAPE, not amount. `ipo-prep` (8.93%) and `distribution`
+      // (10.71%) cover almost the same AREA of the body box and read nothing
+      // alike, because a foreground element crossing horizontally near the
+      // floor reads as depth -- something standing in front of the arena --
+      // while one running the length of the body reads as the character being
+      // cut in half. So the fix moves the run off the fighter lane rather than
+      // shrinking it.
+      //
+      // Heights are also staggered, for the reason the `plateau` monolith was
+      // segmented: three identical axis-aligned bars have no profile a viewer
+      // can name, so the eye files them as a hole punched in the frame rather
+      // than as built structure.
+      for (const [x, h, y] of [[-4.15, 5.0, 2.2], [-3.55, 4.3, 1.85], [-2.95, 3.5, 1.45]] as const) {
+        cyl(0.08, h, x, y, Z, darker)
+      }
       const mesh = structureMat({ color: darker, roughness: 0.8, metalness: 0.4 })
-      for (let i = 0; i < 4; i++) { const w = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.03, 0.03), mesh); w.position.set(-2.7, 0.6 + i * 1.1, Z); b.add(w) }
+      for (let i = 0; i < 4; i++) { const w = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.03, 0.03), mesh); w.position.set(-3.55, 0.5 + i * 0.95, Z); b.add(w) }
+      accent(0.07, 3.2, -4.05, 2.1, Z, cfg.trim, 0.45)
       cyl(0.4, 1.4, 3.0, 0.5, ZC, dark)
       box(1.0, 0.2, 1.0, 3.0, 1.2, ZC, darker)
       break
     }
     case 'plateau': {
       // a stalled monolith edge left + a drooping banner cable kept high on the
-      // RIGHT so it frames the top corner without crossing the fighter's head
-      box(0.9, 5.4, 0.8, -3.3, 2.2, Z, darker)
-      accent(0.1, 4.6, -2.9, 2.2, Z, cfg.trim, 0.5)
+      // RIGHT so it frames the top corner without crossing the fighter's head.
+      //
+      // The monolith was one unbroken 0.9x5.4 slab at x=-3.3. Three blind
+      // critics independently called the foreground "untextured box primitives"
+      // and "a masking layer rather than a physical object" -- but measurement
+      // says the surfaces DO carry scene-parity detail, so the read was never
+      // about texture. What they were describing is the silhouette: a solid,
+      // axis-aligned rectangle has no profile a viewer can name, so the eye
+      // files it as a hole punched in the frame. Segmenting the tower into
+      // offset blocks with gaps gives it an outline that reads as built
+      // structure, and pushing it out to -3.6 pulls it off the fighter lane.
+      for (const [dy, w, dx] of [[0.0, 0.62, 0.0], [1.85, 0.78, 0.09], [3.6, 0.5, -0.07]] as const) {
+        box(w, 1.55, 0.72, -3.6 + dx, 0.75 + dy, Z, darker)
+      }
+      accent(0.09, 4.4, -3.24, 2.2, Z, cfg.trim, 0.5)
       const cable = structureMat({ color: darker, roughness: 0.9, metalness: 0.1 })
       const droop = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([new THREE.Vector3(0.8, 4.4, Z), new THREE.Vector3(2.4, 3.5, Z + 0.2), new THREE.Vector3(3.5, 4.2, Z)]), 20, 0.06, 6, false), cable)
       b.add(droop)
-      box(1.7, 1.0, 1.3, 2.7, 0.3, ZC, dark, 0.03)
+      box(1.25, 0.85, 1.3, 3.15, 0.28, ZC, dark, 0.03)
       break
     }
   }

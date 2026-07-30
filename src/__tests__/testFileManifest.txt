@@ -104,6 +104,7 @@ src/three/fight/__tests__/spacingCharFrac.node.test.ts
 src/three/fight/__tests__/tweenGhosting.node.test.ts
 src/three/fight/__tests__/whiffPunishCensus.node.test.ts
 src/three/fight/__tests__/worldDimOverfade.test.ts
+src/three/stage/__tests__/foregroundFootBand.test.ts
 src/three/stage/__tests__/foregroundOccluders.test.ts
 src/three/stage/__tests__/paintedDecal.test.ts
 src/three/vfx/__tests__/impactFlash.test.ts

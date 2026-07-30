@@ -243,10 +243,27 @@ export function foreground(b: StageBuild, style: OverheadStyle, cfg: StageConfig
       for (let i = 0; i < 3; i++) box(0.7, 0.16, 0.6, -3.25, 0.4 + i * 1.5, Z, dark)
       box(0.34, 3.8, 0.34, 3.3, 1.5, Z, darker)
       accent(0.08, 3.4, 3.08, 1.5, Z, cfg.trim, 0.55)
-      // lower handrail + posts hugging the bottom edge
-      box(9.5, 0.16, 0.3, 0, 0.35, ZC, dark)
-      for (const x of [-2.6, 0, 2.6]) box(0.16, 1.1, 0.24, x, -0.1, ZC, darker)
-      accent(9.2, 0.05, 0, 0.42, ZC, 0x66e6ff, 0.5)
+      // DELETED: a 9.5-wide "warning-striped handrail" (y=0.35), three posts
+      // (y=-0.1) and a cyan accent strip, all at `ZC`. They drew NOTHING.
+      //
+      // The foreground rides a camera-pinned frame whose matrix is
+      // `cam.matrixWorld * neutralView` (StageSubsystem.updateFrame), so an
+      // occluder's VIEW-space position is constant and its NDC position is
+      // fixed by the projection alone. Vertical NDC is also aspect-independent
+      // (fov is vertical). Measured: the handrail projects to NDC y = -1.26 and
+      // the posts to -1.91..-1.20, against a frame that ends at -1.0. So this
+      // assembly was off the bottom of the screen on every device, at every
+      // aspect ratio, for its whole life -- unconditionally, not situationally.
+      //
+      // I nearly "fixed" this instead of deleting it. A blind critic said a
+      // foreground element cuts across the fighters' legs HERE, and this bar
+      // was the widest thing at the nearest depth, so it looked like the
+      // culprit. It is not: I was reading world-space geometry and inferring
+      // what renders. Measuring each mesh's clipped on-screen box instead puts
+      // this stage's widest VISIBLE foreground element at 9.6% of frame width,
+      // hugging x <= -0.81 -- nothing here crosses a fighter at all. The critic
+      // was right about `ipo-prep` (the one genuine 100%-width case) and wrong
+      // about this stage. Weight a blind ranking; verify its prose.
       break
     }
     case 'garage': {
@@ -310,12 +327,69 @@ export function foreground(b: StageBuild, style: OverheadStyle, cfg: StageConfig
       break
     }
     case 'atrium': {
-      // a grand marble balustrade framing the LOWER edge (balusters + handrail
-      // kept low so the rail never bisects the fighters at waist height)
+      // A grand marble balustrade framing the lower edge -- now as two runs with
+      // an open centre, at the mid foreground depth.
+      //
+      // This style was ranked WORST of eight by two blind critics on different
+      // model families, independently, both naming the same element: "a massive
+      // horizontal black slab covering the ground plane" / "a near-black apron
+      // spanning the bottom ~25-30%, reading as a dead bar, not a floor".
+      //
+      // Measured cause. A per-band luminance profile over all eight stages shows
+      // every arena dipping in its bottom 10% (that is the floor, and it is
+      // correct). `ipo-prep` is the only one that also collapses in the band
+      // ABOVE it: 32.5 mean at 80-90% of frame height, against 61.8-101.1 for
+      // the other seven. The 70-80% -> 80-90% step is a 57% cliff.
+      //
+      // The discriminator, measured in SCREEN space by projecting every
+      // foreground mesh and clipping it to the frame: this stage's balustrade
+      // rail spanned x[-1, 1] -- 100% of frame width -- at y[-0.73, -0.47],
+      // straddling the ground line the fighters stand on (y = -0.55). It was
+      // the ONLY full-width visible foreground element in the game. Next widest
+      // anywhere is 38% (plateau, up in the sky corner), then 25.5% (crisis,
+      // two corner masses with the centre open, which both critics passed as
+      // "frames, doesn't maim"). After this fix: 16.9% per side with x in
+      // (-0.66, 0.66) clear, i.e. below the known-good case.
+      //
+      // Do NOT re-derive this from world-space widths. I did that first and it
+      // is wrong: it ranked `gantry`'s 9.5-wide handrail as the worst element
+      // in the game, when that bar projects to NDC y = -1.26 and has never been
+      // on screen at all. Same trap here -- the sub-floor bar this case used to
+      // carry at y=-0.25 lands at -1.65, also invisible. Only the clipped
+      // on-screen box tells you what a player sees.
+      //
+      // Why the existing span gate stayed green, which is the part worth
+      // recording: `measureForegroundSpan` scores an occluder's VERTICAL run
+      // down a body. A horizontal bar spans almost nothing vertically -- this
+      // one covered the body's lowest ~8% of NDC and scored 8.93% against a
+      // 40% ceiling, a comfortable pass, while two blind critics ranked it the
+      // single worst element on screen. The new foot-band metric reads the same
+      // geometry at 100%. Two gates, one subsystem, opposite verdicts: a gate
+      // built for one defect SHAPE is silent on another shape. Do not widen
+      // SPAN_CEILING -- the span metric is right about its own question.
+      // Grounding is the one thing a 2D fighter cannot fake.
+      //
+      // `alarm` proves the safe shape -- two wings with the centre open read as
+      // depth, and both critics let it pass despite carrying MORE foreground
+      // mass than stages they criticised. The open centre, not the total mass,
+      // is what discriminates. So the fix opens the centre rather than dimming
+      // or shrinking the art.
+      //
+      // The runs stop at |x| = 1.8, not at the fighters' own x. Foreground
+      // pinned at `ZC` sits 5.0 units from the neutral camera against the
+      // fighters' 9.85, so it projects ~1.97x wider: an element at world 1.8
+      // lands where a BODY at 3.54 would, just outboard of the body's 3.1 edge.
+      // Using the fighters' own coordinates here would leave the rail sitting
+      // on them -- an earlier revision of this fix moved the balustrade one
+      // depth back "so it reads as architecture instead of a smear", which
+      // pulled it INBOARD in screen space and drove `spanP1/spanP2` from
+      // 8.93/8.93 to 14.29/25. Measured, reverted. Depth is not a free knob
+      // here: it is a magnification.
       for (const x of [-3.3, -2.5, -1.7, 1.7, 2.5, 3.3]) cyl(0.12, 1.7, x, 0.5, ZC, dark)
-      box(8.4, 0.26, 0.5, 0, 1.35, ZC, darker)
-      box(8.4, 0.18, 0.5, 0, -0.25, ZC, darker)
-      accent(8.2, 0.05, 0, 1.48, ZC, cfg.trim, 0.5)
+      for (const sx of [-1, 1]) {
+        box(2.4, 0.26, 0.5, sx * 3.0, 1.35, ZC, darker)
+        accent(2.2, 0.05, sx * 3.0, 1.48, ZC, cfg.trim, 0.5)
+      }
       break
     }
     case 'yard': {
@@ -329,11 +403,21 @@ export function foreground(b: StageBuild, style: OverheadStyle, cfg: StageConfig
       //
       // The defect is SHAPE, not amount. `ipo-prep` (8.93%) and `distribution`
       // (10.71%) cover almost the same AREA of the body box and read nothing
-      // alike, because a foreground element crossing horizontally near the
-      // floor reads as depth -- something standing in front of the arena --
-      // while one running the length of the body reads as the character being
-      // cut in half. So the fix moves the run off the fighter lane rather than
-      // shrinking it.
+      // alike, because an element running the length of the body reads as the
+      // character being cut in half. So the fix moves the run off the fighter
+      // lane rather than shrinking it.
+      //
+      // CORRECTION, and it cost a cycle to learn: this comment used to finish
+      // that sentence with "...while a foreground element crossing horizontally
+      // near the floor reads as depth", stated as settled doctrine. That half
+      // is FALSE in the full-width case, and `ipo-prep` was the counter-example
+      // sitting three cases above -- a horizontal bar near the floor spanning
+      // 100% of frame width, which two blind critics on different model
+      // families independently ranked the worst element in the game. Horizontal
+      // is safe only when the CENTRE IS OPEN over the fight lane; a full-width
+      // horizontal bar severs the ground contact instead, which is worse than
+      // the vertical case this stage fixes, not better. Ground contact and body
+      // occlusion are separate axes with separate gates.
       //
       // Heights are also staggered, for the reason the `plateau` monolith was
       // segmented: three identical axis-aligned bars have no profile a viewer

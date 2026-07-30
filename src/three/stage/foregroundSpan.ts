@@ -68,36 +68,14 @@ export interface ForegroundSpan {
 const ZERO: ForegroundSpan = { coverage: 0, overlapP1: 0, overlapP2: 0, spanP1: 0, spanP2: 0 }
 
 /**
- * TWO cameras, and conflating them makes the metric blind to its own known-bad
- * case. I proved that by mutation before shipping the gate.
+ * Rasterize the foreground group into the shared GX*GY occupancy lattice.
  *
- *   fgCam    -- projects the CAMERA-PINNED foreground.
- *   bodyCam  -- projects the WORLD-FIXED fighter bodies.
- *
- * Live, they are the same object: `updateFrame()` has already baked
- * `cam.matrixWorld * neutralView` into the foreground's world matrix, so
- * projecting it through the live camera yields the neutral projection, while
- * the bodies (untouched) yield the live one. One camera, two different
- * effective frames.
- *
- * Headless, the foreground sits at its AUTHORED positions with no pin applied,
- * so it must be projected through the neutral camera and the bodies through the
- * fight camera's rest pose. Passing the neutral camera for both scored the
- * known-broken `distribution` posts at span 0 where the real GPU run measured
- * 100 -- because the fight camera rests CLOSER (z 9.85 vs 11.4) and LOWER
- * (y 2.03 vs 2.55), so a body projects visibly larger than the neutral camera
- * makes it. A gate that cannot see the defect it was written for is worse than
- * no gate, and only the mutation showed it.
+ * Factored out so the two questions below read the SAME pixels. Forking this
+ * would give us two rasters that drift, which is the exact class this project
+ * has closed twice already -- one list, several questions.
  */
-export function measureForegroundSpan(
-  fg: THREE.Object3D | null | undefined,
-  fgCam: THREE.Camera,
-  bodyCam: THREE.Camera = fgCam,
-): ForegroundSpan {
-  if (!fg) return { ...ZERO }
-  const cam = fgCam
+function rasterizeForeground(fg: THREE.Object3D, cam: THREE.Camera): Uint8Array {
   cam.updateMatrixWorld()
-  bodyCam.updateMatrixWorld()
   fg.updateMatrixWorld(true)
 
   const grid = new Uint8Array(GX * GY)
@@ -145,6 +123,118 @@ export function measureForegroundSpan(
       rasterTri(sx, sy)
     }
   })
+
+  return grid
+}
+
+/**
+ * The widest UNBROKEN horizontal run of foreground occlusion across the fight
+ * lane, at and just below ground contact, as a percentage of the lane's width.
+ *
+ * WHY THIS IS A SECOND METRIC AND NOT A LOOSER THRESHOLD ON THE FIRST ONE.
+ * `measureForegroundSpan` asks "does an occluder run DOWN a body", and it is
+ * correct for that question. It cannot answer this one, for two compounding
+ * reasons found by measurement, not by review:
+ *
+ *   1. A horizontal bar spans almost nothing vertically. `ipo-prep` scored
+ *      8.93% against a SPAN_CEILING of 40 -- a comfortable pass -- while two
+ *      blind critics on different model families independently ranked its
+ *      foreground the single worst element in the game.
+ *   2. `atrium`'s worst bar sat at y = -0.25, entirely BELOW the body box.
+ *      The span metric samples rows that overlap a FIGHTER, so a bar under the
+ *      feet scored exactly zero. It was not under-weighted; it was outside the
+ *      metric's domain.
+ *
+ * A gate built for one defect shape is silent on another shape in the same
+ * subsystem. So do not widen SPAN_CEILING to reach this -- the span metric is
+ * right about its own question. This one owns the floor.
+ *
+ * WHY "UNBROKEN RUN" AND NOT "COVERAGE". Coverage cannot tell a full-width
+ * slab from two wings with the fight lane open between them, and that gap is
+ * exactly what separates the two stages critics condemned from the six they
+ * left alone: widest element at the nearest depth was 9.5 (gantry) and 8.4
+ * (atrium), then a 2.8x cliff to 3.0 (alarm) and 1.0-1.9 for the rest. `alarm`
+ * carries MORE foreground mass than `plateau` and reads as framing because its
+ * centre is open. The run length is the property that discriminates; total
+ * coverage is not.
+ *
+ * The band runs from the fighters' knees down to the bottom of frame, because
+ * bokeh at the nearest depth smears an occluder well above its authored bounds
+ * -- `atrium`'s bar was drawn beneath the floor line and read as amputating
+ * feet. Geometric bounds are not screen bounds at a blurred depth, which is
+ * why this simply measures where the pixels land.
+ */
+export function measureFootBandRun(
+  fg: THREE.Object3D | null | undefined,
+  fgCam: THREE.Camera,
+  bodyCam: THREE.Camera = fgCam,
+): number {
+  if (!fg) return 0
+  const grid = rasterizeForeground(fg, fgCam)
+  bodyCam.updateMatrixWorld()
+
+  const p = new THREE.Vector3()
+  const ndc = (x: number, y: number) => {
+    p.set(x, y, 0).project(bodyCam)
+    return { x: p.x, y: p.y }
+  }
+
+  // Lane: outer edge of one fighter to the outer edge of the other. That is the
+  // ground a player reads as "the floor we are standing on".
+  const laneL = ndc(-WORLD.FIGHTER_SEPARATION - BODY_HALF_W, WORLD.GROUND_Y).x
+  const laneR = ndc(WORLD.FIGHTER_SEPARATION + BODY_HALF_W, WORLD.GROUND_Y).x
+  // Band: knee height down to the bottom of frame.
+  const kneeY = ndc(0, WORLD.GROUND_Y + WORLD.FIGHTER_HEIGHT * 0.28).y
+
+  const gx0 = Math.max(0, Math.floor(((laneL + 1) / 2) * GX))
+  const gx1 = Math.min(GX - 1, Math.ceil(((laneR + 1) / 2) * GX))
+  const gy0 = Math.max(0, Math.floor(((1 - kneeY) / 2) * GY))
+  if (gx1 <= gx0) return 0
+
+  // Collapse the band vertically first: a column counts as blocked if ANY row
+  // in the foot band is occluded there. A slab that dips low in the middle and
+  // rides high at the edges is still one continuous wall to the eye.
+  let best = 0, run = 0
+  for (let gx = gx0; gx <= gx1; gx++) {
+    let blocked = 0
+    for (let gy = gy0; gy < GY; gy++) blocked |= grid[gy * GX + gx]
+    run = blocked ? run + 1 : 0
+    if (run > best) best = run
+  }
+  return Math.round((best / (gx1 - gx0 + 1)) * 10000) / 100
+}
+
+/**
+ * TWO cameras, and conflating them makes the metric blind to its own known-bad
+ * case. I proved that by mutation before shipping the gate.
+ *
+ *   fgCam    -- projects the CAMERA-PINNED foreground.
+ *   bodyCam  -- projects the WORLD-FIXED fighter bodies.
+ *
+ * Live, they are the same object: `updateFrame()` has already baked
+ * `cam.matrixWorld * neutralView` into the foreground's world matrix, so
+ * projecting it through the live camera yields the neutral projection, while
+ * the bodies (untouched) yield the live one. One camera, two different
+ * effective frames.
+ *
+ * Headless, the foreground sits at its AUTHORED positions with no pin applied,
+ * so it must be projected through the neutral camera and the bodies through the
+ * fight camera's rest pose. Passing the neutral camera for both scored the
+ * known-broken `distribution` posts at span 0 where the real GPU run measured
+ * 100 -- because the fight camera rests CLOSER (z 9.85 vs 11.4) and LOWER
+ * (y 2.03 vs 2.55), so a body projects visibly larger than the neutral camera
+ * makes it. A gate that cannot see the defect it was written for is worse than
+ * no gate, and only the mutation showed it.
+ */
+export function measureForegroundSpan(
+  fg: THREE.Object3D | null | undefined,
+  fgCam: THREE.Camera,
+  bodyCam: THREE.Camera = fgCam,
+): ForegroundSpan {
+  if (!fg) return { ...ZERO }
+  const grid = rasterizeForeground(fg, fgCam)
+  const bodyCam2 = bodyCam
+  bodyCam2.updateMatrixWorld()
 
   let hit = 0
   for (let i = 0; i < grid.length; i++) hit += grid[i]

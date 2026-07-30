@@ -24,9 +24,9 @@ import { buildStageScene } from '../StageBuilds'
 import { stageConfig, STAGE_ORDER } from '../StageRegistry'
 import { flagsFor } from '../../core/QualityManager'
 import { measureForegroundSpan, neutralStageCamera, BODY_HALF_W } from '../foregroundSpan'
-import { FightCamera } from '../../fight/FightCamera'
 import { WORLD } from '../../types'
 import { StageBuild } from '../StageKit'
+import { restFightCamera } from './stageHarness'
 
 /**
  * NO FOREGROUND OCCLUDER MAY RUN THE LENGTH OF A FIGHTER'S BODY.
@@ -90,36 +90,6 @@ const KNOWN_GOOD_MAX = 17.86 // crisis, measured
 const KNOWN_BAD = 100 // distribution before the fix, measured
 /** Shipped foreground depth -- `Z` in StageSet.foreground(). */
 const FG_Z = 4.8
-
-/**
- * The camera the WORLD-FIXED fighter bodies are seen through.
- *
- * Driven by the SHIPPED `FightCamera`, not a copy of its constants, so a future
- * reframing moves this gate with it instead of leaving it quietly measuring an
- * old composition. Its rest solve is deterministic (`restZ` derives from the
- * held 5.65 span), so settling the springs converges to a fixed pose.
- *
- * This is NOT the same camera the foreground is projected through, and the
- * difference is load-bearing: using the neutral stage camera for both scored
- * the known-broken posts at span 0 instead of 100, because the fight camera
- * rests closer (z 9.85 vs 11.4) and lower (y 2.03 vs 2.55) so bodies project
- * larger. Caught by mutation before this gate was trusted.
- */
-function restFightCamera(aspect = 16 / 9): THREE.PerspectiveCamera {
-  const cam = new THREE.PerspectiveCamera(
-    WORLD.CAMERA.fov, aspect, WORLD.CAMERA.near, WORLD.CAMERA.far,
-  )
-  const fc = new FightCamera(cam, { minX: -8, maxX: 8 })
-  const framing = {
-    ax: -WORLD.FIGHTER_SEPARATION,
-    bx: WORLD.FIGHTER_SEPARATION,
-    topY: WORLD.FIGHTER_HEIGHT,
-    pushIn: 0,
-  }
-  for (let i = 0; i < 900; i++) fc.update(1 / 60, 1 / 60, framing)
-  cam.updateMatrixWorld(true)
-  return cam
-}
 
 /**
  * World x at which an occluder pinned at depth `z` LANDS ON a fighter standing

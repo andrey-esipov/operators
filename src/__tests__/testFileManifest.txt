@@ -79,6 +79,7 @@ src/three/fight/__tests__/counterHitVfx.test.ts
 src/three/fight/__tests__/crackleContent.test.ts
 src/three/fight/__tests__/edgeAlpha.test.ts
 src/three/fight/__tests__/engineContextRelease.node.test.ts
+src/three/fight/__tests__/footSkate.node.test.ts
 src/three/fight/__tests__/hitFlash.test.ts
 src/three/fight/__tests__/hitLowReaction.test.ts
 src/three/fight/__tests__/impactMark.test.ts

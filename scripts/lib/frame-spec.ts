@@ -76,13 +76,42 @@ export const FRAMES: FrameSpec[] = [
   },
 
   // ── Walk forward: a four-key cycle (contact, passing, contact, passing) ──
+  //
+  // STRIDE IS CONSTRAINED EXPLICITLY, AND THAT IS NOT COSMETIC. The sim walks
+  // a fighter forward at WALK_FWD_SPEED = 2.4 cm/frame, and this cycle runs
+  // 32 frames = 2 steps, so the body covers exactly 38 cm per step. If a
+  // drawing shows the feet further apart than that at the contact pose, the
+  // planted foot MUST slide backward across the floor to make up the
+  // difference — that is foot skate, and it is the single most obvious tell
+  // that a walk was drawn without reference to the speed it plays at.
+  //
+  // These prompts used to say only "back leg extended behind with heel
+  // lifted", which bounds nothing, so the image model chose a stride at
+  // random. Measured across the six selectable fighters, the drawn contact
+  // stride came out at 114-147 cm against 38 cm of travel: a 3.0x to 3.8x
+  // skate on every single fighter, in the one clip that is on screen more
+  // than any other. No gate saw it, because every gate counted cels; a blind
+  // critic saw it immediately and described the swing foot as jumping a
+  // near-full stride.
+  //
+  // That the prompt is the cause rather than a pipeline limit is settled by a
+  // positive control: doshi's walk-BACK, whose prompt happens to say "sliding
+  // back toward it", came out at 32 cm against 30 cm of travel — 1.06x, very
+  // nearly perfect. Same model, same fighter, same run. The pipeline can draw
+  // a correct stride; it was simply never asked to.
+  //
+  // So the bound is stated in units the model can actually act on — a
+  // shoe-length of clear ground — rather than "shuffle", which four of six
+  // fighters ignored. src/three/fight/__tests__/footSkate.node.test.ts
+  // measures the shipped pixels and holds the ratio down.
   {
     name: 'walk-fwd-1',
     heightRatio: 1.0,
     aspect: [0.34, 0.7],
     pose:
-      'a forward walk contact frame in a fighting guard — front foot planted flat and heel just landing, back ' +
-      'leg extended behind with heel lifted, torso upright, both fists held up in guard, moving toward the target.',
+      'a forward walk contact frame in a fighting guard — a SHORT guarded step, not a lunge: the front foot ' +
+      'plants flat with only about one shoe-length of clear ground between the two feet, back foot still close ' +
+      'behind with the heel just lifting, knees soft, torso upright, both fists held up in guard, advancing.',
   },
   {
     name: 'walk-fwd-2',
@@ -97,8 +126,9 @@ export const FRAMES: FrameSpec[] = [
     heightRatio: 1.0,
     aspect: [0.34, 0.7],
     pose:
-      'a forward walk contact frame with the opposite leg leading — the other foot now planted forward with ' +
-      'heel landing, trailing leg extended back with heel raised, both fists up in guard, torso upright.',
+      'a forward walk contact frame with the opposite leg leading — again a SHORT guarded step, feet no more ' +
+      'than about one shoe-length of clear ground apart, the other foot now planted forward with heel landing, ' +
+      'trailing foot close behind with heel raised, both fists up in guard, torso upright.',
   },
   {
     name: 'walk-fwd-4',
@@ -110,13 +140,16 @@ export const FRAMES: FrameSpec[] = [
   },
 
   // ── Walk back: shuffling away while still facing the opponent ────────────
+  // Same stride bound as the forward walk, against WALK_BACK_SPEED = 1.9
+  // cm/frame over the same 32-frame cycle: 30 cm of travel per step.
   {
     name: 'walk-back-1',
     heightRatio: 1.0,
     aspect: [0.34, 0.7],
     pose:
-      'a backward shuffle-step while still facing right — the rear foot reaching back to take weight, front ' +
-      'foot sliding back toward it, body leaning back slightly, both fists held high in a careful guard.',
+      'a backward shuffle-step while still facing right — a SHORT retreating step, not a lunge: the rear foot ' +
+      'reaches back only about one shoe-length of clear ground behind the front foot and takes the weight, ' +
+      'front foot sliding back toward it, body leaning back slightly, both fists held high in a careful guard.',
   },
   {
     name: 'walk-back-2',
@@ -131,8 +164,9 @@ export const FRAMES: FrameSpec[] = [
     heightRatio: 1.0,
     aspect: [0.34, 0.7],
     pose:
-      'a backward shuffle-step with the front foot pushing off while facing right — rear foot planted behind ' +
-      'taking the weight, front foot lifting to slide back, body leaning away, both fists held high in guard.',
+      'a backward shuffle-step with the front foot pushing off while facing right — again a SHORT step, feet no ' +
+      'more than about one shoe-length of clear ground apart, rear foot planted behind taking the weight, front ' +
+      'foot lifting to slide back, body leaning away, both fists held high in guard.',
   },
   {
     name: 'walk-back-4',

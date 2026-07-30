@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import ts from 'typescript'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { execSync } from 'node:child_process'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -85,11 +85,29 @@ interface Scanned {
 }
 
 const SCAN_CACHE = new Map<string, Scanned>()
+/**
+ * Resolve a tool name to its file. Tools are written in either JavaScript or
+ * TypeScript, so the extension is discovered rather than assumed — hardcoding
+ * `.mjs` here is what previously let a tracked `.ts` tool slip past every check
+ * in this file (see the enumeration note below).
+ */
+function toolFile(tool: string): { path: string; kind: ts.ScriptKind } {
+  for (const [ext, kind] of [
+    ['.mjs', ts.ScriptKind.JS],
+    ['.ts', ts.ScriptKind.TS],
+  ] as const) {
+    const p = resolve(TOOLS, `${tool}${ext}`)
+    if (existsSync(p)) return { path: p, kind }
+  }
+  throw new Error(`instrument-manifest names '${tool}' but neither tools/${tool}.mjs nor tools/${tool}.ts exists`)
+}
+
 function scan(tool: string): Scanned {
   const cached = SCAN_CACHE.get(tool)
   if (cached) return cached
-  const src = readFileSync(resolve(TOOLS, `${tool}.mjs`), 'utf8')
-  const sf = ts.createSourceFile(`${tool}.mjs`, src, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS)
+  const { path, kind } = toolFile(tool)
+  const src = readFileSync(path, 'utf8')
+  const sf = ts.createSourceFile(path, src, ts.ScriptTarget.Latest, true, kind)
   const parts: string[] = []
   const idents = new Set<string>()
   const K = ts.SyntaxKind
@@ -125,14 +143,20 @@ function cardHits(s: Scanned): string[] {
 
 const entries = Object.entries(manifest.tools)
 // Enumerate the COMMITTED tool set (git-tracked), not readdir: this shared worktree
-// holds other agents' uncommitted *.mjs scratch, and the manifest must describe what
+// holds other agents' uncommitted scratch, and the manifest must describe what
 // ships in this commit. If git is unavailable the list is empty and the vacuity +
 // completeness guards below redden loudly rather than passing on nothing.
-const tracked = execSync("git ls-files -- '*.mjs'", { cwd: TOOLS, encoding: 'utf8' })
+//
+// BOTH extensions. This enumerated only '*.mjs' until a tracked TypeScript tool
+// (tools/measure-contact-sim.ts) was found sitting outside every check in this
+// file — unclassified, unscanned, and invisible to the completeness guard that
+// exists precisely to prove there is no blind spot. A tool is a tool whatever it
+// is written in; the language is not the boundary this gate is about.
+const tracked = execSync("git ls-files -- '*.mjs' '*.ts'", { cwd: TOOLS, encoding: 'utf8' })
   .split('\n')
   .map((f) => f.trim())
   .filter(Boolean)
-  .map((f) => f.replace(/\.mjs$/, ''))
+  .map((f) => f.replace(/\.(mjs|ts)$/, ''))
 
 describe('instrument routing: shipped-fighter tools must not address the card battler', () => {
   it('classifies a substantial, fully-populated tool set (vacuity guard)', () => {

@@ -172,7 +172,20 @@ img.onload = () => {
 </script></body></html>`
 }
 
-/** Clips worth a filmstrip — the ones whose motion quality actually matters. */
+/**
+ * Clips worth a filmstrip — the ones whose motion quality actually matters.
+ *
+ * STALE PREMISE CORRECTED: this list originally omitted crouch/block/dash/
+ * backdash/jump-fall because those clips shipped as a SINGLE cel on every
+ * fighter, and a one-cel clip has no motion to judge — excluding them was
+ * right at the time. They now carry 3-4 cels across the roster, so the reason
+ * for the omission no longer holds and the clips a player dwells in longest
+ * were the ones with no reviewable artefact.
+ *
+ * The rule this encodes: a clip earns a filmstrip once it has more than one
+ * cel, so the list must be revisited whenever locomotion density changes.
+ */
 export const FILMSTRIP_CLIPS = [
-  'idle', 'walk-fwd', 'walk-back', 'hp', 'hk', 'special-fireball', 'special-uppercut', 'jump-rise',
+  'idle', 'walk-fwd', 'walk-back', 'hp', 'hk', 'special-fireball', 'special-uppercut',
+  'jump-rise', 'jump-fall', 'crouch', 'block', 'dash', 'backdash',
 ]

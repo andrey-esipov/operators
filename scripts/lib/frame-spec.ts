@@ -805,34 +805,91 @@ export const TWEENS: TweenSpec[] = [
   { name: 'tw-i4-i3b', from: 'idle-4', to: 'idle-3', t: 0.67 },
   { name: 'tw-i3-i1a', from: 'idle-3', to: 'idle-1', t: 0.34 },
   { name: 'tw-i3-i1b', from: 'idle-3', to: 'idle-1', t: 0.67 },
-  // Hitstun: snap-back → settle → back toward guard.
-  { name: 'tw-hh-hr', from: 'hit-high', to: 'hit-reel', t: 0.5 },
-  { name: 'tw-hr-hs', from: 'hit-reel', to: 'hit-settle', t: 0.5 },
-  // Juggle arc: launch → apex → fall, a body tumbling through the air.
-  { name: 'tw-jl-ja', from: 'juggle-launch', to: 'juggle-apex', t: 0.5 },
-  { name: 'tw-ja-js', from: 'juggle-apex', to: 'juggle-spin', t: 0.5 },
-  { name: 'tw-js-jf', from: 'juggle-spin', to: 'juggle-fall', t: 0.5 },
-  // Knockdown: the bounce settling to the floor.
-  { name: 'tw-ki-kd', from: 'knockdown-impact', to: 'knockdown', t: 0.5 },
-  // Walk cycles: an inbetween between every contact/passing key, wrapping.
-  { name: 'tw-wf-12', from: 'walk-fwd-1', to: 'walk-fwd-2', t: 0.5 },
-  { name: 'tw-wf-23', from: 'walk-fwd-2', to: 'walk-fwd-3', t: 0.5 },
-  { name: 'tw-wf-34', from: 'walk-fwd-3', to: 'walk-fwd-4', t: 0.5 },
-  { name: 'tw-wf-41', from: 'walk-fwd-4', to: 'walk-fwd-1', t: 0.5 },
-  { name: 'tw-wb-12', from: 'walk-back-1', to: 'walk-back-2', t: 0.5 },
-  { name: 'tw-wb-23', from: 'walk-back-2', to: 'walk-back-3', t: 0.5 },
-  { name: 'tw-wb-34', from: 'walk-back-3', to: 'walk-back-4', t: 0.5 },
-  { name: 'tw-wb-41', from: 'walk-back-4', to: 'walk-back-1', t: 0.5 },
-  // Attack anticipation + recovery-settle. The active frames are already
-  // extreme; these fill the snap INTO contact (wind-up) and, more importantly,
-  // the snap back to guard (recovery) so a punch doesn't hard-cut to idle.
-  // Only the punches get tweens — they extend along a line so the flow-morph is
-  // clean. The kicks sweep a wide arc (morph's weak case) and stay snappy at
-  // 2-3 extreme frames, which reads fine for a fast normal.
-  { name: 'tw-lp-rec', from: 'lp-active', to: 'idle-1', t: 0.5 },
-  { name: 'tw-mp-rec', from: 'mp-active', to: 'idle-1', t: 0.5 },
-  { name: 'tw-hp-wind', from: 'hp-startup', to: 'hp-active', t: 0.5 },
-  { name: 'tw-hp-rec', from: 'hp-active', to: 'idle-1', t: 0.5 },
+  //
+  // ────────────────────────────────────────────────────────────────────────────
+  // WHY HITSTUN, JUGGLE, KNOCKDOWN, BOTH WALKS AND HEAVY PUNCH HAVE NO TWEENS
+  //
+  // They used to. Sixteen tween specs were removed here after the first visual
+  // audit this pipeline has ever had. Every one of them shipped a double-exposure.
+  //
+  // THE MECHANISM. `inbetween.ts` morphs two keys by optical flow. Colour is
+  // forward-splatted along the flow field, which is correct — it moves mass. Alpha
+  // is not: it is a straight linear cross-dissolve (inbetween.ts, the `out[o+3]`
+  // write). Where flow finds a good correspondence that is harmless, because both
+  // keys are opaque in the same places (aA≈aB≈1 → alpha≈255). Where flow FAILS,
+  // one key is opaque and the other transparent across a whole limb (aA=1, aB=0),
+  // and the cross-dissolve lands that limb at alpha≈127 — a 50%-translucent ghost
+  // with the background visible through it.
+  //
+  // WHEN FLOW FAILS — the rule, stated once so it stops being rediscovered:
+  //   Morph quality is governed by the GEOMETRIC DISTANCE between the two source
+  //   drawings — rotation, limb-crossing and self-occlusion — NOT by how fast the
+  //   move is or how many frames it has.
+  // Optical flow can only translate pixels. It cannot represent a rotation, and it
+  // cannot represent a topology change (a limb passing in front of another). Speed
+  // is irrelevant: a light punch is fast but travels a short, in-plane, non-crossing
+  // path and morphs cleanly. A juggle is slow and destroys the figure.
+  //
+  // THIS RULE WAS ALREADY IN THIS FILE, THREE TIMES, AND WAS NOT APPLIED.
+  //   - kicks:  "The kicks sweep a wide arc (morph's weak case)"      → excluded ✔
+  //   - jump:   "hard cuts — morph smears the airborne pose changes"  → excluded ✔
+  //   - wakeup: "hard cuts — kneel->stand smears under morph"         → excluded ✔
+  // and then juggle (an airborne tumble — the same motion as the jump, only more
+  // of it), knockdown (a body rotating to the floor) and the walks (legs crossing)
+  // were tweened anyway. The rationale was written down; the exclusion list it
+  // implies was never audited against the clips. Hence this block.
+  //
+  // MEASURED, on the six selectable fighters, from the SHIPPED atlases
+  // (tools/tween-ghost-census.mjs; score = fraction of body pixels at partial
+  // alpha, calibrated against blind critique — hand-drawn keys sit at 4-8%):
+  //     REMOVED   juggle 54.9%  knockdown 48.8%  walk-fwd 32.2%
+  //               hp 28.6%      walk-back 28.0%  hurt 22.3%
+  //     KEPT      mp 16.8%  lp 16.2%  block 15.2%  crouch 13.0%  idle 9.0%
+  // Every removed clip had broken cels; every kept clip had zero. The split falls
+  // exactly on the rule above, which is why it is a per-CLIP decision and not a
+  // per-fighter one — the motion is the same for every skin.
+  //
+  // TWO FIXES WERE TRIED AND FAILED. Do not re-attempt either:
+  //   1. flowRes 128 → 256. Made it WORSE (52-64% → 57-68%). More resolution
+  //      cannot represent a topology change; it only sharpens the wrong answer.
+  //   2. Post-morph alpha sharpening (smoothstep .45/.55). Drove the score from
+  //      34-41% down to 6.9-17.1% — into the "clean" band — and a blind critic
+  //      then graded the result WORSE than the ghost it replaced (2/10 vs 3/10):
+  //      it had traded soft translucency for ragged, doubled, speckled silhouette
+  //      edges. The score cannot see silhouette damage. That is the standing
+  //      warning on this metric: it is validated as a DETECTOR, never as a target.
+  //
+  // WHAT REPLACED THEM. Each clip below holds its hand-drawn keys longer, by
+  // exactly the frame count the removed tweens occupied, so every clip's total
+  // duration is UNCHANGED — a walk moves at the same speed, a juggle takes the
+  // same time, and no gameplay timing shifts. Fewer, cleaner drawings with snappy
+  // holds is the 3rd-Strike/GGST/KOF idiom; a melted in-between reads as a broken
+  // asset, which is the one thing that reads as cheap.
+  //
+  // THE REAL FIX, when there is an art budget: DRAW the missing poses. A 180°
+  // tumble on four keys may strobe, and juggle/knockdown are the highest-visibility
+  // clips in the game (they replay on every combo and end up in trailers). Added
+  // key DRAWINGS are the only thing that buys smoothness back here — no morph and
+  // no parameter of one can invent a pose that exists in neither source drawing.
+  // ────────────────────────────────────────────────────────────────────────────
+  //
+  // Attack recovery. NOTHING is morphed here any more, and the reason is worth
+  // keeping: "the punches morph cleanly" was HALF true, and the half that was
+  // false is the half that shipped.
+  //
+  // A punch's EXTENSION is the morph's good case — the arm drives straight out
+  // into empty space, in-plane, crossing nothing. Its RECOVERY is the morph's
+  // failure case — the arm retracts back ACROSS the torso, which is a limb
+  // occluding a body, exactly the topology change flow cannot represent. The only
+  // punch tweens this file ever had were `tw-lp-rec` and `tw-mp-rec`: recoveries.
+  // The roster had kept precisely the broken half of a rule that was two-thirds
+  // right, and the whole-cel ghost score cleared them at 13-21% because the ghost
+  // was one translucent forearm averaged against a large, static, clean torso. A
+  // blind critic found it immediately. Both are gone; the recovery holds `idle-1`,
+  // as the kicks already did. Durations unchanged (LP 11f, MP 13f).
+  //
+  // The kicks sweep a wide arc (morph's weak case) and stay snappy at 2-3 extreme
+  // frames, which reads fine for a fast normal.
   // Neutral-game density. Crouch and block get a subtle morph inbetween — small,
   // continuous motion where the flow-morph is clean. Dash, the jump arc and the
   // get-up are large pose changes that double-image under morph, so they keyframe
@@ -908,9 +965,18 @@ export function resolveClip(
 // durations here are the fallback for skins with NO moveset (the unplayable card
 // art) and the seed of each family's cel ORDER, which `shapeFrom` reads to learn
 // which cel is startup, which is contact, which is recovery.
-const LP = clip(false, ['lp-startup', 3], ['lp-active', 4], ['tw-lp-rec', 4])
-const MP = clip(false, ['idle-1', 3], ['mp-active', 5], ['tw-mp-rec', 5])
-const HP = clip(false, ['hp-startup', 5], ['tw-hp-wind', 3], ['hp-active', 5], ['tw-hp-rec', 6])
+const LP = clip(false, ['lp-startup', 3], ['lp-active', 4], ['idle-1', 4])
+const MP = clip(false, ['idle-1', 3], ['mp-active', 5], ['idle-1', 5])
+// Heavy punch holds its two drawings and recovers to neutral, matching the kick
+// families below (`['hk-startup', 6], ['hk-active', 6], ['idle-1', 10]`). It was
+// `['hp-startup',5],['tw-hp-wind',3],['hp-active',5],['tw-hp-rec',6]` = 19f; the
+// heavy rotates the torso and crosses the arm back over the body, which is the
+// morph's failure case, and both tweens ghosted (28.6% mean, worst 52.4%). Still
+// 19f, and `hp-active` still first appears on frame 8, so nothing about the
+// timing moves. Recovery is `idle-1` rather than nothing: `shapeFrom` slices
+// recovery as "the cels after the contact cel", so dropping the recovery tween
+// without replacing it would hand `deriveAttackClip` an empty recovery list.
+const HP = clip(false, ['hp-startup', 8], ['hp-active', 5], ['idle-1', 6])
 // Kick statics specifically CANNOT align to a real active window with fixed
 // durations — the `*-active` cel is spent during startup and has snapped back to
 // idle by the frame the kick connects (LK/MK reserve NO startup cel; HK's 6f
@@ -1269,13 +1335,11 @@ export const CLIPS: Record<string, ClipSpec> = {
   ),
   'walk-fwd': clip(
     true,
-    ['walk-fwd-1', 5], ['tw-wf-12', 3], ['walk-fwd-2', 5], ['tw-wf-23', 3],
-    ['walk-fwd-3', 5], ['tw-wf-34', 3], ['walk-fwd-4', 5], ['tw-wf-41', 3],
+    ['walk-fwd-1', 8], ['walk-fwd-2', 8], ['walk-fwd-3', 8], ['walk-fwd-4', 8],
   ),
   'walk-back': clip(
     true,
-    ['walk-back-1', 5], ['tw-wb-12', 3], ['walk-back-2', 5], ['tw-wb-23', 3],
-    ['walk-back-3', 5], ['tw-wb-34', 3], ['walk-back-4', 5], ['tw-wb-41', 3],
+    ['walk-back-1', 8], ['walk-back-2', 8], ['walk-back-3', 8], ['walk-back-4', 8],
   ),
   // Crouch breathes — players sit in it. Ping-pong crouch<->crouch-2 (subtle,
   // morph-clean).
@@ -1291,11 +1355,19 @@ export const CLIPS: Record<string, ClipSpec> = {
   // Block absorbs the hit then settles back to guard rather than holding a pose.
   block: clip(true, ['block-absorb', 3], ['tw-ba-bs', 3], ['block-stand', 8]),
   // Hitstun: a snap-back that settles back toward guard, not one frozen recoil.
-  hurt: clip(false, ['hit-high', 3], ['tw-hh-hr', 3], ['hit-reel', 4], ['tw-hr-hs', 3], ['hit-settle', 5]),
+  // Keys held (was 3/3-tween/4/3-tween/5 = 18f) — the recoil rotates the torso,
+  // which is the morph's failure case; the two tweens ghosted. Same 18f total.
+  hurt: clip(false, ['hit-high', 6], ['hit-reel', 7], ['hit-settle', 5]),
   // Juggle: a real airborne tumble through the arc — launch, apex, fall.
-  juggle: clip(false, ['juggle-launch', 3], ['tw-jl-ja', 3], ['juggle-apex', 4], ['tw-ja-js', 3], ['juggle-spin', 4], ['tw-js-jf', 3], ['juggle-fall', 5]),
-  // Knockdown: crash and bounce, then settle flat.
-  knockdown: clip(false, ['knockdown-impact', 4], ['tw-ki-kd', 3], ['knockdown', 16]),
+  // Keys held (was 3/3-tween/4/3-tween/4/3-tween/5 = 25f). A whole-body rotation
+  // is the morph's pathological case: every pixel travels an arc and the head
+  // swaps end-to-end, so all three tweens destroyed the figure (54.9% mean, worst
+  // cel in the game at 73.8%). Same 25f total. Highest-priority clip to buy
+  // hand-drawn keys for — it replays on every combo.
+  juggle: clip(false, ['juggle-launch', 5], ['juggle-apex', 7], ['juggle-spin', 7], ['juggle-fall', 6]),
+  // Knockdown: crash and bounce, then settle flat. Keys held (was 4/3-tween/16
+  // = 23f); the body rotates to the floor, so the tween ghosted at 48.8% mean.
+  knockdown: clip(false, ['knockdown-impact', 7], ['knockdown', 16]),
   // Wakeup: rise off the floor through to the stance (hard cuts — kneel->stand
   // smears under morph). kneel -> nearly up -> stance.
   wakeup: clip(false, ['wakeup', 6], ['wakeup-rise', 6], ['idle-1', 4]),

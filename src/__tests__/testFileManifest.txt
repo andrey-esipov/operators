@@ -97,6 +97,7 @@ src/three/fight/__tests__/reactionCoverage.test.ts
 src/three/fight/__tests__/scriptedTransient.node.test.ts
 src/three/fight/__tests__/separationGate.node.test.ts
 src/three/fight/__tests__/spacingCharFrac.node.test.ts
+src/three/fight/__tests__/tweenGhosting.node.test.ts
 src/three/fight/__tests__/whiffPunishCensus.node.test.ts
 src/three/fight/__tests__/worldDimOverfade.test.ts
 src/three/stage/__tests__/paintedDecal.test.ts

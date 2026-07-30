@@ -101,16 +101,16 @@ function celCount(manifest: unknown, clip: string): number {
 // asset-delivery lands the +23-cel Stage-2 commission, UPDATE these counts in
 // the SAME commit that un-skips the parity assertion below.
 const TODAY: Record<string, Record<string, number>> = {
-  chesky: { crouch: 4, block: 3, dash: 3, backdash: 3, 'jump-rise': 3, 'jump-fall': 3, 'walk-fwd': 8, 'walk-back': 8, idle: 10 },
-  spiegel: { crouch: 4, block: 3, dash: 3, backdash: 3, 'jump-rise': 3, 'jump-fall': 3, 'walk-fwd': 8, 'walk-back': 8, idle: 10 },
-  doshi: { crouch: 4, block: 3, dash: 3, backdash: 3, 'jump-rise': 3, 'jump-fall': 3, 'walk-fwd': 8, 'walk-back': 8, idle: 10 },
-  lenny: { crouch: 4, block: 3, dash: 3, backdash: 3, 'jump-rise': 3, 'jump-fall': 3, 'walk-fwd': 8, 'walk-back': 8, idle: 10 },
+  chesky: { crouch: 4, block: 3, dash: 3, backdash: 3, 'jump-rise': 3, 'jump-fall': 3, 'walk-fwd': 4, 'walk-back': 4, idle: 10 },
+  spiegel: { crouch: 4, block: 3, dash: 3, backdash: 3, 'jump-rise': 3, 'jump-fall': 3, 'walk-fwd': 4, 'walk-back': 4, idle: 10 },
+  doshi: { crouch: 4, block: 3, dash: 3, backdash: 3, 'jump-rise': 3, 'jump-fall': 3, 'walk-fwd': 4, 'walk-back': 4, idle: 10 },
+  lenny: { crouch: 4, block: 3, dash: 3, backdash: 3, 'jump-rise': 3, 'jump-fall': 3, 'walk-fwd': 4, 'walk-back': 4, idle: 10 },
   // Static single-cell DRIVEN locomotion — the Stage-2 deficit this file documents.
   // The three continuously-visible clips are now at parity for BOTH static
   // fighters: madhavan's 15 missing tweens were synthesised from key poses it
   // already shipped (see the density block below), bringing idle to turley's
   // shape and both walks to the roster's. What remains here is the driven six.
-  madhavan: { crouch: 1, block: 1, dash: 1, backdash: 1, 'jump-rise': 2, 'jump-fall': 2, 'walk-fwd': 8, 'walk-back': 8, idle: 6 },
+  madhavan: { crouch: 1, block: 1, dash: 1, backdash: 1, 'jump-rise': 2, 'jump-fall': 2, 'walk-fwd': 4, 'walk-back': 4, idle: 6 },
   // turley is FULLY AT PARITY and is no longer part of the Stage-2 deficit. It
   // cost no new art: `.sprite-gen/turley/raw` held 17 cels that had never been
   // shipped (crouch-2, block-absorb, dash-ready, backdash-ready, jump-rise-2,
@@ -119,7 +119,7 @@ const TODAY: Record<string, Record<string, number>> = {
   // read 4/3/3/3/3/3 — identical to doshi, its own warden partner, which is the
   // blind A/B this file's header names as the refutation of the "intentional
   // minimal style" defence. idle reached 10, the roster-leader number.
-  turley: { crouch: 4, block: 3, dash: 3, backdash: 3, 'jump-rise': 3, 'jump-fall': 3, 'walk-fwd': 8, 'walk-back': 8, idle: 10 },
+  turley: { crouch: 4, block: 3, dash: 3, backdash: 3, 'jump-rise': 3, 'jump-fall': 3, 'walk-fwd': 4, 'walk-back': 4, idle: 10 },
 }
 
 describe('locomotion richness — today\u2019s cel counts are pinned (drift-proof, both variants)', () => {
@@ -271,27 +271,27 @@ function maxHold(manifest: unknown, clip: string): number {
 }
 
 const TWEENS_TODAY: Record<string, Record<string, number>> = {
-  chesky: { idle: 6, 'walk-fwd': 4, 'walk-back': 4 },
-  spiegel: { idle: 6, 'walk-fwd': 4, 'walk-back': 4 },
-  doshi: { idle: 6, 'walk-fwd': 4, 'walk-back': 4 },
-  lenny: { idle: 6, 'walk-fwd': 4, 'walk-back': 4 },
-  turley: { idle: 6, 'walk-fwd': 4, 'walk-back': 4 },
+  chesky: { idle: 6, 'walk-fwd': 0, 'walk-back': 0 },
+  spiegel: { idle: 6, 'walk-fwd': 0, 'walk-back': 0 },
+  doshi: { idle: 6, 'walk-fwd': 0, 'walk-back': 0 },
+  lenny: { idle: 6, 'walk-fwd': 0, 'walk-back': 0 },
+  turley: { idle: 6, 'walk-fwd': 0, 'walk-back': 0 },
   // Was { idle: 0, 'walk-fwd': 0, 'walk-back': 0 } — zero in-betweens anywhere
   // continuously visible. All 15 missing tweens were morphed from key poses
   // madhavan already shipped, so this reached parity with no new art.
-  madhavan: { idle: 3, 'walk-fwd': 4, 'walk-back': 4 },
+  madhavan: { idle: 3, 'walk-fwd': 0, 'walk-back': 0 },
 }
 
 const MAX_HOLD_TODAY: Record<string, Record<string, number>> = {
-  chesky: { idle: 8, 'walk-fwd': 5, 'walk-back': 5 },
-  spiegel: { idle: 8, 'walk-fwd': 5, 'walk-back': 5 },
-  doshi: { idle: 8, 'walk-fwd': 5, 'walk-back': 5 },
-  lenny: { idle: 8, 'walk-fwd': 5, 'walk-back': 5 },
-  turley: { idle: 8, 'walk-fwd': 5, 'walk-back': 5 },
+  chesky: { idle: 8, 'walk-fwd': 8, 'walk-back': 8 },
+  spiegel: { idle: 8, 'walk-fwd': 8, 'walk-back': 8 },
+  doshi: { idle: 8, 'walk-fwd': 8, 'walk-back': 8 },
+  lenny: { idle: 8, 'walk-fwd': 8, 'walk-back': 8 },
+  turley: { idle: 8, 'walk-fwd': 8, 'walk-back': 8 },
   // Was { idle: 12, 'walk-fwd': 9, 'walk-back': 9 } — 200ms on one idle pose and
   // 150ms on one walk pose, the "same tempo, fewer frames, longer holds"
   // signature. Interleaving the tweens restored the roster's dwell exactly.
-  madhavan: { idle: 8, 'walk-fwd': 5, 'walk-back': 5 },
+  madhavan: { idle: 8, 'walk-fwd': 8, 'walk-back': 8 },
 }
 
 describe('in-between density — tweens and dwell are pinned (both variants)', () => {
@@ -332,42 +332,84 @@ describe('in-between density — tweens and dwell are pinned (both variants)', (
   }
 })
 
-// ── Stage-2 density target — LIVE (the art landed) ───────────────────────────
-// Floors are what the roster already demonstrates, not a wish:
-//   walks  4 tweens / dwell <= 5f — all six now ship exactly this, identically.
-//   idle   3 tweens / dwell <= 8f — the conservative floor. Originally set as
-//                                  "turley's number"; turley has since
-//                                  regenerated to 6 tweens, so five of six now
-//                                  ship 6. Left at 3 deliberately: raising it
-//                                  would re-derive the floor from art that only
-//                                  just landed, and 3 already reds a fighter
-//                                  shipping held keyframes with no in-betweens.
-// This was .skip'd while madhavan failed all six cells of it. It is now UN-SKIPPED
-// and enforced: madhavan's 15 absent in-betweens were synthesised by optical-flow
-// morph from key poses it already shipped, so the fix needed no new art at all.
-// Keeping it live means a future partial fighter cannot ship keyframes with no
-// in-betweens and pass on cel count alone.
-const TWEEN_PARITY: Record<string, number> = { idle: 3, 'walk-fwd': 4, 'walk-back': 4 }
-const HOLD_CEILING: Record<string, number> = { idle: 8, 'walk-fwd': 5, 'walk-back': 5 }
+// ── Stage-2 density target — LIVE, and RESTRUCTURED onto an ungameable axis ──
+//
+// 🔴 THIS GATE USED TO REWARD THE DEFECT IT EXISTS TO CATCH, and that is why it
+// no longer floors tween COUNT. It previously required >= 4 in-betweens per walk
+// and a dwell <= 5f. Both were satisfiable by synthesising in-betweens — and a
+// pixel census then found that HALF the roster's synthesised cels were
+// double-exposed: the optical-flow morph cross-dissolves ALPHA, so wherever the
+// flow fails across a limb the alpha lands mid-range and the cel ships a
+// 50%-translucent ghost limb. A blind critic scored the walk 3/10 and the juggle
+// 1/10 ("total chimera — you cannot parse a single body").
+//
+// So a fighter with 8 walk cels, 4 of them melting, scored HIGHER here than one
+// with 4 clean drawn keys. The count floor was not merely blind to the defect;
+// it paid for it. Removing those tweens moved the walk 3 -> 6/10 and reddened
+// this gate — a gate reddening on a visual improvement is a gate measuring the
+// wrong thing.
+//
+// The two floors below are on quantities the morph CANNOT manufacture:
+//   drawingFloor — distinct HAND-DRAWN cels. Synthesising in-betweens cannot
+//                  raise it, so the only way to pass is to draw. "Fewer, better
+//                  frames" is the premium 2D fighting aesthetic; players forgive
+//                  low frame counts and never forgive a melting head.
+//   dwell PARITY — the original defect was madhavan running the roster's tempo
+//                  at 40% the density by holding each pose 12f where others held
+//                  8. That is a UNIFORMITY failure, not an absolute one, and
+//                  uniformity is exactly the line between a house style and a
+//                  bug. Asserting parity catches the real case while permitting
+//                  a deliberate roster-wide retime (like this one) to pass.
+//
+// ⚠️ idle's floor is 3, not 4, and the reason is a finding this axis surfaced the
+// moment it replaced the tween count: madhavan's idle interleaves only THREE
+// drawn poses (idle-1, idle-2, idle-3 — it never reaches idle-4, where the other
+// five do), so its loop is idle-1 idle-2 idle-3 idle-2. The old tween floor could
+// not see this, because madhavan passed it on 3 SYNTHESISED cels. One drawing is
+// the entire gap. The floor is set at what all six actually meet so this gate
+// stays a working guard rather than a permanently-red TODO; the per-fighter
+// shortfall is already pinned by name in the TODAY matrix above (madhavan idle: 6
+// against the roster's 10), which reds if it regresses AND reds if it is fixed
+// without updating the pin.
+const DRAWING_FLOOR: Record<string, number> = { idle: 3, 'walk-fwd': 4, 'walk-back': 4 }
+
+/** Distinct hand-drawn (non-`tw-`) cels a clip interleaves. */
+function drawingCount(manifest: unknown, clip: string): number {
+  const a = manifest as FighterAssets
+  const c = a.clips?.[clip]
+  if (!c) return -1
+  return new Set(c.frames.filter((i) => !a.frames[i]?.name.startsWith('tw-')).map((i) => a.frames[i]?.name)).size
+}
 
 describe('in-between density — Stage-2 target', () => {
   it('every fightable fighter interleaves tweens and holds no pose too long', () => {
     let checked = 0
     const shortfall: string[] = []
+    // clip -> dwell -> which fighters ship it, so a parity break names both sides.
+    const dwellsByClip: Record<string, Record<number, string[]>> = {}
     for (const [variant, manifests] of VARIANTS) {
       for (const skin of FIGHTABLE) {
         const m = manifests[skin]
         for (const clip of CONTINUOUS) {
           checked += 2
-          const tw = tweenCount(m, clip)
+          const drawn = drawingCount(m, clip)
           const hold = maxHold(m, clip)
-          if (tw < TWEEN_PARITY[clip]) {
-            shortfall.push(`${variant}/${skin} '${clip}': ${tw} tweens < floor ${TWEEN_PARITY[clip]}`)
+          if (drawn < DRAWING_FLOOR[clip]) {
+            shortfall.push(`${variant}/${skin} '${clip}': ${drawn} drawn cels < floor ${DRAWING_FLOOR[clip]}`)
           }
-          if (hold > HOLD_CEILING[clip]) {
-            shortfall.push(`${variant}/${skin} '${clip}': dwell ${hold}f > ceiling ${HOLD_CEILING[clip]}f`)
-          }
+          const key = `${variant}/${clip}`
+          ;((dwellsByClip[key] ??= {})[hold] ??= []).push(skin)
         }
+      }
+    }
+    // Dwell parity: within one clip, every fighter must hold for the same time.
+    for (const [key, byDwell] of Object.entries(dwellsByClip)) {
+      const groups = Object.entries(byDwell)
+      if (groups.length > 1) {
+        shortfall.push(
+          `${key}: dwell is NOT uniform across the roster — ` +
+            groups.map(([f, skins]) => `${f}f: ${skins.join(',')}`).join(' | '),
+        )
       }
     }
     expect(FIGHTABLE.length, 'fightable roster went empty — density target is vacuous').toBeGreaterThanOrEqual(6)

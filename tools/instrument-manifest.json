@@ -158,9 +158,21 @@
       "app": "analysis",
       "note": "Offline / route-agnostic: reads PNGs, atlases or JSON, or measures on a blank page. Not tied to either game."
     },
+    "clip-strip": {
+      "app": "analysis",
+      "note": "Offline / route-agnostic: reads the SHIPPED public/fighters/<id>/{assets.json,atlas.webp} and lays one clip out cel-by-cel as a labelled filmstrip. No browser, no renderer, no route. Exists to make optical-flow tween artefacts (double-imaging, smearing) visible, which a cel COUNT cannot express. Emits downscaled JPEG so the output is safe to hand a vision agent."
+    },
     "critic-prep": {
       "app": "analysis",
       "note": "Offline / route-agnostic: reads PNGs, atlases or JSON, or measures on a blank page. Not tied to either game."
+    },
+    "measure-contact-sim": {
+      "app": "analysis",
+      "note": "Offline / route-agnostic: drives the real src/fight/sim step() headlessly to measure where a hit's reported contact point lands, with no browser and no renderer. Written in TypeScript because it imports the sim's own types — it was tracked but unclassified until this gate learned to enumerate *.ts as well as *.mjs."
+    },
+    "tween-ghost-census": {
+      "app": "analysis",
+      "note": "Offline / route-agnostic: reads the SHIPPED public/fighters/*/{assets.json,atlas.webp} and scores every synthesised in-between cel for double-exposure (fraction of body pixels at partial alpha). Shares its scorer with the tweenGhosting gate via scripts/lib/ghost-score.ts so tool and gate cannot drift. No browser, no renderer, no route."
     },
     "diag-crop": {
       "app": "analysis",

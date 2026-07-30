@@ -354,7 +354,6 @@ describe('first-bout download — the shipped director honors the budget per con
       // node has no navigator → FAST budget → uncapped opener. This is the path a
       // broadband desktop visitor and every Safari/Firefox visitor actually get.
       let tested = 0
-      let heavyHeadliners = 0
       let maxBytes = 0
       for (let s = 1; s <= SEEDS; s++) {
         const dir = new AttractDirector({ seed: s })
@@ -364,18 +363,29 @@ describe('first-bout download — the shipped director honors the budget per con
         expect(cableSec, `seed ${s} opener ${a.skin}+${b.skin} modeled ${cableSec.toFixed(2)}s on cable`).toBeLessThanOrEqual(
           CABLE_MAX_SEC,
         )
-        if (bytes > HEAVY_OPENER_BYTES) heavyHeadliners++
         maxBytes = Math.max(maxBytes, bytes)
         dir.dispose()
         tested++
       }
       expect(tested).toBe(SEEDS) // vacuity: openers were really priced
-      // The fix's whole point: heavy (best) art is no longer excluded from the
-      // shop window. If this hits zero, a byte ceiling has ratcheted back in.
+      // THE FIX'S WHOLE POINT: heavy (best) art is not excluded from the shop
+      // window. This used to be phrased as "some pairing exceeded 9 MB", which was
+      // a PROXY — an absolute byte count standing in for "our best art headlines".
+      // Deleting 28 double-exposed in-between cels per fighter cut every atlas by
+      // 35-41% (roster download ~32 MB -> ~19.9 MB) and the art got BETTER, yet the
+      // old form reddened and its message blamed a byte ceiling that had not moved.
+      // A proxy that reddens when the art improves is the defect this file exists
+      // to catch, one level up. So assert the property directly and invariantly:
+      // the single heaviest pairing that EXISTS is one the director actually opens
+      // on. That cannot be satisfied by art getting cheaper, and it still reds the
+      // instant a cap re-excludes the top of the range.
+      const heaviestPossible = Math.max(...realOpenerPairs().map((p) => p.bytes))
+      expect(heaviestPossible, 'no real opener pairings were priced').toBeGreaterThan(0)
       expect(
-        heavyHeadliners,
-        'no heavy pairing ever headlined across 150 seeds — the opener byte ceiling is back',
-      ).toBeGreaterThan(0)
+        maxBytes,
+        `the heaviest pairing (${heaviestPossible} B) never headlined across ${SEEDS} seeds — ` +
+          'a byte ceiling is excluding our best art from the opener',
+      ).toBe(heaviestPossible)
       // Even the no-API fallback on a real fast-4G mobile link stays bounded.
       expect(modeledFirstFrameSeconds(maxBytes, FAST_4G_BYTES_PER_SEC)).toBeLessThanOrEqual(FAST_4G_MAX_SEC)
     },

@@ -121,8 +121,16 @@ for (const clipName of clips) {
       .toBuffer()
     layers.push({ input: scaled, left: i * cell, top: 0 })
     const dur = Array.isArray(clip.durations) ? clip.durations[i] : '?'
+    // In blind mode the cel NAME must not be drawn. `tw-wf-12` announces "this
+    // is a synthesised in-between" and `walk-fwd-2` announces "this is a key",
+    // so a strip labelled with names tells a critic which arm it is looking at
+    // before it has looked at a pixel. Renaming the FILE while printing the
+    // arm's identity onto every cell is a blind harness that is not blind —
+    // the same shape as every lying instrument on this project. Index and
+    // duration are kept because they are identical across arms only when the
+    // arms genuinely match, and a critic needs the hold length to judge dwell.
     layers.push({
-      input: await labelStrip(`${i} ${frame.name} ${dur}f`, cell, labelH),
+      input: await labelStrip(blind ? `${i} ${dur}f` : `${i} ${frame.name} ${dur}f`, cell, labelH),
       left: i * cell,
       top: cell,
     })
@@ -155,8 +163,19 @@ for (const clipName of clips) {
 
   const names = idxs.map((n) => manifest.frames[n].name)
   const tweens = names.filter((n) => n.startsWith('tw-')).length
-  summary.push({ clip: clipName, cels: idxs.length, tweens, file, names })
-  console.log(`${tag.padEnd(24)} cels=${String(idxs.length).padStart(2)} tweens=${tweens}  ${file}`)
+  // The stdout summary is as much a leak as the drawn label: a tween COUNT is
+  // the answer to the very question a blind arm exists to ask, so under
+  // --blind neither the names nor the count are emitted.
+  summary.push(
+    blind
+      ? { clip: clipName, cels: idxs.length, file }
+      : { clip: clipName, cels: idxs.length, tweens, file, names },
+  )
+  console.log(
+    blind
+      ? `${tag.padEnd(24)} cels=${String(idxs.length).padStart(2)}  ${file}`
+      : `${tag.padEnd(24)} cels=${String(idxs.length).padStart(2)} tweens=${tweens}  ${file}`,
+  )
 }
 
 console.log(JSON.stringify({ id: blind ? '(blind)' : id, variant, strips: summary }, null, 2))

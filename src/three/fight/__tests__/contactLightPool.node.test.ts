@@ -54,11 +54,25 @@ describe('contact light pool', () => {
   })
 
   it('authors a contact light texture that is NOT the shadow texture', () => {
-    expect(src).toContain('function contactLightTexture()')
-    expect(src).toContain('function shadowTexture()')
-    // Deliberately separate singletons. Mutating the shared shadow texture to
-    // serve both would silently change the cores as well as the pool.
-    expect(src).toMatch(/contactLightTexture\(\)[\s\S]{0,400}?createRadialGradient|createRadialGradient[\s\S]{0,400}?/)
+    // Asserts the PROPERTY (two independent builders with independent caches), not
+    // an exact signature. Pinning `function shadowTexture()` verbatim ossified the
+    // parameter list: adding the falloff knob reddened this gate even though the
+    // separation it exists to protect was untouched. A gate that reds on a change
+    // it does not care about teaches people to edit the gate.
+    expect(src).toMatch(/function contactLightTexture\s*\(/)
+    expect(src).toMatch(/function shadowTexture\s*\(/)
+    // Deliberately separate singletons/caches. Serving both from one store would
+    // silently change the cores whenever the pool was retuned, and vice versa.
+    expect(src).toMatch(/sharedPoolTex/)
+    expect(src).toMatch(/sharedShadowTex/)
+    expect(src).not.toMatch(/sharedPoolTex\s*=\s*sharedShadowTex/)
+    // The pool is additive white; the cores are subtractive black. If these ever
+    // collapsed to one profile the pool would cancel exactly against the shadow.
+    const poolBody = src.slice(src.indexOf('function contactLightTexture'))
+      .slice(0, 900)
+    expect(poolBody).toContain('255,255,255')
+    const coreBody = src.slice(src.indexOf('function shadowTexture')).slice(0, 900)
+    expect(coreBody).toContain('rgba(0,0,0')
   })
 
   it('CONSUMES the pool — it is added to the fighter group, not merely built', () => {
@@ -104,5 +118,31 @@ describe('contact light pool', () => {
     expect(src).toContain('__MUT_POOL_OFF__')
     expect(src).toContain('__MUT_SHADOW_OFF__')
     expect(src.indexOf('__MUT_POOL_OFF__')).not.toBe(src.indexOf('__MUT_SHADOW_OFF__'))
+  })
+
+  it('keeps CORE_FALLOFF_K solving the critics\' spec, not merely near it', () => {
+    // Three blind critics independently asked for a core "feathered within about
+    // half a boot-length". That is a claim about alpha at r = 0.5, and the profile
+    // is alpha(r) = (1-r)^k, so the requirement is checkable arithmetic rather than
+    // taste: 15-20% of peak remaining at half radius.
+    //
+    // This gate exists because the value CANNOT be defended by screenshot. The
+    // scene carries a per-frame grain term plus live crowd and dust, so even
+    // 12-frame-averaged captures of the sole leave residual sprite jitter larger
+    // than the gap between adjacent k values — the blind rig returns noise here.
+    // The arithmetic is therefore the only evidence there is, which is exactly why
+    // it needs pinning: an unpinned number that no picture can check is the kind
+    // that drifts one "looks a bit better" at a time until nothing supports it.
+    const m = src.match(/const CORE_FALLOFF_K = ([\d.]+)/)
+    expect(m, 'CORE_FALLOFF_K must exist as a named constant').toBeTruthy()
+    const k = Number(m![1])
+    const remainingAtHalfRadius = Math.pow(0.5, k)
+    expect(remainingAtHalfRadius).toBeGreaterThanOrEqual(0.15)
+    expect(remainingAtHalfRadius).toBeLessThanOrEqual(0.20)
+
+    // Anti-vacuity: the ORIGINAL hand-authored profile must fail this bar, or the
+    // assertion is not encoding the change the critics asked for. 0.84 leaves 55.9%
+    // of the ink on the floor at half radius — the "broad plateau" they described.
+    expect(Math.pow(0.5, 0.84)).toBeGreaterThan(0.20)
   })
 })

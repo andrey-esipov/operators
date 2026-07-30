@@ -125,9 +125,54 @@ export interface FighterUpdateCtx {
   viewportH?: number
 }
 
-let sharedShadowTex: THREE.Texture | null = null
-function shadowTexture(): THREE.Texture {
-  if (sharedShadowTex) return sharedShadowTex
+/**
+ * THE CONTACT CORE'S FALLOFF EXPONENT — the shape of the shadow, not its darkness.
+ *
+ * alpha(r) = (1 - r)^k across the stamp radius. The knob is the SHAPE: k controls
+ * how fast the dark concentrates toward the sole, independently of peak opacity.
+ *
+ * The original profile (stops 0.95 / 0.62 @ r=0.4 / 0) solves to k = 0.84 — SUB-
+ * linear, meaning it decayed more slowly than a straight line near the centre. That
+ * is a broad plateau with a long tail: it spreads a moderate darkening over a wide
+ * area instead of concentrating it under the sole. Three blind critics on three
+ * model families independently described exactly that failure and independently
+ * prescribed the same fix — "darkest at contact, feathered within about half a
+ * boot-length" — so this is the parameter that carries their note.
+ *
+ * Higher k = tighter core, faster feather, and deliberately LESS total ink. The
+ * point is not a darker shadow, it is a shadow whose darkness sits under the foot
+ * rather than smeared around it.
+ *
+ * THE VALUE IS DERIVED FROM THE CRITICS' SPEC, NOT PICKED BY EYE. "Feathered within
+ * about half a boot-length" is a statement about alpha at r = 0.5, so solve for it:
+ *
+ *     k = ln(target fraction of peak at r=0.5) / ln(0.5)
+ *     20% remaining -> k = 2.32      15% remaining -> k = 2.74
+ *
+ * 2.4 sits inside that band (18.9% at half-radius). The old 0.84 leaves 55.9% —
+ * over half the ink still on the floor at the halfway point, which is why the note
+ * was written. Retune by moving the TARGET FRACTION and re-solving; do not nudge k
+ * directly, or the link back to the requirement is lost and this becomes folklore.
+ *
+ * Deliberately NOT claimed: that 2.4 beats 2.0 or 2.7. The blind rig cannot resolve
+ * differences that fine — the scene carries a per-frame grain term plus live crowd
+ * and dust, and even 12-frame-averaged captures of the sole leave residual sprite
+ * jitter larger than the gap between adjacent k values. Direction is evidenced by
+ * three independent critics; magnitude is evidenced by the arithmetic above; the
+ * ranking WITHIN the band is not evidenced by anything and is not asserted.
+ */
+const CORE_FALLOFF_K = 2.4
+
+/** How far the core spreads past the measured contact width. 1.0 hugs the sole
+ *  exactly; higher values spread it. Separated from the falloff exponent so shape
+ *  and extent are two independent knobs rather than one confounded one. */
+const CORE_W_MUL = 1.35
+
+const sharedShadowTex = new Map<number, THREE.Texture>()
+function shadowTexture(k: number = CORE_FALLOFF_K): THREE.Texture {
+  const key = Math.round(k * 100) / 100
+  const hit = sharedShadowTex.get(key)
+  if (hit) return hit
   const s = 128
   const c = document.createElement('canvas')
   c.width = c.height = s
@@ -135,15 +180,19 @@ function shadowTexture(): THREE.Texture {
   const g = ctx.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2)
   // A tight, dark core so a stamp placed under a sole reads as genuine contact,
   // with a quick falloff so two feet stay visually separate (the gap between the
-  // legs must NOT fill in — that is the contradiction this system fixes).
-  g.addColorStop(0, 'rgba(0,0,0,0.95)')
-  g.addColorStop(0.4, 'rgba(0,0,0,0.62)')
-  g.addColorStop(1, 'rgba(0,0,0,0)')
+  // legs must NOT fill in — that is the contradiction this system fixes). Sampling
+  // the curve at 8 stops rather than hand-authoring 3 keeps the profile smooth at
+  // every k, so the knob cannot introduce a visible banding step of its own.
+  const STOPS = 8
+  for (let i = 0; i <= STOPS; i++) {
+    const r = i / STOPS
+    g.addColorStop(r, `rgba(0,0,0,${(Math.pow(1 - r, k) * 0.97).toFixed(4)})`)
+  }
   ctx.fillStyle = g
   ctx.fillRect(0, 0, s, s)
   const t = new THREE.CanvasTexture(c)
   t.colorSpace = THREE.NoColorSpace
-  sharedShadowTex = t
+  sharedShadowTex.set(key, t)
   return t
 }
 
@@ -638,10 +687,20 @@ export class Fighter {
     //    centroid: the exact OLD defect, so an anchoring probe that passes on the
     //    support-point version must go red here or it is not really testing.
     let shadowOff = false
+    let ck = CORE_FALLOFF_K
+    let cw = CORE_W_MUL
     if (import.meta.env.DEV) {
       const g = globalThis as Record<string, unknown>
       if (g.__MUT_SHADOW_OFF__) shadowOff = true
       if (g.__MUT_SHADOW_CENTROID__) cs = [{ ox: 0, halfW: w * 0.46, strength: 1 }]
+      // Blind-arm hook: lets one build serve several core shapes so the arms differ
+      // ONLY by the variable under test. Rebuilding between arms would vary shader
+      // compile order and HMR state too, silently destroying comparability.
+      const t = g.__CORE_TUNE__ as { k?: number; wmul?: number } | undefined
+      if (t) {
+        if (typeof t.k === 'number') ck = t.k
+        if (typeof t.wmul === 'number') cw = t.wmul
+      }
     }
 
     for (let i = 0; i < this.shadowStamps.length; i++) {
@@ -651,8 +710,12 @@ export class Fighter {
       stamp.visible = true
       const c = cs[i]
       const cx = feet.x + offX + v.facing * c.ox * (1 - conv)
-      const coreW = Math.max(w * 0.14, c.halfW * 2) * 1.35 * shrink
+      const coreW = Math.max(w * 0.14, c.halfW * 2) * cw * shrink
       const coreD = w * 0.26 * shrink
+      if (import.meta.env.DEV && smat.map !== shadowTexture(ck)) {
+        smat.map = shadowTexture(ck)
+        smat.needsUpdate = true
+      }
       stamp.position.set(cx, WORLD.GROUND_Y + 0.02, 0)
       stamp.scale.set(coreW, coreD, 1)
       // Dark and crisp planted, lighter and softer airborne. Extra cores beyond

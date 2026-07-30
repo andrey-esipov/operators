@@ -101,10 +101,10 @@ function celCount(manifest: unknown, clip: string): number {
 // asset-delivery lands the +23-cel Stage-2 commission, UPDATE these counts in
 // the SAME commit that un-skips the parity assertion below.
 const TODAY: Record<string, Record<string, number>> = {
-  chesky: { crouch: 4, block: 3, dash: 3, backdash: 3, 'jump-rise': 3, 'jump-fall': 3, 'walk-fwd': 4, 'walk-back': 4, idle: 10 },
-  spiegel: { crouch: 4, block: 3, dash: 3, backdash: 3, 'jump-rise': 3, 'jump-fall': 3, 'walk-fwd': 4, 'walk-back': 4, idle: 10 },
-  doshi: { crouch: 4, block: 3, dash: 3, backdash: 3, 'jump-rise': 3, 'jump-fall': 3, 'walk-fwd': 4, 'walk-back': 4, idle: 10 },
-  lenny: { crouch: 4, block: 3, dash: 3, backdash: 3, 'jump-rise': 3, 'jump-fall': 3, 'walk-fwd': 4, 'walk-back': 4, idle: 10 },
+  chesky: { crouch: 2, block: 2, dash: 3, backdash: 3, 'jump-rise': 3, 'jump-fall': 3, 'walk-fwd': 4, 'walk-back': 4, idle: 10 },
+  spiegel: { crouch: 2, block: 2, dash: 3, backdash: 3, 'jump-rise': 3, 'jump-fall': 3, 'walk-fwd': 4, 'walk-back': 4, idle: 10 },
+  doshi: { crouch: 2, block: 2, dash: 3, backdash: 3, 'jump-rise': 3, 'jump-fall': 3, 'walk-fwd': 4, 'walk-back': 4, idle: 10 },
+  lenny: { crouch: 2, block: 2, dash: 3, backdash: 3, 'jump-rise': 3, 'jump-fall': 3, 'walk-fwd': 4, 'walk-back': 4, idle: 10 },
   // Static single-cell DRIVEN locomotion — the Stage-2 deficit this file documents.
   // The three continuously-visible clips are now at parity for BOTH static
   // fighters: madhavan's 15 missing tweens were synthesised from key poses it
@@ -119,7 +119,7 @@ const TODAY: Record<string, Record<string, number>> = {
   // read 4/3/3/3/3/3 — identical to doshi, its own warden partner, which is the
   // blind A/B this file's header names as the refutation of the "intentional
   // minimal style" defence. idle reached 10, the roster-leader number.
-  turley: { crouch: 4, block: 3, dash: 3, backdash: 3, 'jump-rise': 3, 'jump-fall': 3, 'walk-fwd': 4, 'walk-back': 4, idle: 10 },
+  turley: { crouch: 2, block: 2, dash: 3, backdash: 3, 'jump-rise': 3, 'jump-fall': 3, 'walk-fwd': 4, 'walk-back': 4, idle: 10 },
 }
 
 describe('locomotion richness — today\u2019s cel counts are pinned (drift-proof, both variants)', () => {
@@ -176,33 +176,54 @@ describe('locomotion richness — today\u2019s cel counts are pinned (drift-proo
 // and (b) update TODAY above, together.
 //
 // Per-clip floors are set to what the roster ALREADY DEMONSTRATES, never to an
-// aspiration — an unmet-by-everyone target would be a wish, not a gate:
-//   driven six  4/3/3/3/3/3  — FIVE of six fighters now ship exactly this.
-//   walks       8 / 8        — all six ship exactly 8. Not arguable.
-//   idle        6            — held at 6 rather than the 10 that five of six now
-//                              ship. This floor was originally justified as
-//                              "turley's number", on the reading that its 6-cel
-//                              cycle might be a deliberate tighter style. That
-//                              justification is GONE: turley regenerated to 10
-//                              from its own cached cels, so the 6 was a shipping
-//                              gap, not a style. The floor stays at 6 anyway
-//                              because madhavan at 4 fails it either way and
-//                              raising it would be re-deriving the target from
-//                              the very art still owed. Revisit when madhavan lands.
+// aspiration — an unmet-by-everyone target would be a wish, not a gate.
 //
-// Remaining cels to clear this target: madhavan +22 (driven six +12, walks +8 —
-// already delivered — idle +2). turley is DONE: it went from +11 owed to fully
-// at parity for zero new art, by regenerating against 17 unshipped cached raws.
+// THIS TARGET IS COUNTED IN HAND-DRAWN CELS, NOT TOTAL CELS, AND THAT IS THE
+// WHOLE POINT. It used to read `crouch 4, block 3, walk-fwd 8, walk-back 8`,
+// justified as "all six ship exactly 8. Not arguable." Those numbers were
+// 4 drawn + 4 synthesised, 2 + 2, and 2 + 1. Roughly half of what this gate
+// held up as the standard was the double-exposure defect, so the commission it
+// specified was literally "give madhavan more ghosted cels" — the target was
+// payable in the bug. Once the in-betweens were stripped, every one of those
+// numbers fell to what had actually been DRAWN, which is what they should have
+// counted from the start.
+//
+// This is the same costume as the old tween-count floor two blocks down, in the
+// aspirational target rather than the floor, and it survived the first pass
+// because that pass fixed the floor and read this as merely stale. A gate and
+// the goal it aims at can carry the same defect independently; fixing one does
+// not fix the other.
+//
+// Counting drawings makes the target unsatisfiable by the generator: no morph,
+// however good, can raise a drawn-cel count. Only an animator can.
+//
+// Every floor below is the number FIVE OF SIX fighters demonstrate today,
+// measured, not reasoned about. Note dash/backdash: they ship 3 CELS but only
+// 2 distinct drawings, because the cycle returns to its first pose. The old
+// matrix pinned 3 there and called it "never tweened, unchanged" — true, but it
+// was still counting a repeat as if it were a third drawing. Cel counts flatter
+// on both axes: they count a synthesised cel and a repeated cel alike.
+//
+//   crouch / block / dash / backdash   2 each
+//   jump-rise / jump-fall              3 each
+//   walk-fwd / walk-back               4 each  — madhavan ALREADY meets these
+//   idle                               4       — madhavan ships 3
+//
+// The commission this specifies is now exact and small: madhavan owes SEVEN
+// drawings — one each on crouch, block, dash, backdash, jump-rise, jump-fall
+// and idle. The previous framing, "+22 cels", overstated the ask by counting
+// in-betweens a morph would have manufactured. Seven drawings is a day of work,
+// not a commission, and it closes the roster's only remaining parity gap.
 const PARITY: Record<string, number> = {
-  crouch: 4,
-  block: 3,
-  dash: 3,
-  backdash: 3,
+  crouch: 2,
+  block: 2,
+  dash: 2,
+  backdash: 2,
   'jump-rise': 3,
   'jump-fall': 3,
-  'walk-fwd': 8,
-  'walk-back': 8,
-  idle: 6,
+  'walk-fwd': 4,
+  'walk-back': 4,
+  idle: 4,
 }
 
 describe('locomotion richness — Stage-2 parity target', () => {
@@ -213,10 +234,12 @@ describe('locomotion richness — Stage-2 parity target', () => {
       for (const skin of FIGHTABLE) {
         const m = manifests[skin]
         for (const clip of CLIPS) {
-          const got = celCount(m, clip)
+          // drawingCount, not celCount: the target is denominated in drawings
+          // so that it cannot be satisfied by synthesising in-betweens.
+          const got = drawingCount(m, clip)
           checked++
           if (got < PARITY[clip]) {
-            shortfall.push(`${variant}/${skin} '${clip}': ${got} cels < parity ${PARITY[clip]}`)
+            shortfall.push(`${variant}/${skin} '${clip}': ${got} drawn cels < parity ${PARITY[clip]}`)
           }
         }
       }

@@ -890,12 +890,34 @@ export const TWEENS: TweenSpec[] = [
   //
   // The kicks sweep a wide arc (morph's weak case) and stay snappy at 2-3 extreme
   // frames, which reads fine for a fast normal.
-  // Neutral-game density. Crouch and block get a subtle morph inbetween — small,
-  // continuous motion where the flow-morph is clean. Dash, the jump arc and the
-  // get-up are large pose changes that double-image under morph, so they keyframe
-  // instead (distinct AI poses, hard cuts), which read cleaner than a doubled tween.
-  { name: 'tw-cr-c2', from: 'crouch', to: 'crouch-2', t: 0.5 },
-  { name: 'tw-ba-bs', from: 'block-absorb', to: 'block-stand', t: 0.5 },
+  //
+  // CROUCH AND BLOCK: this file used to assert "crouch and block get a subtle
+  // morph inbetween - small, continuous motion where the flow-morph is clean."
+  // That was the last untested claim in the file and it was wrong. Those two
+  // were the only synthesised cels no eye had ever judged; they survived the
+  // roster-wide strip purely because they scored LOWEST on the ghost metric
+  // (block 4.9%, crouch 4.0%). Put in front of a critic they were identified as
+  // in-betweens without being labelled, and graded 4/10 and 3/10:
+  //   tw-ba-bs   renders BOTH head positions at once as the head comes up out of
+  //              the absorb - a translucent second face beside the real one. It
+  //              is a small defect parked on the most-scrutinised pixels there
+  //              are, and it flashes immediately before an 8f hold.
+  //   tw-cr-c2   ghosts the leading fist and lays a translucent jacket over the
+  //              chest - and crouch is a LOOP, so it is half the frames played,
+  //              continuously, the entire time the player holds down-back.
+  // The lesson is that "mildest case of the defect" is not "a different case".
+  // Small displacement means the morph does the least damage, which is why the
+  // metric ranked these last - it ranks severity correctly. It cannot certify
+  // clean, because a whole-sprite average dilutes a localised ghost against a
+  // large static torso. Use it to flag bad, never to pass good.
+  // Stripping costs nothing perceptible here: a settle is a body coming to rest,
+  // so holding the rest pose longer is what a settle looks like anyway. Crouch
+  // holds 12+12 (was 8+4+8+4) and block holds 6+8 (was 3+3+8) - 24f and 14f,
+  // both unchanged. There are now no synthesised cels in either clip.
+  //
+  // Dash, the jump arc and the get-up are large pose changes that double-image
+  // under morph, so they keyframe instead (distinct AI poses, hard cuts), which
+  // read cleaner than a doubled tween.
 ]
 
 /** All frame names, in generation order: free stance, generated keys, then synthesised tweens. */
@@ -1343,7 +1365,7 @@ export const CLIPS: Record<string, ClipSpec> = {
   ),
   // Crouch breathes — players sit in it. Ping-pong crouch<->crouch-2 (subtle,
   // morph-clean).
-  crouch: clip(true, ['crouch', 8], ['tw-cr-c2', 4], ['crouch-2', 8], ['tw-cr-c2', 4]),
+  crouch: clip(true, ['crouch', 12], ['crouch-2', 12]),
   // Jump arc keyframes through its phases (hard cuts — morph smears the airborne
   // pose changes): rise -> apex, then apex -> fall -> land absorb.
   'jump-rise': clip(false, ['jump-rise', 5], ['jump-rise-2', 5], ['jump-apex', 8]),
@@ -1353,7 +1375,7 @@ export const CLIPS: Record<string, ClipSpec> = {
   backdash: clip(false, ['backdash-ready', 3], ['backdash', 6], ['backdash-ready', 4]),
   attack: clip(false, ['mp-active', 8]),
   // Block absorbs the hit then settles back to guard rather than holding a pose.
-  block: clip(true, ['block-absorb', 3], ['tw-ba-bs', 3], ['block-stand', 8]),
+  block: clip(true, ['block-absorb', 6], ['block-stand', 8]),
   // Hitstun: a snap-back that settles back toward guard, not one frozen recoil.
   // Keys held (was 3/3-tween/4/3-tween/5 = 18f) — the recoil rotates the torso,
   // which is the morph's failure case; the two tweens ghosted. Same 18f total.

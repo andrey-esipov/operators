@@ -40,3 +40,10 @@ export function attackTimingForSkin(skinId: string): Map<string, MoveTiming> | u
   }
   return timing
 }
+
+/** The archetype a skin is joined to in the select roster, or undefined for the
+ *  unplayable card-art skins. Read by the generator to decide which
+ *  archetype-specific cel families a skin may bake. */
+export function archetypeForSkin(skinId: string): string | undefined {
+  return ROSTER.find((r) => r.skin === skinId)?.archetype
+}

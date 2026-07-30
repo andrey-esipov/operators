@@ -20,6 +20,7 @@ import path from 'node:path'
 import { editPose, removeFlatBackground, registerFrame, findAnchor, mapLimit } from './lib/sprite-pipeline'
 import {
   FRAMES,
+  GRAB_SUPER_CELS,
   STANCE_FRAME,
   TWEENS,
   buildPrompt,
@@ -28,7 +29,7 @@ import {
 } from './lib/frame-spec'
 import { referenceHistogram, validateFrame, type ValidationResult } from './lib/sprite-validate'
 import { packAtlas, assertAnchorsPreserved, type RegisteredFrame } from './lib/atlas'
-import { attackTimingForSkin } from './lib/fighter-timing'
+import { attackTimingForSkin, archetypeForSkin } from './lib/fighter-timing'
 import { contactSheet, clipFilmstrip, previewHtml, FILMSTRIP_CLIPS, type RegMap } from './lib/preview'
 import { clipApng } from './lib/apng'
 import { morph } from './lib/inbetween'
@@ -150,7 +151,15 @@ export async function generateFighter(
   let generated = 0, reused = 0, regenerations = 0
   const missing: string[] = []
 
-  const results = await mapLimit(FRAMES, CONCURRENCY, async (spec) => {
+  // The grab-super arc belongs to the vanguard (its super is a command grab).
+  // `resolveAttackShapeKey` routes on cel presence alone, so baking these into
+  // any other archetype silently re-routes that fighter's super to a grab.
+  const archetype = archetypeForSkin(id)
+  const skinFrames = archetype === 'vanguard'
+    ? FRAMES
+    : FRAMES.filter((f) => !GRAB_SUPER_CELS.includes(f.name))
+
+  const results = await mapLimit(skinFrames, CONCURRENCY, async (spec) => {
     const rawPath = path.join(rawDir, `${spec.name}.png`)
     let best: { raw: Buffer; result: ValidationResult; reg: Buffer } | null = null
     let attempts = 0

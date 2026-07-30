@@ -14,7 +14,7 @@ export const ATLAS_COST_BYTES: Readonly<Record<string, number>> = Object.freeze(
   "madhavan": 3614942,
   "spiegel": 5710006,
   "taylor": 617354,
-  "turley": 4285982,
+  "turley": 5679204,
 })
 
 // Reduced "hero" opener-atlas sizes. On a reported-slow link the attract
@@ -26,5 +26,5 @@ export const HERO_ATLAS_COST_BYTES: Readonly<Record<string, number>> = Object.fr
   "lenny": 1405922,
   "madhavan": 824774,
   "spiegel": 1454122,
-  "turley": 1147674,
+  "turley": 1492174,
 })

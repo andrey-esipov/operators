@@ -111,7 +111,15 @@ const TODAY: Record<string, Record<string, number>> = {
   // already shipped (see the density block below), bringing idle to turley's
   // shape and both walks to the roster's. What remains here is the driven six.
   madhavan: { crouch: 1, block: 1, dash: 1, backdash: 1, 'jump-rise': 2, 'jump-fall': 2, 'walk-fwd': 8, 'walk-back': 8, idle: 6 },
-  turley: { crouch: 1, block: 1, dash: 1, backdash: 1, 'jump-rise': 2, 'jump-fall': 2, 'walk-fwd': 8, 'walk-back': 8, idle: 6 },
+  // turley is FULLY AT PARITY and is no longer part of the Stage-2 deficit. It
+  // cost no new art: `.sprite-gen/turley/raw` held 17 cels that had never been
+  // shipped (crouch-2, block-absorb, dash-ready, backdash-ready, jump-rise-2,
+  // jump-land, idle-4 …), so regenerating `--offline` resolved the richer clips
+  // from cels already paid for. Zero clips lost, zero gained. Its driven six now
+  // read 4/3/3/3/3/3 — identical to doshi, its own warden partner, which is the
+  // blind A/B this file's header names as the refutation of the "intentional
+  // minimal style" defence. idle reached 10, the roster-leader number.
+  turley: { crouch: 4, block: 3, dash: 3, backdash: 3, 'jump-rise': 3, 'jump-fall': 3, 'walk-fwd': 8, 'walk-back': 8, idle: 10 },
 }
 
 describe('locomotion richness — today\u2019s cel counts are pinned (drift-proof, both variants)', () => {
@@ -169,18 +177,22 @@ describe('locomotion richness — today\u2019s cel counts are pinned (drift-proo
 //
 // Per-clip floors are set to what the roster ALREADY DEMONSTRATES, never to an
 // aspiration — an unmet-by-everyone target would be a wish, not a gate:
-//   driven six  4/3/3/3/3/3  — four of six fighters ship exactly this.
-//   walks       8 / 8        — FIVE of six ship exactly 8, byte-identical.
-//                              madhavan alone is 4. This floor is not arguable.
-//   idle        6            — deliberately turley's number, NOT the leaders' 10.
-//                              turley's 6-cel/32-frame idle is a tighter cycle,
-//                              plausibly a real style choice, so holding it to
-//                              the leaders' shape would be over-claiming. 6 is
-//                              the floor every fighter can be held to; madhavan
-//                              at 4 fails it either way, which is the point.
+//   driven six  4/3/3/3/3/3  — FIVE of six fighters now ship exactly this.
+//   walks       8 / 8        — all six ship exactly 8. Not arguable.
+//   idle        6            — held at 6 rather than the 10 that five of six now
+//                              ship. This floor was originally justified as
+//                              "turley's number", on the reading that its 6-cel
+//                              cycle might be a deliberate tighter style. That
+//                              justification is GONE: turley regenerated to 10
+//                              from its own cached cels, so the 6 was a shipping
+//                              gap, not a style. The floor stays at 6 anyway
+//                              because madhavan at 4 fails it either way and
+//                              raising it would be re-deriving the target from
+//                              the very art still owed. Revisit when madhavan lands.
 //
-// Remaining cels to clear this target: turley +11 (driven six only) and
-// madhavan +22 (driven six +12, walks +8, idle +2) = 33.
+// Remaining cels to clear this target: madhavan +22 (driven six +12, walks +8 —
+// already delivered — idle +2). turley is DONE: it went from +11 owed to fully
+// at parity for zero new art, by regenerating against 17 unshipped cached raws.
 const PARITY: Record<string, number> = {
   crouch: 4,
   block: 3,
@@ -227,6 +239,8 @@ describe('locomotion richness — Stage-2 parity target', () => {
 //
 //   lenny  idle       idle-1 tw-i1-i2 idle-2 tw-i2-i4 idle-4 tw-i4-i3a …   6 tweens
 //   turley idle       idle-1 tw-i1-i2 idle-2 idle-3 tw-i3-i1a tw-i3-i1b    3 tweens
+//                      ^ AT DISCOVERY. turley now ships 6 tweens / 10 cels,
+//                        regenerated from its own cached raws (see TODAY).
 //   madhavan idle     idle-1 idle-2 idle-3 idle-2                          0 tweens
 //
 // madhavan runs the SAME loop tempo as the leaders (48 frames vs 49) at 40% the
@@ -261,7 +275,7 @@ const TWEENS_TODAY: Record<string, Record<string, number>> = {
   spiegel: { idle: 6, 'walk-fwd': 4, 'walk-back': 4 },
   doshi: { idle: 6, 'walk-fwd': 4, 'walk-back': 4 },
   lenny: { idle: 6, 'walk-fwd': 4, 'walk-back': 4 },
-  turley: { idle: 3, 'walk-fwd': 4, 'walk-back': 4 },
+  turley: { idle: 6, 'walk-fwd': 4, 'walk-back': 4 },
   // Was { idle: 0, 'walk-fwd': 0, 'walk-back': 0 } — zero in-betweens anywhere
   // continuously visible. All 15 missing tweens were morphed from key poses
   // madhavan already shipped, so this reached parity with no new art.
@@ -321,7 +335,13 @@ describe('in-between density — tweens and dwell are pinned (both variants)', (
 // ── Stage-2 density target — LIVE (the art landed) ───────────────────────────
 // Floors are what the roster already demonstrates, not a wish:
 //   walks  4 tweens / dwell <= 5f — all six now ship exactly this, identically.
-//   idle   3 tweens / dwell <= 8f — turley's number, the conservative floor.
+//   idle   3 tweens / dwell <= 8f — the conservative floor. Originally set as
+//                                  "turley's number"; turley has since
+//                                  regenerated to 6 tweens, so five of six now
+//                                  ship 6. Left at 3 deliberately: raising it
+//                                  would re-derive the floor from art that only
+//                                  just landed, and 3 already reds a fighter
+//                                  shipping held keyframes with no in-betweens.
 // This was .skip'd while madhavan failed all six cells of it. It is now UN-SKIPPED
 // and enforced: madhavan's 15 absent in-betweens were synthesised by optical-flow
 // morph from key poses it already shipped, so the fix needed no new art at all.

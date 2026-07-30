@@ -1188,6 +1188,28 @@ export const DERIVED_ATTACKS: Record<string, AttackShapeKey> = {
  * and rolls over to that shape's recycled fallback.
  */
 export const GRAB_SUPER_CONTACT = 'super-grab-catch'
+
+/**
+ * Every cel in the grab-super family, DERIVED from the shape rather than listed
+ * a second time — a hand-copied list would drift from the shape it names.
+ *
+ * The generator filters these out for non-vanguard skins. `resolveAttackShapeKey`
+ * routes `super` to the grab arc purely on cel PRESENCE, with no archetype check,
+ * on the assumption that only a vanguard would ever have the cels. That
+ * assumption is not self-enforcing: `FRAMES` is a global spec, so the generator
+ * attempts every cel for every skin, and a speculative cached raw is enough to
+ * bake the family into the wrong fighter. It happened — turley (a warden zoner,
+ * whose super is the Ion Storm projection) had all six grab raws sitting in
+ * .sprite-gen, so regenerating it baked them in and its super re-routed to a
+ * command-grab arc. contactCel's "grab cels imply a vanguard skin" pin caught
+ * it. Filtering at generation keeps the routing predicate honest at its source
+ * instead of relying on the cache never containing the wrong thing.
+ */
+export const GRAB_SUPER_CELS: readonly string[] = [
+  ...ATTACK_SHAPES.superGrab.startup,
+  ATTACK_SHAPES.superGrab.active,
+  ...ATTACK_SHAPES.superGrab.recovery,
+]
 function resolveAttackShapeKey(moveId: string, has?: (cel: string) => boolean): AttackShapeKey | undefined {
   const key = DERIVED_ATTACKS[moveId]
   if (key === 'super' && has && has(GRAB_SUPER_CONTACT)) return 'superGrab'

@@ -93,9 +93,17 @@ function median(xs: number[]): number {
  */
 export function AttractMode({ onExit, capture = false }: Props) {
   const dirRef = useRef<AttractDirector | null>(null)
-  if (dirRef.current === null) dirRef.current = new AttractDirector()
 
-  const canvasRef = useRef<HTMLCanvasElement | null>(null)
+  // Built on demand, NOT during render. The unmount cleanup disposes the
+  // director and nulls this ref so a remount can never drive a torn-down sim.
+  // But React StrictMode re-runs EFFECTS without re-rendering, so a render-time
+  // rebuild leaves the ref null for the entire remounted lifetime and the rAF
+  // loop dereferences null on its first tick — which killed the whole reel.
+  // Rebuilding at the point of use makes "there is always a live director" true
+  // at every call site, rather than true only on the first mount.
+  const ensureDir = (): AttractDirector => (dirRef.current ??= new AttractDirector())
+
+  const hostRef = useRef<HTMLDivElement | null>(null)
   const rotateArmedRef = useRef(false)
   const [segment, setSegment] = useState(0)
   const [degraded, setDegraded] = useState(false)
@@ -130,15 +138,28 @@ export function AttractMode({ onExit, capture = false }: Props) {
 
   // Mount a fresh renderer per bout. Mirrors PlayableMatch's proven lifecycle:
   // construct → init → (bail *through* dispose if unmounted) → load both atlases
-  // → bind assets → seed initial state → drive the director's step. On a keyed
-  // canvas swap React runs this segment's cleanup (dispose) before the next
-  // segment's setup, so the old GL context — and its fighter textures — is gone
-  // before the next match loads. That ordering is the whole VRAM argument.
+  // → bind assets → seed initial state → drive the director's step. React runs
+  // this segment's cleanup (dispose) before the next segment's setup, so the old
+  // GL context — and its fighter textures — is gone before the next match loads.
+  // That ordering is the whole VRAM argument.
+  //
+  // The canvas is created HERE rather than in JSX. `Engine.dispose()` ends in
+  // `forceContextLoss()`, which permanently poisons the element: a canvas has at
+  // most one context per type and `getContext()` returns that same dead object
+  // forever after, so the next Engine reads null from
+  // `getShaderPrecisionFormat()` and the screen dies as "FAILED TO START". This
+  // used to be avoided by a `key={segment}` on the canvas, which minted a fresh
+  // element per bout — correct, but a convention someone had to remember. Owning
+  // the element makes reuse impossible instead of merely avoided, and it holds
+  // for the StrictMode remount case, where the key never changes.
   useEffect(() => {
     if (degraded) return
-    const canvas = canvasRef.current
-    if (!canvas) return
-    const dir = dirRef.current!
+    const host = hostRef.current
+    if (!host) return
+    const canvas = document.createElement('canvas')
+    canvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;display:block'
+    host.appendChild(canvas)
+    const dir = ensureDir()
 
     // A rotation was requested for THIS segment. Advance the director now, while
     // the previous renderer is already disposed, so the old renderer never steps
@@ -208,7 +229,7 @@ export function AttractMode({ onExit, capture = false }: Props) {
       }
     })()
 
-    const parent = canvas.parentElement!
+    const parent = host
     const resize = () => {
       const r = parent.getBoundingClientRect()
       renderer?.engine.resize(Math.max(1, Math.round(r.width)), Math.max(1, Math.round(r.height)))
@@ -221,6 +242,7 @@ export function AttractMode({ onExit, capture = false }: Props) {
       disposed = true
       ro.disconnect()
       renderer?.dispose()
+      canvas.remove()
     }
   }, [segment, degraded, capture])
 
@@ -244,7 +266,7 @@ export function AttractMode({ onExit, capture = false }: Props) {
         frames++
       }
 
-      const dir = dirRef.current!
+      const dir = ensureDir()
       // Edge-triggered cut: arm exactly once per KO so the poll can't advance the
       // reel twice before the new segment mounts and disarms it.
       if (dir.wantsRotate && !rotateArmedRef.current) {
@@ -282,15 +304,14 @@ export function AttractMode({ onExit, capture = false }: Props) {
     }
   }, [degraded])
 
-  // Dispose the director on unmount — and null the ref so it is rebuilt live on
-  // the next mount. React StrictMode (dev) mounts → unmounts → remounts, running
-  // this cleanup between the two renders; without the null, the remount at line
-  // 83 would see a non-null ref and reuse a director whose sim is already
-  // disposed, leaving the reel driving a torn-down sim (now inert by guard, so
-  // it would sit frozen). Nulling it means the remount constructs a fresh, live
-  // director. This cleanup runs after the segment effect's (renderer dispose)
-  // and the rAF effect's (cancel), so the sim is torn down only once nothing can
-  // still call `step()` on it.
+  // Dispose the director on unmount and null the ref, so nothing can drive a
+  // torn-down sim. The rebuild is `ensureDir()` at the point of use — NOT a
+  // render-time initialiser. StrictMode runs this cleanup between two effect
+  // passes with no render in between, so a render-time rebuild never fires and
+  // every consumer then reads null; that is exactly how the reel died. This
+  // cleanup runs after the segment effect's (renderer dispose) and the rAF
+  // effect's (cancel), so the sim is torn down only once nothing can still call
+  // `step()` on it.
   useEffect(() => {
     return () => {
       dirRef.current?.dispose()
@@ -342,9 +363,8 @@ export function AttractMode({ onExit, capture = false }: Props) {
       tabIndex={-1}
       style={{ background: '#05060a' }}
     >
-      <canvas
-        key={segment}
-        ref={canvasRef}
+      <div
+        ref={hostRef}
         style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', display: 'block' }}
       />
 

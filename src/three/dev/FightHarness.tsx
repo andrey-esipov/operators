@@ -87,7 +87,7 @@ declare global {
 }
 
 export function FightHarness() {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null)
+  const hostRef = useRef<HTMLDivElement | null>(null)
   const [status, setStatus] = useState('booting')
   const params = new URLSearchParams(window.location.search)
   const stageParam = (params.get('stage') as ScenarioId) || 'ipo-prep'
@@ -99,8 +99,16 @@ export function FightHarness() {
   const seedParam = Number(params.get('seed'))
 
   useEffect(() => {
-    const canvas = canvasRef.current
-    if (!canvas) return
+    const host = hostRef.current
+    if (!host) return
+    // Own the canvas here: Engine.dispose() calls forceContextLoss(), which
+    // permanently poisons the element (getContext() returns the same dead
+    // context forever). React reuses the same DOM node across a StrictMode
+    // remount, so a JSX-owned canvas would hand the next Engine a corpse and
+    // getShaderPrecisionFormat() would return null. See PlayableMatch.tsx.
+    const canvas = document.createElement('canvas')
+    canvas.style.cssText = 'width:100%;height:100%;display:block'
+    host.appendChild(canvas)
     let renderer: FightRenderer | null = null
     let disposed = false
     const sim = useMock
@@ -160,7 +168,7 @@ export function FightHarness() {
       setStatus('running')
     })()
 
-    const parent = canvas.parentElement!
+    const parent = host
     const resize = () => {
       const r = parent.getBoundingClientRect()
       renderer?.engine.resize(Math.max(1, Math.round(r.width)), Math.max(1, Math.round(r.height)))
@@ -174,13 +182,14 @@ export function FightHarness() {
       ro.disconnect()
       delete window.__FIGHT__
       renderer?.dispose()
+      canvas.remove()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: '#05060a' }}>
-      <canvas ref={canvasRef} style={{ width: '100%', height: '100%', display: 'block' }} />
+      <div ref={hostRef} style={{ width: '100%', height: '100%', display: 'block' }} />
       <div
         style={{
           position: 'absolute', left: 12, top: 10, font: '12px ui-monospace, monospace',

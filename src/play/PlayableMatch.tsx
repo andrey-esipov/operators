@@ -78,7 +78,7 @@ const DEFAULT_STAGE: ScenarioId = 'pre-pmf'
 type Phase = 'booting' | 'loading' | 'playing' | 'error'
 
 export function PlayableMatch() {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null)
+  const hostRef = useRef<HTMLDivElement | null>(null)
   const hudRef = useRef<FightHudHandle | null>(null)
   const [phase, setPhase] = useState<Phase>('booting')
   const [error, setError] = useState<string | null>(null)
@@ -115,8 +115,29 @@ export function PlayableMatch() {
   const restartRef = useRef<(() => void) | null>(null)
 
   useEffect(() => {
-    const canvas = canvasRef.current
-    if (!canvas) return
+    const host = hostRef.current
+    if (!host) return
+
+    // Own the <canvas> here rather than letting JSX hold it.
+    //
+    // `Engine.dispose()` ends in `renderer.forceContextLoss()`, which is the
+    // deterministic VRAM free this codebase needs. But it permanently poisons
+    // the element: per spec a canvas has at most ONE context per type, and
+    // `getContext()` returns that same object forever after — lost and
+    // unrecoverable. THREE then reads `getShaderPrecisionFormat(...)` off the
+    // dead context, gets null, and the screen dies as "FAILED TO START".
+    //
+    // React hands the SAME DOM node back across StrictMode's
+    // mount -> cleanup -> remount, so a JSX-owned `<canvas ref>` gives the
+    // second Engine a corpse. A `key=` only mints a fresh element when its
+    // VALUE changes, and a StrictMode remount reuses the same key — so keying
+    // is not a second safe path. Creating the element here makes the safety
+    // structural instead of incidental: every Engine gets a canvas that has
+    // never held a context, and the poisoned one leaves with it. All four
+    // engine-owning routes do this, enforced by canvasOwnership.node.test.ts.
+    const canvas = document.createElement('canvas')
+    canvas.style.cssText = 'width:100%;height:100%;display:block'
+    host.appendChild(canvas)
 
     let renderer: FightRenderer | null = null
     let disposed = false
@@ -257,7 +278,7 @@ export function PlayableMatch() {
       }
     })()
 
-    const parent = canvas.parentElement!
+    const parent = host
     const resize = () => {
       const r = parent.getBoundingClientRect()
       renderer?.engine.resize(Math.max(1, Math.round(r.width)), Math.max(1, Math.round(r.height)))
@@ -273,6 +294,9 @@ export function PlayableMatch() {
       delete window.__PLAY__
       renderer?.dispose()
       sim.dispose()
+      // The canvas is now context-poisoned by forceContextLoss(). Take it out
+      // of the DOM so nothing can hand it to a future Engine.
+      canvas.remove()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -290,7 +314,7 @@ export function PlayableMatch() {
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: '#05060a', overflow: 'hidden' }}>
-      <canvas ref={canvasRef} style={{ width: '100%', height: '100%', display: 'block' }} />
+      <div ref={hostRef} style={{ width: '100%', height: '100%', display: 'block' }} />
 
       {phase === 'playing' && (
         <FightHud

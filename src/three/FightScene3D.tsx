@@ -47,15 +47,23 @@ interface Props {
  * state updates. Props are pushed into the engine imperatively.
  */
 export function FightScene3D({ state, events, timeScale = 1, className, onReady, capture = false }: Props) {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null)
+  const hostRef = useRef<HTMLDivElement | null>(null)
   const engineRef = useRef<Engine | null>(null)
   const stateRef = useRef(state)
   const consumedRef = useRef<FightEvent[]>([])
   stateRef.current = state
 
   useEffect(() => {
-    const canvas = canvasRef.current
-    if (!canvas) return
+    const host = hostRef.current
+    if (!host) return
+    // Own the canvas here: Engine.dispose() calls forceContextLoss(), which
+    // permanently poisons the element (getContext() returns the same dead
+    // context forever). React reuses the same DOM node across a StrictMode
+    // remount, so a JSX-owned canvas would hand the next Engine a corpse and
+    // getShaderPrecisionFormat() would return null. See PlayableMatch.tsx.
+    const canvas = document.createElement('canvas')
+    canvas.style.cssText = 'width:100%;height:100%;display:block'
+    host.appendChild(canvas)
     let disposed = false
 
     const engine = new Engine({ canvas, seed: 0xa11ce })
@@ -99,7 +107,7 @@ export function FightScene3D({ state, events, timeScale = 1, className, onReady,
       })
     })()
 
-    const parent = canvas.parentElement!
+    const parent = host
     const resize = () => {
       const r = parent.getBoundingClientRect()
       engine.resize(Math.max(1, Math.round(r.width)), Math.max(1, Math.round(r.height)))
@@ -120,6 +128,7 @@ export function FightScene3D({ state, events, timeScale = 1, className, onReady,
       document.removeEventListener('visibilitychange', onVis)
       if (capture) removeLabProbe()
       engine.dispose()
+      canvas.remove()
       engineRef.current = null
     }
     // Mount-only: the engine is driven imperatively from here on.
@@ -146,8 +155,8 @@ export function FightScene3D({ state, events, timeScale = 1, className, onReady,
   }, [events])
 
   return (
-    <canvas
-      ref={canvasRef}
+    <div
+      ref={hostRef}
       className={className}
       style={{ display: 'block', width: '100%', height: '100%' }}
     />

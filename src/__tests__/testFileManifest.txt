@@ -62,6 +62,7 @@ src/screens/attract/__tests__/firstBoutBudget.node.test.ts
 src/screens/attract/__tests__/heroClipFidelity.node.test.ts
 src/screens/attract/__tests__/heroOpenerDecoupling.node.test.ts
 src/screens/attract/__tests__/reelQuality.node.test.ts
+src/three/__tests__/backdropFraming.node.test.ts
 src/three/__tests__/canvasOwnership.node.test.ts
 src/three/__tests__/contextLossHandled.node.test.ts
 src/three/__tests__/threeChunkBudget.node.test.ts

@@ -15,6 +15,7 @@ import { ReflectiveFloor, type FloorLook } from './ReflectiveFloor'
 import { buildStageScene } from './StageBuilds'
 import { DustField, groundFog } from './Atmosphere'
 import type { StageBuild } from './StageKit'
+import { BACKDROP_PLANE, backdropUvTransform } from './backdropFraming'
 
 declare global {
   interface Window {
@@ -30,6 +31,13 @@ declare global {
       /** Dev/QA: hide the foreground framing occluders (used by the occluder
        *  probe to difference a frame with and without them). */
       setForegroundVisible: (v: boolean) => void
+      /** Dev/QA: hide the whole mid-ground build, leaving the painted cyclorama
+       *  and the floor. Lets a probe measure how much of the painting the
+       *  procedural set is actually covering, with nothing else changed. */
+      setBuildVisible: (v: boolean) => void
+      /** Dev/QA: retune the backdrop grade live, so a variant sweep can be
+       *  captured without a rebuild between arms. */
+      setBackdropGrade: (g: { exposure?: number; fog?: number; vignette?: number }) => void
       /** Dev/QA: toggle camera-pinning of the foreground frame. `false` restores
        *  the original world-space behaviour — i.e. injects Defect 1 — so a probe
        *  can watch the occlusion spike with every other variable held constant. */
@@ -53,9 +61,13 @@ declare global {
  * The stage.
  *
  * Structure, back to front:
- *   1. Sky gradient + far backdrop cyclorama — the existing plate, pushed deep
- *      and heavily fogged so it reads as distant ambient backing behind the
- *      real geometry rather than as wallpaper.
+ *   1. Sky gradient + far backdrop cyclorama — the hand-painted plate, cover-fit
+ *      to the frame so the fight shows the SAME image the stage-select thumbnail
+ *      sells (see backdropFraming.ts). It is graded to sit behind the geometry,
+ *      not to be erased by it: this layer carries most of each arena's identity.
+ *      It was previously "pushed deep and heavily fogged," which combined with a
+ *      mis-centred 2.2x crop and a saturated DOF gather to render all eight
+ *      arenas as near-identical dark boxes.
  *   2. Mid-ground architecture (per-stage `StageBuild`) — real lit/shadowed
  *      geometry: towers, gantries, screen walls, trusses, crowds. This is the
  *      layer that gives each arena a distinct, memorable silhouette and life.
@@ -98,6 +110,11 @@ export class StageSubsystem implements Subsystem {
 
   private current: ScenarioId | null = null
   private time = 0
+  /** Aspect of the loaded plate (w/h). Drives the cover fit. */
+  private plateAspect = 1.5
+  /** Inputs the current UV transform was solved for, so we only resolve on change. */
+  private framedAspect = -1
+  private framedPlate = -1
   private getLightRig: () => LightRig | undefined
   private quality: QualityTier
 
@@ -178,18 +195,40 @@ export class StageSubsystem implements Subsystem {
         uTime: { value: 0 },
         uTint: { value: new THREE.Color(0x223044) },
         uFogColor: { value: new THREE.Color(0x0a0716) },
-        uFogAmount: { value: 0.62 },
-        uExposure: { value: 0.72 },
+        // The plate is the art. These used to stack into a ~75% brightness cut
+        // and a ~35% saturation drain on top of a 2.2x mis-centred crop, which
+        // is how eight hand-painted arenas turned into one dark box.
+        //
+        // These values are not taste-by-assertion: five treatments spanning
+        // "cinematic, background subordinate" to "art-forward, plate almost
+        // untouched" were captured on four stages and ranked BLIND under
+        // shuffled labels by three independent critics. All three picked this
+        // one. Two useful facts came out of that:
+        //   - Exposure and fog dominate. The losing arm shared this arm's exact
+        //     defocus cap and still placed last on every board.
+        //   - More is not better. The most art-forward arm (exposure 1.25, fog
+        //     0.06) lost to this one; the plate stops reading as part of the
+        //     scene and starts reading as pasted-on wallpaper.
+        // Move these only against another blind ranking.
+        uFogAmount: { value: 0.12 },
+        uExposure: { value: 1.18 },
         uParallax: { value: new THREE.Vector2(0, 0) },
         uSkyTop: { value: new THREE.Color(0x11081f) },
         uSkyBottom: { value: new THREE.Color(0x2c1440) },
-        uVignette: { value: 0.62 },
+        uVignette: { value: 0.2 },
+        // Plane UV -> texture UV. The plane is deliberately far larger than the
+        // frame so it still covers when the camera dollies; without this the
+        // viewer sees a small off-centre crop. See backdropFraming.ts.
+        uUvScale: { value: new THREE.Vector2(1, 1) },
+        uUvPivot: { value: new THREE.Vector2(0.5, 0.5) },
       },
       vertexShader: /* glsl */ `
         varying vec2 vUv;
         uniform vec2 uParallax;
+        uniform vec2 uUvScale;
+        uniform vec2 uUvPivot;
         void main() {
-          vUv = uv + uParallax;
+          vUv = (uv - uUvPivot) * uUvScale + 0.5 + uParallax;
           gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
         }
       `,
@@ -213,10 +252,14 @@ export class StageSubsystem implements Subsystem {
           if (uHasMap > 0.5) {
             vec3 t = texture2D(uMap, uv).rgb;
             float lum = dot(t, vec3(0.299, 0.587, 0.114));
-            t = mix(vec3(lum), t, 0.72);
-            // gentle S-curve so the plate keeps some depth instead of muddying
-            t = t*t*(3.0 - 2.0*t);
-            col = mix(col, t, 0.82);
+            // Keep nearly all of the painting's chroma. The old 0.72 drained a
+            // third of the saturation the art was authored with.
+            t = mix(vec3(lum), t, 0.94);
+            // Gentle S-curve for depth. Applied at half strength: full
+            // smoothstep crushes the dark two-thirds of these plates (a 0.3
+            // midtone fell to 0.22 before any of the other attenuations).
+            t = mix(t, t*t*(3.0 - 2.0*t), 0.5);
+            col = mix(col, t, 0.97);
           }
           col *= uExposure;
           // Distance haze — the plate dissolves into fog toward the bottom
@@ -241,8 +284,8 @@ export class StageSubsystem implements Subsystem {
       fog: false,
     })
     this.backdrop = new THREE.Mesh(geo, this.backdropMat)
-    this.backdrop.position.set(0, 8.5, -30)
-    this.backdrop.scale.set(96, 52, 1)
+    this.backdrop.position.set(0, BACKDROP_PLANE.centerY, BACKDROP_PLANE.z)
+    this.backdrop.scale.set(BACKDROP_PLANE.width, BACKDROP_PLANE.height, 1)
     this.backdrop.renderOrder = -100
     this.root.add(this.backdrop)
   }
@@ -338,9 +381,41 @@ export class StageSubsystem implements Subsystem {
       if (this.current !== id) return
       this.backdropMat.uniforms.uMap.value = tex
       this.backdropMat.uniforms.uHasMap.value = 1
+      const img = tex.image as { width?: number; height?: number } | undefined
+      this.plateAspect = img?.width && img?.height ? img.width / img.height : 1.5
+      this.syncBackdropFraming()
     } catch {
       this.backdropMat.uniforms.uHasMap.value = 0
     }
+  }
+
+  /**
+   * Map the visible frustum onto the whole painting.
+   *
+   * Recomputed on aspect change rather than every frame, and derived from the
+   * NEUTRAL camera rather than the live one: the plate stays world-fixed, so a
+   * dollying camera slides it in frame and yields real parallax. Driving this
+   * off the live camera would pin the art to the viewport and flatten it.
+   */
+  private syncBackdropFraming() {
+    const aspect = this.ctx.camera.aspect || 16 / 9
+    if (aspect === this.framedAspect && this.plateAspect === this.framedPlate) return
+    this.framedAspect = aspect
+    this.framedPlate = this.plateAspect
+    const t = backdropUvTransform(
+      {
+        cameraZ: WORLD.CAMERA.position[2],
+        cameraY: WORLD.CAMERA.position[1],
+        targetY: WORLD.CAMERA.target[1],
+        targetZ: WORLD.CAMERA.target[2],
+        fovDeg: WORLD.CAMERA.fov,
+        aspect,
+      },
+      BACKDROP_PLANE,
+      this.plateAspect,
+    )
+    this.backdropMat.uniforms.uUvScale.value.set(t.scale[0], t.scale[1])
+    this.backdropMat.uniforms.uUvPivot.value.set(t.pivot[0], t.pivot[1])
   }
 
   update(dt: number, state: FightRenderState) {
@@ -350,6 +425,9 @@ export class StageSubsystem implements Subsystem {
     const cam = this.ctx.camera
 
     this.backdropMat.uniforms.uTime.value = this.time
+    // Viewport aspect changes the visible rect, and therefore the crop. Cheap
+    // guarded no-op once solved.
+    if (this.backdropMat.uniforms.uHasMap.value > 0.5) this.syncBackdropFraming()
     this.backdropMat.uniforms.uParallax.value.set(
       -cam.position.x * 0.0016,
       -(cam.position.y - WORLD.CAMERA.position[1]) * 0.002,
@@ -386,6 +464,15 @@ export class StageSubsystem implements Subsystem {
           celebrate: () => this.build?.celebrate ?? false,
           setForegroundVisible: (v: boolean) => {
             if (this.build) this.build.foreground.visible = v
+          },
+          setBuildVisible: (v: boolean) => {
+            if (this.build) this.build.root.visible = v
+          },
+          setBackdropGrade: (g: { exposure?: number; fog?: number; vignette?: number }) => {
+            const u = this.backdropMat.uniforms
+            if (g.exposure !== undefined) u.uExposure.value = g.exposure
+            if (g.fog !== undefined) u.uFogAmount.value = g.fog
+            if (g.vignette !== undefined) u.uVignette.value = g.vignette
           },
           setFramePinned: (v: boolean) => {
             this.framePinned = v

@@ -45,6 +45,7 @@ uniform float camFar;
 uniform float focusCenter;    // linear eye distance to the sharp plane (fighters)
 uniform float focusHalf;      // half-width of the sharp band (both fighters inside)
 uniform float bgRamp;         // units past the band over which background CoC → 1
+uniform float bgMaxCoc;       // ceiling on background CoC (see cocOf)
 uniform float fgRamp;         // units before the band over which foreground CoC → 1
 uniform float fgBoost;        // extra CoC multiplier for foreground (heavier bokeh)
 uniform float maxRadius;      // max gather radius, in pixels
@@ -68,9 +69,17 @@ float windowMask(vec2 uv, vec2 c, vec2 halfExtent) {
 
 // Circle of confusion from a linear eye distance: 0 inside the focus band, ramps
 // up in front (foreground, heavier) and behind (background).
+//
+// Background and foreground are capped separately on purpose. The near
+// occluders WANT heavy bokeh — that is the cinematic depth cue. The far
+// backdrop does not: this is a 2D fighter whose stages are hand-painted art,
+// and the plate sits ~41 world units out, which saturates the background ramp
+// and used to hand it the full maxRadius gather. At 16px on a 1280 frame that
+// dissolved eight painted arenas into coloured mush. bgMaxCoc keeps a real but
+// gentle far defocus for depth separation while the painting stays legible.
 float cocOf(float d) {
   float dev = d - focusCenter;
-  if (dev >  focusHalf) return clamp((dev - focusHalf) / bgRamp, 0.0, 1.0);
+  if (dev >  focusHalf) return clamp((dev - focusHalf) / bgRamp, 0.0, 1.0) * bgMaxCoc;
   if (dev < -focusHalf) return clamp((-dev - focusHalf) / fgRamp, 0.0, 1.0) * fgBoost;
   return 0.0;
 }
@@ -122,6 +131,7 @@ export class DepthOfFieldEffect extends Effect {
       ['focusCenter', new THREE.Uniform(11)],
       ['focusHalf', new THREE.Uniform(1.5)],
       ['bgRamp', new THREE.Uniform(5.5)],
+      ['bgMaxCoc', new THREE.Uniform(0.16)],
       ['fgRamp', new THREE.Uniform(3.0)],
       ['fgBoost', new THREE.Uniform(1.5)],
       ['maxRadius', new THREE.Uniform(14)],
@@ -159,11 +169,17 @@ export class DepthOfFieldEffect extends Effect {
   }
 
   /** Blur shape: how fast CoC ramps behind/in front, foreground boost, max radius. */
-  setParams(bgRamp: number, fgRamp: number, fgBoost: number, maxRadius: number) {
+  setParams(bgRamp: number, fgRamp: number, fgBoost: number, maxRadius: number, bgMaxCoc: number) {
     this.u('bgRamp').value = bgRamp
     this.u('fgRamp').value = fgRamp
     this.u('fgBoost').value = fgBoost
     this.u('maxRadius').value = maxRadius
+    this.u('bgMaxCoc').value = bgMaxCoc
+  }
+
+  /** Ceiling on background CoC. See the cocOf comment. */
+  setBgMaxCoc(v: number) {
+    this.u('bgMaxCoc').value = v
   }
 
   /** Screen-space character matte (same projection the grade/finalize use). */

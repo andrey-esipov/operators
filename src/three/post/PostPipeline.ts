@@ -36,6 +36,9 @@ declare global {
     __POST__?: {
       dofDefeat: (on: boolean) => void
       hasDof: () => boolean
+      /** Dev/QA: retune the background CoC ceiling live, so a variant sweep can
+       *  be captured without a rebuild between arms. */
+      setBgMaxCoc: (v: number) => void
       sepDefeat: (on: boolean) => void
       /** Current value of the reactive impact envelope (0..~1.7). Read-only QA
        *  probe: measure-impact-punch reads this frame-by-frame on the shipped
@@ -183,7 +186,15 @@ export class PostPipeline implements Subsystem, RenderDriver {
       // full blur. fgRamp/fgBoost: the pinned foreground occluders sit ~4-6 units
       // in front of the fighters, so they must reach heavy bokeh over a short
       // ramp. maxRadius in device px at DPR 2. Tuned against native-1:1 captures.
-      this.dof.setParams(7.0, 3.4, 1.7, 16)
+      //
+      // bgMaxCoc caps how far the BACKGROUND is allowed to ride that radius. The
+      // painted cyclorama is ~41 units out, which saturates bgRamp, so before
+      // this cap it took the full 16px gather and the hand-painted arenas —
+      // the thing the stage-select thumbnail sells — came out as coloured mush.
+      // Foreground bokeh is deliberately left uncapped: that one is the cinematic
+      // depth cue and it is not competing with any art.
+      // 0.16 (~2.6px) won a blind three-critic ranking against 0.08/0.32/0.44.
+      this.dof.setParams(7.0, 3.4, 1.7, 16, 0.16)
       this.composer.addPass(new EffectPass(camera, this.dof))
     }
 
@@ -400,6 +411,9 @@ export class PostPipeline implements Subsystem, RenderDriver {
           this.dofDefeat = on
         },
         hasDof: () => !!this.dof,
+        setBgMaxCoc: (v: number) => {
+          this.dof?.setBgMaxCoc(v)
+        },
         sepDefeat: (on: boolean) => {
           this.sepDefeat = on
         },

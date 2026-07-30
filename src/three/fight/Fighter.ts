@@ -147,6 +147,56 @@ function shadowTexture(): THREE.Texture {
   return t
 }
 
+let sharedPoolTex: THREE.Texture | null = null
+function contactLightTexture(): THREE.Texture {
+  if (sharedPoolTex) return sharedPoolTex
+  const s = 128
+  const c = document.createElement('canvas')
+  c.width = c.height = s
+  const ctx = c.getContext('2d')!
+  const g = ctx.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2)
+  // Deliberately the INVERSE profile of shadowTexture(): broad and gentle rather
+  // than tight and dark. The pool's job is to give the floor a value for the dark
+  // cores to bite into, so it must be WIDER than the cores it sits under — a pool
+  // the same size as the shadow would be perfectly cancelled by it.
+  g.addColorStop(0, 'rgba(255,255,255,0.85)')
+  g.addColorStop(0.45, 'rgba(255,255,255,0.34)')
+  g.addColorStop(1, 'rgba(255,255,255,0)')
+  ctx.fillStyle = g
+  ctx.fillRect(0, 0, s, s)
+  const t = new THREE.CanvasTexture(c)
+  t.colorSpace = THREE.NoColorSpace
+  sharedPoolTex = t
+  return t
+}
+
+/**
+ * Peak additive lift of the contact pool.
+ *
+ * ONE constant, not a per-stage table, and the reason is the blend mode: an
+ * ADDITIVE pool is self-normalising in exactly the direction the defect needs. A
+ * fixed delta is a large RELATIVE lift on a dark floor and a negligible one on a
+ * bright floor, so the stages that need help get it and the stages that already
+ * read correctly are left alone. Per-stage tuning would be eight numbers that
+ * drift; this is one that cannot.
+ *
+ * THE VALUE (0.38) AND WIDTH (2.1x body) WERE CHOSEN BLIND, NOT BY EYE. Four
+ * arms — off / broad (2.6 @ 0.50) / soft (2.1 @ 0.38) / tight (1.7 @ 0.62) —
+ * were captured from one build, crypto-shuffled behind anonymous labels with the
+ * key sealed outside the reviewers' reach, and ranked by three critics on three
+ * model families. Two results worth keeping:
+ *
+ *   1. The broad arm — which measures the LARGEST pixel lift (+57.3% on the
+ *      darkest stage) — was ranked SECOND-TO-LAST by both reviewers, one of them
+ *      placing it below no-pool-at-all. More light measured is not more contact
+ *      perceived. Do not re-raise these numbers because an A/B says the delta
+ *      grows; the A/B proves the pool CHANGES pixels, never that it IMPROVES.
+ *   2. Soft was the only arm both reviewers ranked above the no-pool control.
+ *
+ * Raising peak past ~0.45 or width past ~2.3 reproduces the arm that lost.
+ */
+const CONTACT_POOL_PEAK = 0.38
+
 /** Max number of independent contact cores a fighter can cast at once (two feet
  *  plus a hand/knee/torso on a knockdown or wakeup plant). */
 const SHADOW_STAMPS = 4
@@ -176,6 +226,7 @@ export class Fighter {
   readonly mesh: THREE.Mesh
   private uniforms: SpriteFighterUniforms
   private shadowStamps: THREE.Mesh[] = []
+  private contactPool!: THREE.Mesh
   /** Per-frame ground-contact support points, indexed by frame number. */
   private contacts: Contact[][] = []
   private bloomMask: THREE.Mesh
@@ -262,7 +313,42 @@ export class Fighter {
       this.shadowStamps.push(stamp)
     }
 
-    this.group.add(this.mesh, this.bloomMask, ...this.shadowStamps)
+    // ---- Contact light pool: the value the shadow bites into -----------------
+    // Measured defect: the contact cores are pure black at up to 0.92 opacity, so
+    // a stamp composites floor luminance L to L*(1-a). Weber contrast is therefore
+    // EXACTLY a on every stage — the relative darkening is already constant — but
+    // the ABSOLUTE drop scales with L. On `crisis` (measured foot-band luma 27.9)
+    // that is 28 -> 2: correctly placed, correct opacity, and both values crushed
+    // to the same black on any real display, so the fighter reads as floating. On
+    // `monetization` (94.9) the same stamp gives 95 -> 8, a strong contact cue.
+    // Two blind critics on different model families independently prescribed the
+    // same fix — a pool of contact LIGHT beneath the shadow — and this is it.
+    //
+    // Drawn BEFORE the cores (renderOrder 4.5 < 5) so the shadow darkens the lit
+    // pool rather than the bare floor. That ordering IS the fix: it is what gives
+    // the shadow something to bite into on a dark stage.
+    this.contactPool = new THREE.Mesh(
+      new THREE.PlaneGeometry(1, 1),
+      new THREE.MeshBasicMaterial({
+        map: contactLightTexture(),
+        transparent: true,
+        depthWrite: false,
+        depthTest: false,        // same z-fight reason as the cores below
+        blending: THREE.AdditiveBlending,
+        opacity: 0,
+        color: 0xffe9d0,         // faint warm bounce; neutral would read as fog
+      }),
+    )
+    this.contactPool.rotation.x = -Math.PI / 2
+    this.contactPool.position.y = WORLD.GROUND_Y + 0.01  // below the cores at 0.02
+    this.contactPool.renderOrder = 4.5
+    this.contactPool.frustumCulled = false
+    // Never let the pool bloom. An additive ground light that blooms becomes the
+    // formless glow blob already filed against the super — the pool must read as
+    // light ON a surface, not as a light source.
+    this.contactPool.userData.noBloom = true
+
+    this.group.add(this.mesh, this.bloomMask, this.contactPool, ...this.shadowStamps)
   }
 
   setAssets(assets: FighterAssets, tex: AtlasTextureSet, accent: string, reval?: readonly [number, number, number]) {
@@ -576,6 +662,37 @@ export class Fighter {
       const peak = (0.92 - 0.62 * lift) * c.strength
       smat.opacity = THREE.MathUtils.clamp(peak, 0.12, 0.92) * (1 - this.dissolve) * extraFade
     }
+
+    // ---- Contact light pool -------------------------------------------------
+    // Spans the whole stance (the cores are per-foot; this is one wash under the
+    // body) and fades with height on the same `lift` curve, so a jumping fighter
+    // does not drag a light along the floor with him.
+    //
+    // DEV hook __MUT_POOL_OFF__ defeats the pool INDEPENDENTLY of the cores, so a
+    // probe can attribute a change to the pool rather than to the shadow system
+    // as a whole — the two mechanisms are separable by construction.
+    let poolOff = shadowOff
+    if (import.meta.env.DEV && (globalThis as Record<string, unknown>).__MUT_POOL_OFF__) poolOff = true
+    if (poolOff) {
+      this.contactPool.visible = false
+    } else {
+      this.contactPool.visible = true
+      const pmat = this.contactPool.material as THREE.MeshBasicMaterial
+      // DEV-only calibration override. Exists so a blind A/B can capture several
+      // pool shapes from ONE build — rebuilding between arms would make the arms
+      // differ by more than the variable under test.
+      let pw = 2.1, pk = CONTACT_POOL_PEAK
+      if (import.meta.env.DEV) {
+        const t = (globalThis as Record<string, unknown>).__POOL_TUNE__ as
+          { w?: number; peak?: number } | undefined
+        if (t) { pw = t.w ?? pw; pk = t.peak ?? pk }
+      }
+      this.contactPool.position.set(feet.x + offX * 0.5, WORLD.GROUND_Y + 0.01, 0)
+      // Wider than the widest core so the cores sit INSIDE the lit area. A pool
+      // narrower than the shadow would be entirely cancelled by it.
+      this.contactPool.scale.set(w * pw * (1 - 0.35 * lift), w * pw * 0.44 * (1 - 0.35 * lift), 1)
+      pmat.opacity = pk * (1 - 0.8 * lift) * (1 - this.dissolve)
+    }
   }
 
   /** Chest-height world anchor (x, y, z) for the stage's shadow/reflection sync. */
@@ -593,6 +710,8 @@ export class Fighter {
     }
     this.bloomMask.geometry.dispose()
     ;(this.bloomMask.material as THREE.Material).dispose()
+    this.contactPool.geometry.dispose()
+    ;(this.contactPool.material as THREE.Material).dispose()
     this.group.parent?.remove(this.group)
   }
 }

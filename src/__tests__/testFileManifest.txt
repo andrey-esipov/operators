@@ -78,6 +78,7 @@ src/three/fight/__tests__/cameraFraming.test.ts
 src/three/fight/__tests__/cameraFreezeShot.test.ts
 src/three/fight/__tests__/cameraKick.test.ts
 src/three/fight/__tests__/contactCel.test.ts
+src/three/fight/__tests__/contactLightPool.node.test.ts
 src/three/fight/__tests__/counterHitVfx.test.ts
 src/three/fight/__tests__/crackleContent.test.ts
 src/three/fight/__tests__/edgeAlpha.test.ts

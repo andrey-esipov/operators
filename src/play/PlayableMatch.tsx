@@ -165,6 +165,15 @@ export function PlayableMatch() {
         // and the orphan silently overdraws the live one.
         if (disposed) return renderer.dispose()
 
+        // The GPU can take the context away at any time — driver reset, or
+        // Chrome evicting the oldest context once the document passes ~16 live
+        // ones. Unhandled, the canvas just stops updating: a permanently black
+        // screen with nothing in the console. Surface it as a real state.
+        renderer.engine.onContextLost = () => {
+          setError('the GPU dropped this page — reload to continue')
+          setPhase('error')
+        }
+
         // A capture that pins ?quality= is measuring THAT tier — hold it so the
         // adaptive loop can't demote pixelRatio/DOF/bloom mid-measurement. No
         // ?quality= (a real player) stays adaptive. The same call yields the
@@ -273,7 +282,7 @@ export function PlayableMatch() {
         setPhase('playing')
       } catch (e) {
         if (disposed) return
-        setError(e instanceof Error ? e.message : String(e))
+        setError(`failed to start — ${e instanceof Error ? e.message : String(e)}`)
         setPhase('error')
       }
     })()
@@ -328,7 +337,7 @@ export function PlayableMatch() {
 
       {phase !== 'playing' && (
         <div style={overlayStyle}>
-          {phase === 'error' ? `failed to start — ${error}` : 'loading…'}
+          {phase === 'error' ? error : 'loading…'}
         </div>
       )}
 

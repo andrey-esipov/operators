@@ -131,16 +131,22 @@ function fakeEngine() {
   const assets = { dispose: vi.fn() }
   const scene = { traverse: vi.fn() }
   const stop = vi.fn()
+  // `dispose()` detaches the `webglcontextlost` listener the constructor
+  // installed. A real Engine always has a canvas (it is `readonly` and assigned
+  // in the constructor), so the stand-in models one rather than letting the
+  // production code go defensively optional to satisfy a test double.
+  const canvas = { removeEventListener: vi.fn() }
   const self = {
     stop,
     renderer,
     assets,
     scene,
+    canvas,
     subsystems: [subsystem],
     lateUpdates: new Set<(dt: number) => void>(),
     eventListeners: new Set<(e: unknown) => void>(),
   }
-  return { self, renderer, subsystem, assets, stop }
+  return { self, renderer, subsystem, assets, stop, canvas }
 }
 
 /** Run the REAL committed Engine.dispose() against the stand-in as `this`. */
@@ -184,11 +190,18 @@ describe('Engine.dispose releases the WebGL context', () => {
     // If the body short-circuited before the keystone, these collaborators would
     // not all fire. Their firing proves dispose() executed the real teardown path
     // — so the keystone assertion above is about a reachable call, not a stub.
-    const { self, subsystem, assets, stop } = fakeEngine()
+    const { self, subsystem, assets, stop, canvas } = fakeEngine()
     runDispose(self)
     expect(stop, 'dispose() must stop the loop').toHaveBeenCalledTimes(1)
     expect(subsystem.dispose, 'dispose() must dispose each subsystem').toHaveBeenCalledTimes(1)
     expect(assets.dispose, 'dispose() must dispose the asset cache').toHaveBeenCalledTimes(1)
+    // A `webglcontextlost` listener that outlives its Engine closes over a
+    // disposed renderer and keeps answering for it. Detaching is part of the
+    // teardown body, so it belongs in the same non-vacuity proof.
+    expect(
+      canvas.removeEventListener,
+      'dispose() must detach the webglcontextlost listener',
+    ).toHaveBeenCalledTimes(1)
     // The body zeroes the subsystem list; this is precisely why a guard reading
     // `this.subsystems.length === 0` placed before the keystone is dead on arrival.
     expect(self.subsystems.length, 'dispose() must clear the subsystem list').toBe(0)

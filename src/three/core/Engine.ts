@@ -47,6 +47,39 @@ export class Engine {
   readonly camera: THREE.PerspectiveCamera
   readonly assets: AssetCache
 
+  /**
+   * The element this Engine's context lives on. Held so `dispose()` can detach
+   * the context-loss listener it installed — a listener that outlived its
+   * Engine would fire for the *next* Engine mounted on a reused element.
+   */
+  readonly canvas: HTMLCanvasElement
+
+  /**
+   * Called when the GPU takes the context away from us — driver reset, GPU
+   * hang, or (the common one here) Chrome silently evicting the oldest context
+   * once a document exceeds ~16 live ones. Without a listener the canvas simply
+   * stops updating and the player sees a permanently black screen with no error
+   * anywhere, which is indistinguishable from a renderer catastrophe. Routes
+   * set this to surface an honest, actionable state instead.
+   *
+   * NOT called for our own `dispose()`, which loses the context deliberately.
+   */
+  onContextLost: (() => void) | null = null
+
+  /** True from the top of `dispose()`, so our own context loss is not reported. */
+  private _disposing = false
+
+  /**
+   * Bound once as a field so `removeEventListener` in `dispose()` can pass the
+   * identical reference — a fresh arrow per call would silently fail to detach.
+   */
+  private onCanvasContextLost = (e: Event) => {
+    if (this._disposing) return
+    e.preventDefault()
+    this.stop()
+    this.onContextLost?.()
+  }
+
   private subsystems: Subsystem[] = []
   private driver: RenderDriver | null = null
   private lateUpdates = new Set<(dt: number) => void>()
@@ -108,6 +141,13 @@ export class Engine {
       depth: true,
       preserveDrawingBuffer: true, // screenshot capture for the critic loop
     })
+    this.canvas = opts.canvas
+    // `preventDefault()` is what makes a later `webglcontextrestored` possible
+    // at all — without it the browser never offers to give the context back.
+    // We do not yet rebuild on restore, so the honest contract is: report the
+    // loss to whoever owns this Engine and let them show a real state. Silence
+    // was the old behaviour and it looked exactly like a crash.
+    this.canvas.addEventListener('webglcontextlost', this.onCanvasContextLost)
     this.renderer.setPixelRatio(this.effectivePixelRatio())
     this.renderer.outputColorSpace = THREE.SRGBColorSpace
     // ACES gives the filmic highlight rolloff modern fighters use. The post
@@ -510,6 +550,8 @@ export class Engine {
   }
 
   dispose() {
+    this._disposing = true
+    this.canvas.removeEventListener('webglcontextlost', this.onCanvasContextLost)
     this.stop()
     for (const s of this.subsystems) s.dispose()
     this.subsystems.length = 0
@@ -532,7 +574,9 @@ export class Engine {
     // here reclaims that VRAM synchronously at dispose, so dispose-before-mount
     // (the keyed-canvas bout rotation, and the client-side boot transitions this
     // unblocks) stays inside the atlas VRAM budget without throwing the document
-    // away. No `webglcontextlost` listener reacts to this — it is a pure free —
+    // away. `forceContextLoss` DOES fire `webglcontextlost`, but `_disposing`
+    // is already true and the listener is already detached above, so our own
+    // deliberate loss is never reported to the route as a failure —
     // and `forceContextLoss` is a no-op if WEBGL_lose_context is unavailable.
     this.renderer.forceContextLoss()
   }

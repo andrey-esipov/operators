@@ -2,17 +2,23 @@ import { useState } from 'react'
 import { useGame } from '../state/game'
 import { SCENARIOS, SCENARIO_ORDER } from '../data/scenarios'
 import { getFighter } from '../data/fighters'
+import { Sprite } from '../components/Sprite'
 import { Sfx } from '../lib/audio'
 import type { ScenarioId } from '../types'
+import './select/select.css'
 
 /**
  * Stage Select — appears after both fighters are picked (VS mode only).
  *
- * - 8 stage cards in a 4×2 grid, each with icon + tag + topical description
- * - "AUTO" card that randomizes
- * - Highlights which fighters get a bonus in the hovered/selected stage
- * - Starts match on confirm
+ * Built to the SAME AAA material language as CharacterSelect: a dominant
+ * cinematic stage render fills the left (a real `.sel-hero` slab with the
+ * backdrop art, swapping on hover), the arenas sit right as a dense
+ * `.sel-stagecard` grid, and the locked-in fighters ride the header as mirrored
+ * P1/P2 plates. Gold is reserved for the RANDOM ceremony and the FIGHT trigger.
  */
+const SIDE_COLOR = { a: '#E63946', b: '#00B4D8' } as const
+const SIDE_LABEL = { a: 'PLAYER 1', b: 'PLAYER 2' } as const
+
 export function StageSelect() {
   const selectedA = useGame((s) => s.selectedA)
   const selectedB = useGame((s) => s.selectedB)
@@ -21,13 +27,28 @@ export function StageSelect() {
 
   const [picked, setPicked] = useState<ScenarioId | 'auto'>('auto')
   const [hovered, setHovered] = useState<ScenarioId | null>(null)
+  const [randomHover, setRandomHover] = useState(false)
+  const [touched, setTouched] = useState(false)
 
   const fighterA = selectedA ? getFighter(selectedA) : null
   const fighterB = selectedB ? getFighter(selectedB) : null
 
-  // What's hovered/picked determines which stage details to show
-  const active = hovered ?? (picked === 'auto' ? null : picked)
-  const activeScenario = active ? SCENARIOS[active] : null
+  // Three preview moods. Idle (before any pick) is a neutral "choose" hero, not
+  // a gold ceremony — gold is reserved for an intentional RANDOM draw and FIGHT.
+  const previewMode: 'arena' | 'random' | 'idle' =
+    hovered ? 'arena'
+      : randomHover ? 'random'
+        : picked === 'auto' ? (touched ? 'random' : 'idle')
+          : 'arena'
+  const featuredId: ScenarioId = hovered ?? (picked === 'auto' ? SCENARIO_ORDER[0] : picked)
+  const featuredScenario = SCENARIOS[featuredId]
+  const accent = hovered
+    ? SCENARIOS[hovered].accent
+    : previewMode === 'random'
+      ? '#FFD60A'
+      : picked === 'auto'
+        ? 'rgba(255,255,255,0.5)'
+        : SCENARIOS[picked].accent
 
   function confirm() {
     if (!fighterA || !fighterB) return
@@ -40,289 +61,370 @@ export function StageSelect() {
   }
 
   return (
-    <div className="relative w-full h-full flex flex-col p-4 gap-3 overflow-hidden">
-      <div
-        className="absolute inset-0"
-        style={{
-          background:
-            'radial-gradient(ellipse at top, rgba(247,127,0,0.25) 0%, transparent 55%), linear-gradient(180deg, #1A0F2E 0%, #0F0A1A 100%)',
-        }}
-      />
+    <div
+      className="sel-root flex flex-col"
+      style={{
+        ['--sel-accent' as string]: accent,
+        ['--sel-side' as string]: '#FFD60A',
+        ['--sel-p1' as string]: SIDE_COLOR.a,
+        ['--sel-p2' as string]: SIDE_COLOR.b,
+        padding: '14px 16px 16px',
+        gap: 10,
+      }}
+    >
+      {/* Layered atmospheric background — identical system to CharacterSelect */}
+      <div className="sel-bg" />
+      <div className="sel-bg-glow" />
+      <div className="sel-bg-bands" />
+      <div className="sel-bg-scan" />
+      <div className="sel-bg-vignette" />
 
-      {/* Header */}
+      {/* Header rail */}
       <div className="relative z-10 flex items-center justify-between flex-shrink-0">
         <button
-          onClick={() => {
-            Sfx.menuMove()
-            setPhase('character-select')
-          }}
-          className="font-display text-[10px] tracking-widest text-white/70"
+          onClick={() => { Sfx.menuMove(); setPhase('character-select') }}
+          className="sel-btn sel-h"
+          style={{ fontSize: 11, color: 'rgba(255,255,255,0.72)', padding: '4px 4px' }}
         >
-          ← BACK
+          &lsaquo; BACK
         </button>
+
         <h1
-          className="font-display text-2xl tracking-widest"
-          style={{ color: '#FFD60A', textShadow: '4px 4px 0 rgba(0,0,0,0.6)' }}
+          className="sel-name-face"
+          style={{
+            fontSize: 26,
+            letterSpacing: '0.14em',
+            color: '#fff',
+            textShadow: '2px 2px 0 rgba(0,0,0,0.8), 0 0 22px rgba(255,214,10,0.4)',
+            lineHeight: 1,
+          }}
         >
           SELECT YOUR BATTLEGROUND
         </h1>
-        <div className="font-display text-[10px] tracking-widest text-white/70">
-          {fighterA?.shortName} <span className="text-white/40">VS</span> {fighterB?.shortName}
+
+        <div className="sel-h" style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.2em', color: '#FFD60A', textShadow: '1px 1px 0 #000' }}>
+          STAGE
         </div>
       </div>
 
-      {/* MAIN AREA */}
-      <div className="relative z-10 grid grid-cols-3 gap-4 flex-1 min-h-0">
-        {/* LEFT: stage grid (8 stages + AUTO) */}
-        <div className="col-span-2 grid grid-cols-3 gap-2 content-start auto-rows-max overflow-y-auto pr-1">
-          {/* AUTO card — first */}
-          <button
-            onMouseEnter={() => {
-              Sfx.menuMove()
-              setHovered(null)
-            }}
-            onMouseLeave={() => setHovered(null)}
-            onClick={() => {
-              Sfx.menuSelect()
-              setPicked('auto')
-            }}
-            className="relative flex flex-col items-start text-left p-3 transition-transform hover:scale-[1.02]"
-            style={{
-              background:
-                picked === 'auto'
-                  ? 'linear-gradient(180deg, rgba(255,214,10,0.25), rgba(255,214,10,0.08))'
-                  : 'linear-gradient(180deg, rgba(255,214,10,0.08), rgba(0,0,0,0.4))',
-              border: `2px solid ${picked === 'auto' ? '#FFD60A' : '#FFD60A66'}`,
-              boxShadow:
-                picked === 'auto'
-                  ? '0 0 18px #FFD60A88, inset -2px -2px 0 rgba(0,0,0,0.5)'
-                  : 'inset -2px -2px 0 rgba(0,0,0,0.5), inset 2px 2px 0 rgba(255,255,255,0.1)',
-              minHeight: 110,
-              cursor: 'pointer',
-            }}
-          >
-            <div className="flex items-center justify-between w-full">
-              <span
-                className="font-display text-[10px] tracking-widest"
-                style={{ color: '#FFD60A' }}
-              >
-                AUTO
-              </span>
-              <span className="text-2xl">🎲</span>
-            </div>
-            <div className="font-display text-base tracking-wider text-white mt-1">
-              RANDOM STAGE
-            </div>
-            <p className="font-body text-sm text-white/80 mt-1 leading-snug">
-              Let the dice pick the battleground. Most matches go this way.
-            </p>
-          </button>
+      {/* VS plates */}
+      <div className="relative z-10 flex items-stretch flex-shrink-0">
+        <VsPlate side="a" fighter={fighterA} />
+        <div className="sel-name-face flex items-center justify-center flex-shrink-0" style={{ width: 46, fontSize: 22, color: '#FFD60A', textShadow: '2px 2px 0 #000, 0 0 16px rgba(255,214,10,0.6)' }}>VS</div>
+        <VsPlate side="b" fighter={fighterB} />
+      </div>
 
-          {SCENARIO_ORDER.map((id) => {
-            const s = SCENARIOS[id]
-            const isPicked = picked === id
-            const isHovered = hovered === id
-            const aBonus = fighterA?.scenarioBonus[id]
-            const bBonus = fighterB?.scenarioBonus[id]
-            return (
-              <button
-                key={id}
-                onMouseEnter={() => {
-                  Sfx.menuMove()
-                  setHovered(id)
-                }}
-                onMouseLeave={() => setHovered(null)}
-                onClick={() => {
-                  Sfx.menuSelect()
-                  setPicked(id)
-                }}
-                className="relative flex flex-col items-start text-left p-3 transition-transform hover:scale-[1.02]"
-                style={{
-                  background: isPicked
-                    ? `linear-gradient(180deg, ${s.accent}3A, ${s.accent}11)`
-                    : `linear-gradient(180deg, ${s.accent}1A, rgba(0,0,0,0.4))`,
-                  border: `2px solid ${isPicked ? s.accent : isHovered ? s.accent : s.accent + '66'}`,
-                  boxShadow: isPicked
-                    ? `0 0 16px ${s.accent}AA, inset -2px -2px 0 rgba(0,0,0,0.5)`
-                    : isHovered
-                    ? `0 0 12px ${s.accent}55, inset -2px -2px 0 rgba(0,0,0,0.5)`
-                    : 'inset -2px -2px 0 rgba(0,0,0,0.5), inset 2px 2px 0 rgba(255,255,255,0.1)',
-                  minHeight: 110,
-                  cursor: 'pointer',
-                }}
-              >
-                <div className="flex items-center justify-between w-full">
+      {/* MAIN */}
+      <div className="relative z-10 flex gap-4 flex-1 min-h-0">
+        {/* LEFT: dominant cinematic arena render */}
+        <div className="sel-hero flex-shrink-0 flex flex-col" style={{ flex: '0 0 clamp(520px, 52%, 780px)' }}>
+          <StagePreview
+            key={featuredScenario.id + '-' + previewMode}
+            scenario={featuredScenario}
+            fighterA={fighterA}
+            fighterB={fighterB}
+            mode={previewMode}
+          />
+        </div>
+
+        {/* RIGHT: arena grid */}
+        <div className="flex flex-col flex-1 min-w-0 min-h-0">
+          <div className="sel-h flex-shrink-0" style={{ fontSize: 10, letterSpacing: '0.18em', color: 'rgba(255,255,255,0.5)', marginBottom: 8, textShadow: '1px 1px 0 #000' }}>
+            CHOOSE YOUR ARENA
+          </div>
+          <div className="grid gap-2.5 pr-1" style={{ flex: '1 1 0', gridTemplateColumns: 'repeat(3, 1fr)', gridAutoRows: '1fr', alignContent: 'stretch' }}>
+            {/* RANDOM card — a designed ceremony slot, not an empty hole. */}
+            <button
+              onMouseEnter={() => { Sfx.menuMove(); setHovered(null); setRandomHover(true) }}
+              onMouseLeave={() => setRandomHover(false)}
+              onClick={() => { Sfx.menuSelect(); setPicked('auto'); setTouched(true) }}
+              className={`sel-stagecard sel-stage-random flex flex-col items-center justify-center text-center ${picked === 'auto' && touched ? 'is-active is-random-on' : ''}`}
+              style={{ minHeight: 0 }}
+            >
+              <span aria-hidden className="sel-stage-random-q sel-name-face">?</span>
+              <span className="sel-name-face relative" style={{ fontSize: 22, color: '#fff', letterSpacing: '0.04em', lineHeight: 1, textShadow: '2px 2px 0 #000' }}>RANDOM</span>
+              <span className="sel-h relative" style={{ fontSize: 8, letterSpacing: '0.22em', color: '#FFE27A', marginTop: 4 }}>DICE DECIDES</span>
+            </button>
+
+            {SCENARIO_ORDER.map((id) => {
+              const s = SCENARIOS[id]
+              const isPicked = picked === id
+              const isHovered = hovered === id
+              const isActive = isPicked || isHovered
+              const aBonus = fighterA?.scenarioBonus[id]
+              const bBonus = fighterB?.scenarioBonus[id]
+              const showA = !!aBonus && aBonus >= 1.3
+              const showB = !!bBonus && bBonus >= 1.3
+              return (
+                <button
+                  key={id}
+                  data-stage={id}
+                  onMouseEnter={() => { Sfx.menuMove(); setHovered(id) }}
+                  onMouseLeave={() => setHovered(null)}
+                  onClick={() => { Sfx.menuSelect(); setPicked(id); setTouched(true) }}
+                  className={`sel-stagecard flex flex-col justify-end text-left ${isActive ? 'is-active' : ''}`}
+                  style={{
+                    minHeight: 0,
+                    boxShadow: isPicked
+                      ? `inset 0 0 0 2px ${s.accent}, 0 0 22px ${s.accent}aa, 0 6px 16px rgba(0,0,0,0.5)`
+                      : isHovered
+                        ? `inset 0 0 0 1px ${s.accent}, 0 0 16px ${s.accent}77, 0 6px 16px rgba(0,0,0,0.5)`
+                        : undefined,
+                  }}
+                >
+                  {/* Arena art */}
+                  <div
+                    className="absolute inset-0"
+                    style={{
+                      backgroundImage: `url(/stages/${id}.png)`,
+                      backgroundSize: 'cover',
+                      backgroundPosition: 'center',
+                    }}
+                  />
+                  {/* Legibility gradient */}
+                  <div className="absolute inset-0" style={{ background: 'linear-gradient(180deg, rgba(6,4,12,0) 34%, rgba(6,4,12,0.92) 100%)' }} />
+                  {/* Accent underline — the single meaningful colour per card */}
+                  <div className="absolute left-0 right-0 bottom-0" style={{ height: 3, background: s.accent, opacity: isActive ? 1 : 0.55 }} />
+                  {/* Era stamp */}
                   <span
-                    className="font-display text-[10px] tracking-widest"
-                    style={{ color: s.accent }}
+                    className="absolute sel-h"
+                    style={{
+                      top: 6, left: 6, fontSize: 8, letterSpacing: '0.14em', color: '#fff', padding: '2px 6px',
+                      background: `${s.accent}dd`,
+                      clipPath: 'polygon(3px 0, 100% 0, 100% calc(100% - 3px), calc(100% - 3px) 100%, 0 100%, 0 3px)',
+                      textShadow: '1px 1px 0 rgba(0,0,0,0.6)',
+                    }}
                   >
                     {s.tag}
                   </span>
-                  <span className="text-2xl" style={{ filter: 'drop-shadow(0 0 4px ' + s.accent + ')' }}>{s.icon}</span>
-                </div>
-                <div className="font-display text-base tracking-wider text-white mt-1 leading-tight">
-                  {s.name}
-                </div>
-                <p className="font-body text-sm text-white/80 mt-1 leading-snug line-clamp-2">
-                  {s.description}
-                </p>
-
-                {/* Bonus indicators */}
-                <div className="flex gap-1 mt-2 flex-wrap">
-                  {aBonus && aBonus >= 1.3 && (
-                    <span
-                      className="font-display text-[7px] tracking-widest px-1.5 py-0.5"
-                      style={{
-                        background: fighterA!.accent + '33',
-                        border: `1px solid ${fighterA!.accent}`,
-                        color: 'white',
-                      }}
-                    >
-                      {fighterA!.shortName} +{Math.round((aBonus - 1) * 100)}%
-                    </span>
-                  )}
-                  {bBonus && bBonus >= 1.3 && (
-                    <span
-                      className="font-display text-[7px] tracking-widest px-1.5 py-0.5"
-                      style={{
-                        background: fighterB!.accent + '33',
-                        border: `1px solid ${fighterB!.accent}`,
-                        color: 'white',
-                      }}
-                    >
-                      {fighterB!.shortName} +{Math.round((bBonus - 1) * 100)}%
-                    </span>
-                  )}
-                </div>
-              </button>
-            )
-          })}
-        </div>
-
-        {/* RIGHT: detail panel */}
-        <div
-          className="overflow-y-auto p-4"
-          style={{
-            background: 'rgba(15,10,26,0.9)',
-            border: `3px solid ${activeScenario?.accent ?? '#FFD60A'}`,
-            boxShadow: `inset -2px -2px 0 rgba(0,0,0,0.5), inset 2px 2px 0 rgba(255,255,255,0.1), 0 0 24px ${(activeScenario?.accent ?? '#FFD60A')}55`,
-          }}
-        >
-          {activeScenario ? (
-            <>
-              <div className="flex items-center gap-2">
-                <span className="text-4xl" style={{ filter: `drop-shadow(0 0 8px ${activeScenario.accent})` }}>
-                  {activeScenario.icon}
-                </span>
-                <div>
-                  <div
-                    className="font-display text-[9px] tracking-widest"
-                    style={{ color: activeScenario.accent }}
-                  >
-                    {activeScenario.tag}
+                  <div className="relative" style={{ padding: '8px 9px' }}>
+                    <div className="sel-name-face" style={{ fontSize: 15, color: '#fff', letterSpacing: '0.02em', lineHeight: 0.95, textShadow: '2px 2px 0 #000' }}>
+                      {s.name}
+                    </div>
+                    {(showA || showB) && (
+                      <div className="flex gap-1" style={{ marginTop: 6 }}>
+                        {showA && (
+                          <span className="sel-h" style={{ fontSize: 8, letterSpacing: '0.06em', color: '#fff', padding: '2px 5px', background: `${SIDE_COLOR.a}dd` }}>
+                            P1 +{Math.round((aBonus! - 1) * 100)}%
+                          </span>
+                        )}
+                        {showB && (
+                          <span className="sel-h" style={{ fontSize: 8, letterSpacing: '0.06em', color: '#fff', padding: '2px 5px', background: `${SIDE_COLOR.b}dd` }}>
+                            P2 +{Math.round((bBonus! - 1) * 100)}%
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
-                  <div className="font-display text-xl tracking-wider text-white leading-none">
-                    {activeScenario.name}
-                  </div>
-                </div>
-              </div>
-
-              <p className="font-body text-base text-white/85 mt-3 leading-relaxed">
-                {activeScenario.longDescription}
-              </p>
-
-              <div
-                className="mt-4 p-3 italic font-body text-base text-white/90"
-                style={{
-                  background: `${activeScenario.accent}1A`,
-                  borderLeft: `3px solid ${activeScenario.accent}`,
-                }}
-              >
-                &ldquo;{activeScenario.flavorQuote}&rdquo;
-              </div>
-
-              {/* Per-fighter bonus rundown */}
-              <div className="mt-4 space-y-1.5">
-                <div
-                  className="font-display text-[9px] tracking-widest pb-1"
-                  style={{ color: activeScenario.accent, borderBottom: `1px solid ${activeScenario.accent}55` }}
-                >
-                  STAGE BONUSES
-                </div>
-                {fighterA && (
-                  <FighterBonusRow
-                    fighter={fighterA.shortName}
-                    accent={fighterA.accent}
-                    mult={fighterA.scenarioBonus[activeScenario.id] ?? 1.0}
-                  />
-                )}
-                {fighterB && (
-                  <FighterBonusRow
-                    fighter={fighterB.shortName}
-                    accent={fighterB.accent}
-                    mult={fighterB.scenarioBonus[activeScenario.id] ?? 1.0}
-                  />
-                )}
-              </div>
-            </>
-          ) : (
-            <div className="flex flex-col items-center justify-center h-full text-center">
-              <div className="text-6xl mb-3">🎲</div>
-              <div className="font-display text-base tracking-widest text-white">
-                AUTO-SELECTED STAGE
-              </div>
-              <p className="font-body text-base text-white/70 mt-2 leading-snug">
-                Hover a stage to preview it, or click a stage card to lock it in.
-              </p>
-            </div>
-          )}
+                </button>
+              )
+            })}
+          </div>
         </div>
       </div>
 
       {/* CONFIRM */}
-      <div className="relative z-10 flex justify-center flex-shrink-0 pt-2">
+      <div className="relative z-10 flex justify-center flex-shrink-0 pt-1">
         <button
           onClick={confirm}
           onMouseEnter={Sfx.menuMove}
-          className="px-8 py-3 font-display text-xl tracking-widest hover:translate-y-[-2px] transition-transform"
+          className="sel-cta sel-cta-ready"
           style={{
-            background: 'linear-gradient(180deg, #E6394655, #E6394622)',
-            color: 'white',
-            border: '3px solid #E63946',
-            boxShadow:
-              'inset -2px -2px 0 rgba(0,0,0,0.6), inset 2px 2px 0 rgba(255,255,255,0.2), 0 0 24px #E6394666',
-            cursor: 'pointer',
-            letterSpacing: '4px',
-            textShadow: '2px 2px 0 black',
+            padding: '12px 56px',
+            fontSize: 30,
+            color: '#0c0716',
+            background: 'linear-gradient(180deg, #FFE27A 0%, #FFC21F 55%, #F5A700 100%)',
+            border: 'none',
+            letterSpacing: '0.12em',
+            textShadow: '0 1px 0 rgba(255,255,255,0.5)',
+            clipPath: 'polygon(14px 0, 100% 0, calc(100% - 14px) 100%, 0 100%)',
           }}
         >
-          ▶ FIGHT!
+          FIGHT
         </button>
       </div>
     </div>
   )
 }
 
-function FighterBonusRow({ fighter, accent, mult }: { fighter: string; accent: string; mult: number }) {
+/* VS plate — mirrored player identity with locked portrait */
+function VsPlate({ side, fighter }: { side: 'a' | 'b'; fighter: ReturnType<typeof getFighter> | null }) {
+  const color = SIDE_COLOR[side]
+  const cls = [
+    'sel-plate',
+    side === 'a' ? 'sel-plate-a' : 'sel-plate-b',
+    fighter ? (side === 'a' ? 'is-filled-a' : 'is-filled-b') : '',
+  ].filter(Boolean).join(' ')
+  return (
+    <div className={cls} style={{ ['--sel-side' as string]: color }}>
+      <div className="sel-plate-portrait" style={{ boxShadow: `inset 0 0 0 1px ${fighter ? color : 'rgba(255,255,255,0.12)'}` }}>
+        {fighter ? (
+          <div className="sel-portrait" style={{ top: '-10%' }}>
+            <Sprite fighter={fighter} side={side} state="stance" />
+          </div>
+        ) : (
+          <div className="w-full h-full flex items-center justify-center sel-name-face" style={{ fontSize: 20, color: 'rgba(255,255,255,0.28)' }}>&mdash;</div>
+        )}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="sel-h" style={{ fontSize: 9, letterSpacing: '0.16em', color }}>{SIDE_LABEL[side]}</div>
+        <div className="sel-name-face truncate" style={{ fontSize: 20, color: '#fff', letterSpacing: '0.02em', textShadow: '1px 1px 0 #000', lineHeight: 1 }}>
+          {fighter ? fighter.shortName : 'READY'}
+        </div>
+        {fighter && (
+          <div className="sel-cond truncate" style={{ fontSize: 13, color: 'rgba(255,255,255,0.6)', marginTop: 1 }}>{fighter.archetype}</div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/* Dominant cinematic arena render */
+function StagePreview({
+  scenario,
+  fighterA,
+  fighterB,
+  mode = 'arena',
+}: {
+  scenario: (typeof SCENARIOS)[ScenarioId]
+  fighterA: ReturnType<typeof getFighter> | null
+  fighterB: ReturnType<typeof getFighter> | null
+  mode?: 'arena' | 'random' | 'idle'
+}) {
+  const isRandom = mode === 'random'
+  const isIdle = mode === 'idle'
+  const isArena = mode === 'arena'
+  return (
+    <div className="sel-stage-preview relative flex flex-col h-full">
+      {/* Cinematic art */}
+      <div className="relative flex-1 min-h-0 overflow-hidden">
+        <div
+          className="absolute inset-0"
+          style={{
+            backgroundImage: `url(/stages/${scenario.id}.png)`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            filter: isRandom ? 'saturate(0.85) brightness(0.55)' : isIdle ? 'saturate(0.96) brightness(0.82)' : 'none',
+            transform: 'scale(1.04)',
+          }}
+        />
+        <div className="absolute inset-0" style={{ background: 'linear-gradient(180deg, rgba(8,5,16,0) 38%, rgba(8,5,16,0.96) 100%)' }} />
+        <div className="absolute inset-0" style={{ boxShadow: `inset 0 0 120px ${scenario.accent}44` }} />
+
+        {/* RANDOM ceremony — designed, no emoji */}
+        {isRandom && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-8">
+            <div className="sel-stage-ceremony sel-name-face" aria-hidden>?</div>
+            <div
+              className="sel-name-face relative"
+              style={{ fontSize: 'clamp(28px, 3.4vw, 52px)', color: '#FFD60A', letterSpacing: '0.05em', lineHeight: 0.9, textShadow: '3px 3px 0 #000, 0 0 30px rgba(255,214,10,0.6)' }}
+            >
+              RANDOM<br />DRAW
+            </div>
+            <p className="sel-cond relative" style={{ fontSize: 15, color: 'rgba(255,255,255,0.7)', marginTop: 14, maxWidth: '22ch', lineHeight: 1.2, letterSpacing: '0.16em', textTransform: 'uppercase', textShadow: '1px 1px 0 #000' }}>
+              The dice decide the battleground
+            </p>
+          </div>
+        )}
+
+        {/* Neutral idle prompt — before any pick, no gold */}
+        {isIdle && (
+          <div className="absolute left-5 right-5 bottom-4">
+            <div
+              className="inline-block sel-h"
+              style={{ fontSize: 10, letterSpacing: '0.22em', color: 'rgba(255,255,255,0.85)', padding: '4px 10px', marginBottom: 10, background: 'rgba(255,255,255,0.1)', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.25)' }}
+            >
+              8 BATTLEGROUNDS
+            </div>
+            <div
+              className="sel-name-face"
+              style={{ fontSize: 'clamp(34px, 4vw, 62px)', color: '#fff', letterSpacing: '0.01em', lineHeight: 0.86, textShadow: '3px 3px 0 #000, 0 0 26px rgba(255,255,255,0.28)' }}
+            >
+              CHOOSE YOUR<br />ARENA
+            </div>
+          </div>
+        )}
+
+        {/* Title lockup overlaid on the art */}
+        {isArena && (
+          <div className="absolute left-5 right-5 bottom-4">
+            <div
+              className="inline-block sel-h"
+              style={{ fontSize: 9, letterSpacing: '0.16em', color: '#fff', padding: '3px 8px', marginBottom: 8, background: `${scenario.accent}dd`, textShadow: '1px 1px 0 rgba(0,0,0,0.6)' }}
+            >
+              {scenario.tag}
+            </div>
+            <div
+              className="sel-name-face"
+              style={{ fontSize: 'clamp(30px, 3.6vw, 52px)', color: '#fff', letterSpacing: '0.01em', lineHeight: 0.88, textShadow: `3px 3px 0 #000, 0 0 26px ${scenario.accent}` }}
+            >
+              {scenario.name}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Detail slab */}
+      <div
+        className="flex-shrink-0"
+        style={{
+          padding: '14px 18px 16px',
+          background: `linear-gradient(180deg, ${scenario.accent}16, rgba(10,7,20,0.96) 62%)`,
+          borderTop: `2px solid ${isRandom ? '#FFD60A' : isIdle ? 'rgba(255,255,255,0.4)' : scenario.accent}`,
+        }}
+      >
+        {isRandom && (
+          <p className="sel-cond" style={{ fontSize: 17, color: 'rgba(255,255,255,0.82)', lineHeight: 1.25 }}>
+            One of eight battlegrounds is chosen at random when the match begins. Stage bonuses still apply — pick deliberately to swing the odds.
+          </p>
+        )}
+        {isIdle && (
+          <p className="sel-cond" style={{ fontSize: 17, color: 'rgba(255,255,255,0.78)', lineHeight: 1.25, letterSpacing: '0.02em' }}>
+            Every arena rewrites the fight. Hover a battleground to preview its edge — or take the RANDOM draw and let the dice decide.
+          </p>
+        )}
+        {isArena && (
+          <div
+            className="sel-name-face"
+            style={{ fontSize: 'clamp(17px, 1.5vw, 22px)', color: '#fff', lineHeight: 1.06, letterSpacing: '0.01em', paddingLeft: 12, borderLeft: `4px solid ${scenario.accent}`, textShadow: `2px 2px 0 #000, 0 0 18px ${scenario.accent}55` }}
+          >
+            &ldquo;{scenario.flavorQuote}&rdquo;
+          </div>
+        )}
+
+        {/* Stage bonuses */}
+        {isArena && (
+          <div className="grid grid-cols-2 gap-2" style={{ marginTop: 12 }}>
+            {fighterA && <FighterBonusRow side="a" name={fighterA.shortName} mult={fighterA.scenarioBonus[scenario.id] ?? 1.0} />}
+            {fighterB && <FighterBonusRow side="b" name={fighterB.shortName} mult={fighterB.scenarioBonus[scenario.id] ?? 1.0} />}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function FighterBonusRow({ side, name, mult }: { side: 'a' | 'b'; name: string; mult: number }) {
   const pct = Math.round((mult - 1) * 100)
   const sign = pct >= 0 ? '+' : ''
   const bigBonus = mult >= 1.3
+  const sideColor = SIDE_COLOR[side]
+  const valColor = pct >= 30 ? '#0AF0A8' : pct > 0 ? '#FFD60A' : pct < 0 ? '#FF6B6B' : 'rgba(255,255,255,0.8)'
   return (
     <div
-      className="flex items-center justify-between p-2 font-display text-[9px] tracking-widest"
+      className="flex items-center justify-between"
       style={{
-        background: bigBonus ? `${accent}22` : 'rgba(0,0,0,0.3)',
-        border: `1px solid ${bigBonus ? accent : 'rgba(255,255,255,0.1)'}`,
+        padding: '6px 10px',
+        background: bigBonus ? `${sideColor}22` : 'rgba(0,0,0,0.35)',
+        boxShadow: `inset 0 0 0 1px ${bigBonus ? sideColor : 'rgba(255,255,255,0.12)'}`,
       }}
     >
-      <span style={{ color: accent }}>{fighter}</span>
+      <span className="sel-h" style={{ fontSize: 9, letterSpacing: '0.1em', color: sideColor }}>{side === 'a' ? 'P1 ' : 'P2 '}{name}</span>
       <span
-        style={{
-          color: pct >= 30 ? '#06D6A0' : pct > 0 ? '#FFD60A' : '#FFFFFF99',
-        }}
+        className="sel-name-face"
+        style={{ fontSize: 15, color: valColor, textShadow: pct !== 0 ? `0 0 8px ${valColor}66, 1px 1px 0 rgba(0,0,0,0.8)` : '1px 1px 0 rgba(0,0,0,0.8)' }}
       >
-        {sign}
-        {pct}% DMG
+        {sign}{pct}% <span className="sel-h" style={{ fontSize: 8, opacity: 0.7 }}>DMG</span>
       </span>
     </div>
   )

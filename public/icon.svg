@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <linearGradient id="plate" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#18212e"/>
+      <stop offset="1" stop-color="#070b11"/>
+    </linearGradient>
+    <!-- The health-bar ramp, reused so the tab is keyed to the game's palette. -->
+    <linearGradient id="ramp" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffe27a"/>
+      <stop offset="0.45" stop-color="#f5b02e"/>
+      <stop offset="1" stop-color="#e2711d"/>
+    </linearGradient>
+    <linearGradient id="rim" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.22"/>
+      <stop offset="0.5" stop-color="#ffffff" stop-opacity="0.04"/>
+      <stop offset="1" stop-color="#000000" stop-opacity="0.35"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="64" height="64" rx="13" fill="url(#plate)"/>
+  <rect x="0.75" y="0.75" width="62.5" height="62.5" rx="12.4" fill="none" stroke="url(#rim)" stroke-width="1.5"/>
+
+  <!-- A raked ring: the O of OPERATORS carrying the same lean as the HUD's
+       health bars. Stroke stays 9px on a 64 grid so it survives 16px. -->
+  <g transform="translate(32 32) skewX(-11) translate(-32 -32)">
+    <circle cx="32" cy="32" r="17.5" fill="none" stroke="#000000" stroke-opacity="0.55" stroke-width="13"/>
+    <circle cx="32" cy="32" r="17.5" fill="none" stroke="url(#ramp)" stroke-width="9"/>
+    <!-- Top-left specular, the same lit-from-above read the keycaps use. -->
+    <path d="M20.5 21.5 A17.5 17.5 0 0 1 41 16.2" fill="none" stroke="#fff6d8"
+          stroke-opacity="0.75" stroke-width="2.6" stroke-linecap="round"/>
+  </g>
+</svg>

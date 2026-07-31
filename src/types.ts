@@ -130,6 +130,14 @@ export interface FighterDef {
   episode: string
   /** Hex accent color (player-side override) */
   accent: string
+  /**
+   * Optional per-fighter body re-value: an RGB multiplier applied to the sprite
+   * albedo in the fight shader (identity when absent). Reserved for the handful
+   * of dark-neutral fighters whose body value sinks into warm stage walls AND
+   * collides with each other in palette; lifts value and diverges hue WITHOUT
+   * editing the atlas art. Not used by any 2D/UI surface.
+   */
+  reval?: readonly [number, number, number]
   /** Max HP */
   maxHp: number
   /** Scenario damage multipliers (default 1.0) */

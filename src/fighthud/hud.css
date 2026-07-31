@@ -1,0 +1,813 @@
+/* Fighting-game HUD — owned by src/fighthud/**.
+   Scoped with the `fhud-` prefix so nothing here collides with the card
+   game's combat-hud.css or the 3D hud.css. Carries the house language:
+   angular skewed plates, hard black borders, drop shadows, pixel fonts. */
+
+.fhud-root {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  pointer-events: none;
+  font-family: var(--font-display);
+  /* The HUD is authored for a 1600×900 frame; it scales fluidly via % / vw. */
+  user-select: none;
+}
+
+/* ── Top bar layout ─────────────────────────────────────────────────── */
+.fhud-topbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 14px 14px 0;
+}
+
+/* ── Health assembly ────────────────────────────────────────────────────
+   One integrated unit per side: an enlarged portrait frame notched into a
+   thick, skewed housing that the bar is *inset into*, with the nameplate
+   riding the top edge of the housing. Portrait / name / bar read as a single
+   continuous object spanning the top of the screen (SF6 / Tekken), not four
+   floating parts. The whole housing rakes toward the centre. */
+.fhud-hpwrap {
+  flex: 1 1 0;
+  max-width: 730px;
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+}
+.fhud-hpwrap.b { flex-direction: row-reverse; }
+
+.fhud-hpcol {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  /* Tuck the bar/name under the portrait frame so the two connect. */
+  margin-left: -10px;
+  padding-left: 12px;
+}
+.fhud-hpwrap.b .fhud-hpcol {
+  margin-left: 0;
+  margin-right: -10px;
+  padding-left: 0;
+  padding-right: 12px;
+  align-items: flex-end;
+}
+
+.fhud-nameband {
+  display: flex;
+  align-items: flex-end;
+  width: 100%;
+  padding-left: 4px;
+}
+.fhud-hpwrap.b .fhud-nameband { justify-content: flex-end; padding-left: 0; padding-right: 4px; }
+
+.fhud-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  z-index: 2;
+  font-size: 30px;
+  color: #fff;
+  border: 3px solid #04030a;
+  box-shadow:
+    inset 0 4px 8px rgba(255, 255, 255, 0.22),
+    inset 0 -10px 16px rgba(0, 0, 0, 0.55),
+    4px 5px 0 rgba(0, 0, 0, 0.6);
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 9px 100%, 0 calc(100% - 9px));
+  text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.6);
+}
+
+/* Enlarged cropped-atlas portrait. Shaped, layered frame — hard black outer,
+   accent inner rim, top bevel highlight and a deep inner shadow — so it reads
+   as a machined frame with real thickness, not a flat bordered rect. The inner
+   edge notches under the bar housing (negative margin on the column). */
+.fhud-portrait {
+  position: relative;
+  z-index: 2;
+  flex: 0 0 auto;
+  display: inline-block;
+  overflow: hidden;
+  background: linear-gradient(180deg, #2a1650, #0d0818);
+  border: 3px solid #04030a;
+  box-shadow:
+    inset 0 0 0 2px var(--accent),
+    inset 0 4px 8px rgba(255, 255, 255, 0.22),
+    inset 0 -10px 16px rgba(0, 0, 0, 0.55),
+    4px 5px 0 rgba(0, 0, 0, 0.6),
+    0 0 14px -2px var(--accent);
+  /* Angled outer corner — a shaped frame, not a plain rectangle. */
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 9px 100%, 0 calc(100% - 9px));
+  image-rendering: pixelated;
+}
+.fhud-portrait.b {
+  transform: scaleX(-1);
+}
+.fhud-portrait::after {
+  /* Bottom accent shelf for the arcade name-plate read. */
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 4px;
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent);
+}
+/* Brief holding state while the atlas resolves — an accent tile, never a
+   debug letter. Pulses so a capture that catches it reads as alive. */
+.fhud-portrait.loading { animation: fhudPortraitLoad 0.9s ease-in-out infinite; }
+@keyframes fhudPortraitLoad {
+  0%, 100% { opacity: 0.72; }
+  50% { opacity: 1; }
+}
+
+.fhud-name {
+  font-size: 12px;
+  letter-spacing: 0.15em;
+  color: #fff;
+  text-shadow: 1px 1px 0 #000, 0 0 6px rgba(0, 0, 0, 0.9);
+  white-space: nowrap;
+  padding: 3px 14px 2px 10px;
+  /* Accent-keyed dark plate with a solid colour tab on the leading edge, so the
+     name is tied to the assembly (not floating red-on-black) and high-contrast. */
+  background: linear-gradient(180deg, rgba(34, 24, 52, 0.96), rgba(9, 6, 17, 0.96));
+  border: 2px solid #000;
+  border-left: 5px solid var(--accent, #fff);
+  box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  transform: skewX(-13deg);
+}
+.fhud-hpwrap.b .fhud-name {
+  padding: 3px 10px 2px 14px;
+  border-left: 2px solid #000;
+  border-right: 5px solid var(--accent, #fff);
+  transform: skewX(13deg);
+}
+/* Counter-skew the label so the text stays upright inside the raked plate. */
+.fhud-name > span {
+  display: inline-block;
+  transform: skewX(13deg);
+}
+.fhud-hpwrap.b .fhud-name > span { transform: skewX(-13deg); }
+
+/* Thick housing the bar is inset into. Skewing the housing rakes the entire
+   bar silhouette into a parallelogram (not just the notched ends) — the single
+   biggest "fighting game vs. web progress bar" signal. Both sides lean toward
+   the centre. */
+.fhud-hphousing {
+  position: relative;
+  width: 100%;
+  padding: 4px;
+  background: linear-gradient(180deg, #4a3a5e 0%, #241a34 42%, #0c0814 100%);
+  border: 2px solid #04030a;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 -2px 3px rgba(0, 0, 0, 0.6),
+    0 0 0 1px rgba(176, 188, 214, 0.3),
+    5px 5px 0 rgba(0, 0, 0, 0.55);
+  transform: skewX(-13deg);
+}
+.fhud-hpwrap.b .fhud-hphousing { transform: skewX(13deg); }
+
+/* Two-layer track inset in the housing: trail (recoverable/chip) sits behind,
+   main in front, both inside a deep dark trough. */
+.fhud-hptrack {
+  position: relative;
+  width: 100%;
+  height: 22px;
+  background: linear-gradient(180deg, #05030a 0%, #17102a 55%, #0a0713 100%);
+  box-shadow:
+    inset 0 3px 6px rgba(0, 0, 0, 0.85),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+}
+.fhud-hpfill,
+.fhud-hptrail {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  /* width set imperatively (0–100%). */
+  will-change: width;
+}
+/* Right fighter drains toward the centre — anchor fills on the right. */
+.fhud-hpwrap.b .fhud-hpfill,
+.fhud-hpwrap.b .fhud-hptrail {
+  left: auto;
+  right: 0;
+}
+.fhud-hptrail {
+  background: linear-gradient(180deg, #ffffff 0%, #ffe0e0 55%, #ffb3b3 100%);
+  opacity: 0.9;
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.55);
+}
+/* Backlit-glass fill: bright top highlight line, a lit upper third and a
+   distinctly darker bottom third so the bar reads as a curved, lit surface
+   rather than paint. */
+/* Backlit-glass fill. The background is a *horizontal* yellow→amber→orange hue
+   ramp across the length of the bar (bright/safe at the outer end, hot toward
+   the centre) — a ramp reads as a gauge where a single flat hue reads as a UI
+   control. The box-shadow adds the vertical volume: bright top highlight line, a
+   lit upper third and a distinctly darker bottom third, so the bar is a lit,
+   curved surface rather than paint. Tier + side own the ramp via classes. */
+.fhud-hpfill {
+  background: linear-gradient(90deg, #f6ec5a 0%, #f4c130 40%, #ef9420 72%, #e7761c 100%);
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.92),
+    inset 0 7px 8px rgba(255, 255, 255, 0.28),
+    inset 0 -7px 9px rgba(0, 0, 0, 0.58);
+}
+.fhud-hpfill.tier-warn {
+  background: linear-gradient(90deg, #ffcf3a 0%, #f79020 45%, #e35414 100%);
+}
+.fhud-hpfill.tier-crit {
+  background: linear-gradient(90deg, #ff7a52 0%, #ec2833 50%, #a5101f 100%);
+}
+/* Right fighter is mirrored: the safe/bright end stays on its outer (right)
+   edge, so the ramp runs the opposite direction. */
+.fhud-hpwrap.b .fhud-hpfill {
+  background: linear-gradient(270deg, #f6ec5a 0%, #f4c130 40%, #ef9420 72%, #e7761c 100%);
+}
+.fhud-hpwrap.b .fhud-hpfill.tier-warn {
+  background: linear-gradient(270deg, #ffcf3a 0%, #f79020 45%, #e35414 100%);
+}
+.fhud-hpwrap.b .fhud-hpfill.tier-crit {
+  background: linear-gradient(270deg, #ff7a52 0%, #ec2833 50%, #a5101f 100%);
+}
+/* Bright draining edge — the crisp lit lip at the front of the bar that sells
+   the "this is a live gauge" read in SF6 / Strive. Anchored to the inner end. */
+.fhud-hpfill::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: 4px;
+  background: linear-gradient(180deg, #ffffff, rgba(255, 255, 255, 0.4));
+  box-shadow: 0 0 9px rgba(255, 255, 255, 0.85);
+  pointer-events: none;
+}
+.fhud-hpwrap.b .fhud-hpfill::after {
+  right: auto;
+  left: 0;
+}
+/* Notch overlay — keeps the segmented arcade read on a smooth-draining bar. */
+.fhud-hpnotches {
+  position: absolute;
+  inset: 0;
+  background-image: repeating-linear-gradient(
+    90deg,
+    transparent 0 calc(10% - 2px),
+    rgba(0, 0, 0, 0.55) calc(10% - 2px) 10%
+  );
+  pointer-events: none;
+}
+.fhud-hpgloss {
+  position: absolute;
+  inset: 0 0 58% 0;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.06) 72%, transparent);
+  pointer-events: none;
+}
+/* Danger hazard hatching — hidden until crit, then the bar changes *character*
+   (animated red diagonals over the fill) rather than just getting shorter. */
+.fhud-hphazard {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    45deg,
+    rgba(255, 40, 40, 0) 0 9px,
+    rgba(255, 46, 46, 0.32) 9px 18px
+  );
+  mix-blend-mode: screen;
+}
+
+.fhud-hpwrap.crit .fhud-hphazard {
+  opacity: 1;
+  animation: fhudHazard 0.6s linear infinite;
+}
+@keyframes fhudHazard {
+  from { background-position: 0 0; }
+  to { background-position: 25px 0; }
+}
+.fhud-hpwrap.crit .fhud-hphousing {
+  animation: fhudHpCrit 0.66s ease-in-out infinite;
+}
+@keyframes fhudHpCrit {
+  0%, 100% {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.22), inset 0 -2px 3px rgba(0, 0, 0, 0.6),
+      0 0 0 1px rgba(176, 188, 214, 0.3), 5px 5px 0 rgba(0, 0, 0, 0.55),
+      0 0 0 0 rgba(239, 35, 60, 0);
+  }
+  50% {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.22), inset 0 -2px 3px rgba(0, 0, 0, 0.6),
+      0 0 0 1px rgba(255, 90, 90, 0.7), 5px 5px 0 rgba(0, 0, 0, 0.55),
+      0 0 22px 4px rgba(239, 35, 60, 0.8);
+  }
+}
+
+/* ── Super gauge ────────────────────────────────────────────────────── */
+.fhud-superrow {
+  position: absolute;
+  bottom: 30px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.fhud-superrow.a { left: 30px; }
+.fhud-superrow.b { right: 30px; flex-direction: row-reverse; }
+
+.fhud-superlabel {
+  position: relative;
+  font-size: 9px;
+  letter-spacing: 0.28em;
+  line-height: 1;
+}
+.fhud-superlabel-txt {
+  color: #e6b8f0;
+  text-shadow: 1px 1px 0 #000, 0 0 7px rgba(168, 74, 230, 0.6);
+}
+/* "READY" is stacked over "SUPER" and only revealed when a stock is charged. */
+.fhud-superlabel-rdy {
+  position: absolute;
+  left: 0;
+  top: 0;
+  color: #ffe27a;
+  text-shadow: 0 0 8px rgba(255, 196, 60, 0.9), 1px 1px 0 #000;
+  opacity: 0;
+}
+.fhud-superrow.charged .fhud-superlabel-txt { opacity: 0; }
+.fhud-superrow.charged .fhud-superlabel-rdy {
+  opacity: 1;
+  animation: fhudReadyBlink 0.7s steps(2) infinite;
+}
+@keyframes fhudReadyBlink { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+/* "MAX" is stacked over "READY"/"SUPER" and revealed only when the meter can pay
+   for TWO supers (powerTier === 'max') — the graded power read finding #4 asked
+   for. Must follow the .charged rules so equal-specificity source order lets it
+   win over the READY reveal above. */
+.fhud-superlabel-max {
+  position: absolute;
+  left: 0;
+  top: 0;
+  color: #fff3c0;
+  text-shadow: 0 0 10px rgba(255, 224, 130, 1), 0 0 4px rgba(255, 255, 255, 0.9), 1px 1px 0 #000;
+  opacity: 0;
+}
+.fhud-superrow.maxed .fhud-superlabel-rdy { opacity: 0; animation: none; }
+.fhud-superrow.maxed .fhud-superlabel-max {
+  opacity: 1;
+  animation: fhudMaxPulse 0.5s steps(2) infinite;
+}
+@keyframes fhudMaxPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+
+.fhud-superbars {
+  display: flex;
+  gap: 5px;
+}
+/* Each stock is its own machined trough — same vocabulary as the health track.
+   Even empty it must read as a defined, charge-capable slot, so the trough
+   carries a faint violet inner glow and a slow idle sheen rather than looking
+   like an unfilled form field. */
+.fhud-superbar {
+  position: relative;
+  width: 120px;
+  height: 16px;
+  background:
+    linear-gradient(180deg, rgba(150, 58, 214, 0.34), rgba(74, 16, 118, 0.18) 55%, rgba(30, 8, 50, 0.1)),
+    linear-gradient(180deg, #0a0616 0%, #1e0d32 58%, #0c0616 100%);
+  border: 2px solid #000;
+  box-shadow:
+    inset 0 1px 0 rgba(214, 176, 255, 0.28),
+    inset 0 2px 4px rgba(0, 0, 0, 0.7),
+    inset 0 0 9px rgba(168, 74, 230, 0.4),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.06),
+    0 0 0 1px rgba(200, 206, 232, 0.42),
+    0 0 7px rgba(126, 52, 196, 0.4),
+    3px 3px 0 rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+  transform: skewX(-11deg);
+}
+/* Slow idle sheen so an empty gauge still reads as a live, present element. */
+.fhud-superbar::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(110deg, transparent 38%, rgba(190, 130, 240, 0.22) 50%, transparent 62%);
+  transform: translateX(-120%);
+  animation: fhudSuperIdle 3.8s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 1;
+}
+.fhud-superbar.full::before { animation: none; opacity: 0; }
+@keyframes fhudSuperIdle {
+  0% { transform: translateX(-120%); }
+  60%, 100% { transform: translateX(120%); }
+}
+.fhud-superfill {
+  position: absolute;
+  inset: 0;
+  left: 0;
+  /* Charging = a lit violet tube (vertical ramp for volume, not flat paint). */
+  background: linear-gradient(180deg, #d18bff 0%, #a021e0 32%, #7209b7 70%, #46067a 100%);
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.4), inset 0 -3px 5px rgba(0, 0, 0, 0.4);
+  will-change: width;
+  z-index: 2;
+}
+.fhud-superrow.b .fhud-superfill { left: auto; right: 0; }
+/* Beveled segment dividers — a dark cut with a lit edge, so the stock reads as
+   physically segmented rather than printed with flat lines. */
+.fhud-superticks {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  background-image: repeating-linear-gradient(
+    90deg,
+    transparent 0 calc(25% - 2px),
+    rgba(0, 0, 0, 0.6) calc(25% - 2px) calc(25% - 1px),
+    rgba(255, 255, 255, 0.14) calc(25% - 1px) 25%
+  );
+  pointer-events: none;
+}
+
+/* ── Charged stock: the loudest non-character element on screen ────────── */
+.fhud-superbar.full {
+  animation: fhudMeterFull 0.85s ease-in-out infinite;
+}
+.fhud-superbar.full .fhud-superfill {
+  /* Flip from violet to a hot gold-white core so "spendable" is unmistakable. */
+  background: linear-gradient(180deg, #fff7c8 0%, #ffdb5c 34%, #ffab2e 74%, #e07b12 100%);
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.75), inset 0 -3px 6px rgba(0, 0, 0, 0.35);
+}
+/* A specular highlight sweeps across a charged stock — reads as "energised". */
+.fhud-superbar.full .fhud-superfill::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(110deg, transparent 34%, rgba(255, 255, 255, 0.8) 50%, transparent 66%);
+  transform: translateX(-120%);
+  animation: fhudMeterSweep 1.5s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes fhudMeterSweep { 0% { transform: translateX(-120%); } 55%, 100% { transform: translateX(120%); } }
+@keyframes fhudMeterFull {
+  0%, 100% {
+    box-shadow:
+      inset 0 2px 4px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 220, 120, 0.9),
+      0 0 8px 1px rgba(255, 196, 60, 0.6), 3px 3px 0 rgba(0, 0, 0, 0.5);
+  }
+  50% {
+    box-shadow:
+      inset 0 2px 4px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 244, 190, 1),
+      0 0 17px 4px rgba(255, 196, 60, 0.95), 3px 3px 0 rgba(0, 0, 0, 0.5);
+  }
+}
+
+/* ── Timer + pips ───────────────────────────────────────────────────── */
+.fhud-center {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.fhud-timerplate {
+  position: relative;
+  min-width: 96px;
+  padding: 6px 10px 4px;
+  background: linear-gradient(180deg, #2c1a4e 0%, #1a1030 46%, #0d0918 100%);
+  border: 3px solid #000;
+  box-shadow:
+    5px 5px 0 rgba(0, 0, 0, 0.6),
+    inset 0 2px 0 rgba(255, 255, 255, 0.18),
+    inset 0 -3px 6px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(176, 188, 214, 0.25);
+  transform: skewX(-8deg);
+  overflow: hidden;
+}
+/* Top sheen across the plate to match the lit read of the health bars. */
+.fhud-timerplate::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 55% 0;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.16), transparent);
+  pointer-events: none;
+}
+.fhud-timernum {
+  font-family: var(--font-num);
+  font-size: 44px;
+  line-height: 1;
+  color: #ffe98a;
+  text-shadow: 3px 3px 0 #000, 0 0 14px rgba(255, 214, 10, 0.5);
+  text-align: center;
+  transform: skewX(8deg);
+  min-width: 72px;
+}
+.fhud-timernum.low { color: #ff5a5a; animation: fhudTimerLow 0.6s steps(2) infinite; }
+@keyframes fhudTimerLow {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.55; }
+}
+.fhud-pips {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  transform: skewX(-8deg);
+}
+.fhud-pipset { display: flex; gap: 5px; }
+.fhud-pip {
+  width: 12px;
+  height: 12px;
+  border: 2px solid #000;
+  background: #2a1f33;
+  box-shadow: inset -2px -2px 0 rgba(0, 0, 0, 0.4);
+  transform: rotate(45deg);
+}
+.fhud-pip.won {
+  background: radial-gradient(circle at 40% 35%, #ffe98a, #ffb703 70%);
+  box-shadow: 0 0 8px #ffb703, inset -1px -1px 0 rgba(0, 0, 0, 0.4);
+}
+
+/* ── Combo counter ──────────────────────────────────────────────────── */
+.fhud-combo {
+  position: absolute;
+  top: 21%;
+  display: flex;
+  flex-direction: column;
+}
+.fhud-combo.a { left: 8%; align-items: flex-start; }
+.fhud-combo.b { right: 8%; align-items: flex-end; }
+.fhud-combo-rank {
+  font-family: var(--font-display);
+  font-size: 24px;
+  letter-spacing: 0.16em;
+  line-height: 1;
+  margin-bottom: 2px;
+  transform: skewX(-8deg);
+}
+.fhud-combo-count {
+  font-family: var(--font-num);
+  font-size: 74px;
+  line-height: 0.8;
+  color: #ffd60a;
+  text-shadow: 4px 4px 0 #000, 0 0 18px rgba(247, 127, 0, 0.7);
+  transform: skewX(-8deg);
+}
+.fhud-combo-count small {
+  font-size: 26px;
+  color: #fff;
+  margin-left: 6px;
+}
+.fhud-combo-label {
+  font-family: var(--font-display);
+  font-size: 13px;
+  letter-spacing: 0.2em;
+  color: #fff;
+  text-shadow: 2px 2px 0 #000;
+  transform: skewX(-8deg);
+}
+.fhud-combo-dmg {
+  font-family: var(--font-num);
+  font-size: 20px;
+  color: #ff8fa3;
+  text-shadow: 2px 2px 0 #000;
+  transform: skewX(-8deg);
+}
+
+/* ── Flash chips (parry / throw-tech) ───────────────────────────────── */
+.fhud-flash-wrap {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+/* Full-frame coloured edge pulse behind the read. */
+.fhud-flash-edge {
+  position: absolute;
+  inset: 0;
+  mix-blend-mode: screen;
+}
+/* Expanding shock ring, centred just above the fighters' heads. */
+.fhud-flash-ring {
+  position: absolute;
+  top: 40%;
+  width: 120px;
+  height: 120px;
+  border: 5px solid #fff;
+  border-radius: 50%;
+}
+/* The label chip itself. */
+.fhud-flash-chip {
+  position: absolute;
+  top: 34%;
+  padding: 7px 18px;
+  font-family: var(--font-display);
+  font-size: 20px;
+  letter-spacing: 0.26em;
+  color: #fff;
+  border: 3px solid #000;
+}
+
+/* ── Announcements ──────────────────────────────────────────────────── */
+.fhud-announce {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+/* Letterform lettering: the word is the graphic, no plate behind it. */
+.fhud-announce-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 30px;
+  transform: skewX(-9deg);
+  will-change: transform;
+}
+
+/* Two stacked copies share one grid cell: a dark extruded back, a lit front. */
+.fhud-word {
+  position: relative;
+  display: inline-grid;
+  font-family: var(--font-display);
+  font-weight: 900;
+  line-height: 0.86;
+  letter-spacing: 0.015em;
+  white-space: nowrap;
+}
+.fhud-word-shadow,
+.fhud-word-fill {
+  grid-area: 1 / 1;
+  margin: 0;
+  text-align: center;
+}
+/* Back copy: fat hard stroke + stacked offsets = a chunky 3D extrude block. */
+.fhud-word-shadow {
+  color: #130a1e;
+  -webkit-text-stroke: 6px #130a1e;
+  text-shadow:
+    2px 2px 0 #130a1e, 4px 4px 0 #130a1e, 6px 6px 0 #130a1e, 8px 8px 0 #130a1e,
+    11px 11px 0 rgba(0, 0, 0, 0.55), 0 0 46px rgba(0, 0, 0, 0.7);
+}
+/* Front copy: vertical gradient clipped to the glyphs. The dark back copy is
+   what gives the edge, so the fill stays unstroked (a rim here leaves light
+   boxes on the blocky pixel font's top notches). */
+.fhud-word-fill {
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.fhud-word-main {
+  font-size: clamp(120px, 22vw, 300px);
+}
+.fhud-word-kicker {
+  font-size: clamp(34px, 6vw, 76px);
+  letter-spacing: 0.2em;
+}
+.fhud-word-sub {
+  font-size: clamp(48px, 9vw, 130px);
+  letter-spacing: 0.1em;
+}
+
+/* Per-beat sizing: short words go huge, long ones (TIME OVER) rein in. */
+.fhud-announce[data-kind='round'] .fhud-word-main {
+  font-size: clamp(170px, 31vw, 430px);
+}
+.fhud-announce[data-kind='ko'] .fhud-word-main,
+.fhud-announce[data-kind='perfect'] .fhud-word-main {
+  font-size: clamp(150px, 27vw, 380px);
+}
+.fhud-announce[data-kind='time-over'] .fhud-word-main {
+  font-size: clamp(76px, 13vw, 174px);
+}
+.fhud-announce[data-kind='fight'] .fhud-word-main {
+  font-size: clamp(96px, 17vw, 248px);
+}
+.fhud-announce[data-kind='win'] .fhud-word-main {
+  font-size: clamp(120px, 21vw, 300px);
+}
+/* Winner names run long ("Aparna Chennapragada", 20ch). The base kicker size
+   fits "ROUND" but slam-peaks (scale 1.14) a long name straight into the
+   overflow:hidden clip, so the win kicker reins in — measured, not eyeballed. */
+.fhud-announce[data-kind='win'] .fhud-word-kicker {
+  font-size: clamp(28px, 4.2vw, 62px);
+  letter-spacing: 0.16em;
+}
+
+/* ── Counter-hit callout ────────────────────────────────────────────── */
+/* Upper band so it clears the corner combo count and the centred KO word.
+   No plate: the letterform is the graphic, same as the announcements. */
+.fhud-counter {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 13%;
+  overflow: hidden;
+  pointer-events: none;
+}
+/* Radial danger tint blooming behind the word. */
+.fhud-counter-bloom {
+  position: absolute;
+  inset: 0;
+  mix-blend-mode: screen;
+}
+/* Diagonal slash whipping across behind the lettering. */
+.fhud-counter-slash {
+  position: absolute;
+  top: 8%;
+  left: -30%;
+  width: 160%;
+  height: 26%;
+  transform: skewX(-24deg) skewY(-6deg);
+  mix-blend-mode: screen;
+  filter: blur(1px);
+}
+.fhud-counter-stack {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  transform: skewX(-9deg);
+  will-change: transform;
+}
+.fhud-counter-main {
+  font-size: clamp(84px, 14.5vw, 196px);
+  letter-spacing: 0.02em;
+}
+.fhud-counter-kicker {
+  font-size: clamp(30px, 5.2vw, 66px);
+  letter-spacing: 0.26em;
+}
+/* Punish counter is the loud read — push the fill glow harder. */
+.fhud-counter[data-kind='punish'] .fhud-word-fill {
+  filter: drop-shadow(0 0 22px rgba(255, 123, 229, 0.7));
+}
+.fhud-counter[data-kind='counter'] .fhud-word-fill {
+  filter: drop-shadow(0 0 16px rgba(140, 230, 255, 0.6));
+}
+
+/* ── Screen FX (KO flash / round wipe / heavy-hit impact) ────────────── */
+.fhud-fx-ko {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.fhud-fx-flash {
+  position: absolute;
+  inset: 0;
+  background: #fff;
+}
+.fhud-fx-shock {
+  position: absolute;
+  left: 50%;
+  top: 46%;
+  width: 220px;
+  height: 220px;
+  margin: -110px 0 0 -110px;
+  border-radius: 50%;
+  border: 10px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 0 40px rgba(255, 214, 10, 0.7), inset 0 0 30px rgba(255, 214, 10, 0.5);
+}
+.fhud-fx-vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 50% 46%, transparent 30%, rgba(0, 0, 0, 0.86) 100%);
+}
+.fhud-fx-wipe {
+  position: absolute;
+  top: -20%;
+  bottom: -20%;
+  left: 0;
+  right: 0;
+  pointer-events: none;
+  filter: blur(1px);
+}
+.fhud-fx-impact {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse at 50% 50%, transparent 52%, rgba(239, 35, 60, 0.9) 100%);
+}
+.fhud-fx-impact[data-strong='1'] {
+  background: radial-gradient(ellipse at 50% 50%, transparent 42%, rgba(255, 60, 60, 0.95) 100%);
+}

@@ -3,25 +3,44 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    <meta name="theme-color" content="#1A1230" />
-    <title>OPERATORS · A Tactical Fighter on Lenny's Podcast</title>
-    <meta name="description" content="A turn-based pixel-art fighter where 64 of the most iconic guests from Lenny's Podcast face off. Every move is a real framework. Every quote is verbatim. Built for the Lenny × Replit Buildathon." />
+    <meta name="theme-color" content="#0B1018" />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <link rel="apple-touch-icon" href="/icon.svg" />
+    <title>OPERATORS · A Real-Time Pixel Fighter</title>
+    <meta name="description" content="A real-time 2D fighter starring the guests of Lenny's Podcast. Hitboxes, frame data, cancels, juggles, throws, parries and supers — hand-animated pixel art at 60fps. Built for the Lenny × Replit Buildathon." />
 
     <!-- Open Graph / Twitter share cards -->
     <meta property="og:type" content="website" />
-    <meta property="og:title" content="OPERATORS — A Tactical Fighter on Lenny's Podcast" />
-    <meta property="og:description" content="64 fighters · 320 verbatim frameworks · 8 stages · turn-based combat where podcast wisdom is the moveset." />
+    <meta property="og:title" content="OPERATORS — A Real-Time Pixel Fighter" />
+    <meta property="og:description" content="Real-time 2D fighting: frame data, hitboxes, cancels, air juggles, throws, parries and supers. Hand-animated pixel art, three archetypes, 60fps." />
     <meta property="og:url" content="https://operators.replit.app" />
     <meta property="og:image" content="https://operators.replit.app/menu/title-hero.png" />
     <meta property="og:image:width" content="1536" />
     <meta property="og:image:height" content="1024" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="OPERATORS — A Tactical Fighter on Lenny's Podcast" />
-    <meta name="twitter:description" content="64 fighters · 320 verbatim frameworks · 8 stages. Built for #lennysbuildathon" />
+    <meta name="twitter:title" content="OPERATORS — A Real-Time Pixel Fighter" />
+    <meta name="twitter:description" content="Real-time 2D fighting: frame data, hitboxes, cancels, air juggles, throws, parries and supers. Built for #lennysbuildathon" />
     <meta name="twitter:image" content="https://operators.replit.app/menu/title-hero.png" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet" />
+    <!-- All fonts are self-hosted under SIL OFL 1.1 (see public/fonts/): the two
+         brand faces (Press Start 2P, VT323) plus the front-door / select /
+         ceremony UI faces (Anton, Chakra Petch, Oswald, Saira, Barlow Condensed).
+         @font-face lives in the bundled stylesheet (src/index.css), so there is
+         no third-party font origin on any route.
+
+         Exactly ONE face is preloaded: Anton renders the "OPERATORS" wordmark on
+         BootCard — the LCP of the very first frame — so it must be in flight
+         before that card paints. Paired with font-display:optional on its
+         @font-face it renders with zero layout shift; without the preload the
+         browser only discovers Anton when app CSS first needs it, and the mark
+         painted in fallback Arial Narrow then reflowed ~17% when Anton arrived.
+         crossorigin is mandatory — a font preload without it is fetched twice.
+         The other eight faces are deliberately NOT preloaded (font-display:swap,
+         fetched same-origin at first use): preloading them would re-contend the
+         entry chunk's bandwidth, the exact cost that dropping the render-blocking
+         Google stylesheet paid down. The gate that keeps all of this true (no
+         third-party origins, Anton preloaded and ONLY Anton, the optional-vs-swap
+         policy) is src/screens/__tests__/fontDeliveryBudget.node.test.ts. -->
+    <link rel="preload" href="/fonts/Anton-400-latin.woff2" as="font" type="font/woff2" crossorigin />
   </head>
   <body>
     <div id="root"></div>

@@ -17,6 +17,10 @@ export const FIGHTERS: FighterDef[] = [
     bio: 'Airbnb co-founder. Designer-turned-CEO. Believes founder mode wins.',
     episode: 'ep 217',
     accent: '#E63946',
+    // Dark-neutral body; sinks into warm walls and reads near-identical to
+    // madhavan. Lift value + push warm-red (his accent), low blue, to separate
+    // from the wall AND from madhavan (who goes high-blue).
+    reval: [1.68, 1.24, 0.95],
     maxHp: 1000,
     scenarioBonus: { 'pre-pmf': 1.5, crisis: 1.4, distribution: 1.2 },
     moves: [
@@ -280,6 +284,10 @@ export const FIGHTERS: FighterDef[] = [
     bio: 'Author of "Monetizing Innovation." Studied pricing across 400+ companies and 50+ unicorns.',
     episode: 'ep 273',
     accent: '#F72585',
+    // Dark-neutral body; sinks into warm walls and reads near-identical to
+    // chesky. Lift value + push cool-magenta (his accent), high blue / low
+    // green, to separate from the wall AND from chesky (who goes low-blue).
+    reval: [1.42, 1.06, 1.7],
     maxHp: 900,
     scenarioBonus: { monetization: 1.5, plateau: 1.2 },
     moves: [

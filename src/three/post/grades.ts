@@ -1,0 +1,577 @@
+import * as THREE from 'three'
+import { KernelSize } from 'postprocessing'
+import type { ScenarioId } from '../../types'
+
+/**
+ * A per-stage colour script.
+ *
+ * These are authored the way a DI colourist would build a show LUT: a neutral
+ * filmic base (AgX) with a per-stage "look" layered on top — white balance,
+ * lift/gamma/gain, an AgX log-space look (slope/offset/power/saturation),
+ * split toning and a vignette. The eight arenas each get their own emotional
+ * grade so the game reads as authored, not as a raw WebGL buffer.
+ *
+ * All colour values are linear-sRGB unless noted. The grade is uploaded to the
+ * MasterGradeEffect as uniforms and cross-faded on stage changes.
+ */
+export interface StageGrade {
+  /** Linear exposure multiplier applied before the tone map. */
+  exposure: number
+  /** White balance: warm(+)/cool(-) and green(-)/magenta(+). Small values. */
+  temperature: number
+  tint: number
+  /** ASC-CDL style shadow lift (added), mid gamma, highlight gain (mult). */
+  lift: [number, number, number]
+  gamma: [number, number, number]
+  gain: [number, number, number]
+  /** Saturation applied in linear before the tone map. 1 = neutral. */
+  preSat: number
+  /** AgX log-space look. */
+  lookSlope: [number, number, number]
+  lookOffset: [number, number, number]
+  lookPower: [number, number, number]
+  lookSat: number
+  /** Display-referred S-curve contrast around 0.5. 1 = neutral. */
+  contrast: number
+  /** Post-tonemap black-point crush for filmic density. 0 = none. */
+  black: number
+  /**
+   * True black-point anchor: the input value remapped to a clean 0 before the
+   * toe. Raise it on single-hue stages where the arena floods coloured light
+   * into the shadows (red/green/blue), lifting them to a milky mid instead of
+   * black — a firmer anchor crushes that flood back to a real black point.
+   */
+  blackPoint: number
+  /** Split toning: shadow + highlight tint colours, balance pivot, strength. */
+  shadowTint: [number, number, number]
+  highlightTint: [number, number, number]
+  splitBalance: number
+  splitStrength: number
+  /** Vignette: radius offset, darkness, and its colour (cool/warm falloff). */
+  vigOffset: number
+  vigDarkness: number
+  vigColor: [number, number, number]
+  /** Filmic grain strength (sits in the mid-tones). */
+  grain: number
+  /** Bloom art direction. */
+  bloomIntensity: number
+  bloomThreshold: number
+  bloomTint: [number, number, number]
+  /**
+   * Bloom blur kernel width. Optional; omitted grades keep the pipeline's HUGE
+   * default. A wide (HUGE) kernel turns any mid-bright background highlight —
+   * a reflective rib, a light shaft, a curtain sheen — into a big soft disc
+   * that reads as a dirty lens rather than intent. Narrowing to LARGE keeps the
+   * genuine stage glow (runway, spotlights, VFX cores measured within ~1% of
+   * HUGE) while roughly halving those parasitic corner "orbs". Discrete enum —
+   * applied from the destination grade, never cross-faded.
+   */
+  bloomKernel?: KernelSize
+  /** Lens dirt / anamorphic streak strength for this arena. */
+  lensDirt: number
+  anamorphic: number
+  anamorphicTint: [number, number, number]
+  /**
+   * Aerial-perspective haze: the tint the far background lifts toward and how
+   * strongly. Builds near/far depth separation (far reads lighter + lower
+   * contrast). Applied only to the background — the character matte is excluded.
+   */
+  hazeColor: [number, number, number]
+  hazeAmount: number
+  /**
+   * Character/environment chroma separation. `envTint` is the arena's dominant
+   * on-screen hue direction; inside the character matte the component of the
+   * fighter's chroma that points along `envTint` is removed by `charUntint`
+   * strength (0 = off). This neutralises a same-hue environment cast on strongly
+   * MONOCHROME stages (crisis/distribution red, ai-native/ipo-prep blue) so the
+   * fighter reads as a separate subject, while the fighter's own differently-hued
+   * colours (orthogonal to `envTint`) survive untouched — so multi-hue stages
+   * keep `charUntint` at 0 and are unaffected.
+   */
+  envTint: [number, number, number]
+  charUntint: number
+  /**
+   * Bloom-cast recovery strength for the final pass. On stages where heavy
+   * single-hue bloom (teal) collapses a fighter's identity chroma toward zero,
+   * the orthogonal reveal gate stops firing and skin reads as the arena colour.
+   * This term strips the shared cast on bright, strongly-aligned pixels to
+   * recover them. It must stay 0 on stages with a bright, same-hue BACKGROUND
+   * (e.g. ipo-prep's blue wall) or it would desaturate that background into a
+   * visible box inside the character matte.
+   */
+  castRecover: number
+  /**
+   * Overall character-branch strength (scales charChroma: how strongly the
+   * neutralised/key-lifted character look replaces the plain arena grade on the
+   * fighters). 1 = full treatment (needed on monochrome stages where the fighter
+   * dissolves into the arena). Lower it on stages where the environment already
+   * lights the fighters with clean, separated albedo (e.g. ipo-prep) — there the
+   * aggressive branch only adds a milky wash and a matte halo, so a light touch
+   * lets the fighters' own colour read.
+   */
+  charStrength: number
+  /**
+   * Complementary subject accent. On a single-hue arena, a neutralised fighter
+   * still reads as weak grey; push it toward `charTone` (the arena's COMPLEMENT —
+   * cool for a red room, warm for a cyan/blue room) so the subject becomes a
+   * positive accent colour and its skin can never sit at the arena hue. Only the
+   * de-tinted (low-chroma) fighter pixels are pushed; surviving identity chroma
+   * and saturated background keep their own hue. `charToneAmt` 0 = off (multi-hue
+   * stages), which is the default.
+   */
+  charTone: [number, number, number]
+  charToneAmt: number
+  /**
+   * Vertical padding of the character matte (multiplies the head→feet half-
+   * height). The matte is a soft ellipse, not a true silhouette, so any padding
+   * beyond the body catches co-planar background and reads as a faint box at the
+   * ellipse edge. Keep it TIGHT (~1.05, hug the body) on stages that only strip
+   * the shared cast (charToneAmt 0). Only the complementary-accent stages need it
+   * TALL (~1.20) so the warm/cool push reaches the heavily-bloomed faces — there
+   * the accent is what kills the green/red skin, worth the slightly larger window.
+   */
+  mattePad: number
+}
+
+const base: StageGrade = {
+  exposure: 1.0,
+  temperature: 0,
+  tint: 0,
+  lift: [0, 0, 0],
+  gamma: [1, 1, 1],
+  gain: [1, 1, 1],
+  preSat: 1.0,
+  lookSlope: [1, 1, 1],
+  lookOffset: [0, 0, 0],
+  lookPower: [1, 1, 1],
+  lookSat: 1.0,
+  contrast: 1.0,
+  black: 0.035,
+  blackPoint: 0.009,
+  shadowTint: [0.5, 0.55, 0.7],
+  highlightTint: [1.0, 0.95, 0.85],
+  splitBalance: 0.5,
+  splitStrength: 0.12,
+  vigOffset: 0.62,
+  vigDarkness: 0.5,
+  vigColor: [0.06, 0.05, 0.09],
+  grain: 0.05,
+  bloomIntensity: 1.1,
+  bloomThreshold: 0.6,
+  bloomTint: [1, 1, 1],
+  lensDirt: 0.35,
+  anamorphic: 0.35,
+  anamorphicTint: [0.35, 0.55, 1.0],
+  hazeColor: [0.5, 0.55, 0.62],
+  hazeAmount: 0.32,
+  envTint: [1, 1, 1],
+  charUntint: 0,
+  castRecover: 0,
+  charStrength: 1.0,
+  charTone: [1, 1, 1],
+  charToneAmt: 0,
+  mattePad: 1.06,
+}
+
+function grade(overrides: Partial<StageGrade>): StageGrade {
+  return { ...base, ...overrides }
+}
+
+/**
+ * The eight authored arena grades. Each is written to evoke the emotional beat
+ * of that stage of a company's life.
+ */
+export const STAGE_GRADES: Record<ScenarioId, StageGrade> = {
+  // Uncertain, cold pre-dawn. Muted, blue-grey, low energy — everything still
+  // to prove. Slightly lifted milky shadows (fog of the unknown).
+  'pre-pmf': grade({
+    exposure: 1.02,
+    temperature: -0.06,
+    tint: 0.01,
+    lift: [0.008, 0.012, 0.02],
+    gamma: [1.0, 1.0, 1.02],
+    gain: [0.98, 0.99, 1.02],
+    preSat: 0.9,
+    lookSat: 0.9,
+    contrast: 1.05,
+    shadowTint: [0.34, 0.42, 0.62],
+    highlightTint: [0.86, 0.9, 1.0],
+    splitStrength: 0.18,
+    vigOffset: 0.55,
+    vigDarkness: 0.62,
+    vigColor: [0.03, 0.04, 0.08],
+    grain: 0.07,
+    bloomIntensity: 0.95,
+    bloomThreshold: 0.68,
+    bloomTint: [0.8, 0.88, 1.0],
+    lensDirt: 0.25,
+    anamorphic: 0.28,
+    anamorphicTint: [0.4, 0.55, 1.0],
+    hazeColor: [0.42, 0.5, 0.62],
+    hazeAmount: 0.44,
+  }),
+
+  // Explosive, electric momentum. Punchy teal-and-orange, high saturation and
+  // contrast — the classic energetic fighting-game grade.
+  hypergrowth: grade({
+    exposure: 1.08,
+    temperature: 0.05,
+    tint: 0.0,
+    lift: [0.0, 0.004, 0.014],
+    gamma: [0.99, 1.0, 1.0],
+    gain: [1.06, 1.02, 0.97],
+    preSat: 1.12,
+    lookSlope: [1.04, 1.0, 0.97],
+    lookSat: 1.16,
+    contrast: 1.2,
+    black: 0.105,
+    blackPoint: 0.0285,
+    shadowTint: [0.22, 0.44, 0.66],
+    highlightTint: [1.0, 0.86, 0.6],
+    splitBalance: 0.48,
+    splitStrength: 0.22,
+    vigOffset: 0.6,
+    vigDarkness: 0.56,
+    vigColor: [0.05, 0.03, 0.02],
+    grain: 0.05,
+    bloomIntensity: 1.35,
+    bloomThreshold: 0.56,
+    bloomTint: [1.0, 0.92, 0.78],
+    lensDirt: 0.42,
+    anamorphic: 0.5,
+    anamorphicTint: [0.5, 0.7, 1.0],
+    hazeColor: [0.24, 0.4, 0.46],
+    hazeAmount: 0.14,
+    // Teal/cyan-dominant arena light renders both fighters' SKIN green (the key
+    // light on the characters is greener than the cyan floor/UI). The un-tint
+    // axis must match the cast ON THE FIGHTERS, not the arena's cyan — so envTint
+    // points at that green. Removing the green cast neutralises skin to warm grey;
+    // purple denim and red hair (orthogonal to green) survive to read them apart.
+    envTint: [0.5, 1.0, 0.55],
+    charUntint: 0.34,
+    castRecover: 0.9,
+    // Cyan-green arena → push neutralised fighters WARM (amber/peach) so skin
+    // reads warm not green and the subjects separate from the teal field.
+    charTone: [1.0, 0.42, 0.32],
+    charToneAmt: 0.22,
+    mattePad: 1.2,
+  }),
+
+  // Stalled, airless. Flat, faintly sickly green-grey — the grind of the
+  // plateau. Low contrast, drained saturation.
+  plateau: grade({
+    exposure: 0.98,
+    temperature: -0.02,
+    tint: -0.05,
+    lift: [0.01, 0.014, 0.012],
+    gamma: [1.0, 1.0, 0.99],
+    gain: [0.98, 1.0, 0.97],
+    preSat: 0.82,
+    lookSat: 0.82,
+    contrast: 1.06,
+    black: 0.063,
+    blackPoint: 0.0165,
+    shadowTint: [0.4, 0.46, 0.44],
+    highlightTint: [0.92, 0.94, 0.86],
+    splitStrength: 0.14,
+    vigOffset: 0.58,
+    vigDarkness: 0.58,
+    vigColor: [0.05, 0.06, 0.05],
+    grain: 0.08,
+    bloomIntensity: 0.85,
+    bloomThreshold: 0.7,
+    bloomTint: [0.92, 0.96, 0.88],
+    lensDirt: 0.2,
+    anamorphic: 0.22,
+    anamorphicTint: [0.5, 0.6, 0.7],
+    hazeColor: [0.5, 0.53, 0.48],
+    hazeAmount: 0.3,
+    // Magenta/purple floor and blocks cast the fighters' lower halves violet, but
+    // the fighters already carry distinct albedo here (grey vs grey-hat, blue vs
+    // indigo jeans, red hair) — the arena is multi-hue enough to read them apart.
+    // An A/B proved the char branch only ADDED a matte-box lift around the man, so
+    // it stays OFF; the plain arena grade reads cleaner.
+    envTint: [0.85, 0.35, 1.0],
+    charUntint: 0.0,
+    charStrength: 0.0,
+    mattePad: 1.05,
+  }),
+
+  // Neon future. Cyan/magenta bi-chromatic, cool and high-contrast with hot
+  // bloom on the emissive tech.
+  'ai-native': grade({
+    exposure: 1.05,
+    temperature: -0.05,
+    tint: 0.04,
+    lift: [0.0, 0.006, 0.016],
+    gamma: [0.99, 1.0, 1.01],
+    gain: [1.02, 1.0, 1.05],
+    preSat: 1.1,
+    lookSlope: [1.0, 0.99, 1.05],
+    lookSat: 1.14,
+    contrast: 1.22,
+    black: 0.098,
+    blackPoint: 0.021,
+    shadowTint: [0.18, 0.3, 0.6],
+    highlightTint: [0.85, 0.75, 1.0],
+    splitBalance: 0.46,
+    splitStrength: 0.26,
+    vigOffset: 0.58,
+    vigDarkness: 0.62,
+    vigColor: [0.04, 0.02, 0.1],
+    grain: 0.05,
+    bloomIntensity: 1.18,
+    bloomThreshold: 0.58,
+    bloomTint: [0.7, 0.85, 1.0],
+    lensDirt: 0.45,
+    anamorphic: 0.68,
+    anamorphicTint: [0.5, 0.8, 1.0],
+    hazeColor: [0.28, 0.44, 0.66],
+    hazeAmount: 0.38,
+    // Dark teal + hologram-orb light greens both fighters' skin; the un-tint axis
+    // must be the GREEN cast on the characters (not the arena's blue-teal) or the
+    // green residue survives the projection. Neutralises skin to warm grey while
+    // warm hair and off-axis albedo read the fighters apart.
+    envTint: [0.5, 1.0, 0.6],
+    charUntint: 0.32,
+    castRecover: 0.88,
+    // Blue-teal arena → push neutralised fighters WARM so skin de-greens and the
+    // subjects read as a warm accent against the cold field.
+    charTone: [1.0, 0.42, 0.32],
+    charToneAmt: 0.22,
+    mattePad: 1.2,
+  }),
+
+  // Money. Warm gold with rich green undertones, luxe and slightly opulent —
+  // creamy highlights, deep saturated mids.
+  monetization: grade({
+    exposure: 1.05,
+    temperature: 0.07,
+    tint: -0.02,
+    lift: [0.006, 0.008, 0.0],
+    gamma: [1.0, 1.0, 0.98],
+    gain: [1.05, 1.02, 0.92],
+    preSat: 1.08,
+    lookSlope: [1.03, 1.01, 0.95],
+    lookSat: 1.1,
+    contrast: 1.1,
+    blackPoint: 0.0168,
+    shadowTint: [0.3, 0.36, 0.28],
+    highlightTint: [1.0, 0.9, 0.62],
+    splitBalance: 0.5,
+    splitStrength: 0.24,
+    vigOffset: 0.6,
+    vigDarkness: 0.54,
+    vigColor: [0.06, 0.05, 0.02],
+    grain: 0.05,
+    bloomIntensity: 1.2,
+    bloomThreshold: 0.58,
+    bloomTint: [1.0, 0.88, 0.6],
+    lensDirt: 0.4,
+    anamorphic: 0.4,
+    anamorphicTint: [1.0, 0.8, 0.4],
+    hazeColor: [0.6, 0.54, 0.42],
+    hazeAmount: 0.3,
+    // A hot magenta mid-band washes both fighters' torsos violet, but their own
+    // garment/skin chroma (white/lilac top + blue jeans vs magenta jacket + blue
+    // jeans) still reads them apart against the red-gold stage. The char branch
+    // only lifted a faint matte box, so leave it OFF and let the arena grade run.
+    envTint: [0.9, 0.32, 0.95],
+    charUntint: 0.0,
+    charStrength: 0.0,
+    mattePad: 1.05,
+  }),
+
+  // Crisis. Smouldering red/orange danger, crushed cool shadows, high
+  // contrast, heavier grain and vignette. Everything is on fire.
+  crisis: grade({
+    exposure: 1.0,
+    temperature: 0.06,
+    tint: 0.02,
+    lift: [0.014, 0.004, 0.004],
+    gamma: [1.02, 0.99, 0.97],
+    gain: [1.08, 0.98, 0.9],
+    preSat: 1.02,
+    lookSlope: [1.06, 0.98, 0.94],
+    lookSat: 1.06,
+    contrast: 1.26,
+    black: 0.098,
+    blackPoint: 0.0195,
+    shadowTint: [0.4, 0.16, 0.14],
+    highlightTint: [1.0, 0.72, 0.4],
+    splitBalance: 0.52,
+    splitStrength: 0.3,
+    vigOffset: 0.5,
+    vigDarkness: 0.72,
+    vigColor: [0.09, 0.02, 0.01],
+    grain: 0.09,
+    bloomIntensity: 1.3,
+    bloomThreshold: 0.54,
+    bloomTint: [1.0, 0.6, 0.35],
+    lensDirt: 0.5,
+    anamorphic: 0.45,
+    anamorphicTint: [1.0, 0.5, 0.3],
+    hazeColor: [0.58, 0.4, 0.3],
+    hazeAmount: 0.3,
+    envTint: [1.0, 0.34, 0.22],
+    charUntint: 0.34,
+    castRecover: 0.55,
+    // Red-orange arena → push neutralised fighters COOL (teal). In an all-red room
+    // the subject can carry almost no surviving albedo, so a firm complementary
+    // accent is the strongest separation lever post has: the fighters read as cool
+    // silhouettes against the red field (the value split still tells them apart).
+    charTone: [0.32, 0.68, 1.0],
+    charToneAmt: 0.22,
+    mattePad: 1.2,
+  }),
+
+  // Prestige. Clean, bright, cool corporate glass — champagne highlights, low
+  // grain, restrained and expensive-looking.
+  'ipo-prep': grade({
+    exposure: 1.1,
+    temperature: -0.03,
+    tint: 0.0,
+    lift: [0.004, 0.006, 0.01],
+    gamma: [1.0, 1.0, 1.0],
+    gain: [1.02, 1.02, 1.03],
+    preSat: 0.98,
+    lookSat: 1.02,
+    contrast: 1.08,
+    black: 0.056,
+    blackPoint: 0.0165,
+    shadowTint: [0.32, 0.4, 0.56],
+    highlightTint: [1.0, 0.97, 0.9],
+    splitBalance: 0.5,
+    splitStrength: 0.16,
+    vigOffset: 0.66,
+    vigDarkness: 0.44,
+    vigColor: [0.05, 0.06, 0.08],
+    grain: 0.035,
+    // Post restraint (was intensity 1.15 / thresh 0.6 / dirt 0.3 / ana 0.42):
+    // the bright overhead LED ticker-boards crossed the bloom threshold and the
+    // strong horizontal anamorphic streak smeared their ends sideways into soft
+    // round blobs parked in the top corners — the "smudge on the lens" tell.
+    // Raise the threshold so mid-value fixtures/fabrics stay out of bloom, and
+    // cut the anamorphic + dirt hard so the streak no longer reaches the corners.
+    // Bloom should be invisible until you turn it off, not a corner artifact.
+    bloomIntensity: 1.08,
+    bloomThreshold: 0.72,
+    bloomTint: [1.0, 0.98, 0.92],
+    bloomKernel: KernelSize.LARGE,
+    lensDirt: 0.12,
+    anamorphic: 0.18,
+    anamorphicTint: [0.7, 0.8, 1.0],
+    hazeColor: [0.62, 0.66, 0.72],
+    hazeAmount: 0.16,
+    envTint: [0.34, 0.5, 1.0],
+    charUntint: 0.0,
+    charStrength: 0.0,
+  }),
+
+  // Broadcast blockbuster. Wide warm sunset, saturated teal-and-orange with a
+  // cinematic falloff — the "go wide" finale grade.
+  distribution: grade({
+    exposure: 1.06,
+    temperature: 0.08,
+    tint: 0.0,
+    lift: [0.002, 0.006, 0.016],
+    gamma: [0.99, 1.0, 1.0],
+    gain: [1.07, 1.0, 0.94],
+    preSat: 1.12,
+    lookSlope: [1.05, 1.0, 0.95],
+    lookSat: 1.14,
+    contrast: 1.14,
+    black: 0.07,
+    blackPoint: 0.0246,
+    shadowTint: [0.2, 0.42, 0.6],
+    highlightTint: [1.0, 0.82, 0.55],
+    splitBalance: 0.48,
+    splitStrength: 0.26,
+    vigOffset: 0.62,
+    vigDarkness: 0.54,
+    vigColor: [0.06, 0.04, 0.02],
+    grain: 0.05,
+    bloomIntensity: 1.3,
+    bloomThreshold: 0.55,
+    bloomTint: [1.0, 0.86, 0.62],
+    lensDirt: 0.44,
+    anamorphic: 0.55,
+    anamorphicTint: [1.0, 0.75, 0.45],
+    hazeColor: [0.62, 0.55, 0.45],
+    hazeAmount: 0.36,
+    // Warm red-orange dock light. An A/B proved the fighters already read cleanly
+    // here (auburn hair, white top, blue jeans vs dark jacket, olive pants) — the
+    // un-tint only greened the man's skin and lifted a matte box, so leave it OFF.
+    envTint: [1.0, 0.5, 0.28],
+    charUntint: 0.0,
+    charStrength: 0.0,
+    mattePad: 1.05,
+  }),
+}
+
+const lerp = (a: number, b: number, t: number) => a + (b - a) * t
+const lerp3 = (
+  a: [number, number, number],
+  b: [number, number, number],
+  t: number,
+): [number, number, number] => [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)]
+
+/** Smoothly cross-fade two grades (used on stage transitions). */
+export function mixGrades(a: StageGrade, b: StageGrade, t: number): StageGrade {
+  return {
+    exposure: lerp(a.exposure, b.exposure, t),
+    temperature: lerp(a.temperature, b.temperature, t),
+    tint: lerp(a.tint, b.tint, t),
+    lift: lerp3(a.lift, b.lift, t),
+    gamma: lerp3(a.gamma, b.gamma, t),
+    gain: lerp3(a.gain, b.gain, t),
+    preSat: lerp(a.preSat, b.preSat, t),
+    lookSlope: lerp3(a.lookSlope, b.lookSlope, t),
+    lookOffset: lerp3(a.lookOffset, b.lookOffset, t),
+    lookPower: lerp3(a.lookPower, b.lookPower, t),
+    lookSat: lerp(a.lookSat, b.lookSat, t),
+    contrast: lerp(a.contrast, b.contrast, t),
+    black: lerp(a.black, b.black, t),
+    blackPoint: lerp(a.blackPoint, b.blackPoint, t),
+    shadowTint: lerp3(a.shadowTint, b.shadowTint, t),
+    highlightTint: lerp3(a.highlightTint, b.highlightTint, t),
+    splitBalance: lerp(a.splitBalance, b.splitBalance, t),
+    splitStrength: lerp(a.splitStrength, b.splitStrength, t),
+    vigOffset: lerp(a.vigOffset, b.vigOffset, t),
+    vigDarkness: lerp(a.vigDarkness, b.vigDarkness, t),
+    vigColor: lerp3(a.vigColor, b.vigColor, t),
+    grain: lerp(a.grain, b.grain, t),
+    bloomIntensity: lerp(a.bloomIntensity, b.bloomIntensity, t),
+    bloomThreshold: lerp(a.bloomThreshold, b.bloomThreshold, t),
+    bloomTint: lerp3(a.bloomTint, b.bloomTint, t),
+    lensDirt: lerp(a.lensDirt, b.lensDirt, t),
+    anamorphic: lerp(a.anamorphic, b.anamorphic, t),
+    anamorphicTint: lerp3(a.anamorphicTint, b.anamorphicTint, t),
+    hazeColor: lerp3(a.hazeColor, b.hazeColor, t),
+    hazeAmount: lerp(a.hazeAmount, b.hazeAmount, t),
+    envTint: lerp3(a.envTint, b.envTint, t),
+    charUntint: lerp(a.charUntint, b.charUntint, t),
+    castRecover: lerp(a.castRecover, b.castRecover, t),
+    charStrength: lerp(a.charStrength, b.charStrength, t),
+    charTone: lerp3(a.charTone, b.charTone, t),
+    charToneAmt: lerp(a.charToneAmt, b.charToneAmt, t),
+    mattePad: lerp(a.mattePad, b.mattePad, t),
+  }
+}
+
+/**
+ * Convert a temperature/tint pair into an approximate linear white-balance
+ * gain. Warm (+temp) pushes red/knocks blue; magenta (+tint) lifts red/blue.
+ */
+export function whiteBalanceGain(temperature: number, tint: number): THREE.Vector3 {
+  const r = 1 + temperature * 0.6 + tint * 0.2
+  const g = 1 - tint * 0.3
+  const b = 1 - temperature * 0.6 + tint * 0.2
+  return new THREE.Vector3(r, g, b)
+}
+
+export function gradeFor(scenario: ScenarioId): StageGrade {
+  return STAGE_GRADES[scenario] ?? base
+}
+
+export const NEUTRAL_GRADE = base

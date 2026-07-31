@@ -1,515 +1,402 @@
-import { useEffect, useState, useMemo } from 'react'
-import { FIGHTERS, FEATURED_ROSTER, getFighter } from '../data/fighters'
-import type { FighterDef } from '../types'
-import { SCENARIOS, SCENARIO_ORDER } from '../data/scenarios'
-import { PULL_QUOTES } from '../data/pull-quotes'
-import { Sprite } from '../components/Sprite'
-import { Sfx } from '../lib/audio'
-import { Announcer } from '../lib/announcer'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { FightRenderer } from '../three/fight/FightRenderer'
+import { loadFighterAtlas } from '../three/fight/loadFighterAtlas'
+import { getFighter } from '../data/fighters'
+import { applyCaptureQuality } from '../play/captureQuality'
+import { AttractDirector } from './attract/attractDirector'
+import { firstBoutAtlasVariant } from './attract/attractLoadCost'
+import './menu/menu.css'
 
 interface Props {
   onExit: () => void
+  /**
+   * Freeze adaptive quality to a still, reproducible tier for capture. ONLY the
+   * standalone `?attract=1` reel-capture route (App.tsx, `route === 'attract'`)
+   * passes this. The customer FRONT DOOR (FrontDoor.tsx, bare `/`, which mounts
+   * the reel after a 6 s idle — buyer-reachable, traced to the route table) does
+   * NOT: it leaves adaptive quality ON so a weak machine demotes to a live
+   * low-tier reel instead of being pinned at the boot tier and forced to the
+   * static fallback. Default false is the buyer-safe path.
+   */
+  capture?: boolean
 }
-
-type Scene =
-  | { kind: 'title' }
-  | { kind: 'matchup'; fighterA: string; fighterB: string; scenarioId: typeof SCENARIO_ORDER[number] }
-  | { kind: 'ko'; winner: string; loser: string }
-  | { kind: 'quote'; fighterId: string; quote: string; episode: string }
-  | { kind: 'stats' }
-  | { kind: 'roster' }
 
 /**
- * SF II–style attract mode reel.
- *
- * Cycles through scripted scenes for ~30s. Stops on ANY user interaction
- * via the parent's onExit callback wired to a global pointer listener.
- *
- * Scenes:
- *   1. Title beat        — "OPERATORS" logo with subtitle
- *   2. Matchup            — random Fighter A vs Fighter B in a stage
- *   3. K.O. flash         — "K.O.!" banner over a winner pose
- *   4. Quote pull-card    — random curated quote
- *   5. Stats              — derived counts (fighters / frameworks / stages)
- *   6. Roster grid        — every fighter portrait at once
- *   7. (loop back to title)
+ * Dev-only probe surface for the perf harness. Deliberately NOT `__PLAY__` /
+ * `__FIGHT__` — those are owned by the playable route and the capture tools, and
+ * a name collision would let an attract build answer a capture tool's poll with
+ * the wrong world. `?attract=1` is the only route that exposes this.
  */
-export function AttractMode({ onExit }: Props) {
-  // Pre-compute a randomized scene sequence (8 scenes ≈ 32 seconds). The
-  // matchup + KO scenes draw from FEATURED_ROSTER so the demo reel only
-  // shows fighters with finished sprite art — wave-4 placeholder figures
-  // shouldn't headline the marquee. RosterScene still renders all FIGHTERS.
-  const scenes = useMemo<Scene[]>(() => {
-    const featuredDefs = FEATURED_ROSTER
-      .map((id) => getFighter(id))
-      .filter((f): f is FighterDef => !!f)
-    const pool = featuredDefs.length >= 5 ? featuredDefs : FIGHTERS
-    const shuffled = [...pool].sort(() => Math.random() - 0.5)
-    const sc = SCENARIO_ORDER
-    return [
-      { kind: 'title' },
-      { kind: 'matchup', fighterA: shuffled[0].id, fighterB: shuffled[1].id, scenarioId: sc[Math.floor(Math.random() * sc.length)] },
-      { kind: 'ko', winner: shuffled[2].id, loser: shuffled[3].id },
-      (() => {
-        // Single coherent pick — otherwise fighterId / quote / episode were
-        // sourced from three independent random PULL_QUOTES entries and the
-        // reel could attribute one guest's quote to another guest's episode.
-        const pq = PULL_QUOTES[Math.floor(Math.random() * PULL_QUOTES.length)]
-        return {
-          kind: 'quote' as const,
-          fighterId: pq.fighterId,
-          quote: pq.quote,
-          episode: pq.episode,
-        }
-      })(),
-      { kind: 'matchup', fighterA: shuffled[4].id, fighterB: 'lenny', scenarioId: 'ipo-prep' },
-      { kind: 'stats' },
-      { kind: 'roster' },
-      { kind: 'title' },
-    ]
+interface AttractProbe {
+  ready: () => boolean
+  steps: () => number
+  matches: () => number
+  kos: () => number
+  /** Median fps over the recent sample window, or 0 before warmup. */
+  fps: () => number
+  matchup: () => string
+  degraded: () => boolean
+}
+
+declare global {
+  interface Window {
+    __ATTRACT__?: AttractProbe
+  }
+}
+
+/**
+ * How long the branded title beat holds over the opening bout before it fades,
+ * in ms. Long enough to read "OPERATORS", short enough that the fight is the
+ * star — a demo reel that opens on a logo card and lingers sells nothing.
+ */
+const TITLE_BEAT_MS = 2600
+
+/**
+ * Sustained fps floor. A live sim on the menu that can't hold this after warmup
+ * drops to the static fallback rather than shipping a stuttering title screen,
+ * which is worse than a card. Set below any real hardware but above genuinely
+ * unplayable — it is a safety net, not a normal path.
+ */
+const MIN_FPS = 30
+
+/**
+ * Frames to sample before the fps floor is allowed to trip. Skips the opening
+ * atlas-decode hitch and the first bout's ramp so a one-off load stall can't
+ * degrade an otherwise-smooth reel.
+ */
+const FPS_WARMUP_FRAMES = 300
+
+function median(xs: number[]): number {
+  if (xs.length === 0) return 0
+  const s = [...xs].sort((a, b) => a - b)
+  const mid = s.length >> 1
+  return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2
+}
+
+/**
+ * SF II–style attract mode reel — a live CPU-vs-CPU demo fight from the real
+ * engine, cut to the good part.
+ *
+ * Every arcade fighter since 1987 opens on a demo match; we shipped six static
+ * cards under a header that promised one. This mounts `MatchSim` + `FightRenderer`
+ * (the exact stack a paying player fights) driven by {@link AttractDirector}: a
+ * pure brain that picks distinct matchups, primes meter so supers fire, and cuts
+ * per round on the decisive KO. Any input exits instantly to the menu.
+ *
+ * Rotation uses a fresh canvas per bout (React `key`) rather than in-place asset
+ * swaps: `Fighter.setAssets` rebinds texture uniforms without freeing the prior
+ * `DataTexture`s, so only a full renderer dispose (which tears down the GL
+ * context) frees fighter VRAM. Keying the canvas disposes the old renderer
+ * before the next mounts — peak VRAM is one match's two fighters, never two
+ * matches at once, so the reel stays inside the 512 MB atlas budget the
+ * `atlasVramBudget` gate defends.
+ */
+export function AttractMode({ onExit, capture = false }: Props) {
+  const dirRef = useRef<AttractDirector | null>(null)
+
+  // Built on demand, NOT during render. The unmount cleanup disposes the
+  // director and nulls this ref so a remount can never drive a torn-down sim.
+  // But React StrictMode re-runs EFFECTS without re-rendering, so a render-time
+  // rebuild leaves the ref null for the entire remounted lifetime and the rAF
+  // loop dereferences null on its first tick — which killed the whole reel.
+  // Rebuilding at the point of use makes "there is always a live director" true
+  // at every call site, rather than true only on the first mount.
+  const ensureDir = (): AttractDirector => (dirRef.current ??= new AttractDirector())
+
+  const hostRef = useRef<HTMLDivElement | null>(null)
+  const rotateArmedRef = useRef(false)
+  const [segment, setSegment] = useState(0)
+  const [degraded, setDegraded] = useState(false)
+  const [showTitle, setShowTitle] = useState(true)
+
+  // Any input leaves at once. The director is told first so its `exitPending`
+  // contract flips the same tick (the gate asserts that zero-frame window), then
+  // the parent tears the overlay down. Idempotent — double-firing is harmless.
+  const exit = useCallback(() => {
+    dirRef.current?.requestExit()
+    onExit()
+  }, [onExit])
+
+  // Global listeners, not just root handlers: the canvas can hold focus and a
+  // keypress that lands on it would otherwise never reach the root. A demo you
+  // have to sit through is worse than no demo, so every key and pointer exits.
+  useEffect(() => {
+    const onKey = () => exit()
+    const onPointer = () => exit()
+    window.addEventListener('keydown', onKey)
+    window.addEventListener('pointerdown', onPointer)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('pointerdown', onPointer)
+    }
+  }, [exit])
+
+  useEffect(() => {
+    const id = window.setTimeout(() => setShowTitle(false), TITLE_BEAT_MS)
+    return () => window.clearTimeout(id)
   }, [])
 
-  const [sceneIdx, setSceneIdx] = useState(0)
-  const scene = scenes[sceneIdx % scenes.length]
-
-  // Advance scenes. Stats + quote scenes hold longer than the default so
-  // the viewer can actually read them. Stats keeps its staggered reveal
-  // (~0.8s for four cells at 0.18s stagger), then dwells for ~5.2s of a
-  // 6s scene — readable but not overlong.
+  // Mount a fresh renderer per bout. Mirrors PlayableMatch's proven lifecycle:
+  // construct → init → (bail *through* dispose if unmounted) → load both atlases
+  // → bind assets → seed initial state → drive the director's step. React runs
+  // this segment's cleanup (dispose) before the next segment's setup, so the old
+  // GL context — and its fighter textures — is gone before the next match loads.
+  // That ordering is the whole VRAM argument.
+  //
+  // The canvas is created HERE rather than in JSX. `Engine.dispose()` ends in
+  // `forceContextLoss()`, which permanently poisons the element: a canvas has at
+  // most one context per type and `getContext()` returns that same dead object
+  // forever after, so the next Engine reads null from
+  // `getShaderPrecisionFormat()` and the screen dies as "FAILED TO START". This
+  // used to be avoided by a `key={segment}` on the canvas, which minted a fresh
+  // element per bout — correct, but a convention someone had to remember. Owning
+  // the element makes reuse impossible instead of merely avoided, and it holds
+  // for the StrictMode remount case, where the key never changes.
   useEffect(() => {
-    const duration =
-      scene.kind === 'ko' ? 3000
-      : scene.kind === 'title' ? 3500
-      : scene.kind === 'stats' ? 6000
-      : scene.kind === 'quote' ? 6500
-      : 4500
-    const id = setTimeout(() => setSceneIdx((i) => i + 1), duration)
-    return () => clearTimeout(id)
-  }, [sceneIdx, scene.kind])
+    if (degraded) return
+    const host = hostRef.current
+    if (!host) return
+    const canvas = document.createElement('canvas')
+    canvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;display:block'
+    host.appendChild(canvas)
+    const dir = ensureDir()
 
-  // Sound triggers per scene
-  useEffect(() => {
-    if (scene.kind === 'matchup') {
-      Announcer.fight()
-    } else if (scene.kind === 'ko') {
-      Announcer.ko()
-      Sfx.ko()
-    } else if (scene.kind === 'quote') {
-      Sfx.menuMove()
-    } else if (scene.kind === 'roster') {
-      Sfx.menuSelect()
+    // A rotation was requested for THIS segment. Advance the director now, while
+    // the previous renderer is already disposed, so the old renderer never steps
+    // the newly-built sim (which would flash the new bout through old textures).
+    if (rotateArmedRef.current) {
+      dir.rotate()
+      rotateArmedRef.current = false
     }
-  }, [sceneIdx, scene.kind])
 
-  return (
-    <div
-      className="relative w-full h-full overflow-hidden cursor-pointer"
-      onClick={onExit}
-      onKeyDown={onExit}
-      tabIndex={-1}
-      style={{
-        background: 'radial-gradient(circle at 50% 30%, #1A0F2E 0%, #0F0A1A 100%)',
-      }}
-    >
-      {/* CRT flicker overlay always present */}
-      <div
-        className="pointer-events-none absolute inset-0"
-        style={{
-          background: 'repeating-linear-gradient(0deg, rgba(0,0,0,0.15) 0px, transparent 2px, transparent 4px)',
-          opacity: 0.4,
-          mixBlendMode: 'multiply',
-        }}
-      />
+    let renderer: FightRenderer | null = null
+    let disposed = false
 
-      {scene.kind === 'title' && <TitleScene />}
-      {scene.kind === 'matchup' && (
-        <MatchupScene
-          fighterA={scene.fighterA}
-          fighterB={scene.fighterB}
-          scenarioId={scene.scenarioId}
-        />
-      )}
-      {scene.kind === 'ko' && <KOScene winner={scene.winner} loser={scene.loser} />}
-      {scene.kind === 'quote' && (
-        <QuoteScene fighterId={scene.fighterId} quote={scene.quote} episode={scene.episode} />
-      )}
-      {scene.kind === 'stats' && <StatsScene />}
-      {scene.kind === 'roster' && <RosterScene />}
-
-      {/* Constant PRESS START prompt at bottom */}
-      <div
-        className="absolute left-0 right-0 bottom-6 z-30 text-center font-display text-base tracking-widest pointer-events-none"
-        style={{
-          color: '#FFD60A',
-          textShadow: '3px 3px 0 black, 0 0 18px #F77F00',
-          animation: 'flash 1s linear infinite',
-        }}
-      >
-        ◇ CLICK ANYWHERE TO PLAY ◇
-      </div>
-    </div>
-  )
-}
-
-// ─── SCENES ─────────────────────────────────────────────────────────
-
-function TitleScene() {
-  return (
-    <div className="relative w-full h-full flex flex-col items-center justify-center">
-      {/* Hero artwork if present */}
-      <img
-        src="/menu/title-hero.png"
-        alt=""
-        onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')}
-        className="absolute inset-0 w-full h-full object-cover"
-        style={{
-          imageRendering: 'pixelated',
-          opacity: 0.7,
-          mixBlendMode: 'screen',
-        }}
-      />
-      <div
-        className="absolute inset-0"
-        style={{ background: 'radial-gradient(ellipse, transparent 30%, rgba(0,0,0,0.85) 100%)' }}
-      />
-      <div
-        className="relative z-10 font-display tracking-widest"
-        style={{
-          color: '#FFD60A',
-          fontSize: 110,
-          letterSpacing: '0.1em',
-          textShadow: '8px 8px 0 black, 0 0 32px #F77F00, 0 0 64px #E63946',
-          animation: 'titlePulse 2s ease-in-out infinite',
-          transform: 'skewX(-3deg)',
-        }}
-      >
-        OPERATORS
-      </div>
-      <div
-        className="relative z-10 font-display tracking-widest mt-3"
-        style={{
-          color: 'white',
-          fontSize: 14,
-          letterSpacing: '0.4em',
-          textShadow: '2px 2px 0 black',
-        }}
-      >
-        ★ A TACTICAL FIGHTER ON LENNY'S PODCAST ★
-      </div>
-      <style>{`
-        @keyframes titlePulse {
-          0%, 100% { transform: skewX(-3deg) scale(1) }
-          50%      { transform: skewX(-3deg) scale(1.04) }
+    void (async () => {
+      try {
+        const m = dir.matchup
+        renderer = new FightRenderer(canvas, { scenario: m.stage })
+        await renderer.init()
+        if (disposed) return renderer.dispose()
+        // AttractMode has THREE mounts (traced to the route table, not the import
+        // graph — a census enforced by captureCoverage's attractModeMountCensus so
+        // this list cannot silently drift): (1) the standalone `?attract=1`
+        // reel-capture route (App.tsx:212, passes `capture`); (2) the customer
+        // FRONT DOOR (FrontDoor.tsx:105, bare `/`, mounts this reel after a 6 s
+        // idle as a live demo the buyer sees); (3) the `?cards=1` legacy card
+        // game's in-menu preview (MainMenu.tsx:287). Freeze the tier ONLY on the
+        // capture mount (1): there a still, reproducible tier is the default
+        // (every reel frame graded before this gate came off a drifting tier
+        // because nothing pinned it; captureRoute makes the still tier the default
+        // with no per-tool opt-in). Mounts (2) and (3) pass no `capture`, so
+        // adaptive quality stays on — on the front door a weak machine demotes to a
+        // live low-tier reel instead of the static fallback. This freeze was once
+        // UNCONDITIONAL, justified as "no buyer lands here" — a 34167c6-class bug:
+        // the route table falsifies that claim (FrontDoor is reachable at bare
+        // `/`), and freezing pinned the buyer's reel. Freeze-only: the __ATTRACT__
+        // probe is built in a SEPARATE effect below with no renderer handle, so it
+        // can't fuse the way __PLAY__/__FIGHT__ do — the captureCoverage node gate
+        // enforces this call is present, and its scope block enforces only the
+        // capture mount opts in. See captureQuality.ts.
+        if (capture) {
+          applyCaptureQuality(renderer.engine, window.location.search, { captureRoute: true })
         }
-      `}</style>
-    </div>
-  )
-}
+        // The OPENER (bout 1, segment 0) is the one download a cold visitor waits
+        // on. On a reported-slow link it is served the reduced HERO atlas so its
+        // cost is decoupled from full-art growth (see attractLoadCost.ts); bouts
+        // 2+ always upgrade to full art. A fast/unknown link gets full art here
+        // too — firstBoutAtlasVariant() returns 'full' unless the browser reports
+        // a slow connection. A missing hero variant falls back to full in the loader.
+        const variant = segment === 0 ? firstBoutAtlasVariant() : 'full'
+        const [atlasA, atlasB] = await Promise.all([
+          loadFighterAtlas(m.a.skin, variant),
+          loadFighterAtlas(m.b.skin, variant),
+        ])
+        if (disposed) return renderer.dispose()
+        await renderer.setFighterAssets(0, atlasA.assets, atlasA.atlas, m.a.accent, getFighter(m.a.skin)?.reval)
+        await renderer.setFighterAssets(1, atlasB.assets, atlasB.atlas, m.b.accent, getFighter(m.b.skin)?.reval)
+        if (disposed) return renderer.dispose()
+        renderer.setInitialState(dir.initialState)
+        // The engine's internal rAF calls this once per frame. The director owns
+        // the sim; we just pump it. No audio: attract runs before any user
+        // gesture, so a live AudioContext would be autoplay-suspended anyway —
+        // wiring it would only add a second atlas of decode work for silence.
+        renderer.setStep(() => dir.step())
+      } catch {
+        // No WebGL, a 404 atlas, a lost context: fall to the branded card rather
+        // than a black rectangle. The reel degrades; it never breaks.
+        if (!disposed) setDegraded(true)
+      }
+    })()
 
-function MatchupScene({
-  fighterA, fighterB, scenarioId,
-}: {
-  fighterA: string; fighterB: string; scenarioId: typeof SCENARIO_ORDER[number]
-}) {
-  const a = getFighter(fighterA)!
-  const b = getFighter(fighterB)!
-  const stage = SCENARIOS[scenarioId]
-  return (
-    <div className="relative w-full h-full">
-      {/* Stage background */}
-      <img
-        src={`/stages/${scenarioId}.png`}
-        alt=""
-        onError={(e) => ((e.target as HTMLImageElement).style.opacity = '0')}
-        className="absolute inset-0 w-full h-full object-cover"
-        style={{ imageRendering: 'pixelated', filter: 'brightness(0.7)' }}
-      />
-      <div className="absolute inset-0" style={{ background: 'radial-gradient(ellipse at center, transparent 30%, rgba(0,0,0,0.7) 100%)' }} />
+    const parent = host
+    const resize = () => {
+      const r = parent.getBoundingClientRect()
+      renderer?.engine.resize(Math.max(1, Math.round(r.width)), Math.max(1, Math.round(r.height)))
+    }
+    resize()
+    const ro = new ResizeObserver(resize)
+    ro.observe(parent)
 
-      {/* Stage label */}
+    return () => {
+      disposed = true
+      ro.disconnect()
+      renderer?.dispose()
+      canvas.remove()
+    }
+  }, [segment, degraded, capture])
+
+  // One persistent rAF loop for the whole mount (survives segment swaps): it
+  // asks the director when to cut, measures frame rate, and publishes the probe.
+  useEffect(() => {
+    if (degraded) return
+    let raf = 0
+    let last = performance.now()
+    let frames = 0
+    const fpsSamples: number[] = []
+
+    const tick = (now: number) => {
+      const dt = now - last
+      last = now
+      // Ignore absurd deltas (tab backgrounded, first frame) so they can't
+      // poison the median either way.
+      if (dt > 0 && dt < 500) {
+        fpsSamples.push(1000 / dt)
+        if (fpsSamples.length > 120) fpsSamples.shift()
+        frames++
+      }
+
+      const dir = ensureDir()
+      // Edge-triggered cut: arm exactly once per KO so the poll can't advance the
+      // reel twice before the new segment mounts and disarms it.
+      if (dir.wantsRotate && !rotateArmedRef.current) {
+        rotateArmedRef.current = true
+        setSegment((s) => s + 1)
+      }
+
+      if (frames >= FPS_WARMUP_FRAMES && median(fpsSamples) > 0 && median(fpsSamples) < MIN_FPS) {
+        setDegraded(true)
+        return
+      }
+
+      raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+
+    if (import.meta.env.DEV) {
+      window.__ATTRACT__ = {
+        ready: () => dirRef.current !== null,
+        steps: () => dirRef.current?.stepsTaken ?? 0,
+        matches: () => dirRef.current?.matchesShown ?? 0,
+        kos: () => dirRef.current?.kos ?? 0,
+        fps: () => median(fpsSamples),
+        matchup: () => {
+          const m = dirRef.current?.matchup
+          return m ? `${m.a.skin} vs ${m.b.skin} @ ${m.stage}` : ''
+        },
+        degraded: () => degraded,
+      }
+    }
+
+    return () => {
+      cancelAnimationFrame(raf)
+      if (import.meta.env.DEV) delete window.__ATTRACT__
+    }
+  }, [degraded])
+
+  // Dispose the director on unmount and null the ref, so nothing can drive a
+  // torn-down sim. The rebuild is `ensureDir()` at the point of use — NOT a
+  // render-time initialiser. StrictMode runs this cleanup between two effect
+  // passes with no render in between, so a render-time rebuild never fires and
+  // every consumer then reads null; that is exactly how the reel died. This
+  // cleanup runs after the segment effect's (renderer dispose) and the rAF
+  // effect's (cancel), so the sim is torn down only once nothing can still call
+  // `step()` on it.
+  useEffect(() => {
+    return () => {
+      dirRef.current?.dispose()
+      dirRef.current = null
+    }
+  }, [])
+
+  if (degraded) {
+    // Static fallback: the reel could not hold frame rate (or WebGL was
+    // unavailable). A branded card that still exits on input beats a stutter.
+    return (
       <div
-        className="absolute top-12 left-0 right-0 text-center font-display"
-        style={{
-          color: stage.accent,
-          fontSize: 24,
-          letterSpacing: '0.3em',
-          textShadow: '4px 4px 0 black',
-          animation: 'banner-in 0.6s ease-out',
-        }}
+        className="am-root"
+        onClick={exit}
+        onKeyDown={exit}
+        tabIndex={-1}
+        style={{ background: 'radial-gradient(circle at 50% 32%, #150C26 0%, #07050E 100%)' }}
       >
-        {stage.icon} {stage.name}
-      </div>
-
-      {/* Fighters facing off */}
-      <div className="absolute inset-x-0 bottom-24 flex items-end justify-center gap-10">
-        <div style={{ width: 260, height: 340 }} className="idle-bob">
-          <Sprite fighter={a} side="a" state="stance" />
-          <div
-            className="absolute top-0 left-0 right-0 text-center font-display"
-            style={{ color: a.accent, fontSize: 20, letterSpacing: '0.2em', textShadow: '2px 2px 0 black', transform: 'translateY(-40px)' }}
-          >
-            {a.shortName}
-          </div>
-        </div>
         <div
-          className="font-display"
           style={{
-            color: '#FFD60A',
-            fontSize: 64,
-            letterSpacing: '0.05em',
-            textShadow: '4px 4px 0 black, 0 0 24px #F77F00',
-            animation: 'titlePulse 1.4s ease-in-out infinite',
+            position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column',
+            alignItems: 'center', justifyContent: 'center', gap: 14,
           }}
         >
-          VS
+          <div className="am-eyebrow" style={{ fontSize: 15 }}>A 2D FIGHTING GAME</div>
+          <div className="am-logo" style={{ fontSize: 132 }}>OPERATORS</div>
         </div>
-        <div style={{ width: 260, height: 340 }} className="idle-bob">
-          <Sprite fighter={b} side="b" state="stance" />
-          <div
-            className="absolute top-0 left-0 right-0 text-center font-display"
-            style={{ color: b.accent, fontSize: 20, letterSpacing: '0.2em', textShadow: '2px 2px 0 black', transform: 'translateY(-40px)' }}
-          >
-            {b.shortName}
-          </div>
+        <div className="am-vignette" aria-hidden />
+        <div className="am-scan" aria-hidden />
+        <div className="am-grain" aria-hidden />
+        <div
+          className="am-prompt"
+          style={{
+            position: 'absolute', left: 0, right: 0, bottom: 44, zIndex: 41,
+            textAlign: 'center', fontSize: 40, pointerEvents: 'none',
+          }}
+        >
+          PRESS&nbsp; START
         </div>
       </div>
+    )
+  }
 
-      <style>{`
-        @keyframes titlePulse {
-          0%, 100% { transform: scale(1) }
-          50%      { transform: scale(1.08) }
-        }
-      `}</style>
-    </div>
-  )
-}
-
-function KOScene({ winner, loser }: { winner: string; loser: string }) {
-  const w = getFighter(winner)!
-  const l = getFighter(loser)!
   return (
     <div
-      className="relative w-full h-full"
-      style={{ background: 'radial-gradient(ellipse, #1A0F2E 0%, #0F0A1A 100%)' }}
+      className="am-root"
+      onClick={exit}
+      onKeyDown={exit}
+      tabIndex={-1}
+      style={{ background: '#05060a' }}
     >
-      {/* Defeated fighter on the side */}
-      <div className="absolute left-8 bottom-12 opacity-50" style={{ width: 240, height: 320 }}>
-        <Sprite fighter={l} side="b" state="lose" />
-      </div>
-
-      {/* Winner pose */}
-      <div className="absolute right-12 bottom-8" style={{ width: 280, height: 380 }}>
-        <Sprite fighter={w} side="a" state="win" />
-      </div>
-
-      {/* "K.O." text */}
       <div
-        className="absolute left-0 right-0 text-center font-display"
+        ref={hostRef}
+        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', display: 'block' }}
+      />
+
+      {/* Branded title beat over the opening bout, then it fades to the fight. */}
+      <div
+        aria-hidden
         style={{
-          top: '24%',
-          color: '#FFD60A',
-          fontSize: 140,
-          letterSpacing: '0.18em',
-          textShadow: '8px 8px 0 black, 0 0 32px #F77F00, 0 0 64px #E63946',
-          transform: 'skewX(-6deg)',
-          animation: 'koBannerCrash 0.6s cubic-bezier(0.2, 0.9, 0.3, 1)',
+          position: 'absolute', inset: 0, zIndex: 30, display: 'flex',
+          flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14,
+          pointerEvents: 'none',
+          opacity: showTitle ? 1 : 0,
+          transition: 'opacity 700ms ease',
+          background: showTitle ? 'rgba(5,6,10,0.42)' : 'rgba(5,6,10,0)',
         }}
       >
-        K.O.!
+        <div className="am-eyebrow" style={{ fontSize: 15 }}>A 2D FIGHTING GAME</div>
+        <div className="am-logo" style={{ fontSize: 132 }}>OPERATORS</div>
       </div>
 
+      {/* Atmosphere overlays over the live fight. */}
+      <div className="am-vignette" aria-hidden />
+      <div className="am-scan" aria-hidden />
+      <div className="am-grain" aria-hidden />
+
       <div
-        className="absolute left-0 right-0 text-center font-display"
+        className="am-prompt"
         style={{
-          top: '46%',
-          color: w.accent,
-          fontSize: 28,
-          letterSpacing: '0.35em',
-          textShadow: '4px 4px 0 black',
+          position: 'absolute', left: 0, right: 0, bottom: 44, zIndex: 41,
+          textAlign: 'center', fontSize: 40, pointerEvents: 'none',
         }}
       >
-        {w.shortName} WINS
-      </div>
-
-      {/* Particle burst */}
-      <svg className="absolute inset-0 w-full h-full pointer-events-none" preserveAspectRatio="none" viewBox="0 0 100 100">
-        {Array.from({ length: 40 }).map((_, i) => {
-          const angle = (i / 40) * Math.PI * 2
-          const speed = 25 + (i % 18)
-          const dx = Math.cos(angle) * speed
-          const dy = Math.sin(angle) * speed - 12
-          const hue = ['#FFD60A', '#F77F00', '#E63946', '#FFFFFF'][i % 4]
-          return (
-            <rect
-              key={i}
-              x={50}
-              y={36}
-              width={(i % 3) + 1}
-              height={(i % 3) + 1}
-              fill={hue}
-              style={{
-                animation: 'koParticle 1.3s linear forwards',
-                animationDelay: `${(i * 8) % 60}ms`,
-                ['--dx' as unknown as string]: `${dx}`,
-                ['--dy' as unknown as string]: `${dy}`,
-              }}
-            />
-          )
-        })}
-      </svg>
-    </div>
-  )
-}
-
-function QuoteScene({ fighterId, quote, episode }: { fighterId: string; quote: string; episode: string }) {
-  const f = getFighter(fighterId)
-  if (!f) return null
-  return (
-    <div className="relative w-full h-full flex items-center justify-center px-12">
-      {/* Background fighter silhouette */}
-      <div
-        className="absolute left-0 right-0 flex items-center justify-center pointer-events-none"
-        style={{ top: '14%', opacity: 0.18 }}
-      >
-        <div style={{ width: 320, height: 460 }}>
-          <Sprite fighter={f} side="a" state="win" />
-        </div>
-      </div>
-
-      {/* Quote card. Note: we deliberately do NOT use a CSS keyframe
-       *  animation here — in React 18 dev (StrictMode), the component
-       *  mounts → unmounts → remounts on first render, which re-fires
-       *  the keyframe and causes a visible flash/disappear/reappear. A
-       *  static element renders consistently in both dev and prod. */}
-      <div
-        className="relative z-10 max-w-3xl px-8 py-6"
-        style={{
-          background: 'rgba(15,10,26,0.85)',
-          border: `3px solid ${f.accent}`,
-          boxShadow: `0 0 36px ${f.accent}77, inset -2px -2px 0 rgba(0,0,0,0.5), inset 2px 2px 0 rgba(255,255,255,0.1)`,
-        }}
-      >
-        <div
-          className="font-display text-[10px] tracking-widest mb-3"
-          style={{ color: f.accent }}
-        >
-          ◇ VERBATIM FROM {episode.toUpperCase()}
-        </div>
-        <p
-          className="font-body italic text-3xl text-white leading-snug"
-          style={{ textShadow: '2px 2px 0 black' }}
-        >
-          &ldquo;{quote}&rdquo;
-        </p>
-        <div
-          className="font-display text-[12px] tracking-widest mt-4"
-          style={{ color: f.accent }}
-        >
-          — {f.shortName}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function StatsScene() {
-  // Derive counts from the canonical data so this never drifts as the
-  // roster grows. Frameworks = every move + every ult across all fighters.
-  // Voice lines = 6 fixed slots per fighter + the trash-talk array length.
-  // Cut from 6 stats to 4 — the previous "GAME MODES: 6" was stale after
-  // the menu consolidation (PR #35), and "PATTERN MATCHES: ∞" was filler
-  // that crowded the readable stats off the screen. Four stats, big and
-  // legible, hold for the full 8s scene duration.
-  const frameworks = FIGHTERS.reduce((sum, f) => sum + f.moves.length + 1, 0)
-  const voiceLines = FIGHTERS.reduce(
-    (sum, f) => sum + 6 + (f.voiceLines.trash?.length ?? 0),
-    0
-  )
-  const stats = [
-    { num: String(FIGHTERS.length), label: 'OPERATORS' },
-    { num: String(frameworks), label: 'FRAMEWORKS' },
-    { num: String(SCENARIO_ORDER.length), label: 'STAGES' },
-    { num: String(voiceLines), label: 'VOICE LINES' },
-  ]
-  return (
-    <div className="relative w-full h-full flex flex-col items-center justify-center px-12">
-      <div
-        className="font-display tracking-widest mb-10"
-        style={{
-          color: '#FFD60A',
-          fontSize: 32,
-          letterSpacing: '0.3em',
-          textShadow: '4px 4px 0 black, 0 0 24px #F77F00',
-        }}
-      >
-        FROM LENNY'S ARCHIVE
-      </div>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-x-12 gap-y-10">
-        {stats.map((s, i) => (
-          <div
-            key={s.label}
-            className="flex flex-col items-center"
-            style={{ animation: `attract-pop-in 0.55s ease-out ${i * 0.18}s both` }}
-          >
-            <div
-              className="font-num tabular-nums"
-              style={{
-                color: 'white',
-                fontSize: 96,
-                lineHeight: 1,
-                textShadow: '4px 4px 0 black, 0 0 18px #F72585',
-              }}
-            >
-              {s.num}
-            </div>
-            <div
-              className="font-display text-xs tracking-widest mt-3"
-              style={{ color: '#FCBF49', letterSpacing: '0.3em' }}
-            >
-              {s.label}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-function RosterScene() {
-  return (
-    <div className="relative w-full h-full flex flex-col items-center justify-center">
-      <div
-        className="font-display tracking-widest mb-6"
-        style={{
-          color: '#FFD60A',
-          fontSize: 24,
-          letterSpacing: '0.3em',
-          textShadow: '4px 4px 0 black',
-        }}
-      >
-        {FIGHTERS.length} OPERATORS
-      </div>
-      <div className="grid grid-cols-7 gap-2 max-w-4xl">
-        {FIGHTERS.map((f, i) => (
-          <div
-            key={f.id}
-            className="aspect-square relative"
-            style={{
-              background: `linear-gradient(180deg, ${f.accent}33, ${f.accent}11)`,
-              border: `2px solid ${f.accent}88`,
-              boxShadow: 'inset -2px -2px 0 rgba(0,0,0,0.4)',
-              animation: `banner-in 0.5s ease-out ${(i * 0.04)}s both`,
-            }}
-          >
-            <Sprite fighter={f} side="a" state="stance" />
-            <div
-              className="absolute left-0 right-0 bottom-0 font-display text-[7px] text-center py-0.5 text-white truncate"
-              style={{ background: 'rgba(0,0,0,0.78)', letterSpacing: '0.5px' }}
-            >
-              {f.shortName}
-            </div>
-          </div>
-        ))}
+        PRESS&nbsp; START
       </div>
     </div>
   )

@@ -1,0 +1,234 @@
+import * as THREE from 'three'
+
+/**
+ * Atmosphere — the volume between the camera and the set.
+ *
+ * `DustField` is a real 3D point cloud (not a screen-space shader) so it
+ * parallaxes correctly as the camera moves, giving honest depth cues. Motes
+ * near the camera are large and soft; distant ones are tiny. They drift and
+ * twinkle so the air is never dead.
+ *
+ * `groundFog` is a stack of soft planes hugging the floor that catch the rim
+ * light and dissolve the hard line where geometry meets the ground — the thing
+ * that makes an arena feel like it has atmosphere instead of a cut-out floor.
+ */
+
+export class DustField {
+  readonly points: THREE.Points
+  private velocities: Float32Array
+  private basePos: Float32Array
+  private bounds: THREE.Vector3
+  private count: number
+
+  constructor(count: number, bounds: THREE.Vector3, color: number, size = 0.09) {
+    this.count = count
+    this.bounds = bounds
+    const pos = new Float32Array(count * 3)
+    const rnd = new Float32Array(count)
+    this.velocities = new Float32Array(count * 3)
+    this.basePos = new Float32Array(count * 3)
+    for (let i = 0; i < count; i++) {
+      const x = (Math.random() - 0.5) * bounds.x
+      const y = Math.random() * bounds.y
+      const z = -bounds.z * 0.5 + Math.random() * bounds.z
+      pos[i * 3] = x; pos[i * 3 + 1] = y; pos[i * 3 + 2] = z
+      this.basePos[i * 3] = x; this.basePos[i * 3 + 1] = y; this.basePos[i * 3 + 2] = z
+      this.velocities[i * 3] = (Math.random() - 0.5) * 0.08
+      this.velocities[i * 3 + 1] = 0.02 + Math.random() * 0.06
+      this.velocities[i * 3 + 2] = (Math.random() - 0.5) * 0.05
+      rnd[i] = Math.random()
+    }
+    const geo = new THREE.BufferGeometry()
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3))
+    geo.setAttribute('aRnd', new THREE.BufferAttribute(rnd, 1))
+
+    const mat = new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      fog: false,
+      toneMapped: false,
+      uniforms: {
+        uColor: { value: new THREE.Color(color) },
+        uSize: { value: size },
+        uTime: { value: 0 },
+        uPixelRatio: { value: 1 },
+      },
+      vertexShader: /* glsl */ `
+        attribute float aRnd;
+        uniform float uSize; uniform float uTime; uniform float uPixelRatio;
+        varying float vTw;
+        void main(){
+          vec4 mv = modelViewMatrix * vec4(position,1.0);
+          float dist = -mv.z;
+          vTw = 0.5 + 0.5*sin(uTime*(1.5+aRnd*3.0) + aRnd*30.0);
+          gl_PointSize = uSize * (300.0/dist) * uPixelRatio * (0.5+aRnd);
+          gl_Position = projectionMatrix * mv;
+        }
+      `,
+      fragmentShader: /* glsl */ `
+        precision highp float; varying float vTw; uniform vec3 uColor;
+        void main(){
+          vec2 d = gl_PointCoord - 0.5;
+          float r = length(d);
+          float a = smoothstep(0.5, 0.0, r);
+          a *= a;
+          gl_FragColor = vec4(uColor*(0.6+vTw*0.8), a*vTw*0.7);
+        }
+      `,
+    })
+    this.points = new THREE.Points(geo, mat)
+    this.points.frustumCulled = false
+    this.points.renderOrder = 3
+  }
+
+  setColor(color: number) {
+    ;(this.points.material as THREE.ShaderMaterial).uniforms.uColor.value.setHex(color)
+  }
+  setPixelRatio(r: number) {
+    ;(this.points.material as THREE.ShaderMaterial).uniforms.uSize.value // noop guard
+    ;(this.points.material as THREE.ShaderMaterial).uniforms.uPixelRatio.value = r
+  }
+
+  update(t: number, dt: number, drift: number) {
+    const mat = this.points.material as THREE.ShaderMaterial
+    mat.uniforms.uTime.value = t
+    const attr = this.points.geometry.getAttribute('position') as THREE.BufferAttribute
+    const arr = attr.array as Float32Array
+    for (let i = 0; i < this.count; i++) {
+      arr[i * 3] += this.velocities[i * 3] * dt * drift
+      arr[i * 3 + 1] += this.velocities[i * 3 + 1] * dt * drift
+      arr[i * 3 + 2] += this.velocities[i * 3 + 2] * dt * drift
+      // gentle sine sway so motion isn't linear
+      arr[i * 3] += Math.sin(t * 0.5 + i) * 0.0015 * drift
+      if (arr[i * 3 + 1] > this.bounds.y) {
+        arr[i * 3] = this.basePos[i * 3] + (Math.random() - 0.5) * 2
+        arr[i * 3 + 1] = 0
+        arr[i * 3 + 2] = this.basePos[i * 3 + 2] + (Math.random() - 0.5) * 2
+      }
+    }
+    attr.needsUpdate = true
+  }
+
+  dispose() {
+    this.points.geometry.dispose()
+    ;(this.points.material as THREE.Material).dispose()
+  }
+}
+
+/** Soft glowing fog planes hugging the ground. Returns a group + updater. */
+export function groundFog(color: number, extent: number): {
+  group: THREE.Group
+  update: (t: number) => void
+  /**
+   * Scale the FAR additive haze bands only (near steam banks are untouched).
+   *
+   * These bands are ADDITIVE and carry the stage accent, so they add a roughly
+   * fixed amount of light regardless of what is behind them. On a bright plate
+   * that reads as atmospheric depth; on a dark plate it *becomes* the image --
+   * the painting is buried under accent-coloured glow and the arena stops
+   * matching the thumbnail it was picked from. Atmospheric scattering should be
+   * proportional to the light actually in the scene, so the caller scales this
+   * by the plate's own luminance. See StageSubsystem.applyPlateHazeScale.
+   */
+  setFarHaze: (scale: number) => void
+} {
+  const group = new THREE.Group()
+  const mats: THREE.ShaderMaterial[] = []
+  const farMats: THREE.ShaderMaterial[] = []
+  // Rolling luminous steam banks that fill the mid-ground (the dead black band a
+  // fighting stage must never have). Additive so they GLOW with the scene neon
+  // ("particulate in the light"), ground-hugging, drifting horizontally with an
+  // upward billow. Biased behind the play plane so they never veil the fighters.
+  const near = [
+    { z: 2.2, op: 0.05, h: 3.8, y: 1.05, seed: 0.4 },
+    { z: -1.8, op: 0.16, h: 4.6, y: 1.2, seed: 3.1 },
+    { z: -5.4, op: 0.24, h: 5.4, y: 1.4, seed: 6.7 },
+    { z: -9.0, op: 0.21, h: 6.4, y: 1.7, seed: 9.9 },
+  ]
+  for (const spec of near) {
+    const mat = new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      fog: false,
+      toneMapped: false,
+      uniforms: {
+        uColor: { value: new THREE.Color(color) },
+        uTime: { value: 0 },
+        uSeed: { value: spec.seed },
+        uOpacity: { value: spec.op },
+      },
+      vertexShader: `varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
+      fragmentShader: /* glsl */ `
+        precision highp float; varying vec2 vUv;
+        uniform vec3 uColor; uniform float uTime; uniform float uSeed; uniform float uOpacity;
+        float hash(vec2 p){ p=fract(p*vec2(233.34,851.73)); p+=dot(p,p+23.45); return fract(p.x*p.y); }
+        float n(vec2 p){ vec2 i=floor(p),f=fract(p); f=f*f*(3.-2.*f);
+          return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x),f.y);}
+        float fbm(vec2 p){ float a=.5,s=0.; for(int i=0;i<5;i++){s+=a*n(p);p*=2.02;a*=.5;} return s; }
+        void main(){
+          vec2 p = vUv*vec2(3.5,2.2) + vec2(uTime*0.06+uSeed, -uTime*0.045);
+          float f = fbm(p);
+          f *= fbm(p*1.9 + vec2(-uTime*0.05, uTime*0.03));
+          f = pow(f, 0.8);
+          float band = smoothstep(0.0,0.5,vUv.y)*smoothstep(1.0,0.38,vUv.y);
+          float a = f * band * uOpacity;
+          gl_FragColor = vec4(uColor * (0.55 + 0.9*f), a);
+        }
+      `,
+    })
+    mats.push(mat)
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(extent, spec.h), mat)
+    m.position.set(0, spec.y, spec.z)
+    m.renderOrder = 4
+    group.add(m)
+  }
+  // Far atmospheric haze bands — tall, faint, ADDITIVE glow sheets standing at
+  // the background-architecture depth so the far layer dissolves into luminous
+  // fog instead of butting hard against the backdrop (atmospheric perspective).
+  for (let i = 0; i < 3; i++) {
+    const mat = new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      fog: false,
+      toneMapped: false,
+      uniforms: {
+        uColor: { value: new THREE.Color(color) },
+        uTime: { value: 0 },
+        uSeed: { value: 7.3 + i * 3.7 },
+        uOpacity: { value: 0.19 - i * 0.045 },
+      },
+      vertexShader: `varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
+      fragmentShader: /* glsl */ `
+        precision highp float; varying vec2 vUv;
+        uniform vec3 uColor; uniform float uTime; uniform float uSeed; uniform float uOpacity;
+        float hash(vec2 p){ p=fract(p*vec2(233.34,851.73)); p+=dot(p,p+23.45); return fract(p.x*p.y); }
+        float n(vec2 p){ vec2 i=floor(p),f=fract(p); f=f*f*(3.-2.*f);
+          return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x),f.y);}
+        float fbm(vec2 p){ float a=.5,s=0.; for(int i=0;i<4;i++){s+=a*n(p);p*=2.02;a*=.5;} return s; }
+        void main(){
+          vec2 p = vUv*vec2(3.0,1.6) + vec2(uTime*0.02+uSeed, uSeed*0.5);
+          float f = fbm(p)*0.6 + 0.4;
+          // dense at the base, dissolving upward — a ground-hugging light fog
+          float band = smoothstep(1.0,0.15,vUv.y);
+          float a = f * band * uOpacity;
+          gl_FragColor = vec4(uColor, a);
+        }
+      `,
+    })
+    mats.push(mat); farMats.push(mat); mat.userData.baseOpacity = mat.uniforms.uOpacity.value
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(extent * 1.1, 9), mat)
+    m.position.set(0, 3.4, -11 - i * 3.5)
+    m.renderOrder = 3
+    group.add(m)
+  }
+  return {
+    group,
+    update: (t) => { for (const m of mats) m.uniforms.uTime.value = t },
+    setFarHaze: (scale: number) => {
+      for (const m of farMats) m.uniforms.uOpacity.value = (m.userData.baseOpacity as number) * scale
+    },
+  }
+}

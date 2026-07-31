@@ -36,3 +36,62 @@ signature-peak*.png
 story-*.png
 menu-*.png
 .gstack/
+
+# Render/critic harness output — hundreds of MB of PNGs, local only.
+.shots/
+shots/
+shots-cam/
+vfx-shots/
+.hud-agent/shots/
+*.bak
+.*.bak
+
+# Audio agent scratch (offline renders, metrics, PNGs)
+.audio-agent/
+
+# arena QA artifacts (untracked)
+.arena-qa/
+cap-arena.mjs
+review-shots/
+.sprite-probe/
+.sprite-gen/
+fight-shots/
+fight-shots-*/
+play-shots/
+fighthud-shots/
+.impeccable/
+
+# Generated animation review artifacts (previews/contact sheets) — regenerate from cache
+public/fighters/*/review/
+public/projectiles/*/review/
+public/impact/*/review/
+diag/
+
+# Visual critic working artifacts — local only
+critique/
+ceremony-shots/
+projectile-shots/
+motion-strips/
+probe-out/
+dist-measure/
+
+# Temp roster trees built by node-typed fixtures (e.g. heroOpenerDecoupling) under
+# src/**/__tests__/. The fixtures clean up on throw, but ignore the prefix too so a
+# future leak — or a new fixture copying the mkdtemp shape — can never be swept in by
+# a `git add -A`/`git add src/`. These are multi-MB and materialise only on failure.
+.herofix-*
+
+# Scratch measurement probes. Convention: a leading underscore means throwaway.
+# Agents drop these to print one number and are supposed to delete them; when
+# they don't, they redden the shared gate or get committed by accident.
+src/**/_*.probe.test.ts
+tools/_out/
+tools/_probe/*.txt
+spark-pixel/
+spark-pixel-mutant/
+/_*.png
+/spark-pixel*.png
+.hud-agent/
+.fg-shots/
+.fg-boards/
+.stage-shots/

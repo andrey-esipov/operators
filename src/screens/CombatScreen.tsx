@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, lazy, Suspense } from 'react'
 import { useGame } from '../state/game'
 import { getFighter } from '../data/fighters'
 import { pickQuoteForMove } from '../lib/quotePool'
@@ -20,7 +20,17 @@ import { StatusHalo } from '../components/StatusHalo'
 import { HitSparks } from '../components/HitSparks'
 import { youtubeDeepLink } from '../lib/youtube'
 import { Sfx } from '../lib/audio'
+import { fightAudio, type Flavor } from '../audio'
+import { getRenderMode, setRenderMode } from '../lib/renderMode'
+import type { AnnounceMoment, DamageNumber } from '../three/hud/types'
 import { AnimatePresence, motion } from 'framer-motion'
+import './../components/combat-hud.css'
+
+// The WebGL layer is ~250 kB gzipped. Loading it lazily keeps the 2D fallback
+// path — and the first paint of the fight — off that budget entirely.
+const FightStage = lazy(() =>
+  import('../three/FightStage').then((m) => ({ default: m.FightStage })),
+)
 
 export function CombatScreen() {
   const mode = useGame((s) => s.mode)
@@ -56,6 +66,11 @@ export function CombatScreen() {
   /** Which side is currently in attack-pose (briefly after casting) */
   const [attackingSide, setAttackingSide] = useState<'a' | 'b' | null>(null)
   const resetMatch = useGame((s) => s.resetMatch)
+
+  // Renderer selection is resolved once per mount so the engine is never torn
+  // down mid-fight. `?render=2d` or the on-screen toggle switches paths.
+  const [renderer, setRenderer] = useState(getRenderMode)
+  const use3D = renderer === '3d'
 
   // ESC quits to menu. ZXCVB casts moves 1-4 + ult (alt: 12345). R fires
   // a READ. Keys are only honored on the human player's turn during the
@@ -131,18 +146,52 @@ export function CombatScreen() {
     if (!soundCue) return
     const [primary, ...rest] = soundCue.kind.split('+')
     const hasEx = rest.includes('ex')
-    switch (primary) {
-      case 'crit': Sfx.crit(); break
-      case 'combo': Sfx.combo(); break
-      case 'ult': Sfx.ult(); break
-      case 'heavy': Sfx.heavy(); break
-      case 'ex': Sfx.ex(); break
-      case 'shatter': Sfx.shatter(); break
-      case 'signature': Sfx.signature(); break
-      default: Sfx.light()
+
+    // The synth engine takes real hit dynamics, so drive it from the log entry
+    // that produced this cue rather than firing a flat default.
+    const entry = log[log.length - 1]
+    const damage = entry?.finalDamage ?? 0
+    const target = entry ? (entry.attacker === 'a' ? 'b' : 'a') : 'b'
+    const power = Math.max(0.15, Math.min(1, damage / 110))
+    // Pan toward whoever is taking the hit; they are the on-screen event.
+    const pan = target === 'a' ? -0.5 : 0.5
+
+    if (primary === 'shatter') {
+      fightAudio.shatter({ power, pan })
+    } else {
+      const flavor = (
+        ['light', 'heavy', 'crit', 'combo', 'ex', 'ult', 'signature'] as const
+      ).includes(primary as never)
+        ? (primary as Flavor)
+        : 'light'
+      fightAudio.impact(flavor, { power, damage, pan })
     }
-    if (hasEx && primary !== 'ex') setTimeout(() => Sfx.ex(), 40)
+    if (hasEx && primary !== 'ex') {
+      setTimeout(() => fightAudio.impact('ex', { power: power * 0.8, pan }), 40)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [soundCue?.id])
+
+  // Arena acoustics: each stage gets its own convolution reverb + ambience bed.
+  useEffect(() => {
+    fightAudio.setStage(scenario)
+  }, [scenario])
+
+  // Tension drives the adaptive mix — the closer either fighter is to dying,
+  // the more intimate and pressurised the bus becomes.
+  useEffect(() => {
+    if (!fighterA || !fighterB) return
+    const lowest = Math.min(
+      fighterA.hp / Math.max(1, fighterA.maxHp),
+      fighterB.hp / Math.max(1, fighterB.maxHp),
+    )
+    fightAudio.setTension(Math.max(0, Math.min(1, lowest)))
+  }, [fighterA?.hp, fighterA?.maxHp, fighterB?.hp, fighterB?.maxHp])
+
+  // KO is its own sound event, not just another impact.
+  useEffect(() => {
+    if (koCinematic) fightAudio.ko({ power: 1 })
+  }, [koCinematic?.id])
 
   // Combat log effects: combo banner + hit flash + screen shake + quote callout
   useEffect(() => {
@@ -312,20 +361,77 @@ export function CombatScreen() {
   const inFlightFlash: 'ult' | 'combo' | 'crit' | 'ex' | 'signature' | undefined =
     attackingSide && lastLogEntry?.attacker === attackingSide ? lastLogEntry.flash : undefined
 
+  // --- 3D renderer inputs -------------------------------------------------
+  // The WebGL layer reads a plain snapshot (see three/bridge.ts), so everything
+  // it needs is derived here rather than reaching into the store from the scene.
+  const lastPulse = damagePulses[damagePulses.length - 1]
+  const koLoser = koCinematic?.loser ?? (fighterA.hp <= 0 ? 'a' : fighterB.hp <= 0 ? 'b' : null)
+  const anyCinematic = !!koCinematic || !!shatterCinematic || !!signatureCinematic
+
+  const hudAnnounce: AnnounceMoment | null = koCinematic
+    ? {
+        kind: signatureCinematic ? 'perfect' : 'ko',
+        side: koCinematic.winner,
+        sub: koCinematic.comboTitle,
+        id: koCinematic.id,
+      }
+    : null
+
+  const hudDamage: DamageNumber[] = damagePulses.slice(-6).map((p) => ({
+    id: p.id,
+    side: p.side,
+    value: p.amount,
+    flavor:
+      p.kind === 'crit' ? ('crit' as const) : p.amount >= 45 ? ('heavy' as const) : ('light' as const),
+  }))
+
+  const hudCombo = comboStreak && comboStreak.count > 1
+    ? { side: comboStreak.side, hits: comboStreak.count, id: comboStreak.id }
+    : null
+
   return (
     <div
-      className={`relative w-full h-full overflow-hidden ${shaking ? 'shake' : ''}`}
+      className={`relative w-full h-full overflow-hidden ${shaking && !use3D ? 'shake' : ''}`}
       style={{
-        filter: critFreeze ? 'saturate(1.6) contrast(1.4) hue-rotate(-12deg)' : 'none',
+        // In 3D the engine owns shake, slow-mo and colour grading. A DOM filter
+        // over the WebGL canvas would double-grade the frame and force an
+        // expensive extra composite, so it only applies to the 2D path.
+        filter: critFreeze && !use3D ? 'saturate(1.6) contrast(1.4) hue-rotate(-12deg)' : 'none',
         transition: critFreeze ? 'none' : 'filter 180ms ease-out',
       }}
     >
-      {/* Stage background */}
-      <StageBackground scenario={scenario} shake={shaking} />
+      {/* Stage: WebGL fight scene + AAA HUD, or the original 2D sprite stage. */}
+      {use3D ? (
+        <Suspense fallback={<StageBackground scenario={scenario} shake={shaking} />}>
+          <FightStage
+            scenario={scenario}
+            a={fighterA}
+            b={fighterB}
+            activeSide={activeSide}
+            timeLeft={timeLeft}
+            round={round}
+            attackingSide={attackingSide}
+            inFlightFlash={inFlightFlash}
+            cinematic={anyCinematic}
+            koLoser={koLoser}
+            hurtSide={shaking ? lastPulse?.side ?? null : null}
+            log={log}
+            names={{ a: a.shortName, b: b.shortName }}
+            roundsWon={roundsWon}
+            combo={hudCombo}
+            announce={hudAnnounce}
+            damageNumbers={hudDamage}
+            timeScale={critFreeze ? 0.25 : 1}
+          />
+        </Suspense>
+      ) : (
+        <StageBackground scenario={scenario} shake={shaking} />
+      )}
 
-      {/* Hit flash overlay */}
+      {/* Hit flash overlay. 3D drives its own impact flash through the VFX
+       *  subsystem, so the DOM version would land a second frame late. */}
       <AnimatePresence>
-        {hitFlash && (
+        {hitFlash && !use3D && (
           <motion.div
             key={lastFlash?.id ?? 'flash'}
             initial={{ opacity: 0.85 }}
@@ -348,6 +454,7 @@ export function CombatScreen() {
       </AnimatePresence>
 
       {/* TOP HUD */}
+      {!use3D && (
       <div className="absolute left-0 right-0 top-0 z-20 px-6 pt-3 flex items-start justify-between">
         <div className="flex flex-col gap-1">
           <HpBar hp={fighterA.hp} maxHp={fighterA.maxHp} side="a" name={a.shortName} />
@@ -424,6 +531,22 @@ export function CombatScreen() {
           </div>
         </div>
       </div>
+      )}
+
+      {/* Renderer toggle — keeps the 2D path one click away for A/B and fallback. */}
+      <button
+        onClick={() => {
+          const next = use3D ? '2d' : '3d'
+          Sfx.menuMove()
+          setRenderMode(next)
+          setRenderer(next)
+        }}
+        className="absolute top-2 right-24 z-30 px-2 py-1 font-display text-[7px] tracking-widest text-white/60 hover:text-white"
+        title="Switch between the WebGL and the classic 2D renderer"
+        style={{ background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(255,255,255,0.2)' }}
+      >
+        {use3D ? '3D' : '2D'}
+      </button>
 
       {/* Quit button (top-right) */}
       <button
@@ -439,6 +562,7 @@ export function CombatScreen() {
       </button>
 
       {/* FIGHTERS */}
+      {!use3D && (
       <div className="absolute left-0 right-0 z-10" style={{ bottom: 200 }}>
         <div className="flex items-end justify-between px-12 md:px-20">
           <div
@@ -514,12 +638,13 @@ export function CombatScreen() {
           </div>
         </div>
       </div>
+      )}
 
       {/* Hit sparks at the defender's body */}
-      <HitSparks trigger={hitSpark} />
+      {!use3D && <HitSparks trigger={hitSpark} />}
 
       {/* Damage floats */}
-      <DamageFloats pulses={damagePulses} />
+      {!use3D && <DamageFloats pulses={damagePulses} />}
 
       {/* Quote callout (real podcast quote). Hidden during the Signature
        *  Sequence so the cinematic's giant tagline isn't covered by the
@@ -809,13 +934,32 @@ function ActiveMoves({
     <div className="absolute left-0 right-0 bottom-0 z-20 px-6 pb-4">
       {showHumanControls ? (
         <>
-          <div className="font-display text-[10px] tracking-widest text-center mb-2" style={{ color: side === 'a' ? '#E63946' : '#00B4D8' }}>
-            P{side === 'a' ? '1' : '2'} · {def.shortName} · CHOOSE MOVE
-            {activeRt.read && (
-              <span className="ml-2 px-1.5 py-0.5" style={{ background: '#00B4D8', color: '#0F0A1A', fontSize: '8px' }}>
-                READING {activeRt.read.toUpperCase()}
-              </span>
-            )}
+          <div className="flex justify-center mb-2">
+            <div
+              className="combat-turn-prompt font-display tracking-widest inline-flex items-center gap-2 px-4 py-2"
+              style={{
+                fontSize: 14,
+                lineHeight: 1,
+                color: '#fff',
+                background: 'linear-gradient(180deg, rgba(15,10,26,0.92), rgba(6,4,12,0.94))',
+                border: `2px solid ${side === 'a' ? '#E63946' : '#00B4D8'}`,
+                boxShadow: `inset 0 2px 0 rgba(255,255,255,0.12), 0 0 18px ${side === 'a' ? 'rgba(230,57,70,0.55)' : 'rgba(0,180,216,0.55)'}, 0 4px 12px rgba(0,0,0,0.6)`,
+                clipPath: 'polygon(10px 0, 100% 0, calc(100% - 10px) 100%, 0 100%)',
+                textShadow: '0 2px 0 rgba(0,0,0,0.9)',
+                animation: 'turnPromptPulse 1.4s ease-in-out infinite',
+              }}
+            >
+              <span style={{ color: side === 'a' ? '#ff6b78' : '#4fd6f5' }}>P{side === 'a' ? '1' : '2'}</span>
+              <span style={{ opacity: 0.55 }}>·</span>
+              <span>{def.shortName}</span>
+              <span style={{ opacity: 0.55 }}>·</span>
+              <span style={{ color: '#FFD60A' }}>CHOOSE MOVE</span>
+              {activeRt.read && (
+                <span className="ml-1 px-1.5 py-0.5" style={{ background: '#00B4D8', color: '#0F0A1A', fontSize: 11 }}>
+                  READING {activeRt.read.toUpperCase()}
+                </span>
+              )}
+            </div>
           </div>
           <div className="flex gap-2 flex-wrap justify-center">
             {def.moves.map((m, i) => (

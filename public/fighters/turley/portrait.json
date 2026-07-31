@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "note": "Baked by tools/bake-vs-portraits.mjs from the atlas hero idle frame. Supersample of existing art (no new detail). Anchor traces to assets.json.",
+  "src": {
+    "frame": 1,
+    "name": "idle-2",
+    "rect": {
+      "x": 2043,
+      "y": 0,
+      "w": 397,
+      "h": 777
+    },
+    "anchor": {
+      "x": 198,
+      "y": 776
+    }
+  },
+  "bbox": {
+    "x": 0,
+    "y": 0,
+    "w": 397,
+    "h": 777
+  },
+  "scale": 1.976834,
+  "image": "portrait.png",
+  "w": 785,
+  "h": 1536,
+  "refH": 1536,
+  "anchor": {
+    "x": 391.413,
+    "y": 1534.023
+  }
+}

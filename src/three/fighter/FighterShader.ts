@@ -1,0 +1,921 @@
+import * as THREE from 'three'
+
+/**
+ * The fighter material.
+ *
+ * The art is a flat pixel-art PNG. We turn it into a lit, shaded, volumetric-
+ * feeling character by:
+ *
+ *  - relief-mapping the albedo with the derived height map (parallax offset,
+ *    so the silhouette shifts slightly as the camera moves — reads as depth)
+ *  - lighting the derived normal map with the stage's own key/fill/rim rig
+ *  - a wrapped diffuse term (half-Lambert) so the shadow side never goes flat
+ *    black, which is what makes naive sprite lighting look like a sticker
+ *  - a Fresnel-driven rim in the fighter's accent colour
+ *  - per-hit white-hot flash + chromatic edge fringe
+ *  - a dissolve/ash burn for KO
+ *  - vertex squash/stretch + lean so the sprite has weight
+ *
+ * Everything is driven by uniforms so a single material instance can animate
+ * without recompiling.
+ */
+
+export interface FighterUniforms {
+  uAlbedo: { value: THREE.Texture | null }
+  uNormal: { value: THREE.Texture | null }
+  uHeight: { value: THREE.Texture | null }
+  uPrevAlbedo: { value: THREE.Texture | null }
+  uPoseBlend: { value: number }
+
+  uKeyDir: { value: THREE.Vector3 }
+  uKeyColor: { value: THREE.Color }
+  uKeyIntensity: { value: number }
+  uFillDir: { value: THREE.Vector3 }
+  uFillColor: { value: THREE.Color }
+  uFillIntensity: { value: number }
+  uRimDir: { value: THREE.Vector3 }
+  uRimColor: { value: THREE.Color }
+  uRimIntensity: { value: number }
+  uAmbientColor: { value: THREE.Color }
+  uAmbientIntensity: { value: number }
+  uFlashPos: { value: THREE.Vector4 }
+  uFlashColor: { value: THREE.Color }
+  uFlashIntensity: { value: number }
+
+  uAccent: { value: THREE.Color }
+  uTime: { value: number }
+  uHitFlash: { value: number }
+  uHitColor: { value: THREE.Color }
+  uDissolve: { value: number }
+  uDamage: { value: number }
+  uSuperGlow: { value: number }
+  uShattered: { value: number }
+  uOutline: { value: number }
+  uOutlineColor: { value: THREE.Color }
+  uFacing: { value: number }
+  uSquash: { value: THREE.Vector2 }
+  uLean: { value: number }
+  uWobble: { value: number }
+  uCameraPos: { value: THREE.Vector3 }
+  uParallax: { value: number }
+  uSilhouette: { value: number }
+  uFogColor: { value: THREE.Color }
+  uFogDensity: { value: number }
+
+  // --- form / material / grounding (2.5D upgrade) ---
+  /** 0..3 render tier; gates expensive loops (self-shadow taps). */
+  uQuality: { value: number }
+  /** Cavity/AO strength derived from the height field. */
+  uAO: { value: number }
+  /** Height-march self-shadow strength (arm-on-torso etc). */
+  uSelfShadow: { value: number }
+  /** Warm bounce colour reflected up from the stage floor. */
+  uBounceColor: { value: THREE.Color }
+  uBounceIntensity: { value: number }
+  /** Texel size of the sprite (1/width) for edge/AO taps. */
+  uTexel: { value: number }
+  /** Sweat / sheen amount, ramps with damage + exertion. */
+  uSweat: { value: number }
+  /** Breathing exertion 0..1 (drives subtle warmth + sheen at low HP). */
+  uExertion: { value: number }
+
+  // --- hero grade (AAA focal-point pass) ---
+  /** 0..1: how much the stage's coloured key/fill/ambient light is neutralised
+   *  toward its own luma before it touches the character, so a heavily-tinted
+   *  arena (crisis red) can't wash the albedo to a single hue. */
+  uIdentityDefense: { value: number }
+  /** Overall exposure multiplier so the fighter stays the brightest element. */
+  uCharExposure: { value: number }
+  /** Pivot contrast applied to the final lit colour (true black ↔ spec white). */
+  uContrast: { value: number }
+  /** Saturation multiplier so the character's colour identity stays vivid. */
+  uSaturation: { value: number }
+  /** Always-on neutral separation kicker that carves the silhouette. */
+  uKickColor: { value: THREE.Color }
+  uKickIntensity: { value: number }
+  /** 0..1: pull the DEEPEST shadow cores back toward a neutral, near-black
+   *  anchor so a heavily-tinted arena (crisis red) can't leave the fighter
+   *  with no true black — restores the authored black end of the value range. */
+  uShadowAnchor: { value: number }
+
+  [key: string]: THREE.IUniform
+}
+
+export function createFighterUniforms(): FighterUniforms {
+  return {
+    uAlbedo: { value: null },
+    uNormal: { value: null },
+    uHeight: { value: null },
+    uPrevAlbedo: { value: null },
+    uPoseBlend: { value: 1 },
+
+    uKeyDir: { value: new THREE.Vector3(-0.5, 0.7, 0.5) },
+    uKeyColor: { value: new THREE.Color(0xfff0dd) },
+    uKeyIntensity: { value: 3 },
+    uFillDir: { value: new THREE.Vector3(0.7, 0.25, 0.5) },
+    uFillColor: { value: new THREE.Color(0x4466aa) },
+    uFillIntensity: { value: 0.8 },
+    uRimDir: { value: new THREE.Vector3(0.2, 0.4, -0.9) },
+    uRimColor: { value: new THREE.Color(0x88ccff) },
+    uRimIntensity: { value: 2.2 },
+    uAmbientColor: { value: new THREE.Color(0x2a2440) },
+    uAmbientIntensity: { value: 0.5 },
+    uFlashPos: { value: new THREE.Vector4(0, 2, 0, 6) },
+    uFlashColor: { value: new THREE.Color(0xffffff) },
+    uFlashIntensity: { value: 0 },
+
+    uAccent: { value: new THREE.Color(0xffd60a) },
+    uTime: { value: 0 },
+    uHitFlash: { value: 0 },
+    uHitColor: { value: new THREE.Color(0xffffff) },
+    uDissolve: { value: 0 },
+    uDamage: { value: 0 },
+    uSuperGlow: { value: 0 },
+    uShattered: { value: 0 },
+    uOutline: { value: 1 },
+    uOutlineColor: { value: new THREE.Color(0x0a0614) },
+    uFacing: { value: 1 },
+    uSquash: { value: new THREE.Vector2(1, 1) },
+    uLean: { value: 0 },
+    uWobble: { value: 0 },
+    uCameraPos: { value: new THREE.Vector3() },
+    uParallax: { value: 0.014 },
+    uSilhouette: { value: 0 },
+    uFogColor: { value: new THREE.Color(0x0a0716) },
+    uFogDensity: { value: 0.02 },
+
+    uQuality: { value: 3 },
+    uAO: { value: 1 },
+    uSelfShadow: { value: 1 },
+    uBounceColor: { value: new THREE.Color(0x25324a) },
+    uBounceIntensity: { value: 0.35 },
+    uTexel: { value: 1 / 1024 },
+    uSweat: { value: 0 },
+    uExertion: { value: 0 },
+
+    uIdentityDefense: { value: 0.62 },
+    uCharExposure: { value: 1.34 },
+    uContrast: { value: 1.23 },
+    uSaturation: { value: 1.2 },
+    uKickColor: { value: new THREE.Color(0xdcecff) },
+    uKickIntensity: { value: 1.12 },
+    uShadowAnchor: { value: 0.5 },
+  }
+}
+
+export const FIGHTER_VERTEX = /* glsl */ `
+  uniform float uTime;
+  uniform vec2  uSquash;
+  uniform float uLean;
+  uniform float uWobble;
+  uniform float uFacing;
+
+  varying vec2  vUv;
+  varying vec3  vWorldPos;
+  varying vec3  vViewDir;
+  varying float vHeightNorm;
+
+  void main() {
+    vUv = uv;
+    vec3 p = position;
+
+    // Normalised height up the quad (0 = feet, 1 = head).
+    float h = uv.y;
+    vHeightNorm = h;
+
+    // Squash & stretch about the feet.
+    p.x *= uSquash.x;
+    p.y = (p.y + 0.5) * uSquash.y - 0.5;
+
+    // Lean: shear the top of the quad forward. Weighted by height so the feet
+    // stay planted — this is what gives the sprite a sense of mass.
+    p.x += uLean * h * h;
+
+    // Impact wobble: a damped travelling wave up the body.
+    p.x += uWobble * sin(h * 9.0 - uTime * 26.0) * (1.0 - h * 0.35) * 0.09;
+
+    vec4 world = modelMatrix * vec4(p, 1.0);
+    vWorldPos = world.xyz;
+    vViewDir = normalize(cameraPosition - world.xyz);
+    gl_Position = projectionMatrix * viewMatrix * world;
+  }
+`
+
+export const FIGHTER_FRAGMENT = /* glsl */ `
+  precision highp float;
+
+  uniform sampler2D uAlbedo;
+  uniform sampler2D uNormal;
+  uniform sampler2D uHeight;
+  uniform sampler2D uPrevAlbedo;
+  uniform float uPoseBlend;
+
+  uniform vec3  uKeyDir;
+  uniform vec3  uKeyColor;
+  uniform float uKeyIntensity;
+  uniform vec3  uFillDir;
+  uniform vec3  uFillColor;
+  uniform float uFillIntensity;
+  uniform vec3  uRimDir;
+  uniform vec3  uRimColor;
+  uniform float uRimIntensity;
+  uniform vec3  uAmbientColor;
+  uniform float uAmbientIntensity;
+  uniform vec4  uFlashPos;
+  uniform vec3  uFlashColor;
+  uniform float uFlashIntensity;
+
+  uniform vec3  uAccent;
+  uniform float uTime;
+  uniform float uHitFlash;
+  uniform vec3  uHitColor;
+  uniform float uDissolve;
+  uniform float uDamage;
+  uniform float uSuperGlow;
+  uniform float uShattered;
+  uniform float uOutline;
+  uniform vec3  uOutlineColor;
+  uniform float uFacing;
+  uniform float uParallax;
+  uniform float uSilhouette;
+  uniform vec3  uFogColor;
+  uniform float uFogDensity;
+
+  uniform float uQuality;
+  uniform float uAO;
+  uniform float uSelfShadow;
+  uniform vec3  uBounceColor;
+  uniform float uBounceIntensity;
+  uniform float uTexel;
+  uniform float uSweat;
+  uniform float uExertion;
+
+  uniform float uIdentityDefense;
+  uniform float uCharExposure;
+  uniform float uContrast;
+  uniform float uSaturation;
+  uniform vec3  uKickColor;
+  uniform float uKickIntensity;
+  uniform float uShadowAnchor;
+
+  varying vec2  vUv;
+  varying vec3  vWorldPos;
+  varying vec3  vViewDir;
+  varying float vHeightNorm;
+
+  // Cheap hash for dissolve noise.
+  float hash(vec2 p) {
+    p = fract(p * vec2(233.34, 851.73));
+    p += dot(p, p + 23.45);
+    return fract(p.x * p.y);
+  }
+  float noise(vec2 p) {
+    vec2 i = floor(p), f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+    return mix(mix(hash(i), hash(i + vec2(1,0)), f.x),
+               mix(hash(i + vec2(0,1)), hash(i + vec2(1,1)), f.x), f.y);
+  }
+
+  float luma(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
+
+  // Neutralise a coloured stage light toward its own luminance so it lights the
+  // character without staining the albedo to a single hue. Keeps the light's
+  // brightness (and thus the stage's mood/exposure) but defends colour identity.
+  vec3 defendLight(vec3 c, float amount) {
+    return mix(c, vec3(max(luma(c), 1e-3)), amount);
+  }
+
+  // Classify skin from albedo: warm, ordered r>=g>=b, mid-bright, moderate sat.
+  // Returns 0..1 mask. Robust enough to separate faces/hands/arms from denim,
+  // cotton and hair so each can take a different material response.
+  float skinMask(vec3 c) {
+    float mx = max(c.r, max(c.g, c.b));
+    float mn = min(c.r, min(c.g, c.b));
+    float sat = (mx - mn) / max(mx, 1e-4);
+    float warm = clamp((c.r - c.b) * 3.0, 0.0, 1.0);
+    float ordered = smoothstep(-0.02, 0.02, c.r - c.g) * smoothstep(-0.04, 0.03, c.g - c.b);
+    float bright = smoothstep(0.14, 0.4, mx) * (1.0 - smoothstep(0.94, 1.0, mx));
+    float satOk = smoothstep(0.10, 0.22, sat) * (1.0 - smoothstep(0.62, 0.9, sat));
+    return clamp(warm * ordered * bright * satOk, 0.0, 1.0);
+  }
+
+  void main() {
+    // ---- Parallax relief offset -------------------------------------------
+    // Shift the sample point along the view vector proportional to height.
+    // Subtle (a few pixels) but it makes the character feel like it occupies
+    // space rather than sitting on a pane of glass.
+    vec2 uvBase = vUv;
+    float h0 = texture2D(uHeight, uvBase).r;
+    vec2 viewOffset = vec2(vViewDir.x, vViewDir.y) * (h0 - 0.5) * uParallax;
+    vec2 uvP = clamp(uvBase - viewOffset, vec2(0.001), vec2(0.999));
+
+    vec4 base = texture2D(uAlbedo, uvP);
+    if (uPoseBlend < 0.999) {
+      vec4 prev = texture2D(uPrevAlbedo, uvP);
+      base = mix(prev, base, uPoseBlend);
+    }
+    if (base.a < 0.02) discard;
+
+    // ---- Normal -----------------------------------------------------------
+    vec3 nTex = texture2D(uNormal, uvP).xyz * 2.0 - 1.0;
+    // Mirror X for the right-hand fighter so lighting stays physically sane.
+    nTex.x *= uFacing;
+
+    // Sharpen form with a fresh derivative of the height field. The baked
+    // normal is smooth (distance transform); this re-injects crisp fold/muscle
+    // detail so the body reads as sculpted volume rather than a soft balloon.
+    float t = uTexel;
+    float hC = texture2D(uHeight, uvP).r;
+    float hL = texture2D(uHeight, uvP + vec2(-t, 0.0)).r;
+    float hR = texture2D(uHeight, uvP + vec2( t, 0.0)).r;
+    float hD = texture2D(uHeight, uvP + vec2(0.0, -t)).r;
+    float hU = texture2D(uHeight, uvP + vec2(0.0,  t)).r;
+    vec3 nDetail = normalize(vec3((hL - hR) * 2.6 * uFacing, (hD - hU) * 2.6, 1.0));
+    // Broad normal: mostly the smooth baked normal, only a touch of detail —
+    // drives the low-frequency diffuse form so the body reads as a rounded
+    // torso, not a bubbly embossed "pillow-shaded" UI button.
+    vec3 Nbroad = normalize(vec3(nTex.xy + nDetail.xy * 0.30, max(nTex.z, 0.34)));
+    // Detailed normal: full crease/fold detail for specular, cavity, self-shadow.
+    vec3 N = normalize(vec3(nTex.xy + nDetail.xy * 0.72, max(nTex.z, 0.18)));
+
+    vec3 V = normalize(vViewDir);
+    vec3 albedo = base.rgb;
+    float lumA = luma(albedo);
+
+    // ---- Material segmentation -------------------------------------------
+    float skin = skinMask(albedo);
+    float mn = min(albedo.r, min(albedo.g, albedo.b));
+    float mx = max(albedo.r, max(albedo.g, albedo.b));
+    float sat = (mx - mn) / max(mx, 1e-4);
+    // Metal / bright hardware & sneaker rubber: desaturated + bright.
+    float metal = smoothstep(0.5, 0.85, lumA) * (1.0 - smoothstep(0.16, 0.32, sat));
+    // Dark hair / leather: low luma, low-mid sat — takes a tight anisotropic-ish
+    // sheen. Cloth is everything else: matte.
+    float dark = (1.0 - smoothstep(0.06, 0.28, lumA));
+    // Denim: blue-dominant, mid luma. Dead matte + slightly cool so it never
+    // reads like the same plastic as skin or a cotton shirt.
+    float denim = smoothstep(0.0, 0.05, albedo.b - albedo.r) * smoothstep(0.07, 0.2, sat)
+                  * smoothstep(0.05, 0.2, lumA) * (1.0 - smoothstep(0.7, 0.9, lumA));
+    float cloth = clamp(1.0 - skin - metal, 0.0, 1.0);
+
+    // Dark-suit form rescue: a pure-black albedo (charcoal suits, black denim)
+    // has no internal value range for the normal-driven shading to reveal, so a
+    // dark-suited fighter collapses to a flat sticker cutout on aggressive rigs.
+    // Lift ONLY the darkest albedo to a dark charcoal so the lit planes catch a
+    // readable gradient and folds show as form; the cavity/self-shadow terms
+    // below still crush the recesses back toward true near-black, so the authored
+    // black end of the value range survives while the suit stops reading flat.
+    albedo = mix(albedo, max(albedo, vec3(0.085)), dark * 0.5);
+
+    // Interior mask: ~1 deep inside the silhouette, →0 within a few px of the
+    // edge. Keeps the rim glow off the ink outline so the pixel silhouette
+    // stays razor-crisp instead of blooming into a halo.
+    float aR = 4.0 * t;
+    float aWide =
+        texture2D(uAlbedo, uvP + vec2( aR, 0.0)).a +
+        texture2D(uAlbedo, uvP + vec2(-aR, 0.0)).a +
+        texture2D(uAlbedo, uvP + vec2(0.0,  aR)).a +
+        texture2D(uAlbedo, uvP + vec2(0.0, -aR)).a;
+    float interior = smoothstep(2.2, 3.9, aWide);
+
+    // ---- Cavity / ambient occlusion from the height field -----------------
+    // Compare the local height to a wider low-frequency average; recessed
+    // pixels (folds, between limbs, under jaw) darken. This is the single
+    // biggest thing that turns a flat fill into sculpted form.
+    float wide = 0.0;
+    wide += texture2D(uHeight, uvP + vec2( 3.0 * t,  3.0 * t)).r;
+    wide += texture2D(uHeight, uvP + vec2(-3.0 * t,  3.0 * t)).r;
+    wide += texture2D(uHeight, uvP + vec2( 3.0 * t, -3.0 * t)).r;
+    wide += texture2D(uHeight, uvP + vec2(-3.0 * t, -3.0 * t)).r;
+    wide += texture2D(uHeight, uvP + vec2( 6.0 * t, 0.0)).r;
+    wide += texture2D(uHeight, uvP + vec2(-6.0 * t, 0.0)).r;
+    wide += texture2D(uHeight, uvP + vec2(0.0,  6.0 * t)).r;
+    wide += texture2D(uHeight, uvP + vec2(0.0, -6.0 * t)).r;
+    wide *= 0.125;
+    float cavity = clamp((hC - wide) * 4.4 + 0.52, 0.0, 1.0);
+    float ao = mix(1.0, cavity, uAO * 0.94);
+    // Grounding: the lower body sits in floor contact occlusion.
+    float footAO = mix(0.55, 1.0, smoothstep(0.0, 0.16, vHeightNorm));
+    ao *= mix(1.0, footAO, uAO);
+
+    // ---- Height-march self-shadow ----------------------------------------
+    // Walk a few texels toward the key light along the surface; if the terrain
+    // rises above us we're occluded. Gives real arm-over-torso shadows.
+    float selfShadow = 1.0;
+    if (uSelfShadow > 0.001 && uQuality > 1.5) {
+      vec3 Lk = normalize(uKeyDir); Lk.x *= uFacing;
+      vec2 ldir = normalize(vec2(Lk.x, Lk.y) + 1e-4);
+      float occ = 0.0;
+      for (int i = 1; i <= 6; i++) {
+        float fi = float(i);
+        float hs = texture2D(uHeight, uvP + ldir * (5.0 * t) * fi).r;
+        occ = max(occ, (hs - hC) - 0.045 * fi);
+      }
+      selfShadow = 1.0 - clamp(occ * 6.0, 0.0, 0.5) * uSelfShadow;
+    }
+
+    // ---- Direct lighting --------------------------------------------------
+    // Defend the character's colour identity: neutralise the stage's coloured
+    // key/fill/ambient toward their own luma before they touch the albedo, then
+    // give the character its own exposure so it stays the brightest, most
+    // saturated element in frame (AAA focal-point rule).
+    vec3 keyCol = defendLight(uKeyColor, uIdentityDefense) * uCharExposure;
+    vec3 fillCol = defendLight(uFillColor, uIdentityDefense * 0.85);
+    vec3 ambCol = defendLight(uAmbientColor, uIdentityDefense * 0.7);
+
+    vec3 Lkey = normalize(uKeyDir);
+    float ndlKey = dot(Nbroad, Lkey);
+    // Skin scatters light so its terminator is soft & warm; cloth/metal keep a
+    // crisper terminator that actually reads as a lit form.
+    float wrapAmt = mix(0.32, 0.62, skin);
+    float wrapKey = clamp((ndlKey + wrapAmt) / (1.0 + wrapAmt), 0.0, 1.0);
+    wrapKey = pow(wrapKey, mix(1.25, 1.0, skin));
+    vec3 diffuse = keyCol * uKeyIntensity * wrapKey * selfShadow;
+
+    // Subsurface: on skin, the shadowed side glows warm (translucency).
+    float sss = pow(clamp(1.0 - abs(ndlKey), 0.0, 1.0), 2.0) * (1.0 - wrapKey);
+    vec3 subsurface = keyCol * vec3(1.0, 0.42, 0.32) * sss * skin * uKeyIntensity * 0.62;
+
+    // Stage-resistant flesh key: a small warm near-neutral light applied to SKIN
+    // ONLY, independent of the stage's key hue, so faces and hands keep a human
+    // flesh reading instead of washing 100% to a red/teal stage colour. It rides
+    // the key's own shape (wrapKey) so it stays a lit-side warm anchor, not a flat
+    // fill. This is what keeps a face legible as a face under the crisis red rig.
+    diffuse += vec3(1.0, 0.74, 0.6) * skin * wrapKey * selfShadow * uKeyIntensity * 0.16;
+    // Skin legibility floor: the flesh key above rides wrapKey, so a face turned
+    // AWAY from the key (or shadowed by a dim/side rig) drops toward the grade and
+    // loses its lit-face reading. Add a small omnidirectional warm skin fill so the
+    // face plane never falls below a legible floor regardless of orientation. Kept
+    // low and skin-only so it lifts a turned/shadowed face to parity without
+    // flattening the directional form the key still layers on top.
+    diffuse += vec3(1.0, 0.82, 0.72) * skin * 0.13;
+
+    float ndlFill = dot(Nbroad, normalize(uFillDir));
+    diffuse += fillCol * uFillIntensity * (ndlFill * 0.5 + 0.5);
+
+    // Floor bounce: soft up-from-below light on the lower body, stage-tinted.
+    float bounce = clamp(-Nbroad.y * 0.5 + 0.5, 0.0, 1.0) * (1.0 - smoothstep(0.0, 0.5, vHeightNorm));
+    diffuse += uBounceColor * uBounceIntensity * bounce;
+    // Denim reads cooler & darker than skin/cotton — subtle desaturation toward
+    // the fill/bounce hue sells it as heavy cotton twill, not plastic.
+    diffuse *= mix(1.0, 0.9, denim);
+
+    // ---- Specular (material-aware) ---------------------------------------
+    vec3 H = normalize(Lkey + V);
+    // Use a normal blended a touch toward the broad form for the highlight, so
+    // the tight speculars don't stair-step where crisp normal detail crosses the
+    // pixel grid (prop edges, knuckles) — smoother glint, same material split.
+    vec3 Nspec = normalize(mix(N, Nbroad, 0.32));
+    float ndh = max(dot(Nspec, H), 0.0);
+    // Skin: broad soft sheen. Cotton: almost none. Denim: dead matte.
+    // Metal/hair: tight bright glint. Kept far apart so materials never read as
+    // one uniform "wet plastic" surface.
+    float specSkin  = pow(ndh, 20.0) * 0.26 * skin;
+    // A second, tighter skin/brow highlight so faces catch a real glint (the
+    // AAA "wet eye / cheekbone" pop) instead of one broad soft sheen.
+    float specSkinHot = pow(ndh, 50.0) * 0.4 * skin;
+    float specCloth = pow(ndh, 44.0) * 0.03 * cloth * (1.0 - denim);
+    // Metal/hardware glint: kept bright but not razor-tight, so it doesn't
+    // stair-step into hard aliasing where a prop edge crosses the pixel grid.
+    float specMetal = pow(ndh, 74.0) * 1.15 * (metal + dark * 0.45);
+    vec3 specular = keyCol * (specSkin + specSkinHot + specCloth + specMetal) * uKeyIntensity * 0.3 * selfShadow;
+    // Hot specular WHITE cap: a very tight pinpoint that tops the character's
+    // value range at true white (not the key's warm/tinted hue) — the AAA
+    // "blown highlight" on cheekbones, knuckles, hair strands and prop hardware.
+    // Biased toward white so a coloured stage key can't cap the range at orange.
+    float specWhite = pow(ndh, 82.0) * (skin * 0.9 + metal * 2.2 + dark * 0.5 + cloth * 0.22);
+    specular += mix(keyCol, vec3(1.0), 0.9) * specWhite * uKeyIntensity * 0.3 * selfShadow;
+    // Razor pinpoint of PURE neutral white: guarantees a true blown highlight
+    // even on a heavily warm/red-lit stage (crisis), so the character's value
+    // range always tops at true white on knuckles / cheekbones / hardware — not
+    // a warm orange cap. Kept very tight so only the peak texel blows out.
+    float specPin = pow(ndh, 128.0) * (skin * 1.2 + metal * 3.2 + dark * 0.85 + cloth * 0.3);
+    // Overdriven well past 1.0 so that after the renderer's AgX tone-map and the
+    // stage's warm/red post grade the peak still resolves to a near-white blown
+    // highlight instead of being re-tinted to orange — AgX desaturates very bright
+    // values toward white, so the character keeps a true specular-white ceiling
+    // even inside the crisis red room.
+    specular += vec3(1.0) * specPin * uKeyIntensity * 0.55 * selfShadow;
+    // Sweat sheen at low HP / exertion: extra broad wet highlight, skin only.
+    specular += keyCol * pow(ndh, 40.0) * skin * uSweat * 0.6 * uKeyIntensity * 0.3;
+    specular *= base.a;
+
+    // ---- Rim / back light -------------------------------------------------
+    float fres = pow(1.0 - clamp(dot(N, V), 0.0, 1.0), 2.1);
+    float rimTerm = clamp(dot(N, normalize(uRimDir)) * 0.5 + 0.5, 0.0, 1.0);
+    // Matte fabrics barely catch a rim; skin / hair / metal do.
+    float matte = clamp(denim + cloth * 0.6, 0.0, 1.0);
+    vec3 rim = uRimColor * uRimIntensity * fres * rimTerm * mix(1.0, 0.4, matte);
+    // Neutral rim is held off the ink outline so flat frames never halo.
+    rim *= mix(0.12, 1.0, interior);
+    // Convexity gate: the fresnel edge terms fire wherever the DETAILED normal
+    // turns away from the camera — which is true at the silhouette (a convex roll)
+    // but ALSO inside every concave fold crease, where a rim would light the crease
+    // and invert the form (fold reads brighter than the lit fabric beside it — the
+    // "flat sticker suit" failure). Cavity is ~1 on convex ridges/edges and low in
+    // recesses, so use it to keep the carving edge on convex silhouette geometry
+    // and starve it inside creases, letting the fold structure read as shadow.
+    float convex = smoothstep(0.30, 0.66, cavity);
+    rim *= mix(0.45, 1.0, convex);
+
+    // Always-on separation kicker: a bright, near-neutral back-light that carves
+    // the whole silhouette away from the backdrop no matter how weak (or how
+    // colour-clashing) the stage rim is. This is the single biggest thing that
+    // makes the fighter POP off the stage as the focal point. A tight fresnel
+    // keeps it a crisp edge line (not a bloomy halo), biased to the top so it
+    // reads as a light from behind-above.
+    float kickF = pow(1.0 - clamp(dot(N, V), 0.0, 1.0), 3.4);
+    float kickTop = clamp(Nbroad.y * 0.5 + 0.65, 0.0, 1.0);
+    // Lower-body rescue: the top bias above starves the legs/feet of the carving
+    // edge, so dark trousers merge into an equally dark floor (the single most
+    // common silhouette failure). Force a strong edge back onto the lower body so
+    // the legs stay separated from the ground plane no matter their normal.
+    kickTop = max(kickTop, (1.0 - smoothstep(0.0, 0.46, vHeightNorm)) * 0.92);
+    // Stage-rim-aware separation: when the stage's OWN rim is warm and/or dim it
+    // gives the silhouette almost no cool back-edge (e.g. warm office/loft
+    // stages), so lean harder on the neutral kicker to keep the fighter carved
+    // off the backdrop. Cool, strong stage rims (teal server floors) help, but a
+    // strong cool rim on a DARK-suited fighter against a DARK cool backdrop
+    // (ai-native) is the cool analogue of crisis' red-on-red — same-hue, so it
+    // barely separates. So keep a solid neutral-kicker FLOOR on every stage (a
+    // near-white edge carves the silhouette against any hue) and only add extra
+    // boost when the stage rim is warm/dim.
+    float stageRimSep = uRimIntensity * clamp(uRimColor.b - uRimColor.r * 0.6, 0.0, 1.0);
+    float kickBoost = 1.18 + (1.0 - smoothstep(0.35, 1.5, stageRimSep)) * 0.5;
+    // Dark materials (black suits, dark denim) have the least internal value
+    // range to separate on, so give them a touch more of the carving edge.
+    float kickMat = mix(0.6, 1.0, 1.0 - matte * 0.5) + dark * 0.26;
+    vec3 kicker = uKickColor * uKickIntensity * kickBoost * kickF * kickTop * kickMat;
+    // Lower-body separation rim: dark trousers merge into a same-luminance floor
+    // because the only cue was trouser-vs-floor value contrast. Drive a distinctly
+    // BRIGHTER carving edge onto the legs/feet so the rim's luminance clearly
+    // exceeds the floor's regardless of hue (survives even a monochrome red grade),
+    // and lift the very-edge floor there so the leg contour isn't half-dimmed.
+    float lowerBody = 1.0 - smoothstep(0.0, 0.46, vHeightNorm);
+    kicker *= 1.0 + lowerBody * 0.95;
+    // Hold the kicker just inside the linework (so it never haloes the ink
+    // outline) but keep enough of it right at the back edge to actually read as
+    // separation, and clamp to sprite alpha so it can't spill past the silhouette.
+    kicker *= mix(mix(0.52, 0.72, lowerBody), 1.0, interior) * base.a;
+    // Same convexity gate as the neutral rim: keep the bright carving edge on
+    // convex silhouette geometry and out of interior fold creases so it separates
+    // the figure without lighting (and inverting) the suit's folds.
+    kicker *= mix(0.5, 1.0, convex);
+    rim += kicker;
+
+    // Accent corona: the fighter's identity colour, reserved for super state.
+    // It is ALLOWED to ride the silhouette edge (that reading IS the charged
+    // energy corona), only lightly eased in from the outline, then masked by
+    // alpha so it still can't spill past the sprite bounds.
+    vec3 accentRim = uAccent * fres * (0.10 + uSuperGlow * 2.4);
+    rim += accentRim * mix(0.55, 1.0, interior);
+    rim *= base.a;
+
+
+    // ---- Impact point light ----------------------------------------------
+    // Soft-ceilinged AND directionally shaped on purpose. This light is
+    // positioned AT the fighter being hit, so 1.0 / (1.0 + d*d*1.6) barely
+    // attenuates anywhere on their body: a crit requesting 72 arrived as ~50 at
+    // the chest, multiplied albedo to ~25x over white, and flattened the entire
+    // character to a featureless white shape.
+    //
+    // Measured chain (hypergrowth, crit, defender bounding box, pure-white %):
+    //   at rest                        0.0%   <- the frame is clean until a hit
+    //   on impact, composed           43.9%
+    //   on impact, ?nobloom            0.0%   <- bloom is the amplifier
+    //   on impact, fighter hidden     13.5%   <- ...but the FIGHTER is the source
+    //   on impact, all VFX hidden     41.0%   <- sparks/waves contribute ~3 points
+    // So: the flash overdrives the fighter's surface, bloom's threshold then
+    // treats the whole character as an emitter, and a HUGE-kernel SCREEN blend
+    // paints them back over themselves. Fixing the light fixes both.
+    //
+    // Two ceilings, not one:
+    //  - FLASH_MAX caps total flash contribution near the key light's own scale,
+    //    so the brightest possible hit roughly doubles the fighter's lighting
+    //    rather than multiplying it 25x. Soft knee, not a clamp, so distance
+    //    falloff still reads between a near hit and a far one.
+    //  - The N.L term is only lightly wrapped. A half-Lambert wrap (d*0.5+0.5)
+    //    hands 50% of the flash to surfaces facing directly AWAY from the
+    //    contact, which is what erases form: every plane gets lit equally and
+    //    the silhouette fills in. A 0.32 wrap keeps the far side dark, so the
+    //    hit reads as a hot directional flare off the point of contact and the
+    //    character's shape survives the brightest frame of the game.
+    vec3 toFlash = uFlashPos.xyz - vWorldPos;
+    float dist = length(toFlash);
+    // LightRig authors flashIntensity for a THREE.PointLight, which applies its
+    // own distance/decay curve in world units. This shader rolls its own
+    // falloff, so the same number means something completely different here: a
+    // crit's peak of ~36 arrived as ~25 at the chest. Rescaled so the soft knee
+    // below actually operates in its linear region across the body. Without
+    // this the term pins at FLASH_MAX on every fragment, which removes the
+    // falloff entirely and the flash reads as a coat of white paint rather than
+    // as light arriving from the point of contact.
+    const float FLASH_DRIVE = 0.055;
+    float rawAtten = uFlashIntensity * FLASH_DRIVE / (1.0 + dist * dist * 1.6);
+    const float FLASH_MAX = 1.15;
+    const float FLASH_KNEE = FLASH_MAX * 0.55;
+    float atten = rawAtten <= FLASH_KNEE
+      ? rawAtten
+      : FLASH_KNEE + (FLASH_MAX - FLASH_KNEE) * (1.0 - exp(-(rawAtten - FLASH_KNEE) / (FLASH_MAX - FLASH_KNEE)));
+    float flashWrap = max(dot(N, normalize(toFlash)) * 0.68 + 0.32, 0.0);
+    vec3 flashL = uFlashColor * atten * flashWrap;
+
+    vec3 ambient = ambCol * uAmbientIntensity;
+
+    // Direct terms are fully occluded by cavity + contact AO; ambient is only
+    // partly occluded so shadow cores keep the material's local colour (a purple
+    // jacket stays purple in shadow) instead of crushing to muddy black.
+    // The additive rim SPILL (the part painted straight onto the figure, not
+    // modulated by albedo) is where a strongly-tinted stage rim — crisis' red
+    // 0xef233c at 3.2 — dumps its raw hue onto the character and crushes their
+    // identity to a single colour at the edges. Defend that spill's hue toward
+    // its own brightness so it still reads as a bright separation edge but stops
+    // repainting the fighter red. The albedo-modulated rim term below already
+    // tints toward the material, so it is left alone.
+    vec3 rimSpill = defendLight(rim, uIdentityDefense * 0.6);
+    vec3 lit = albedo * (diffuse + flashL) * ao
+             + albedo * ambient * mix(0.7, 1.0, ao)
+             + subsurface * ao
+             + specular + rim * albedo * 0.5 + rimSpill * 0.24;
+    // Bright-neutral materials (white sneakers, chrome hardware) keep a small
+    // neutral value floor so a heavily-tinted arena (crisis red) can't crush a
+    // white prop to a dim single hue. Reserved to genuinely bright + desaturated
+    // albedo, so coloured clothing / skin identity is never washed. Doubles as a
+    // cheap neutral value-pop that helps the silhouette separate on same-hue
+    // backdrops.
+    lit += albedo * vec3(0.16) * metal * ao;
+    // Dark-suit form light: charcoal cloth has near-zero albedo, so albedo*diffuse
+    // leaves its planes invisible even when lit and the suit reads as a flat black
+    // cutout with the face/hands floating on it (worst on a smooth, un-patterned
+    // suit). Add a small NON-albedo-modulated, key-driven term on dark materials so
+    // the broad body curvature carried in Nbroad (shoulders, chest, knees) paints a
+    // rounded lit gradient directly onto the black mass — sculpted form, not a
+    // sticker — while shadowed planes and cavities stay near-black. Self-limiting:
+    // it only fills where the suit is ACTUALLY crushed toward black (dim rigs like
+    // crisis), and fades out as the suit already catches value on a bright rig, so
+    // it never grays out a dark top that is already reading as lit cloth.
+    float darkNeed = 1.0 - smoothstep(0.035, 0.11, luma(lit));
+    lit += keyCol * dark * wrapKey * selfShadow * ao * uKeyIntensity * 0.1 * darkNeed;
+    // Stage-independent companion to the key-driven fill above: the term above rides
+    // uKeyIntensity/keyCol, so a DIM rig (an ai-native stage whose ambient/fill has
+    // been dropped) leaves a dark jacket a black void with no form, while a bright
+    // rig washes it flat. Anchor a small sculpted gradient on dark cloth that does
+    // NOT depend on the stage's intensity: a fixed cool-neutral light along the broad
+    // body normal paints lit front/top planes, cavity keeps the fold cores dark, and
+    // darkNeed limits it to suits that are actually crushed — so the suit always reads
+    // as rounded form at a controlled value on ANY rig, never a void and never a wash.
+    float suitForm = clamp(dot(Nbroad, normalize(vec3(0.2, 0.72, 0.95))) * 0.5 + 0.5, 0.0, 1.0);
+    lit += vec3(0.10, 0.105, 0.125) * dark * suitForm * cavity * ao * darkNeed;
+    // Lower-body form: the overhead key barely reaches the legs, so the key-driven
+    // term above sculpts the torso but leaves dark trousers a flat black void below
+    // a modeled torso (a value discontinuity read head-on). Drive a second form term
+    // from the FILL direction (a cross-leg left/right gradient) and the floor BOUNCE
+    // (an up-from-below gradient) so the leg planes catch a rounded gradient too —
+    // knees, shins and the inseam separation now read as form instead of a cutout.
+    float lowerForm = (1.0 - smoothstep(0.0, 0.5, vHeightNorm)) * dark * darkNeed * ao;
+    float fillWrap = dot(Nbroad, normalize(uFillDir)) * 0.5 + 0.5;
+    lit += fillCol * lowerForm * fillWrap * uFillIntensity * 0.85;
+    lit += uBounceColor * lowerForm * bounce * uBounceIntensity * 0.9;
+    // Lower-body neutral separation floor: the two form terms above are driven by
+    // the stage FILL and BOUNCE, which on a dim single-channel rig (crisis red) are
+    // near-black — so a dark trouser shin collapses to the SAME near-black as the
+    // floor and the leg vanishes below mid-calf except at the extreme silhouette
+    // (frontal shins carry almost no fresnel rim). Add a tiny STAGE-INDEPENDENT
+    // neutral floor on the crushed lower body so the shin always keeps a hair of
+    // value above a black floor and the leg reads even when every stage light is
+    // off. Gated by lowerForm (lower body + dark + darkNeed crush), so it adds
+    // nothing to already-lit legs on bright rigs and never touches upper-body folds.
+    lit += vec3(0.17) * lowerForm;
+    vec3 color = lit;
+
+    // ---- Hero grade: authored value range + defended colour identity ------
+    // Push a true black-to-specular-white response and keep the character's own
+    // hues vivid, so the fighter is the brightest, highest-contrast, most
+    // saturated element in frame (the AAA focal-point rule). Applied as the
+    // material's tonal response so the damage/super passes below layer on top.
+    color = max(color, 0.0);
+    float gLum = luma(color);
+    color = mix(vec3(gLum), color, uSaturation);        // vivid identity
+    color = (color - 0.40) * uContrast + 0.40;          // pivot contrast
+    color = max(color, 0.0);
+    // Neutral black anchor: on strongly-tinted stages the coloured ambient bleeds
+    // into every fold, so the deepest shadows read as dark-red/dark-teal instead
+    // of true black. Pull ONLY the darkest cores toward a neutral near-black,
+    // leaving mid-shadows their local colour (a purple jacket still reads purple
+    // in its mid-shadow). Restores the authored black end of the value range and
+    // gives the silhouette real value separation from a same-hue backdrop.
+    float shadowCore = 1.0 - smoothstep(0.02, 0.20, luma(color));
+    color = mix(color, vec3(luma(color) * 0.82), shadowCore * uShadowAnchor);
+    color = max(color, 0.0);
+
+    // ---- Damage state: grime, fatigue, flush, bruising & sweat ------------
+    // All terms are multiplies or warm additives (never a mix to flat grey), so
+    // the sculpted form survives at low HP while the fighter clearly reads as
+    // beaten up. Grime/bruise noise is kept low-frequency so it never fights
+    // the crisp pixel albedo.
+    if (uDamage > 0.001) {
+      float dmg = uDamage;
+      // Slow, heavy breathing pulse — drives the flush + sheen throb.
+      float breathP = 0.5 + 0.5 * sin(uTime * 2.4);
+
+      // (1) Grime / scuffs: dirt that settles into cavities and the lower body.
+      //     Stronger + wider coverage so a beaten fighter is filthy, not tidy.
+      float grime = noise(uvP * 6.0) * 0.6 + noise(uvP * 13.0) * 0.4;
+      float lowBody = smoothstep(0.82, 0.08, vUv.y);
+      float grimeMask = clamp(grime * (0.50 + 0.80 * (1.0 - cavity)) * (0.60 + 0.95 * lowBody) * dmg, 0.0, 1.0);
+      color *= mix(vec3(1.0), vec3(0.37, 0.30, 0.25), grimeMask * 0.98);
+
+      // (2) Edge scuffs: the silhouette rim gets scuffed & darkened (torn cloth,
+      //     road rash) so the damage reads right on the outline too.
+      float edge = clamp(1.0 - interior, 0.0, 1.0) * base.a;
+      float scuff = edge * (0.35 + 0.65 * noise(uvP * 20.0)) * smoothstep(0.2, 0.9, dmg);
+      color *= mix(vec3(1.0), vec3(0.55, 0.48, 0.44), scuff * 0.5);
+
+      // (3) Overall fatigue: heavier warm-biased darken + desaturation. A wrecked
+      //     fighter loses colour vibrancy, but keep enough so identity survives.
+      color *= mix(vec3(1.0), vec3(0.86, 0.75, 0.71), dmg * 0.5);
+      float dlum = dot(color, vec3(0.299, 0.587, 0.114));
+      color = mix(color, vec3(dlum), dmg * 0.13);
+
+      // (4) Skin flush: exertion floods the face/arms with warm blood; throbs
+      //     with the breathing pulse. Additive so it reads as heat, not paint.
+      //     Boosted + higher floor so a wrecked fighter is visibly flushed even
+      //     between breaths.
+      color += vec3(0.23, 0.03, 0.0) * skin * uExertion * (0.6 + 0.4 * breathP);
+
+      // (5) Bruising: cool blotches on skin — larger & earlier than before so a
+      //     battered face reads clearly by mid damage.
+      float bruise = smoothstep(0.66, 0.9, noise(uvP * 7.0 + 3.1)) * skin;
+      color = mix(color, color * vec3(0.60, 0.55, 0.82), bruise * smoothstep(0.28, 0.9, dmg) * 0.7);
+
+      // (6) Clammy sweat SHEEN: a wet specular film over the exhausted fighter.
+      //     Two layers — a BROAD low-gloss film across the whole upper body
+      //     (sweat-soaked shirt + slick skin, the biggest at-a-glance read) and
+      //     a sharper, brighter highlight concentrated on bare skin.
+      float upper = smoothstep(0.24, 0.86, vUv.y);
+      vec3 Hs = normalize(normalize(uKeyDir) + V);
+      float sheenBroad = pow(max(dot(N, Hs), 0.0), 3.5);
+      color += keyCol * sheenBroad * upper * uSweat * 1.25 * uKeyIntensity * 0.3 * selfShadow;
+      float sheen = pow(max(dot(N, Hs), 0.0), 6.0);
+      color += keyCol * sheen * skin * upper * uSweat * 3.6 * uKeyIntensity * 0.3 * selfShadow;
+      // Sparse bright beads riding on top of the sheen.
+      float bead = smoothstep(0.9, 0.99, noise(uvP * 46.0));
+      color += keyCol * bead * skin * upper * uSweat * 1.7 * uKeyIntensity * 0.3;
+    }
+
+    // ---- Super charge: rising energy that visibly builds over the body ----
+    if (uSuperGlow > 0.001) {
+      float g = uSuperGlow;
+      // Global charge pulse — a gentle interior lift so the build-up reads at a
+      // glance, but kept low enough that the character's own colours/materials
+      // still show through (the fighter is CHARGING, not turning into a decal).
+      float pulse = 0.5 + 0.5 * sin(uTime * 7.0);
+      color += uAccent * g * (0.11 + 0.09 * pulse) * interior * base.a * (0.5 + 0.5 * wrapKey);
+      // Silhouette ignition: the outline itself burns with the identity colour so
+      // the charged fighter's shape reads as pure energy from across the screen.
+      // This is the money read — kept strong.
+      float edgeBand = clamp(1.0 - interior, 0.0, 1.0) * base.a;
+      color += uAccent * edgeBand * g * (1.6 + 0.8 * pulse);
+      color += vec3(1.0) * edgeBand * g * 0.45 * pulse;
+      // Rising energy bands crawling UP the body (charging read) — bright accents
+      // riding over the form, kept restrained so the character's own materials
+      // still read through the aura (charging, not a solid decal).
+      float band = sin((vUv.y * 22.0) - uTime * 9.0) * 0.5 + 0.5;
+      band = pow(band, 3.0);
+      color += uAccent * band * g * 0.42 * interior * base.a * (0.45 + 0.55 * wrapKey);
+      // Fast upward streaks add motion energy on top of the slow bands.
+      float streak = pow(0.5 + 0.5 * sin(vUv.y * 60.0 - uTime * 22.0), 6.0);
+      color += uAccent * streak * g * 0.26 * interior * base.a;
+      // Hot inner core where the energy is densest.
+      color += vec3(1.0) * band * g * 0.16 * interior * base.a * wrapKey;
+    }
+
+    // ---- Shattered: cracked-glass chroma split ---------------------------
+    if (uShattered > 0.001) {
+      float crack = noise(vUv * 26.0 + vec2(0.0, uTime * 0.4));
+      float lines = smoothstep(0.62, 0.66, crack) - smoothstep(0.70, 0.74, crack);
+      color += vec3(0.9, 0.25, 0.35) * lines * uShattered * 2.2;
+    }
+
+    // ---- Hit flash --------------------------------------------------------
+    // The contact white-out. This used to be a straight replacement --
+    // mix(color, uHitColor * 2.4, flash) -- which at full strength painted the
+    // entire character one flat colour at 2.4x over white. Every lighting term
+    // above it became irrelevant, the silhouette filled in solid, and bloom
+    // (threshold ~0.4, HUGE kernel) then smeared that solid block back over
+    // itself. It was the single largest contributor to the fighter being
+    // erased on impact.
+    //
+    // Now the flash target is modulated by the character's own luminance, so
+    // their value structure survives it: lit planes flash hard, shadowed
+    // planes stay comparatively dark, and the form still reads at peak. The
+    // mix is capped below 1.0 so some of the original colour always shows
+    // through -- a fighter is never 100% replaced by the flash colour.
+    float hf = clamp(uHitFlash, 0.0, 1.0);
+    if (hf > 0.001) {
+      float hfLuma = dot(color, vec3(0.2126, 0.7152, 0.0722));
+      float hfShape = 0.42 + 0.58 * smoothstep(0.0, 0.55, hfLuma);
+      color = mix(color, uHitColor * 1.5 * hfShape, hf * 0.72);
+    }
+
+    // ---- Ink outline ------------------------------------------------------
+    // Sample the alpha ring around the fragment; where the sprite is about to
+    // end, darken. Preserves the Street-Fighter linework read at any zoom.
+    if (uOutline > 0.001) {
+      float texel = uTexel * 1.4;
+      float aSum = 0.0;
+      aSum += texture2D(uAlbedo, uvP + vec2( texel, 0.0)).a;
+      aSum += texture2D(uAlbedo, uvP + vec2(-texel, 0.0)).a;
+      aSum += texture2D(uAlbedo, uvP + vec2(0.0,  texel)).a;
+      aSum += texture2D(uAlbedo, uvP + vec2(0.0, -texel)).a;
+      float edge = clamp(1.0 - aSum * 0.25, 0.0, 1.0);
+      edge = smoothstep(0.25, 0.85, edge);
+      // Tint the ink line slightly with the scene ambient so it sits in the
+      // world instead of reading as a pure-black cutout sticker border.
+      vec3 inkCol = mix(uOutlineColor, uAmbientColor * 0.5, 0.35);
+      color = mix(color, inkCol, edge * uOutline * base.a);
+    }
+
+    float alpha = base.a;
+
+    // ---- Silhouette mode (used for the KO freeze frame) -------------------
+    if (uSilhouette > 0.001) {
+      color = mix(color, uAccent * 0.15, uSilhouette);
+    }
+
+    // ---- Dissolve (KO burn-away) -----------------------------------------
+    if (uDissolve > 0.001) {
+      float n = noise(vUv * 12.0) * 0.65 + noise(vUv * 41.0) * 0.35;
+      // Burn from the feet up.
+      float threshold = uDissolve * 1.25 - vHeightNorm * 0.25;
+      float edgeW = 0.09;
+      if (n < threshold - edgeW) discard;
+      float burn = smoothstep(threshold - edgeW, threshold, n);
+      color = mix(vec3(3.0, 1.1, 0.25), color, burn);
+      alpha *= smoothstep(threshold - edgeW * 2.2, threshold, n);
+    }
+
+    // ---- Fog --------------------------------------------------------------
+    float depth = length(cameraPosition - vWorldPos);
+    float fogF = 1.0 - exp(-uFogDensity * uFogDensity * depth * depth);
+    color = mix(color, uFogColor, clamp(fogF, 0.0, 1.0) * 0.55);
+
+    gl_FragColor = vec4(color, alpha);
+    #include <colorspace_fragment>
+  }
+`
+
+export function createFighterMaterial(uniforms: FighterUniforms): THREE.ShaderMaterial {
+  const mat = new THREE.ShaderMaterial({
+    uniforms: uniforms as unknown as Record<string, THREE.IUniform>,
+    vertexShader: FIGHTER_VERTEX,
+    fragmentShader: FIGHTER_FRAGMENT,
+    transparent: true,
+    depthWrite: true,
+    depthTest: true,
+    side: THREE.DoubleSide,
+    alphaTest: 0.01,
+  })
+  mat.toneMapped = true
+  return mat
+}
+
+/**
+ * Depth-only material used for shadow casting so the sprite's alpha punches a
+ * correct silhouette into the shadow map.
+ */
+export function createFighterDepthMaterial(uniforms: FighterUniforms): THREE.ShaderMaterial {
+  return new THREE.ShaderMaterial({
+    uniforms: {
+      uAlbedo: uniforms.uAlbedo,
+      uSquash: uniforms.uSquash,
+      uLean: uniforms.uLean,
+      uWobble: uniforms.uWobble,
+      uTime: uniforms.uTime,
+      uDissolve: uniforms.uDissolve,
+    },
+    vertexShader: /* glsl */ `
+      uniform vec2 uSquash; uniform float uLean; uniform float uWobble; uniform float uTime;
+      varying vec2 vUv;
+      void main() {
+        vUv = uv;
+        vec3 p = position;
+        float h = uv.y;
+        p.x *= uSquash.x;
+        p.y = (p.y + 0.5) * uSquash.y - 0.5;
+        p.x += uLean * h * h;
+        p.x += uWobble * sin(h * 9.0 - uTime * 26.0) * (1.0 - h * 0.35) * 0.09;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+      }
+    `,
+    fragmentShader: /* glsl */ `
+      uniform sampler2D uAlbedo; uniform float uDissolve;
+      varying vec2 vUv;
+      void main() {
+        float a = texture2D(uAlbedo, vUv).a;
+        if (a < 0.5 || uDissolve > 0.4) discard;
+        gl_FragColor = vec4(1.0);
+      }
+    `,
+  })
+}

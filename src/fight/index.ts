@@ -1,0 +1,37 @@
+/**
+ * Public surface of the fighting-game simulation. The renderer and game loop
+ * import from here; nothing reaches into the module internals.
+ */
+
+export * from './types'
+export { FPS, DT } from './types'
+
+export { step, createFight, makeFighter, fighterCanAct } from './sim'
+export { scaleDamage } from './combat'
+export { HarnessSim, type HarnessSimOptions } from './harnessSim'
+export { FighterAI, makeAI, type AIOptions, type Difficulty } from './ai'
+export { makeRng, type Rng } from './rng'
+
+export {
+  type InputSource,
+  KeyboardSource,
+  GamepadSource,
+  DEFAULT_KEYMAP,
+  DEFAULT_PAD_BUTTONS,
+  neutralInput,
+  toNumpad,
+  type KeyMap,
+} from './input/sources'
+
+export {
+  toRelative,
+  toAbsolute,
+  detectMotion,
+  detectCharge,
+  detectDoubleTap,
+} from './input/motion'
+
+export { FIGHTERS, getFighterDef, OPERATOR, VANGUARD, WARDEN } from './fighters'
+export type { FighterDef, ProjectileSpawn, SelectContext } from './def'
+
+export * as constants from './constants'

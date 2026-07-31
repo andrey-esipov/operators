@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OPERATORS — Fight HUD Preview</title>
+    <!-- Fonts self-hosted from this origin (no third-party CDN). This is a
+         standalone preview of a superseded HUD design; the shipping in-game HUD
+         renders in Press Start 2P / VT323 (see src/three/hud/hud.css). Only the
+         app-rendered faces are hosted, so this page's heavier Saira weights /
+         italics synthesise from Saira 400 — acceptable for a dev preview. -->
+    <style>
+      @font-face { font-family: 'Saira'; font-style: normal; font-weight: 400; font-display: swap; src: url('/fonts/Saira-400-latin.woff2') format('woff2'); }
+      @font-face { font-family: 'Chakra Petch'; font-style: normal; font-weight: 400; font-display: swap; src: url('/fonts/ChakraPetch-400-latin.woff2') format('woff2'); }
+      @font-face { font-family: 'Chakra Petch'; font-style: normal; font-weight: 600; font-display: swap; src: url('/fonts/ChakraPetch-600-latin.woff2') format('woff2'); }
+      @font-face { font-family: 'Chakra Petch'; font-style: normal; font-weight: 700; font-display: swap; src: url('/fonts/ChakraPetch-700-latin.woff2') format('woff2'); }
+    </style>
+    <style>
+      html, body, #root { height: 100%; margin: 0; padding: 0; background: #05060c; overflow: hidden; }
+      * { box-sizing: border-box; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <!-- Vite React Fast-Refresh preamble. Files served from public/ are NOT
+         transformed by Vite, so @vitejs/plugin-react cannot auto-inject this.
+         Static import guarantees it runs before the app module (dev only). -->
+    <script type="module">
+      import RefreshRuntime from '/@react-refresh'
+      RefreshRuntime.injectIntoGlobalHook(window)
+      window.$RefreshReg$ = () => {}
+      window.$RefreshSig$ = () => (type) => type
+      window.__vite_plugin_react_preamble_installed__ = true
+    </script>
+    <script type="module" src="/src/three/hud/hudPreviewMain.tsx"></script>
+  </body>
+</html>

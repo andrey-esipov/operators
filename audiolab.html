@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OPERATORS · AudioLab</title>
+    <!--
+      Dev-only audio QA harness. Loads src/audio/audioLabMain.tsx, which mounts
+      the interactive sound board AND installs window.__AUDIOLAB__.render() — an
+      offline (OfflineAudioContext) render bridge that returns raw PCM so a
+      headless script can MEASURE what the engine actually produces. Not listed
+      in vite build inputs, so it never ships to production.
+    -->
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/audio/audioLabMain.tsx"></script>
+  </body>
+</html>

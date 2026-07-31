@@ -369,3 +369,100 @@ button {
 }
 /* Phone viewports get the same layout as desktop — the menu and combat
    UI scroll naturally; no nag banner. */
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Self-hosted brand fonts — SIL OFL 1.1. Subset to Google's "latin"
+   unicode-range (same glyphs the CDN served); licences + a sha256-pinned
+   coverage manifest live in public/fonts/. Rendered under the global
+   `-webkit-font-smoothing: none; image-rendering: pixelated`, so the subset
+   is byte-faithful to what shipped before. font-display: swap — never blank;
+   not preloaded (neither is a front-door first-paint font — see index.html).
+   ───────────────────────────────────────────────────────────────────────── */
+@font-face {
+  font-family: "Press Start 2P";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/PressStart2P-latin.woff2") format("woff2");
+}
+@font-face {
+  font-family: "VT323";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/VT323-latin.woff2") format("woff2");
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Self-hosted UI/display fonts for the front door, character select and
+   victory ceremony — SIL OFL 1.1. These used to arrive via a render-blocking
+   Google Fonts `@import` in menu.css / select.css / ceremony.css (2 third-party
+   origins + FOUT on the FIRST screen a player sees; Anton renders the "OPERATORS" wordmark). They are now delivered from
+   THIS origin, so there is no third-party font request on any route.
+
+   Only the faces the app actually RENDERS ship here (audited over all three
+   stylesheets): Anton 400; Chakra Petch 400/600/700; Oswald 400–700 (one
+   Google variable file); Saira 400; Barlow Condensed 600. The old @imports
+   also declared Bebas Neue and Saira Condensed, but neither renders a single
+   pixel (Bebas Neue's var is never applied; Saira Condensed is only an
+   unreachable fallback behind Oswald) — they are dropped, not re-hosted.
+
+   Secondary faces are Google Fonts' own latin woff2 re-hosted verbatim
+   (byte-identical to what the browser fetched before → unchanged rendering;
+   their glyf-transform build is ~55% smaller than a local re-subset). See
+   public/fonts/*-OFL.txt + fonts.coverage.json.
+   ───────────────────────────────────────────────────────────────────────── */
+@font-face {
+  font-family: "Anton";
+  font-style: normal;
+  font-weight: 400;
+  /* optional, NOT swap: Anton is BootCard's first-paint "OPERATORS" wordmark and
+     is preloaded in index.html, so it renders with zero layout shift. swap would
+     paint fallback Arial Narrow first, then reflow ~17% when Anton arrived; on the
+     rare cold+slow load where the preload loses the race, optional keeps the
+     fallback for that one view WITHOUT a late reflow. The other faces stay swap. */
+  font-display: optional;
+  src: url("/fonts/Anton-400-latin.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Chakra Petch";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/ChakraPetch-400-latin.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Chakra Petch";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("/fonts/ChakraPetch-600-latin.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Chakra Petch";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/fonts/ChakraPetch-700-latin.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Oswald";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("/fonts/Oswald-var-latin.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Saira";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/Saira-400-latin.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Barlow Condensed";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("/fonts/BarlowCondensed-600-latin.woff2") format("woff2");
+}

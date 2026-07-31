@@ -1,0 +1,505 @@
+import * as THREE from 'three'
+import type { LightingDescription } from '../lighting/LightRig'
+
+/**
+ * The material a live fighter sprite is drawn with.
+ *
+ * A frame is a sub-rect of the character's packed atlas. We light the
+ * synthesised normal map with the *stage's own* key/fill/rim rig (passed in
+ * from LightRig every frame) so the character is lit by the world it stands in
+ * rather than pasted onto it — the single biggest thing separating a 2.5D
+ * fighter from a sticker. On top of that:
+ *
+ *  - a wrapped (half-Lambert) key so the shadow side never crushes to flat
+ *    black,
+ *  - a fresnel rim in both the stage's rim colour (grounds it in the scene) and
+ *    the fighter's accent (keeps its identity readable against any backdrop),
+ *  - the scene's exponential fog re-derived in-shader, so the sprite recedes
+ *    into the same haze as the geometry instead of floating in front of it,
+ *  - a per-hit white flash, and a KO dissolve,
+ *  - feet-pivoted squash / stretch / lean in the vertex stage for weight,
+ *  - a resolution-independent, fwidth-based alpha edge that stays a crisp cel
+ *    silhouette at any zoom instead of the muddy bilinear ramp.
+ *
+ * Registration (which pixel of the frame lands on the fighter's world
+ * position) is entirely a function of uSize + uPivot, computed on the CPU by
+ * the Fighter from the frame's rect and anchor. Getting that wrong makes the
+ * character swim, so it is driven by data, never guessed in the shader.
+ */
+
+export interface SpriteFighterUniforms {
+  [key: string]: THREE.IUniform
+  uAlbedo: { value: THREE.Texture | null }
+  uNormal: { value: THREE.Texture | null }
+  uHeight: { value: THREE.Texture | null }
+  uUvOffset: { value: THREE.Vector2 }
+  uUvScale: { value: THREE.Vector2 }
+  uSize: { value: THREE.Vector2 }
+  uPivot: { value: THREE.Vector2 }
+  uFacing: { value: number }
+  uSquash: { value: THREE.Vector2 }
+  uLean: { value: number }
+
+  uKeyDir: { value: THREE.Vector3 }
+  uKeyColor: { value: THREE.Color }
+  uKeyIntensity: { value: number }
+  uFillDir: { value: THREE.Vector3 }
+  uFillColor: { value: THREE.Color }
+  uFillIntensity: { value: number }
+  uRimDir: { value: THREE.Vector3 }
+  uRimColor: { value: THREE.Color }
+  uRimIntensity: { value: number }
+  uAmbientColor: { value: THREE.Color }
+  uAmbientIntensity: { value: number }
+  uFlashPos: { value: THREE.Vector4 }
+  uFlashColor: { value: THREE.Color }
+  uFlashIntensity: { value: number }
+  uBounceColor: { value: THREE.Color }
+
+  uAccent: { value: THREE.Color }
+  uHitFlash: { value: number }
+  uHitColor: { value: THREE.Color }
+  uDissolve: { value: number }
+  uOpacity: { value: number }
+  uFogColor: { value: THREE.Color }
+  uFogDensity: { value: number }
+  uCameraPos: { value: THREE.Vector3 }
+  uTexel: { value: THREE.Vector2 }
+  uTime: { value: number }
+
+  // Controlled-width silhouette keyline (stage-independent separation).
+  uKeylineColor: { value: THREE.Color }
+  uKeylineIntensity: { value: number }
+  uKeylineWidthPx: { value: number }
+
+  // Stage-independent self-fill ("the Xrd move") + per-fighter body re-value.
+  uSelfFillColor: { value: THREE.Color }
+  uSelfFillIntensity: { value: number }
+  uSelfFillDir: { value: THREE.Vector3 }
+  uShadowLift: { value: number }
+  uBodyReval: { value: THREE.Vector3 }
+}
+
+export function createSpriteUniforms(): SpriteFighterUniforms {
+  return {
+    uAlbedo: { value: null },
+    uNormal: { value: null },
+    uHeight: { value: null },
+    uUvOffset: { value: new THREE.Vector2(0, 0) },
+    uUvScale: { value: new THREE.Vector2(1, 1) },
+    uSize: { value: new THREE.Vector2(1, 1) },
+    uPivot: { value: new THREE.Vector2(0.5, 0) },
+    uFacing: { value: 1 },
+    uSquash: { value: new THREE.Vector2(1, 1) },
+    uLean: { value: 0 },
+
+    uKeyDir: { value: new THREE.Vector3(-0.5, 0.7, 0.5) },
+    uKeyColor: { value: new THREE.Color(0xfff0dd) },
+    uKeyIntensity: { value: 3 },
+    uFillDir: { value: new THREE.Vector3(0.7, 0.25, 0.5) },
+    uFillColor: { value: new THREE.Color(0x4466aa) },
+    uFillIntensity: { value: 0.8 },
+    uRimDir: { value: new THREE.Vector3(0.2, 0.4, -0.9) },
+    uRimColor: { value: new THREE.Color(0x88ccff) },
+    uRimIntensity: { value: 2.2 },
+    uAmbientColor: { value: new THREE.Color(0x2a2440) },
+    uAmbientIntensity: { value: 0.55 },
+    uFlashPos: { value: new THREE.Vector4(0, 2, 0, 6) },
+    uFlashColor: { value: new THREE.Color(0xffffff) },
+    uFlashIntensity: { value: 0 },
+    uBounceColor: { value: new THREE.Color(0x2a1a30) },
+
+    uAccent: { value: new THREE.Color(0xffa53c) },
+    uHitFlash: { value: 0 },
+    uHitColor: { value: new THREE.Color(0xffffff) },
+    uDissolve: { value: 0 },
+    uOpacity: { value: 1 },
+    uFogColor: { value: new THREE.Color(0x0a0716) },
+    uFogDensity: { value: 0.02 },
+    uCameraPos: { value: new THREE.Vector3(0, 2.5, 11) },
+    uTexel: { value: new THREE.Vector2(1 / 1024, 1 / 1024) },
+    uTime: { value: 0 },
+
+    // Bright cool-white silhouette keyline. Kept STAGE-INDEPENDENT on purpose:
+    // its whole job is to guarantee the fighter/background read no matter what
+    // colour the arena is, so it is NOT driven from LightRig. Width is in device
+    // px and set per-frame from the viewport height so it holds a constant
+    // screen fraction across resolutions / DPR. Intensity default matches the
+    // module constant in Fighter.ts (that path owns the live value + mutation).
+    uKeylineColor: { value: new THREE.Color(0.72, 0.86, 1.0) },
+    uKeylineIntensity: { value: 2.2 },
+    uKeylineWidthPx: { value: 3.0 },
+
+    // Stage-independent self-fill ("the Xrd move"): a fixed cool-neutral
+    // hemispheric light the sprite carries REGARDLESS of the arena, so a
+    // dark-bodied fighter on a dim/warm stage keeps a minimum body value and the
+    // keyline stops being the ONLY thing separating it from the wall. Guilty
+    // Gear Xrd's sprite shader deliberately ignores environment light for
+    // exactly this reason. Intensity is owned by Fighter.ts (live value +
+    // mutation hook), same convention as the keyline. Cool-neutral so it lifts
+    // value and nudges the fighter off a warm wall in hue without recolouring.
+    uSelfFillColor: { value: new THREE.Color(0.60, 0.68, 0.82) },
+    uSelfFillIntensity: { value: 0.55 },
+    uSelfFillDir: { value: new THREE.Vector3(0.15, 0.5, 1.0) },
+    uShadowLift: { value: 0.02 },
+    // Per-fighter body re-value (albedo channel multiplier). Identity (1,1,1)
+    // for all but the few dark-neutral fighters whose body sinks into warm walls
+    // AND collides with each other in palette; set from fighter data in
+    // setAssets. Lifts value and diverges hue without touching the atlas art.
+    uBodyReval: { value: new THREE.Vector3(1, 1, 1) },
+  }
+}
+
+/** Sync the stage's live lighting description into the sprite's uniforms. */
+export function applyLighting(u: SpriteFighterUniforms, d: LightingDescription) {
+  u.uKeyDir.value.copy(d.keyDir)
+  u.uKeyColor.value.copy(d.keyColor)
+  u.uKeyIntensity.value = d.keyIntensity
+  u.uFillDir.value.copy(d.fillDir)
+  u.uFillColor.value.copy(d.fillColor)
+  u.uFillIntensity.value = d.fillIntensity
+  u.uRimDir.value.copy(d.rimDir)
+  u.uRimColor.value.copy(d.rimColor)
+  u.uRimIntensity.value = d.rimIntensity
+  u.uAmbientColor.value.copy(d.ambientColor)
+  u.uAmbientIntensity.value = d.ambientIntensity
+  u.uFlashPos.value.copy(d.flashPos)
+  u.uFlashColor.value.copy(d.flashColor)
+  u.uFlashIntensity.value = d.flashIntensity
+}
+
+const VERT = /* glsl */ `
+  precision highp float;
+
+  uniform vec2 uUvOffset;
+  uniform vec2 uUvScale;
+  uniform vec2 uSize;
+  uniform vec2 uPivot;
+  uniform float uFacing;
+  uniform vec2 uSquash;
+  uniform float uLean;
+
+  varying vec2 vUv;
+  varying vec3 vWorld;
+  varying vec3 vViewDir;
+
+  void main() {
+    // Base geometry carries x,y in [0,1] (0,0 = bottom-left of the frame).
+    vec2 g = uv;
+
+    // UV into the atlas sub-rect. Textures are loaded flipY=false, so v grows
+    // downward in image space: the top of the frame (head) is g.y = 1.
+    vUv = uUvOffset + vec2(g.x, 1.0 - g.y) * uUvScale;
+
+    // Offset from the feet pivot, in world units, before deformation.
+    vec2 off = vec2((g.x - uPivot.x) * uSize.x, (g.y - uPivot.y) * uSize.y);
+    // Feet-pivoted squash/stretch, then a lean shear that grows toward the head.
+    off *= uSquash;
+    off.x += off.y * uLean;
+    off.x *= uFacing;
+
+    vec4 world = modelMatrix * vec4(off.x, off.y, 0.0, 1.0);
+    vWorld = world.xyz;
+    vViewDir = normalize(cameraPosition - world.xyz);
+    gl_Position = projectionMatrix * viewMatrix * world;
+  }
+`
+
+const FRAG = /* glsl */ `
+  precision highp float;
+
+  uniform sampler2D uAlbedo;
+  uniform sampler2D uNormal;
+  uniform sampler2D uHeight;
+  uniform float uFacing;
+
+  uniform vec3 uKeyDir;
+  uniform vec3 uKeyColor;
+  uniform float uKeyIntensity;
+  uniform vec3 uFillDir;
+  uniform vec3 uFillColor;
+  uniform float uFillIntensity;
+  uniform vec3 uRimDir;
+  uniform vec3 uRimColor;
+  uniform float uRimIntensity;
+  uniform vec3 uAmbientColor;
+  uniform float uAmbientIntensity;
+  uniform vec4 uFlashPos;
+  uniform vec3 uFlashColor;
+  uniform float uFlashIntensity;
+  uniform vec3 uBounceColor;
+
+  uniform vec3 uAccent;
+  uniform float uHitFlash;
+  uniform vec3 uHitColor;
+  uniform float uDissolve;
+  uniform float uOpacity;
+  uniform vec3 uFogColor;
+  uniform float uFogDensity;
+  uniform vec2 uTexel;
+  uniform float uTime;
+
+  uniform vec3 uKeylineColor;
+  uniform float uKeylineIntensity;
+  uniform float uKeylineWidthPx;
+  uniform vec3 uSelfFillColor;
+  uniform float uSelfFillIntensity;
+  uniform vec3 uSelfFillDir;
+  uniform float uShadowLift;
+  uniform vec3 uBodyReval;
+
+  varying vec2 vUv;
+  varying vec3 vWorld;
+  varying vec3 vViewDir;
+
+  float hash(vec2 p){ p=fract(p*vec2(233.34,851.73)); p+=dot(p,p+23.45); return fract(p.x*p.y); }
+
+  void main() {
+    vec4 base = texture2D(uAlbedo, vUv);
+
+    // Resolution-independent crisp silhouette: harden the feathered alpha to a
+    // ~1px antialiased edge using screen-space derivatives. Keeps the cel edge
+    // sharp at any zoom instead of the muddy bilinear ramp, without aliasing.
+    float aa = max(fwidth(base.a), 0.0008);
+    float alpha = smoothstep(0.5 - aa, 0.5 + aa, base.a);
+    if (alpha < 0.004) discard;
+
+    // Interior mask (1 well inside the body, 0 at the very edge) so rim terms
+    // don't spill past the silhouette into a halo.
+    float interior = smoothstep(0.0, 0.16, base.a - 0.55);
+
+    // ---- Crisp interior sampling ------------------------------------------
+    // The atlas art is authored crisp at native res, but a fighter fills ~1.5x
+    // its atlas-frame height on screen, so plain bilinear magnification softens
+    // every interior edge into a 2-3px ramp — the "soft upscale" the aesthetic
+    // (original-SF pixel craft, 2026) can't afford. Reconstruct each art-texel
+    // as a defined block with only a ~1px screen-space antialiased seam: crisp
+    // where texels differ (edges), smooth where they don't (skin/cloth
+    // gradients), and — critically — this warps only the RGB fetch. The alpha
+    // above is sampled from the plain vUv, so the baked coverage-AA silhouette
+    // ramp is untouched and cannot be re-aliased.
+    vec2 res = 1.0 / uTexel;
+    vec2 uvPix = vUv * res;
+    vec2 seam = floor(uvPix - 0.5) + 0.5;
+    vec2 frac = uvPix - seam;
+    vec2 fw = max(fwidth(uvPix), vec2(1e-5));
+    vec2 snap = clamp((frac - 0.5) / fw + 0.5, 0.0, 1.0);
+    vec2 uvCrisp = (seam + snap) * uTexel;
+    vec3 albedoRgb = texture2D(uAlbedo, uvCrisp).rgb;
+    // Per-fighter body re-value: lift value + diverge hue for the handful of
+    // dark-neutral fighters that otherwise sink into warm walls and collide with
+    // each other in palette. Identity (1,1,1) for everyone else, so this touches
+    // only the named fighters and never the atlas art itself.
+    albedoRgb *= uBodyReval;
+
+    // Unpack the tangent-space normal. The map ships two channels (RG); z is
+    // reconstructed as the positive hemisphere. Mirror x with facing so lighting
+    // flips with the character.
+    vec2 nxy = texture2D(uNormal, vUv).xy * 2.0 - 1.0;
+    vec3 N = vec3(nxy, sqrt(max(0.0, 1.0 - dot(nxy, nxy))));
+    N.x *= uFacing;
+    N = normalize(N);
+
+    float height = texture2D(uHeight, vUv).r;
+
+    // Form-shaping normal: the synthesised height field saturates across wide
+    // interiors (torso), so raw normals barely tilt away from camera and the
+    // body reads flat and evenly lit — the "cutout composited into the scene"
+    // tell. Exaggerate the lateral tilt for the diffuse dots only (key + fill)
+    // so the stage's directional rig sculpts a real warm-key / cool-shadow
+    // gradient across the form. Rim/fresnel stay on raw N so the silhouette
+    // edge and halo gating are untouched.
+    vec3 Nl = normalize(vec3(N.xy * 1.7, N.z));
+
+    // ---- Key: wrapped half-Lambert, never crushes to flat black -----------
+    vec3 keyDir = normalize(uKeyDir);
+    float ndl = dot(Nl, keyDir);
+    float wrap = clamp((ndl + 0.34) / 1.34, 0.0, 1.0);
+    wrap = pow(wrap, 1.15);
+    vec3 diffuse = uKeyColor * uKeyIntensity * wrap;
+
+    // ---- Fill: soft directional + a hemispheric floor ---------------------
+    float ndf = dot(Nl, normalize(uFillDir)) * 0.5 + 0.5;
+    vec3 fill = uFillColor * uFillIntensity * (0.24 + 0.76 * ndf);
+
+    // ---- Stage-independent self-fill ("the Xrd move") ---------------------
+    // A fixed hemispheric light the sprite carries no matter the arena, so the
+    // body value never collapses toward a dim/warm wall and the keyline stops
+    // being the only separator. Directional (not flat) so it still models the
+    // form; albedo-multiplied in the compose below (like the stage lights) so it
+    // lifts value without washing out hue or the material read. NOT sourced from
+    // LightRig on purpose — that is exactly what makes it stage-independent.
+    float selfW = dot(Nl, normalize(uSelfFillDir)) * 0.5 + 0.5;
+    vec3 selfFill = uSelfFillColor * uSelfFillIntensity * (0.5 + 0.5 * selfW);
+
+    // ---- Shadow-lift floor (the additive half of the Xrd move) ------------
+    // An albedo-MULTIPLIED fill (selfFill above, and the whole stage rig) lifts
+    // a dark body by almost nothing — it vanishes exactly where the body is
+    // darkest, which is why a dark-neutral fighter still sinks into a bright
+    // warm wall even with the self-fill on. This ADDITIVE term supplies the
+    // missing floor: a small cool fill gated to the darkest body regions only
+    // (mask = 1 - albedo luminance), so genuinely dark fighters get a value
+    // floor while pale bodies are left essentially untouched (their mask ~0).
+    // Scales with uShadowLift, which the gate's self-fill mutation zeroes.
+    float albLum = dot(albedoRgb, vec3(0.299, 0.587, 0.114));
+    float darkMask = 1.0 - smoothstep(0.14, 0.6, albLum);
+    vec3 shadowLift = uSelfFillColor * uShadowLift * darkMask;
+
+    // ---- Ambient + warm floor bounce on the lower body --------------------
+    float lowBody = 1.0 - smoothstep(0.0, 0.4, vUv.y); // near feet (v grows down)
+    vec3 ambient = uAmbientColor * uAmbientIntensity + uBounceColor * lowBody * 0.5;
+
+    // ---- Fresnel rim (stage rim colour + accent identity) -----------------
+    // The accent rim keeps the fighter's identity readable against any
+    // backdrop, but it is a thin edge highlight, not a glow — kept low and
+    // interior-gated so it never blooms into a halo around the silhouette.
+    float fres = pow(1.0 - clamp(dot(N, vec3(0.0, 0.0, 1.0)), 0.0, 1.0), 2.8);
+    float rimTerm = clamp(dot(N, normalize(uRimDir)) * 0.5 + 0.5, 0.0, 1.0);
+    vec3 stageRim = uRimColor * uRimIntensity * fres * rimTerm;
+    vec3 accentRim = uAccent * fres * 0.5;
+
+    // ---- Keyed back-rim: silhouette separation on any backdrop ------------
+    // A back light placed opposite the key's horizontal throw. It lights only
+    // the shadow-side edge of the silhouette, in a cool complement to the
+    // (usually warm) stage key, so a fighter whose stage rim shares the hue of
+    // a warm busy background — e.g. ipo-prep's gold rim over gold ticker
+    // screens — still separates from it. This is the "rim/back light keyed to
+    // the stage's dominant light" that ties the sprite to the scene rig instead
+    // of leaving it a flat, evenly-lit cutout. Its falloff is wider than the
+    // razor fresnel so it reads as an edge, but it is gated to the away-from-key
+    // side so it never wraps into a full halo, and the fighter is bloom-excluded
+    // so it cannot smear into a glow.
+    vec2 keyH = normalize(keyDir.xy + vec2(1e-4));
+    float backSide = clamp(dot(normalize(N.xy + vec2(1e-4)), -keyH), 0.0, 1.0);
+    float backEdge = pow(1.0 - clamp(dot(N, vec3(0.0, 0.0, 1.0)), 0.0, 1.0), 1.7);
+    vec3 coolKey = uKeyColor.bgr; // swap R/B: a cool complement to a warm key
+    vec3 backRim = coolKey * (0.16 + 0.07 * uKeyIntensity) * backEdge * backSide;
+
+    vec3 rim = (stageRim + accentRim + backRim) * interior;
+
+    // ---- Controlled-width silhouette keyline ------------------------------
+    // The fresnel/back rims above are the ONLY thing separating the fighter
+    // from the wall behind it, and they fail: their brightness rides the stage
+    // light and their width collapses to ~1px on most stage/fighter combos, so
+    // the "you can always tell where the fighter ends" guarantee was left to
+    // luck (measured: some stages the body is DARKER than the wall behind it,
+    // rescued only by that razor rim). This is a second, deterministic edge
+    // that does NOT depend on the normal map or the stage rig: it marches out
+    // to the alpha silhouette in SCREEN space and lights a fixed device-pixel
+    // band just inside the edge in a bright cool white — same width, same value
+    // on every arena. That is what converts a lucky read into a guaranteed one.
+    //
+    // It only ever lights fragments already inside the silhouette (base.a>=0.5)
+    // and marches OUTWARD (toward falling alpha), so it can never paint a halo
+    // outside the character; the fighter is bloom-excluded so it cannot smear.
+    // Placed BEFORE the highlight knee below so the additive is tamed, not left
+    // to clip to a flat white slab.
+    float keyline = 0.0;
+    if (uKeylineIntensity > 0.0 && base.a >= 0.5) {
+      vec2 aGrad = vec2(dFdx(base.a), dFdy(base.a)); // d(alpha)/d(screen px)
+      float aGm = length(aGrad);
+      if (aGm > 1e-4) {
+        vec2 outward = -aGrad / aGm;                 // toward the edge, screen px
+        vec2 stepUv = outward.x * dFdx(vUv) + outward.y * dFdy(vUv); // uv / screen px
+        // Width is authored as a FRACTION of buffer height (Fighter.ts:
+        // 0.0038 * viewportH), which is DPR-invariant in CSS px BY DESIGN. The
+        // ceiling here must therefore be large enough not to clip that fraction
+        // on a HiDPI buffer. The old 7.0 / k<=8 device-px ceilings were invisible
+        // on the 900p capture rig (wpx 6.84 < 7) but clamped the keyline on every
+        // taller retina display (e.g. 1080 logical x DPR2 -> wpx 8.2 -> capped to
+        // 7 -> the band THINS in CSS as resolution climbs -> the "cheap sizzling
+        // wire" tell). 24 keeps width proportional up to a ~6300px buffer (beyond
+        // any shipping display); the 1px march step is unchanged so DPR-1 output
+        // is byte-identical (the loop still breaks at ceil(wpx) via fk > wpx).
+        float wpx = clamp(uKeylineWidthPx, 1.0, 24.0);
+        for (int k = 1; k <= 24; k++) {
+          float fk = float(k);
+          if (fk > wpx) break;
+          // If a sample this many px outward has fallen outside the silhouette,
+          // we are within wpx of the edge → light it, brightest nearest the rim.
+          if (texture2D(uAlbedo, vUv + stepUv * fk).a < 0.5) {
+            keyline = max(keyline, 1.0 - (fk - 1.0) / wpx);
+          }
+        }
+      }
+    }
+
+    // ---- Transient impact point light -------------------------------------
+    vec3 toFlash = uFlashPos.xyz - vWorld;
+    float fd = length(toFlash);
+    float atten = uFlashIntensity / (1.0 + fd * fd * 0.6);
+    float fnl = clamp(dot(N, normalize(toFlash)) * 0.5 + 0.5, 0.0, 1.0);
+    vec3 flash = uFlashColor * atten * fnl;
+
+    // ---- Compose ----------------------------------------------------------
+    // A gentle cavity/AO term from the height field keeps folds and the far
+    // side reading as volume rather than a flat cutout.
+    float ao = mix(0.72, 1.0, height);
+    vec3 albedo = albedoRgb;
+    vec3 color = albedo * (ambient + diffuse * ao + fill * ao + selfFill * ao) + shadowLift * ao + rim * (0.5 + 0.5 * albedo) + flash;
+
+    // Additive keyline in linear scene colour (post owns the tonemap). Added
+    // before the knee below so the bright cool edge is compressed rather than
+    // clipped, and kept independent of albedo so it holds its value over both a
+    // dark and a pale body.
+    color += uKeylineColor * (uKeylineIntensity * keyline);
+
+    // Soft highlight knee on the lit body. The fighter is bloom-excluded, so
+    // pale fabrics (lenny's shirt, chesky's shoes) don't smear — but a strong
+    // key still pushes them to a flat clipped white that loses the weave.
+    // Compress only the top end so mid-value cloth keeps its gradient; midtones
+    // are untouched, and this runs BEFORE the hit-flash / KO burn so those
+    // intentional highlights stay hot.
+    vec3 over = max(color - 0.82, 0.0);
+    color = min(color, vec3(0.82)) + over / (1.0 + over * 1.4);
+
+    // KO dissolve: burn the silhouette away from the edges inward with a hot rim.
+    if (uDissolve > 0.0) {
+      float n = hash(floor(vUv / uTexel * 0.25));
+      float edge = uDissolve * 1.15;
+      if (n < edge - 0.08) discard;
+      if (n < edge) color += uAccent * 3.0;
+    }
+
+    // Per-hit white flash — ADDITIVE, never a mix() toward white.
+    // A lerp pulls every channel toward the same value, so at partial strength a
+    // navy-denim torso collapses to a flat grey ghost (measured: saturation 0.60
+    // -> 0.17 one frame after contact). Adding light instead preserves the channel
+    // *gaps* that carry hue: the fighter reads as lit by a flashbulb — hot, but
+    // still unmistakably coloured — and on the 2-3 contact frames a still-capture
+    // lands on it looks like impact, not a broken material.
+    color += uHitColor * clamp(uHitFlash, 0.0, 1.0);
+
+    // Match the scene's FogExp2 so the fighter sits in the same atmosphere.
+    float dist = length(cameraPosition - vWorld);
+    float fog = 1.0 - exp(-uFogDensity * uFogDensity * dist * dist);
+    color = mix(color, uFogColor, clamp(fog, 0.0, 1.0));
+
+    // Output linear scene colour; the post pipeline owns tonemapping and the
+    // final sRGB encode (same convention as the existing fighter/stage shaders).
+    gl_FragColor = vec4(color, alpha * uOpacity);
+  }
+`
+
+/** A 1x1 quad with x,y in [0,1] and matching uv. Feet pivot handled in shader. */
+export function makeUnitQuad(): THREE.BufferGeometry {
+  const geo = new THREE.BufferGeometry()
+  const pos = new Float32Array([0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0])
+  const uv = new Float32Array([0, 0, 1, 0, 1, 1, 0, 1])
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3))
+  geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2))
+  geo.setIndex([0, 1, 2, 0, 2, 3])
+  return geo
+}
+
+export function createSpriteMaterial(u: SpriteFighterUniforms): THREE.ShaderMaterial {
+  return new THREE.ShaderMaterial({
+    uniforms: u,
+    vertexShader: VERT,
+    fragmentShader: FRAG,
+    transparent: true,
+    depthTest: true,
+    depthWrite: true,
+    side: THREE.DoubleSide,
+  })
+}

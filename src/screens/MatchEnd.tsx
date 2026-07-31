@@ -1,4 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
+import './ceremony/devExpose'
+import './ceremony/ceremony.css'
+import { ImpactFlash, StageBackdrop, WinnerFloor } from './ceremony/CeremonyFX'
+import { PowerWord, Kicker, CER_GRAD } from './ceremony/CeremonyType'
 import { useGame } from '../state/game'
 import { getFighter } from '../data/fighters'
 import { Sprite } from '../components/Sprite'
@@ -16,6 +20,7 @@ export function MatchEnd() {
   const arcadeStep = useGame((s) => s.arcadeStep)
   const nextArcadeFight = useGame((s) => s.nextArcadeFight)
   const setPhase = useGame((s) => s.setPhase)
+  const scenario = useGame((s) => s.scenario)
 
   useEffect(() => {
     if (roundsWon.a >= 2) Sfx.victory()
@@ -23,8 +28,6 @@ export function MatchEnd() {
   }, [])
 
   // Final-round stats — biggest single hit and the longest combo streak.
-  // We only have the final round's log (newRound clears between rounds),
-  // but that's still the most exciting fragment to surface as a "highlight."
   const matchStats = useMemo(() => {
     let biggest = 0
     let longestCombo = 0
@@ -46,12 +49,6 @@ export function MatchEnd() {
   }, [log])
 
   if (!fighterA || !fighterB) return null
-  // Winner derivation — primary source is roundsWon (must be >= 2 for
-  // either side to have legitimately reached match-end). If neither side
-  // shows >= 2 (shouldn't happen, but be defensive against any future
-  // state-mutation bug), fall back to the last log entry's attacker so
-  // the screen at least matches the K.O.-landing fighter. The default of
-  // 'a' (player) on a total tie is safer than the old default of 'b'.
   const winnerSide: 'a' | 'b' =
     roundsWon.a >= 2 ? 'a'
     : roundsWon.b >= 2 ? 'b'
@@ -67,14 +64,22 @@ export function MatchEnd() {
   const arcadePlayerLost = mode === 'arcade' && winnerSide === 'b'
   const isFinalBoss = mode === 'arcade' && arcadeStep === ARCADE_PROGRESSION.length - 1
 
+  const accent = winner.accent || '#FFD60A'
+  const loserSide: 'a' | 'b' = winnerSide === 'a' ? 'b' : 'a'
+  // When the arcade player loses, the emotional focus flips: THEIR fighter is
+  // the large, defeated hero and the CPU that beat them stands as the small,
+  // lit victor. On a win it's the classic champion-large / fallen-small frame.
+  const hero = arcadePlayerLost
+    ? { fighter: loser, side: loserSide, state: 'lose' as const, quote: loser.voiceLines.lose, glow: '#5a6373', defeated: true }
+    : { fighter: winner, side: winnerSide, state: 'win' as const, quote: winner.voiceLines.win, glow: accent, defeated: false }
+  const foil = arcadePlayerLost
+    ? { fighter: winner, side: winnerSide, state: 'win' as const, label: `${winner.shortName} WINS`, litVictor: true }
+    : { fighter: loser, side: loserSide, state: 'lose' as const, label: loser.shortName, litVictor: false }
+
   function handleContinue() {
     Sfx.menuSelect()
     if (arcadePlayerWon) {
-      if (isFinalBoss) {
-        setPhase('arcade-victory')
-        return
-      }
-      // Advance arcade step then trigger next fight
+      if (isFinalBoss) { setPhase('arcade-victory'); return }
       useGame.setState((s) => ({ arcadeStep: s.arcadeStep + 1 }))
       nextArcadeFight()
     } else {
@@ -82,135 +87,232 @@ export function MatchEnd() {
     }
   }
 
-  // Arcade-mode auto-advance. Players were getting stuck on the Victory
-  // screen — either missing the NEXT STAGE button or assuming the game
-  // would proceed on its own. We give a visible 6-second countdown that
-  // clicking the button can override (handleContinue is idempotent enough
-  // since it both increments step and triggers nextArcadeFight). Cancels
-  // if the player navigates away or the phase changes.
   const ARCADE_AUTOADVANCE_SECONDS = 6
   const [secondsLeft, setSecondsLeft] = useState(ARCADE_AUTOADVANCE_SECONDS)
   useEffect(() => {
     if (!arcadePlayerWon) return
-    if (isFinalBoss) return  // Final boss → user clicks "CLAIM YOUR PRIZE"
+    if (isFinalBoss) return
     setSecondsLeft(ARCADE_AUTOADVANCE_SECONDS)
-    const tick = setInterval(() => {
-      setSecondsLeft((s) => Math.max(0, s - 1))
-    }, 1000)
+    const tick = setInterval(() => setSecondsLeft((s) => Math.max(0, s - 1)), 1000)
     const advance = setTimeout(() => {
-      // Same flow as the manual NEXT STAGE click.
       useGame.setState((s) => ({ arcadeStep: s.arcadeStep + 1 }))
       nextArcadeFight()
     }, ARCADE_AUTOADVANCE_SECONDS * 1000)
-    return () => {
-      clearInterval(tick)
-      clearTimeout(advance)
-    }
+    return () => { clearInterval(tick); clearTimeout(advance) }
   }, [arcadePlayerWon, isFinalBoss, nextArcadeFight])
 
-  return (
-    <div className="relative w-full h-full flex flex-col items-center justify-center overflow-hidden p-6">
-      <div
-        className="absolute inset-0"
-        style={{
-          background:
-            winnerSide === 'a'
-              ? 'radial-gradient(circle at center, #E6394644 0%, #1A0F2E 60%, #0F0A1A 100%)'
-              : 'radial-gradient(circle at center, #00B4D844 0%, #0F1A2E 60%, #0F0A1A 100%)',
-        }}
-      />
+  const titleColor = arcadePlayerLost ? '#9DB8DE' : '#FFD60A'
 
-      <div className="relative z-10 font-display tracking-widest text-center" style={{
-        color: '#FFD60A',
-        textShadow: '6px 6px 0 black, 0 0 24px #F77F00',
-        fontSize: arcadePlayerLost ? 84 : 96,
-      }}>
-        {arcadePlayerLost ? 'DEFEATED' : 'VICTORY'}
+  return (
+    <div className="cer-anim relative w-full h-full flex flex-col items-center justify-center overflow-hidden px-6 py-2" style={{ background: '#05030b' }}>
+      {/* Real stage backdrop — state-graded: warm gold for a win, cold steel
+          for a loss, so the two results read as opposite moods at a glance. */}
+      <StageBackdrop
+        scenario={scenario}
+        tint={arcadePlayerLost ? '#2E5C8A' : '#F7A400'}
+        dim={arcadePlayerLost ? 0.36 : 0.5}
+      />
+      {!arcadePlayerLost && <div className="cer-rays" style={{ opacity: 0.16 }} />}
+      <div className="cer-grain" />
+      <ImpactFlash duration={0.22} />
+
+      {/* RESULT WORD — enormous, crashes down from the top, seated on an
+          authored title slab. Victory's slab is centred and symmetric; the loss
+          slab is shifted and more sharply raked so the two states read as
+          different compositions, not one template recoloured. */}
+      <div className="relative z-10 flex items-center justify-center" style={{ animation: 'cer-shake-hard 0.3s ease-out both' }}>
+        <div
+          aria-hidden
+          className="absolute pointer-events-none"
+          style={{
+            left: '50%', top: '52%',
+            width: arcadePlayerLost ? 'min(calc(72 * var(--cer-u)), 1040px)' : 'min(calc(80 * var(--cer-u)), 1180px)',
+            height: 'clamp(40px, calc(6.4 * var(--cer-u)), 96px)',
+            transform: `translate(${arcadePlayerLost ? '-56%' : '-50%'}, -50%) skewX(${arcadePlayerLost ? -15 : -8}deg)`,
+            background: arcadePlayerLost
+              ? 'linear-gradient(180deg, transparent, rgba(46,92,138,0.32) 22%, rgba(10,20,40,0.5) 50%, rgba(46,92,138,0.32) 78%, transparent)'
+              : 'linear-gradient(180deg, transparent, rgba(247,164,0,0.34) 20%, rgba(60,30,4,0.5) 50%, rgba(247,164,0,0.34) 80%, transparent)',
+            borderTop: arcadePlayerLost ? '2px solid #2E5C8A' : '2px solid #FFC23D',
+            borderBottom: arcadePlayerLost ? '2px solid #2E5C8A' : '2px solid #FFC23D',
+            boxShadow: arcadePlayerLost ? '0 0 30px rgba(46,92,138,0.4)' : '0 0 30px rgba(247,147,19,0.45)',
+            animation: 'cer-wipe-right 0.42s cubic-bezier(0.16,0.9,0.3,1) both',
+          }}
+        />
+        <PowerWord
+          size={arcadePlayerLost ? 'clamp(72px, calc(12.5 * var(--cer-u)), 186px)' : 'clamp(80px, calc(13.5 * var(--cer-u)), 202px)'}
+          color={arcadePlayerLost ? '#DCE4F2' : '#FFFFFF'}
+          gradient={arcadePlayerLost ? CER_GRAD.steel : CER_GRAD.gold}
+          echo={arcadePlayerLost ? '#0A1A33' : '#B3122F'}
+          echoOffset="0.08em"
+          glow={arcadePlayerLost ? '#2E5C8A' : '#F77F00'}
+          glow2={arcadePlayerLost ? '#12335c' : '#E63946'}
+          skew={-8}
+          entrance="ko"
+          live
+          idle
+          style={{ position: 'relative', zIndex: 1 }}
+        >
+          {arcadePlayerLost ? 'DEFEATED' : 'VICTORY'}
+        </PowerWord>
       </div>
-      <div className="relative z-10 font-display text-2xl tracking-widest mt-2" style={{ color: winner.accent }}>
-        {winner.name.toUpperCase()} WINS
+      <div
+        className="cer-type relative z-10 mt-1"
+        style={{ animation: 'cer-rise-fade 0.45s ease-out 0.25s both' }}
+      >
+        <Kicker color={titleColor} style={{ fontSize: 'clamp(14px,calc(2 * var(--cer-u)),24px)', letterSpacing: '0.28em', fontWeight: 700 }}>
+          {arcadePlayerLost ? `DEFEATED BY ${winner.name.toUpperCase()}` : `${winner.name.toUpperCase()} · WINNER`}
+        </Kicker>
       </div>
 
       {mode === 'arcade' && arcadePlayerWon && (
-        <div className="relative z-10 font-display text-base tracking-widest mt-3 text-white/80">
-          STAGE {arcadeStep + 1} / {ARCADE_PROGRESSION.length}
-          {isFinalBoss && <span style={{ color: '#FFD60A' }}> · FINAL BOSS DEFEATED</span>}
+        <div className="cer-type relative z-10 mt-2" style={{ animation: 'cer-rise-fade 0.45s ease-out 0.32s both' }}>
+          <Kicker color="rgba(255,255,255,0.75)" style={{ fontSize: 'clamp(10px,calc(1.2 * var(--cer-u)),14px)' }}>
+            STAGE {arcadeStep + 1} / {ARCADE_PROGRESSION.length}
+            {isFinalBoss && <span style={{ color: '#FFD60A' }}> · FINAL BOSS DEFEATED</span>}
+          </Kicker>
         </div>
       )}
 
-      <div className="relative z-10 mt-8 flex items-end gap-12">
-        <div className="flex flex-col items-center opacity-50">
-          <div style={{ width: 160, height: 230 }}>
-            <Sprite fighter={loser} side={winnerSide === 'a' ? 'b' : 'a'} state="lose" />
+      {/* HERO ROW — the winner reads as the large, lit figure; the fallen
+          fighter is small and dim. On a player loss the roles swap so the
+          player's own fighter is the large defeated hero (never the enemy). */}
+      <div className="relative z-10 mt-1 flex items-end justify-center gap-8 md:gap-16">
+        <div
+          className="flex flex-col items-center"
+          style={{ animation: 'cer-loser-in 0.5s ease-out 0.2s both' }}
+        >
+          <div style={{
+            width: foil.litVictor ? 'min(calc(29 * var(--cer-u)), 310px)' : 'min(calc(21 * var(--cer-u)), 200px)',
+            height: foil.litVictor ? 'min(calc(23.62 * var(--cer-u)), 360px)' : 'min(calc(15.19 * var(--cer-u)), 210px)',
+            filter: foil.litVictor
+              ? `drop-shadow(0 0 26px ${accent}) brightness(1.05)`
+              : 'grayscale(0.7) brightness(0.62)',
+          }}>
+            <Sprite fighter={foil.fighter} side={foil.side} state={foil.state} />
           </div>
-          <div className="font-display text-base tracking-widest mt-2 text-white/60">{loser.shortName}</div>
-          <div className="font-body text-base italic text-white/40 mt-1 max-w-xs text-center px-2">"{loser.voiceLines.lose}"</div>
+          {/* The foil is meant to read as subordinate, not as noise. Dimming it
+              by opacity alone put it at roughly 1.2:1 against a lit stage floor
+              -- visibly text, impossible to read. Sit it on a dark chip so it
+              stays quiet but legible. */}
+          <Kicker style={{
+            marginTop: 3, fontSize: foil.litVictor ? 'clamp(11px,calc(1.35 * var(--cer-u)),17px)' : 'clamp(11px,calc(1.15 * var(--cer-u)),13px)',
+            color: foil.litVictor ? accent : '#F0E9DC',
+            letterSpacing: '0.18em', fontWeight: 700,
+            background: foil.litVictor ? undefined : 'rgba(8,6,4,0.78)',
+            padding: foil.litVictor ? undefined : '3px 8px',
+            border: foil.litVictor ? undefined : '1px solid rgba(240,233,220,0.3)',
+            textShadow: foil.litVictor ? `0 0 14px ${accent}` : '0 1px 2px rgba(0,0,0,0.95)',
+          }}>{foil.label}</Kicker>
+          {!foil.litVictor && (
+            <div
+              className="cer-type cer-quote mt-1 max-w-[18ch] text-center leading-tight"
+              style={{
+                fontStyle: 'italic',
+                fontSize: 'clamp(12px,calc(1.3 * var(--cer-u)),15px)',
+                color: 'rgba(244,238,226,0.88)',
+                background: 'rgba(8,6,4,0.62)',
+                padding: '3px 7px',
+                textShadow: '0 1px 3px rgba(0,0,0,0.95)',
+              }}
+            >“{loser.voiceLines.lose}”</div>
+          )}
         </div>
 
-        <div className="flex flex-col items-center">
-          <div style={{ width: 220, height: 300 }}>
-            <Sprite fighter={winner} side={winnerSide} state="win" />
+        <div
+          className="flex flex-col items-center relative"
+          style={{ animation: 'cer-hero-rise 0.6s cubic-bezier(0.15,0.9,0.3,1) 0.15s both' }}
+        >
+          {/* Spotlight cone behind the champion (warm on a win, cold on a loss). */}
+          <div
+            className="absolute pointer-events-none"
+            style={{
+              left: '50%', top: '46%', width: '140%', height: '140%',
+              transform: 'translate(-50%,-50%)',
+              background: `radial-gradient(ellipse at center, ${hero.glow}${hero.defeated ? '33' : '55'} 0%, transparent 66%)`,
+              animation: 'cer-spotlight 2.6s ease-in-out infinite',
+            }}
+          />
+          <div
+            style={{
+              width: 'min(calc(42 * var(--cer-u)), 480px)', height: 'min(calc(28.12 * var(--cer-u)), 520px)', position: 'relative',
+            }}
+          >
+            <div
+              className={hero.defeated ? '' : 'cer-breathe'}
+              style={{
+                width: '100%', height: '100%',
+                filter: hero.defeated
+                  ? 'grayscale(0.85) brightness(0.66) drop-shadow(6px 12px 0 rgba(0,0,0,0.6))'
+                  : `drop-shadow(0 0 36px ${accent}) drop-shadow(6px 10px 0 rgba(0,0,0,0.5))`,
+                transform: hero.defeated ? 'rotate(-2deg) translateY(6px)' : undefined,
+              }}
+            >
+              <Sprite fighter={hero.fighter} side={hero.side} state={hero.state} />
+            </div>
+            <WinnerFloor color={hero.defeated ? '#3a3f4d' : accent} />
           </div>
-          <div className="font-display text-lg tracking-widest mt-3" style={{ color: winner.accent }}>{winner.shortName}</div>
-          <div className="font-body text-xl italic text-white mt-1 max-w-md text-center px-2">"{winner.voiceLines.win}"</div>
+          <div className="cer-type mt-1" style={{ transform: 'skewX(-10deg)' }}>
+            <span className="cer-display" style={{ display: 'inline-block', transform: 'skewX(10deg)', color: hero.defeated ? '#c8ccd6' : accent, fontSize: 'clamp(22px,calc(3 * var(--cer-u)),38px)', letterSpacing: '0.03em', textShadow: hero.defeated ? '2px 2px 0 rgba(0,0,0,0.85)' : `2px 2px 0 rgba(0,0,0,0.85), 0 0 18px ${accent}` }}>
+              {hero.fighter.shortName}
+            </span>
+          </div>
+          <div className="cer-type cer-quote mt-1 max-w-[32ch] text-center leading-tight" style={{ fontStyle: 'italic', fontWeight: 500, fontSize: 'clamp(14px,calc(1.6 * var(--cer-u)),19px)', color: hero.defeated ? 'rgba(255,255,255,0.6)' : '#fff', textShadow: '1px 1px 0 rgba(0,0,0,0.8)' }}>“{hero.quote}”</div>
         </div>
       </div>
 
-      {/* MATCH STATS — biggest hit, longest combo, final HP %.
-          This is the highlight reel that turns into a tweet. */}
-      <div className="relative z-10 mt-5 grid grid-cols-3 gap-3 max-w-2xl">
-        <StatTile label="BIGGEST HIT" value={`${matchStats.biggest} DMG`} accent="#E63946" />
-        <StatTile label="LONGEST STREAK" value={`${matchStats.longestCombo}× COMBO`} accent="#FFD60A" />
-        <StatTile label="WINNER HP" value={`${winnerHpPct}%`} accent={winnerHpPct >= 90 ? '#06D6A0' : '#FCBF49'} />
-      </div>
+      {/* MATCH STATS — one cohesive result bar (reads designed, not like three
+          floating dashboard cards). */}
+      <StatBar
+        lost={arcadePlayerLost}
+        stats={[
+          { label: 'BIGGEST HIT', value: `${matchStats.biggest}`, unit: 'DMG', accent: '#FF3B57' },
+          { label: 'LONGEST STREAK', value: `${matchStats.longestCombo}×`, unit: 'COMBO', accent: '#FFD60A' },
+          { label: arcadePlayerLost ? 'ENEMY HP' : 'WINNER HP', value: `${winnerHpPct}`, unit: '% LEFT', accent: winnerHpPct >= 90 ? '#06D6A0' : '#FCBF49' },
+        ]}
+      />
 
-      <div className="relative z-10 mt-4 px-6 py-3 max-w-xl text-center" style={{
-        background: 'rgba(15,10,26,0.7)',
-        border: '2px solid #FFD60A',
-      }}>
-        <div className="font-display text-[10px] tracking-widest" style={{ color: '#FFD60A' }}>
-          QUOTE BANK · {quoteBank.length} ENTRIES UNLOCKED
-        </div>
-        <div className="font-body text-base text-white/70 mt-1">
-          Every move you played added a real podcast quote to your library.
-        </div>
-      </div>
-
-      <div className="relative z-10 mt-8 flex gap-3 flex-wrap justify-center">
+      {/* CTAs — arcade prompts, not web buttons. Utility UI arrives LAST, after
+          the hero shot and stats have landed, so the frame reads as a poster
+          first and an interface second. */}
+      <div className="relative z-10 mt-4 flex gap-4 flex-wrap justify-center items-center">
         {arcadePlayerWon && (
           <button
             onClick={handleContinue}
-            className="px-6 py-3 font-display text-base tracking-widest"
+            className="cer-btn cer-cond px-9 py-3"
             style={{
-              background: 'linear-gradient(180deg, #FFD60A44, #F7798044)',
-              color: 'white',
-              border: '2px solid #FFD60A',
-              boxShadow: 'inset -2px -2px 0 rgba(0,0,0,0.6), inset 2px 2px 0 rgba(255,255,255,0.2), 0 0 16px rgba(255,214,10,0.45)',
-              cursor: 'pointer',
-              animation: !isFinalBoss ? 'flash 1.2s ease-in-out infinite' : undefined,
+              background: 'linear-gradient(180deg, rgba(24,16,4,0.92), rgba(10,7,3,0.94))',
+              color: accent,
+              fontSize: 'clamp(14px,calc(1.55 * var(--cer-u)),19px)',
+              fontWeight: 800,
+              letterSpacing: '0.16em',
+              border: `2px solid ${accent}`,
+              clipPath: 'polygon(12px 0, 100% 0, calc(100% - 12px) 100%, 0 100%)',
+              boxShadow: `0 0 24px ${accent}55, inset 0 0 20px ${accent}1f`,
+              textShadow: `0 0 12px ${accent}66`,
+              animation: 'cer-rise-fade 0.4s ease-out 1.45s both',
             }}
           >
-            {isFinalBoss
-              ? 'CLAIM YOUR PRIZE →'
-              : `NEXT STAGE → (auto in ${secondsLeft}s)`}
+            {isFinalBoss ? '▸ CLAIM YOUR PRIZE' : `▸ NEXT STAGE  ·  ${secondsLeft}s`}
           </button>
         )}
         {!arcadePlayerWon && (
           <button
-            onClick={() => {
-              Sfx.menuSelect()
-              resetMatch()
-            }}
-            className="px-6 py-3 font-display text-base tracking-widest"
+            onClick={() => { Sfx.menuSelect(); resetMatch() }}
+            className="cer-btn cer-cond px-9 py-3"
             style={{
-              background: 'linear-gradient(180deg, #F77F0044, #E6394644)',
-              color: 'white',
-              border: '2px solid #E63946',
-              boxShadow: 'inset -2px -2px 0 rgba(0,0,0,0.6), inset 2px 2px 0 rgba(255,255,255,0.2)',
-              cursor: 'pointer',
+              background: 'linear-gradient(180deg, rgba(10,18,32,0.92), rgba(6,10,20,0.94))',
+              color: '#BBD0EC',
+              fontSize: 'clamp(14px,calc(1.55 * var(--cer-u)),19px)',
+              fontWeight: 800,
+              letterSpacing: '0.16em',
+              border: '2px solid #3E6DA0',
+              clipPath: 'polygon(12px 0, 100% 0, calc(100% - 12px) 100%, 0 100%)',
+              boxShadow: '0 0 22px rgba(62,109,160,0.5), inset 0 0 20px rgba(62,109,160,0.14)',
+              textShadow: '0 0 12px rgba(157,184,222,0.5)',
+              animation: 'cer-rise-fade 0.4s ease-out 1.45s both',
             }}
           >
-            MAIN MENU
+            ▸ REMATCH
           </button>
         )}
         <ShareButton
@@ -226,18 +328,43 @@ export function MatchEnd() {
   )
 }
 
-function StatTile({ label, value, accent }: { label: string; value: string; accent: string }) {
+function StatBar({ stats, lost }: { stats: { label: string; value: string; unit: string; accent: string }[]; lost: boolean }) {
+  const edge = lost ? '#2E5C8A' : '#FFB400'
   return (
     <div
-      className="p-3 text-center"
+      className="cer-type relative z-10 mt-3"
       style={{
-        background: 'rgba(15,10,26,0.7)',
-        border: `2px solid ${accent}`,
-        boxShadow: 'inset -2px -2px 0 rgba(0,0,0,0.5)',
+        animation: 'cer-tile-pop 0.5s cubic-bezier(0.2,0.9,0.3,1) 1.15s both',
       }}
     >
-      <div className="font-display text-[8px] tracking-widest" style={{ color: accent }}>{label}</div>
-      <div className="font-num text-2xl tabular-nums text-white mt-1">{value}</div>
+      <div
+        className="flex items-stretch"
+        style={{
+          background: 'linear-gradient(160deg, rgba(10,7,17,0.94), rgba(18,11,26,0.86))',
+          borderTop: `4px solid ${edge}`,
+          borderBottom: '1px solid rgba(255,255,255,0.1)',
+          clipPath: 'polygon(18px 0, 100% 0, calc(100% - 18px) 100%, 0 100%)',
+          boxShadow: `0 10px 34px rgba(0,0,0,0.6), 0 0 26px ${edge}22`,
+          padding: '2px',
+        }}
+      >
+        {stats.map((s, i) => (
+          <div
+            key={s.label}
+            className="flex flex-col justify-center px-8 py-3"
+            style={{
+              borderLeft: i > 0 ? '1px solid rgba(255,255,255,0.12)' : undefined,
+              minWidth: 180,
+            }}
+          >
+            <div className="cer-cond" style={{ fontSize: 'clamp(10px,calc(1.15 * var(--cer-u)),14px)', fontWeight: 700, letterSpacing: '0.24em', color: s.accent }}>{s.label}</div>
+            <div className="flex items-baseline gap-1.5 mt-0.5">
+              <span className="cer-display" style={{ fontSize: 'clamp(38px,calc(4.8 * var(--cer-u)),66px)', color: '#fff', lineHeight: 0.84, textShadow: `0 2px 0 rgba(0,0,0,0.6), 0 0 16px ${s.accent}55` }}>{s.value}</span>
+              <span className="cer-cond" style={{ fontSize: 'clamp(11px,calc(1.25 * var(--cer-u)),16px)', fontWeight: 700, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.6)' }}>{s.unit}</span>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
@@ -250,16 +377,11 @@ function ShareButton({
 }) {
   function tweet() {
     Sfx.menuSelect()
-    // Lead with the highlight — the biggest hit or longest combo is more
-    // compelling than just "X beat Y." Include the HP% so screenshots
-    // make sense at a glance.
     const highlight = combo >= 3
       ? `${combo}-hit combo`
       : biggest >= 200
       ? `${biggest}-dmg finisher`
       : `${hpPct}% HP left`
-    // Lead the hook: every move is a real framework from a real podcast
-    // guest. The numbers are the proof; the framework angle is the share-worthy reason.
     const text = `OPERATORS · ${winner} beat ${loser} (${highlight}) using real frameworks from Lenny's guests. ${quoteBank} verbatim quotes unlocked. Built for #lennysbuildathon —`
     const url = 'https://operators.replit.app'
     const tweetUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`
@@ -268,16 +390,21 @@ function ShareButton({
   return (
     <button
       onClick={tweet}
-      className="px-6 py-3 font-display text-base tracking-widest"
+      className="cer-btn cer-cond cer-plate px-5 py-2.5"
       style={{
-        background: 'linear-gradient(180deg, #00B4D844, #0077B644)',
-        color: 'white',
-        border: '2px solid #00B4D8',
-        boxShadow: 'inset -2px -2px 0 rgba(0,0,0,0.6), inset 2px 2px 0 rgba(255,255,255,0.2)',
-        cursor: 'pointer',
+        color: '#F2EFE6',
+        fontSize: 'clamp(11px,calc(1.2 * var(--cer-u)),14px)',
+        fontWeight: 700,
+        letterSpacing: '0.2em',
+        textShadow: '0 1px 3px rgba(0,0,0,0.9)',
+        ['--plate-clip' as string]: 'polygon(9px 0, 100% 0, calc(100% - 9px) 100%, 0 100%)',
+        ['--plate-frame' as string]: 'rgba(255,255,255,0.58)',
+        ['--plate-fill' as string]: 'rgba(10,8,6,0.82)',
+        ['--plate-w' as string]: '1.5px',
+        animation: 'cer-rise-fade 0.4s ease-out 1.75s both',
       }}
     >
-      ↗ TWEET RESULT
+      ↗ SHARE
     </button>
   )
 }

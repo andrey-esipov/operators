@@ -1,0 +1,53 @@
+{
+  "sheet": "impact-sparks",
+  "atlas": "atlas.png",
+  "frameW": 128,
+  "frameH": 128,
+  "marks": [
+    {
+      "name": "star4",
+      "rect": {
+        "x": 4,
+        "y": 4,
+        "w": 128,
+        "h": 128
+      }
+    },
+    {
+      "name": "burst6",
+      "rect": {
+        "x": 136,
+        "y": 4,
+        "w": 128,
+        "h": 128
+      }
+    },
+    {
+      "name": "impact8",
+      "rect": {
+        "x": 268,
+        "y": 4,
+        "w": 128,
+        "h": 128
+      }
+    },
+    {
+      "name": "slash",
+      "rect": {
+        "x": 400,
+        "y": 4,
+        "w": 128,
+        "h": 128
+      }
+    },
+    {
+      "name": "shatter",
+      "rect": {
+        "x": 532,
+        "y": 4,
+        "w": 128,
+        "h": 128
+      }
+    }
+  ]
+}

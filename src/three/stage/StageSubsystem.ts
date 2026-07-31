@@ -15,6 +15,7 @@ import { flagsFor } from '../core/QualityManager'
 import { ReflectiveFloor, type FloorLook } from './ReflectiveFloor'
 import { buildStageScene } from './StageBuilds'
 import { DustField, groundFog } from './Atmosphere'
+import { hazeScaleFor, plateBandMedian, HAZE_REF_LUMA } from './plateHaze'
 import type { StageBuild } from './StageKit'
 import { BACKDROP_PLANE, backdropUvTransform } from './backdropFraming'
 
@@ -49,6 +50,8 @@ declare global {
        *  can watch the occlusion spike with every other variable held constant. */
       setFramePinned: (v: boolean) => void
       framePinned: () => boolean
+      setHazeRef: (v: number) => void
+      plateMedian: () => number
       /** Dev/QA: project a world point through the LIVE play camera to NDC
        *  ([-1,1], +y up). Lets the occluder probe build a tight screen box around
        *  the downed fighter — instead of the loose two-fighter coverage union —
@@ -113,11 +116,13 @@ export class StageSubsystem implements Subsystem {
   /** When false, the frame collapses to identity and occluders revert to their
    *  authored world positions (the original Defect-1 behaviour). Dev toggle. */
   private framePinned = true
+  private plateMedian = HAZE_REF_LUMA
+  private hazeRef = HAZE_REF_LUMA
   private backdrop!: THREE.Mesh
   private backdropMat!: THREE.ShaderMaterial
   private floor!: ReflectiveFloor
   private dust!: DustField
-  private fog!: { group: THREE.Group; update: (t: number) => void }
+  private fog!: ReturnType<typeof groundFog>
   private build: StageBuild | null = null
   private practicals: THREE.PointLight[] = []
   private disposeLateUpdate: (() => void) | null = null
@@ -311,6 +316,29 @@ export class StageSubsystem implements Subsystem {
     this.root.add(this.floor.mesh)
   }
 
+  /**
+   * Measure the plate and scale the far additive haze bands to it, so the
+   * painting is never buried under accent-coloured glow. See plateHaze.ts.
+   */
+  private applyPlateHazeScale(tex: THREE.Texture) {
+    const img = tex.image as CanvasImageSource & { width?: number; height?: number }
+    if (typeof document === 'undefined' || !img?.width || !img?.height) return
+    try {
+      const N = 96
+      const c = document.createElement('canvas')
+      c.width = N
+      c.height = N
+      const g = c.getContext('2d', { willReadFrequently: true })
+      if (!g) return
+      g.drawImage(img, 0, 0, N, N)
+      const median = plateBandMedian(g.getImageData(0, 0, N, N).data, N, N, 4)
+      this.plateMedian = median
+      this.fog.setFarHaze(hazeScaleFor(median, this.hazeRef))
+    } catch {
+      // Canvas can throw on a tainted texture; leave the authored haze alone.
+    }
+  }
+
   private buildAtmosphere() {
     const flags = flagsFor(this.quality)
     const count = Math.round(THREE.MathUtils.clamp(flags.particleBudget * 0.18, 120, 900))
@@ -398,6 +426,7 @@ export class StageSubsystem implements Subsystem {
       const img = tex.image as { width?: number; height?: number } | undefined
       this.plateAspect = img?.width && img?.height ? img.width / img.height : 1.5
       this.syncBackdropFraming()
+      this.applyPlateHazeScale(tex)
     } catch {
       this.backdropMat.uniforms.uHasMap.value = 0
     }
@@ -509,12 +538,21 @@ export class StageSubsystem implements Subsystem {
           setBuildVisible: (v: boolean) => {
             if (this.build) this.build.root.visible = v
           },
-          setBackdropGrade: (g: { exposure?: number; fog?: number; vignette?: number }) => {
+          setBackdropGrade: (g: { exposure?: number; fog?: number; vignette?: number; tint?: number }) => {
             const u = this.backdropMat.uniforms
             if (g.exposure !== undefined) u.uExposure.value = g.exposure
             if (g.fog !== undefined) u.uFogAmount.value = g.fog
             if (g.vignette !== undefined) u.uVignette.value = g.vignette
+            // White tint leaves the term as a pure `col * 1.12` brightness scale,
+            // so a capture can separate the tint's HUE contribution from its gain.
+            if (g.tint !== undefined) (u.uTint.value as THREE.Color).setHex(g.tint)
           },
+          /** Sweep the haze reference luminance to fit it against the art. */
+          setHazeRef: (v: number) => {
+            this.hazeRef = v
+            this.fog.setFarHaze(hazeScaleFor(this.plateMedian, v))
+          },
+          plateMedian: () => this.plateMedian,
           setFramePinned: (v: boolean) => {
             this.framePinned = v
           },

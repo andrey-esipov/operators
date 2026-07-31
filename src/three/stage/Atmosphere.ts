@@ -117,9 +117,25 @@ export class DustField {
 }
 
 /** Soft glowing fog planes hugging the ground. Returns a group + updater. */
-export function groundFog(color: number, extent: number): { group: THREE.Group; update: (t: number) => void } {
+export function groundFog(color: number, extent: number): {
+  group: THREE.Group
+  update: (t: number) => void
+  /**
+   * Scale the FAR additive haze bands only (near steam banks are untouched).
+   *
+   * These bands are ADDITIVE and carry the stage accent, so they add a roughly
+   * fixed amount of light regardless of what is behind them. On a bright plate
+   * that reads as atmospheric depth; on a dark plate it *becomes* the image --
+   * the painting is buried under accent-coloured glow and the arena stops
+   * matching the thumbnail it was picked from. Atmospheric scattering should be
+   * proportional to the light actually in the scene, so the caller scales this
+   * by the plate's own luminance. See StageSubsystem.applyPlateHazeScale.
+   */
+  setFarHaze: (scale: number) => void
+} {
   const group = new THREE.Group()
   const mats: THREE.ShaderMaterial[] = []
+  const farMats: THREE.ShaderMaterial[] = []
   // Rolling luminous steam banks that fill the mid-ground (the dead black band a
   // fighting stage must never have). Additive so they GLOW with the scene neon
   // ("particulate in the light"), ground-hugging, drifting horizontally with an
@@ -202,7 +218,7 @@ export function groundFog(color: number, extent: number): { group: THREE.Group; 
         }
       `,
     })
-    mats.push(mat)
+    mats.push(mat); farMats.push(mat); mat.userData.baseOpacity = mat.uniforms.uOpacity.value
     const m = new THREE.Mesh(new THREE.PlaneGeometry(extent * 1.1, 9), mat)
     m.position.set(0, 3.4, -11 - i * 3.5)
     m.renderOrder = 3
@@ -211,5 +227,8 @@ export function groundFog(color: number, extent: number): { group: THREE.Group; 
   return {
     group,
     update: (t) => { for (const m of mats) m.uniforms.uTime.value = t },
+    setFarHaze: (scale: number) => {
+      for (const m of farMats) m.uniforms.uOpacity.value = (m.userData.baseOpacity as number) * scale
+    },
   }
 }

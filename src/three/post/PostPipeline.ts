@@ -40,6 +40,7 @@ declare global {
        *  be captured without a rebuild between arms. */
       setBgMaxCoc: (v: number) => void
       sepDefeat: (on: boolean) => void
+      gradeDefeat: (on: boolean) => void
       /** Current value of the reactive impact envelope (0..~1.7). Read-only QA
        *  probe: measure-impact-punch reads this frame-by-frame on the shipped
        *  route to prove a normal hit actually charges the screen-punch (it sat
@@ -119,6 +120,13 @@ export class PostPipeline implements Subsystem, RenderDriver {
   private sepOff = false
   /** __POST__.sepDefeat / dev mutation — forces behind-fighter separation off. */
   private sepDefeat = false
+  /**
+   * __POST__.gradeDefeat — swaps the per-stage look for NEUTRAL_GRADE so a
+   * capture can attribute colour to the GRADE vs the scene beneath it. Same
+   * role as dofDefeat/sepDefeat: isolate one stage of the chain, DEV only.
+   */
+  private gradeDefeat = false
+  private gradeDefeatDirty = false
   private smaa: SMAAEffect | null = null
   private dirtTexture!: THREE.Texture
 
@@ -417,6 +425,10 @@ export class PostPipeline implements Subsystem, RenderDriver {
         sepDefeat: (on: boolean) => {
           this.sepDefeat = on
         },
+        gradeDefeat: (on: boolean) => {
+          this.gradeDefeat = on
+          this.gradeDefeatDirty = true
+        },
         impact: () => this.impact,
       }
     }
@@ -440,10 +452,11 @@ export class PostPipeline implements Subsystem, RenderDriver {
     const i = this.impact
 
     // --- stage grade cross-fade ----------------------------------------
-    if (state.scenario !== this.targetScenario) {
+    if (state.scenario !== this.targetScenario || this.gradeDefeatDirty) {
       this.targetScenario = state.scenario
+      this.gradeDefeatDirty = false
       this.fromGrade = this.currentGrade
-      this.targetGrade = gradeFor(state.scenario)
+      this.targetGrade = this.gradeDefeat ? NEUTRAL_GRADE : gradeFor(state.scenario)
       this.fade = 0
     }
     if (this.fade < 1) {
